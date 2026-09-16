@@ -509,9 +509,9 @@ fn validate_rectangles(rectangles: &[RectangleInstance]) -> PyResult<()> {
     for rectangle in rectangles {
         if rectangle.len() != RECTANGLE_INSTANCE_FLOATS {
             return Err(PyValueError::new_err(format!(
-                "Rectangle instances require {RECTANGLE_INSTANCE_FLOATS} floats: "
+                "Rectangle instances require {RECTANGLE_INSTANCE_FLOATS} floats: x, y, width, "
                     .to_owned()
-                    + "x, y, width, height, rgba and four corner radii."
+                    + "height, rgba and four corner radii."
             )));
         }
         if !rectangle.iter().copied().all(f32::is_finite) {
