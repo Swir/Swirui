@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 
 
@@ -84,6 +85,107 @@ class CornerRadius:
 
 
 @dataclass(frozen=True, slots=True)
+class Path2D:
+    """A simple closed polygon path expressed in local logical coordinates.
+
+    The first renderer implementation supports filled straight-line paths. Both
+    convex and concave simple polygons are accepted and deterministically
+    tessellated into triangles before crossing the native renderer boundary.
+    """
+
+    points: tuple[Point, ...]
+
+    def __post_init__(self) -> None:
+        points = self.points
+        if len(points) >= 2 and points[0] == points[-1]:
+            points = points[:-1]
+        if len(points) < 3:
+            raise ValueError("Path2D requires at least three vertices.")
+        if any(not math.isfinite(value) for point in points for value in (point.x, point.y)):
+            raise ValueError("Path2D vertices must use finite coordinates.")
+        if len({(point.x, point.y) for point in points}) != len(points):
+            raise ValueError("Path2D vertices must be unique except for an optional closing point.")
+        if abs(_signed_area(points)) <= 1.0e-9:
+            raise ValueError("Path2D requires a non-zero enclosed area.")
+        object.__setattr__(self, "points", points)
+
+    @classmethod
+    def polygon(cls, *points: Point) -> Path2D:
+        return cls(tuple(points))
+
+    @property
+    def bounds(self) -> Rect:
+        xs = [point.x for point in self.points]
+        ys = [point.y for point in self.points]
+        left = min(xs)
+        top = min(ys)
+        return Rect(left, top, max(xs) - left, max(ys) - top)
+
+    def contains(self, point: Point) -> bool:
+        """Return whether ``point`` lies inside or on the polygon boundary."""
+
+        inside = False
+        points = self.points
+        for index, current in enumerate(points):
+            previous = points[index - 1]
+            if _point_on_segment(point, previous, current):
+                return True
+            intersects = (current.y > point.y) != (previous.y > point.y)
+            if not intersects:
+                continue
+            denominator = previous.y - current.y
+            crossing_x = (previous.x - current.x) * (point.y - current.y) / denominator + current.x
+            if point.x < crossing_x:
+                inside = not inside
+        return inside
+
+    def triangulate(self) -> tuple[tuple[Point, Point, Point], ...]:
+        """Tessellate a simple convex or concave polygon using deterministic ear clipping."""
+
+        points = self.points
+        counter_clockwise = _signed_area(points) > 0.0
+        indices = list(range(len(points)))
+        triangles: list[tuple[Point, Point, Point]] = []
+        epsilon = 1.0e-9
+
+        while len(indices) > 3:
+            ear_found = False
+            for position, current_index in enumerate(indices):
+                previous_index = indices[position - 1]
+                next_index = indices[(position + 1) % len(indices)]
+                a = points[previous_index]
+                b = points[current_index]
+                c = points[next_index]
+                cross = _cross(a, b, c)
+                if counter_clockwise:
+                    if cross <= epsilon:
+                        continue
+                elif cross >= -epsilon:
+                    continue
+
+                if any(
+                    _point_in_triangle(points[candidate], a, b, c, epsilon)
+                    for candidate in indices
+                    if candidate not in (previous_index, current_index, next_index)
+                ):
+                    continue
+
+                triangles.append((a, b, c))
+                del indices[position]
+                ear_found = True
+                break
+
+            if not ear_found:
+                raise ValueError(
+                    "Path2D could not be tessellated; the polygon may self-intersect or be degenerate."
+                )
+
+        a, b, c = (points[index] for index in indices)
+        triangles.append((a, b, c))
+        return tuple(triangles)
+
+
+@dataclass(frozen=True, slots=True)
 class Color:
     """Linear framework color represented as normalized RGBA channels."""
 
@@ -112,3 +214,34 @@ class Color:
 
     def with_alpha(self, alpha: float) -> Color:
         return Color(self.r, self.g, self.b, alpha)
+
+
+def _signed_area(points: tuple[Point, ...]) -> float:
+    return 0.5 * sum(
+        point.x * points[(index + 1) % len(points)].y
+        - points[(index + 1) % len(points)].x * point.y
+        for index, point in enumerate(points)
+    )
+
+
+def _cross(a: Point, b: Point, c: Point) -> float:
+    return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x)
+
+
+def _point_in_triangle(point: Point, a: Point, b: Point, c: Point, epsilon: float) -> bool:
+    first = _cross(a, b, point)
+    second = _cross(b, c, point)
+    third = _cross(c, a, point)
+    has_negative = first < -epsilon or second < -epsilon or third < -epsilon
+    has_positive = first > epsilon or second > epsilon or third > epsilon
+    return not (has_negative and has_positive)
+
+
+def _point_on_segment(point: Point, a: Point, b: Point) -> bool:
+    epsilon = 1.0e-9
+    if abs(_cross(a, b, point)) > epsilon:
+        return False
+    return (
+        min(a.x, b.x) - epsilon <= point.x <= max(a.x, b.x) + epsilon
+        and min(a.y, b.y) - epsilon <= point.y <= max(a.y, b.y) + epsilon
+    )
