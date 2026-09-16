@@ -3,6 +3,7 @@
 from .base import NullRenderer, Renderer
 from .factory import create_renderer
 from .geometry import Color, CornerRadius, Point, Rect, Size
+from .path import PathGeometry, Triangle
 from .scene import Scene, SceneNode, SceneNodeKind
 from .scheduler import FrameScheduler, FrameStats
 from .surface import RenderSurface
@@ -16,6 +17,7 @@ __all__ = [
     "FrameScheduler",
     "FrameStats",
     "NullRenderer",
+    "PathGeometry",
     "Point",
     "Rect",
     "RenderNode",
@@ -26,6 +28,7 @@ __all__ = [
     "SceneNode",
     "SceneNodeKind",
     "Size",
+    "Triangle",
     "WgpuRenderer",
     "Win32PreviewRenderer",
     "create_renderer",
