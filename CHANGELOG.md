@@ -44,6 +44,10 @@ The project uses semantic versioning where practical during pre-alpha developmen
 - Runtime `App.set_target_fps()` retargeting for all current and future window frame schedulers.
 - Cross-window `App.seconds_until_next_frame()` deadline reporting and frame events that expose the active target FPS and frame interval.
 - Automated high-refresh pacing coverage for runtime 60 → 120/144 Hz retargeting and sub-poll-interval frame deadlines.
+- End-to-end logical-DIP window geometry with explicit logical ↔ physical conversion helpers and physical-pixel renderer surfaces.
+- Per-monitor DPI scaling for GPU rectangles, per-corner radii, shaped text, images and clip rectangles before Python → Rust/wgpu submission.
+- Native physical pointer and resize input normalization back into logical DIPs before SceneGraph hit testing and routed component input.
+- Deterministic 150% → 200% scale-transition coverage plus a real Win32/wgpu mixed-DPI smoke test that verifies rectangles, Unicode text, images, input coordinates and persistent surface reconfiguration.
 
 ### Changed
 - The wgpu renderer now reports submitted rectangle, text and image counts independently.
@@ -56,6 +60,9 @@ The project uses semantic versioning where practical during pre-alpha developmen
 - Native event-loop idle sleeps now shorten to the nearest pending frame deadline instead of quantizing 120/144+ Hz targets to a fixed 4 ms polling cadence.
 - `AppConfig.target_fps` is now an application ceiling for native windows rather than an unconditional per-window target; headless rendering keeps the configured value unchanged.
 - `DisplayInfo` keeps its existing positional field ordering while adding refresh-rate metadata at the end of the public dataclass contract.
+- Public `Window` and SceneGraph geometry now stays in logical DIPs while Win32 and renderer backends operate on physical client pixels.
+- Adjacent Win32 resize/DPI transitions are normalized so resize pixels are interpreted with the incoming monitor scale rather than the previous scale.
+- The temporary GDI preview renderer now follows the same logical-DIP → physical-pixel scaling contract as the native wgpu renderer.
 
 ## [0.1.0a1] - 2026-09-16
 
