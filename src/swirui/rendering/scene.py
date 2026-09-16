@@ -28,14 +28,21 @@ class SceneNode:
     fill: Color | None = None
     corner_radius: CornerRadius = field(default_factory=CornerRadius)
     text: str | None = None
+    font_size: float = 16.0
+    font_family: str = "Segoe UI"
     resource_id: str | None = None
     children: list[SceneNode] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         if not 0.0 <= self.opacity <= 1.0:
             raise ValueError("opacity must be between 0.0 and 1.0.")
-        if self.kind is SceneNodeKind.TEXT and self.text is None:
-            raise ValueError("Text scene nodes require text content.")
+        if self.kind is SceneNodeKind.TEXT:
+            if self.text is None:
+                raise ValueError("Text scene nodes require text content.")
+            if self.font_size <= 0:
+                raise ValueError("Text scene nodes require a positive font_size.")
+            if not self.font_family:
+                raise ValueError("Text scene nodes require a font_family.")
         if self.kind is SceneNodeKind.IMAGE and self.resource_id is None:
             raise ValueError("Image scene nodes require a resource_id.")
 
