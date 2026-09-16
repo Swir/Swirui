@@ -45,20 +45,31 @@ class FakePersistentContext:
         self.width = width
         self.height = height
         self.scene_calls: list[tuple[object, ...]] = []
+        self.image_resources: dict[str, tuple[int, int, bytes]] = {}
         self.draw_calls: list[tuple[object, ...]] = []
         self.clear_calls: list[tuple[object, ...]] = []
         self.resize_calls: list[tuple[int, int]] = []
+
+    def register_image_rgba(
+        self, resource_id: str, width: int, height: int, rgba: bytes
+    ) -> None:
+        self.image_resources[resource_id] = (width, height, bytes(rgba))
+
+    def unregister_image(self, resource_id: str) -> bool:
+        return self.image_resources.pop(resource_id, None) is not None
 
     def draw_scene(
         self,
         rectangles: object,
         texts: object,
+        images: object,
         *background: object,
-    ) -> tuple[int, int]:
-        self.scene_calls.append((rectangles, texts, *background))
+    ) -> tuple[int, int, int]:
+        self.scene_calls.append((rectangles, texts, images, *background))
         assert isinstance(rectangles, list)
         assert isinstance(texts, list)
-        return (len(rectangles), len(texts))
+        assert isinstance(images, list)
+        return (len(rectangles), len(texts), len(images))
 
     def draw_rectangles(self, rectangles: object, *background: object) -> int:
         self.draw_calls.append((rectangles, *background))
@@ -127,6 +138,7 @@ def test_wgpu_renderer_submits_scene_rectangles_and_text() -> None:
     assert renderer.frames_rendered == 1
     assert renderer.last_rectangle_count == 1
     assert renderer.last_text_count == 1
+    assert renderer.last_image_count == 0
     assert renderer.adapter_name == "Fake GPU"
     assert renderer.graphics_backend == "test-backend"
     assert len(native.scene_calls) == 1
@@ -145,6 +157,78 @@ def test_wgpu_renderer_submits_scene_rectangles_and_text() -> None:
     assert submitted_texts[0][10] == "Segoe UI"
 
     app.stop()
+
+
+def test_wgpu_renderer_uploads_and_submits_registered_image() -> None:
+    native = FakePersistentNative()
+    renderer = WgpuRenderer(native_module=native)
+    pixels = bytes(
+        [
+            255,
+            0,
+            0,
+            255,
+            0,
+            255,
+            0,
+            255,
+            0,
+            0,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+        ]
+    )
+    renderer.register_image_rgba("checker", 2, 2, pixels)
+    assert renderer.image_resource_count == 1
+
+    root = SceneNode(
+        key="root",
+        kind=SceneNodeKind.GROUP,
+        bounds=Rect(0, 0, 640, 360),
+    )
+    root.add(
+        SceneNode(
+            key="image",
+            kind=SceneNodeKind.IMAGE,
+            bounds=Rect(40, 50, 240, 160),
+            resource_id="checker",
+            opacity=0.65,
+        )
+    )
+    app = App(platform_backend=NullPlatformBackend(), renderer=renderer)
+    window = Window(width=640, height=360)
+    window.set_scene(Scene(640, 360, root))
+    app.add_window(window)
+
+    app.start()
+
+    context = native.contexts[0]
+    assert context.image_resources["checker"] == (2, 2, pixels)
+    assert renderer.last_rectangle_count == 0
+    assert renderer.last_text_count == 0
+    assert renderer.last_image_count == 1
+    submitted_images = context.scene_calls[0][2]
+    assert isinstance(submitted_images, list)
+    assert submitted_images == [("checker", 40, 50, 240, 160, 0.65)]
+
+    assert renderer.unregister_image("checker") is True
+    assert renderer.image_resource_count == 0
+    assert context.image_resources == {}
+    app.stop()
+
+
+def test_wgpu_renderer_rejects_invalid_rgba_resource() -> None:
+    renderer = WgpuRenderer(native_module=FakePersistentNative())
+    try:
+        renderer.register_image_rgba("bad", 2, 2, bytes(15))
+    except ValueError as exc:
+        assert "exactly 16 bytes" in str(exc)
+    else:
+        raise AssertionError("Invalid RGBA resource should fail validation")
 
 
 def test_wgpu_renderer_uses_white_for_unfilled_text() -> None:
@@ -204,6 +288,7 @@ def test_wgpu_renderer_clears_when_scene_has_no_drawables() -> None:
     assert renderer.frames_rendered == 1
     assert renderer.last_rectangle_count == 0
     assert renderer.last_text_count == 0
+    assert renderer.last_image_count == 0
     assert len(native.clear_calls) == 1
     assert native.scene_calls == []
     assert native.rectangle_calls == []
@@ -227,6 +312,7 @@ def test_wgpu_renderer_reuses_persistent_context_and_resizes_it() -> None:
     assert len(context.scene_calls) == 1
     assert renderer.last_rectangle_count == 1
     assert renderer.last_text_count == 1
+    assert renderer.last_image_count == 0
     assert renderer.adapter_name == "Persistent Fake GPU"
     assert renderer.graphics_backend == "persistent-test-backend"
 
