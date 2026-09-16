@@ -84,7 +84,7 @@ jobs:
         run: cargo test --manifest-path native/Cargo.toml --lib
 
   windows-native:
-    name: Win32 native smoke / Python 3.14
+    name: Win32 + wgpu native smoke / Python 3.14
     runs-on: windows-latest
     steps:
       - name: Checkout
@@ -96,8 +96,26 @@ jobs:
           python-version: "3.14"
           cache: pip
 
-      - name: Install
-        run: python -m pip install --upgrade pip && python -m pip install -e ".[dev]"
+      - name: Set up stable Rust
+        run: rustup toolchain install stable --profile minimal && rustup default stable
+
+      - name: Install Python tools
+        run: python -m pip install --upgrade pip && python -m pip install -e ".[dev]" maturin==1.15.0
+
+      - name: Check native core on Windows
+        run: cargo check --manifest-path native/Cargo.toml --all-targets
+
+      - name: Build PyO3 extension
+        run: maturin build --manifest-path native/Cargo.toml --release --interpreter python --out dist-native
+
+      - name: Install PyO3 extension
+        shell: pwsh
+        run: |
+          $wheel = (Get-ChildItem dist-native\*.whl | Select-Object -First 1).FullName
+          python -m pip install $wheel
 
       - name: Create and paint real Win32 window
         run: pytest tests/test_windows_backend.py -q
+
+      - name: Clear real Win32 surface through wgpu
+        run: pytest tests/test_windows_gpu_bridge.py -q
