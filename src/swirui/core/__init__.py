@@ -1,7 +1,18 @@
 """Core building blocks exposed by SwirUI."""
 
 from .component import Component
+from .config import AppConfig, VisualQuality
 from .events import Event, EventEmitter
+from .logging import configure_logging, get_logger
 from .state import State
 
-__all__ = ["Component", "Event", "EventEmitter", "State"]
+__all__ = [
+    "AppConfig",
+    "Component",
+    "Event",
+    "EventEmitter",
+    "State",
+    "VisualQuality",
+    "configure_logging",
+    "get_logger",
+]
