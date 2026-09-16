@@ -11,12 +11,13 @@ from .events import NativeWindowHandle, PlatformEvent
 
 @dataclass(frozen=True, slots=True)
 class DisplayInfo:
-    """Physical display geometry and effective UI scale exposed by a backend."""
+    """Physical display geometry, UI scale and active refresh rate."""
 
     name: str
     width: int
     height: int
     scale: float = 1.0
+    refresh_rate_hz: float = 60.0
     primary: bool = False
     x: int = 0
     y: int = 0
@@ -30,6 +31,8 @@ class DisplayInfo:
             raise ValueError("Display dimensions must be positive.")
         if self.scale <= 0.0:
             raise ValueError("Display scale must be positive.")
+        if self.refresh_rate_hz <= 0.0:
+            raise ValueError("Display refresh rate must be positive.")
         if self.work_width is not None and self.work_width <= 0:
             raise ValueError("Display work width must be positive when provided.")
         if self.work_height is not None and self.work_height <= 0:
@@ -76,6 +79,8 @@ class PlatformBackend(Protocol):
 
     def window_scale(self, handle: NativeWindowHandle) -> float: ...
 
+    def window_display(self, handle: NativeWindowHandle) -> DisplayInfo | None: ...
+
     def show_window(self, handle: NativeWindowHandle) -> None: ...
 
     def hide_window(self, handle: NativeWindowHandle) -> None: ...
@@ -119,6 +124,10 @@ class NullPlatformBackend:
     def window_scale(self, handle: NativeWindowHandle) -> float:
         self._require_window(handle)
         return 1.0
+
+    def window_display(self, handle: NativeWindowHandle) -> DisplayInfo | None:
+        self._require_window(handle)
+        return None
 
     def show_window(self, handle: NativeWindowHandle) -> None:
         self._require_window(handle)
