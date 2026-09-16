@@ -65,7 +65,8 @@ class Win32PreviewRenderer:
         self._require_initialized()
         if window.native_handle is None:
             raise RuntimeError("A native window handle is required before creating a surface.")
-        surface = RenderSurface(window.native_handle, window.width, window.height)
+        pixel_width, pixel_height = window.pixel_size
+        surface = RenderSurface(window.native_handle, pixel_width, pixel_height)
         self.surfaces[window.native_handle.value] = surface
         return surface
 
@@ -80,7 +81,7 @@ class Win32PreviewRenderer:
             surface.destroy()
 
     def render(self, window: Window, root: Component | None) -> None:
-        """Paint the attached scene into the HWND using the temporary GDI bridge."""
+        """Paint the attached logical-DIP scene into the physical-pixel HWND."""
 
         del root
         self._require_initialized()
@@ -105,7 +106,7 @@ class Win32PreviewRenderer:
             scene = window.scene
             if scene is not None:
                 for node in scene.walk():
-                    self._paint_node(hdc, node)
+                    self._paint_node(hdc, node, window.scale)
             self.frames_rendered += 1
         finally:
             self._user32.ReleaseDC(hwnd, hdc)
@@ -118,15 +119,15 @@ class Win32PreviewRenderer:
         self._user32 = None
         self._gdi32 = None
 
-    def _paint_node(self, hdc: Any, node: SceneNode) -> None:
+    def _paint_node(self, hdc: Any, node: SceneNode, scale: float) -> None:
         if node.opacity <= 0.0:
             return
         if node.kind in (SceneNodeKind.GROUP, SceneNodeKind.RECTANGLE):
             if node.fill is not None:
-                self._fill_rect(hdc, node.bounds, node.fill, node.corner_radius)
+                self._fill_rect(hdc, node.bounds, node.fill, node.corner_radius, scale)
             return
         if node.kind is SceneNodeKind.TEXT and node.text is not None:
-            self._draw_text(hdc, node)
+            self._draw_text(hdc, node, scale)
 
     def _fill_rect(
         self,
@@ -134,8 +135,9 @@ class Win32PreviewRenderer:
         rect: Rect,
         color: Color,
         radius: CornerRadius,
+        scale: float,
     ) -> None:
-        native = self._to_native_rect(rect)
+        native = self._to_native_rect(rect, scale)
         maximum_radius = max(
             radius.top_left,
             radius.top_right,
@@ -149,7 +151,7 @@ class Win32PreviewRenderer:
             if maximum_radius <= 0.0:
                 self._user32.FillRect(hdc, ctypes.byref(native), brush)
                 return
-            diameter = max(1, int(round(maximum_radius * 2.0)))
+            diameter = max(1, int(round(maximum_radius * scale * 2.0)))
             region = self._gdi32.CreateRoundRectRgn(
                 native.left,
                 native.top,
@@ -176,13 +178,13 @@ class Win32PreviewRenderer:
         finally:
             self._gdi32.DeleteObject(brush)
 
-    def _draw_text(self, hdc: Any, node: SceneNode) -> None:
+    def _draw_text(self, hdc: Any, node: SceneNode, scale: float) -> None:
         text = node.text
         if text is None:
             return
 
         color = node.fill or Color(1.0, 1.0, 1.0, 1.0)
-        height = -max(1, int(round(node.font_size)))
+        height = -max(1, int(round(node.font_size * scale)))
         font = self._gdi32.CreateFontW(
             height,
             0,
@@ -206,8 +208,8 @@ class Win32PreviewRenderer:
         try:
             self._gdi32.SetBkMode(hdc, _TRANSPARENT)
             self._gdi32.SetTextColor(hdc, self._colorref(color))
-            x = int(round(node.bounds.x))
-            y = int(round(node.bounds.y))
+            x = int(round(node.bounds.x * scale))
+            y = int(round(node.bounds.y * scale))
             self._gdi32.TextOutW(hdc, x, y, text, len(text))
         finally:
             if previous_font:
@@ -285,12 +287,12 @@ class Win32PreviewRenderer:
         self._gdi32.CreateFontW.restype = ctypes.c_void_p
 
     @staticmethod
-    def _to_native_rect(rect: Rect) -> _WinRect:
+    def _to_native_rect(rect: Rect, scale: float = 1.0) -> _WinRect:
         return _WinRect(
-            int(round(rect.x)),
-            int(round(rect.y)),
-            int(round(rect.right)),
-            int(round(rect.bottom)),
+            int(round(rect.x * scale)),
+            int(round(rect.y * scale)),
+            int(round(rect.right * scale)),
+            int(round(rect.bottom * scale)),
         )
 
     @staticmethod
