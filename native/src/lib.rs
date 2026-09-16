@@ -13,7 +13,8 @@ use std::num::NonZeroIsize;
 #[cfg(target_os = "windows")]
 use wgpu::util::DeviceExt;
 
-type RectangleInstance = (f32, f32, f32, f32, f32, f32, f32, f32);
+type RectangleInstance = Vec<f32>;
+const RECTANGLE_INSTANCE_FLOATS: usize = 12;
 
 #[pyfunction]
 fn core_version() -> &'static str {
@@ -113,11 +114,11 @@ impl PersistentGpuContext {
             immediate_size: 0,
         });
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("SwirUI rectangle shader"),
+            label: Some("SwirUI rounded rectangle shader"),
             source: wgpu::ShaderSource::Wgsl(include_str!("rectangles.wgsl").into()),
         });
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("SwirUI persistent rectangle pipeline"),
+            label: Some("SwirUI persistent rounded rectangle pipeline"),
             layout: Some(&pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &shader,
@@ -223,7 +224,7 @@ impl PersistentGpuContext {
 
         let rectangle_data = rectangle_bytes(rectangles);
         let rectangle_buffer = self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("SwirUI rectangle instances"),
+            label: Some("SwirUI rounded rectangle instances"),
             contents: &rectangle_data,
             usage: wgpu::BufferUsages::STORAGE,
         });
@@ -253,7 +254,7 @@ impl PersistentGpuContext {
             });
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("SwirUI persistent rectangle pass"),
+                label: Some("SwirUI persistent rounded rectangle pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &view,
                     depth_slice: None,
@@ -505,26 +506,35 @@ fn validate_rectangles(rectangles: &[RectangleInstance]) -> PyResult<()> {
         ));
     }
 
-    for &(x, y, width, height, red, green, blue, alpha) in rectangles {
-        if ![x, y, width, height, red, green, blue, alpha]
-            .into_iter()
-            .all(f32::is_finite)
-        {
+    for rectangle in rectangles {
+        if rectangle.len() != RECTANGLE_INSTANCE_FLOATS {
+            return Err(PyValueError::new_err(format!(
+                "Rectangle instances require {RECTANGLE_INSTANCE_FLOATS} floats: "
+                    .to_owned()
+                    + "x, y, width, height, rgba and four corner radii."
+            )));
+        }
+        if !rectangle.iter().copied().all(f32::is_finite) {
             return Err(PyValueError::new_err(
-                "Rectangle geometry and color channels must be finite.",
+                "Rectangle geometry, colors and corner radii must be finite.",
             ));
         }
-        if width <= 0.0 || height <= 0.0 {
+        if rectangle[2] <= 0.0 || rectangle[3] <= 0.0 {
             return Err(PyValueError::new_err(
                 "Rectangle width and height must be greater than zero.",
             ));
         }
-        if [red, green, blue, alpha]
-            .into_iter()
-            .any(|channel| !(0.0..=1.0).contains(&channel))
+        if rectangle[4..8]
+            .iter()
+            .any(|channel| !(0.0..=1.0).contains(channel))
         {
             return Err(PyValueError::new_err(
                 "Rectangle color channels must be between 0.0 and 1.0.",
+            ));
+        }
+        if rectangle[8..12].iter().any(|radius| *radius < 0.0) {
+            return Err(PyValueError::new_err(
+                "Rectangle corner radii cannot be negative.",
             ));
         }
     }
@@ -542,9 +552,9 @@ fn floats_to_bytes(values: &[f32]) -> Vec<u8> {
 
 #[cfg(target_os = "windows")]
 fn rectangle_bytes(rectangles: &[RectangleInstance]) -> Vec<u8> {
-    let mut values = Vec::with_capacity(rectangles.len() * 8);
-    for &(x, y, width, height, red, green, blue, alpha) in rectangles {
-        values.extend_from_slice(&[x, y, width, height, red, green, blue, alpha]);
+    let mut values = Vec::with_capacity(rectangles.len() * RECTANGLE_INSTANCE_FLOATS);
+    for rectangle in rectangles {
+        values.extend_from_slice(rectangle);
     }
     floats_to_bytes(&values)
 }
@@ -634,6 +644,12 @@ fn _swirui_native(module: &Bound<'_, PyModule>) -> PyResult<()> {
 mod tests {
     use super::*;
 
+    fn valid_rectangle() -> RectangleInstance {
+        vec![
+            20.0, 30.0, 100.0, 50.0, 0.0, 0.5, 1.0, 1.0, 12.0, 18.0, 22.0, 8.0,
+        ]
+    }
+
     #[test]
     fn reports_at_least_one_compiled_backend() {
         assert!(!enabled_backends().is_empty());
@@ -653,15 +669,24 @@ mod tests {
     }
 
     #[test]
-    fn validates_rectangle_instances() {
-        let valid = [(20.0, 30.0, 100.0, 50.0, 0.0, 0.5, 1.0, 1.0)];
-        assert!(validate_rectangles(&valid).is_ok());
+    fn validates_rounded_rectangle_instances() {
+        assert!(validate_rectangles(&[valid_rectangle()]).is_ok());
         assert!(validate_rectangles(&[]).is_err());
 
-        let zero_width = [(20.0, 30.0, 0.0, 50.0, 0.0, 0.5, 1.0, 1.0)];
-        assert!(validate_rectangles(&zero_width).is_err());
+        let mut wrong_length = valid_rectangle();
+        wrong_length.pop();
+        assert!(validate_rectangles(&[wrong_length]).is_err());
 
-        let invalid_color = [(20.0, 30.0, 100.0, 50.0, 0.0, 1.5, 1.0, 1.0)];
-        assert!(validate_rectangles(&invalid_color).is_err());
+        let mut zero_width = valid_rectangle();
+        zero_width[2] = 0.0;
+        assert!(validate_rectangles(&[zero_width]).is_err());
+
+        let mut invalid_color = valid_rectangle();
+        invalid_color[5] = 1.5;
+        assert!(validate_rectangles(&[invalid_color]).is_err());
+
+        let mut negative_radius = valid_rectangle();
+        negative_radius[8] = -1.0;
+        assert!(validate_rectangles(&[negative_radius]).is_err());
     }
 }
