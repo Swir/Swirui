@@ -1,6 +1,7 @@
 """Rendering contracts and backend-neutral primitives."""
 
 from .base import NullRenderer, Renderer
+from .factory import create_renderer
 from .geometry import Color, CornerRadius, Point, Rect, Size
 from .scene import Scene, SceneNode, SceneNodeKind
 from .scheduler import FrameScheduler, FrameStats
@@ -27,4 +28,5 @@ __all__ = [
     "Size",
     "WgpuRenderer",
     "Win32PreviewRenderer",
+    "create_renderer",
 ]
