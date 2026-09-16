@@ -55,6 +55,11 @@ _DEFAULT_TEXT_COLOR = Color(1.0, 1.0, 1.0, 1.0)
 class WgpuRenderer:
     """Submit prepared SwirUI scenes to the native Rust/wgpu renderer.
 
+    Scene geometry is authored in logical device-independent pixels. Before
+    crossing the PyO3 boundary it is converted to physical pixels using the
+    window's current per-monitor scale, keeping shapes, text, images and clip
+    rectangles aligned across mixed-DPI displays.
+
     Native builds retain one persistent GPU context per window so the expensive
     instance/device/pipeline setup is not repeated for every frame. Images are
     registered once as RGBA resources and uploaded into every active native GPU
@@ -156,7 +161,8 @@ class WgpuRenderer:
             raise RuntimeError("A native window handle is required before creating a GPU surface.")
 
         handle = window.native_handle.value
-        surface = RenderSurface(window.native_handle, window.width, window.height)
+        pixel_width, pixel_height = window.pixel_size
+        surface = RenderSurface(window.native_handle, pixel_width, pixel_height)
         self.surfaces[handle] = surface
 
         native = self._native
@@ -166,12 +172,12 @@ class WgpuRenderer:
                 self.presentation_mode is PresentationMode.AUTO_VSYNC
                 and self.maximum_frame_latency == 1
             ):
-                context = context_factory(handle, window.width, window.height)
+                context = context_factory(handle, pixel_width, pixel_height)
             else:
                 context = context_factory(
                     handle,
-                    window.width,
-                    window.height,
+                    pixel_width,
+                    pixel_height,
                     self.presentation_mode.value,
                     self.maximum_frame_latency,
                 )
@@ -281,6 +287,7 @@ class WgpuRenderer:
                 "Image rendering requires the persistent SwirUI native GPU context."
             )
         background = self.background
+        pixel_width, pixel_height = window.pixel_size
         if texts:
             draw_scene = getattr(native, "draw_scene_win32_surface", None)
             if draw_scene is None:
@@ -289,8 +296,8 @@ class WgpuRenderer:
                 )
             adapter_name, graphics_backend, rectangle_count, text_count = draw_scene(
                 window.native_handle.value,
-                window.width,
-                window.height,
+                pixel_width,
+                pixel_height,
                 rectangles,
                 texts,
                 background.r,
@@ -305,8 +312,8 @@ class WgpuRenderer:
             adapter_name, graphics_backend, rectangle_count = (
                 native.draw_rectangles_win32_surface(
                     window.native_handle.value,
-                    window.width,
-                    window.height,
+                    pixel_width,
+                    pixel_height,
                     rectangles,
                     background.r,
                     background.g,
@@ -320,8 +327,8 @@ class WgpuRenderer:
         else:
             adapter_name, graphics_backend = native.clear_win32_surface(
                 window.native_handle.value,
-                window.width,
-                window.height,
+                pixel_width,
+                pixel_height,
                 background.r,
                 background.g,
                 background.b,
@@ -355,14 +362,24 @@ class WgpuRenderer:
         return viewport if clip is None else viewport.intersection(clip)
 
     @staticmethod
-    def _clip_tuple(clip: Rect) -> ClipRect:
-        return (clip.x, clip.y, clip.right, clip.bottom)
+    def _scale(value: float, scale: float) -> float:
+        return value * scale
+
+    @classmethod
+    def _clip_tuple(cls, clip: Rect, scale: float = 1.0) -> ClipRect:
+        return (
+            cls._scale(clip.x, scale),
+            cls._scale(clip.y, scale),
+            cls._scale(clip.right, scale),
+            cls._scale(clip.bottom, scale),
+        )
 
     def _rectangle_instances(self, window: Window) -> list[RectangleInstance]:
         scene = window.scene
         if scene is None:
             return []
 
+        scale = window.scale
         rectangles: list[RectangleInstance] = []
         for node, effective_opacity, inherited_clip in scene.walk_composited():
             if node.kind not in (SceneNodeKind.GROUP, SceneNodeKind.RECTANGLE):
@@ -377,21 +394,21 @@ class WgpuRenderer:
 
             fill = node.fill
             radius = node.corner_radius
-            clip_left, clip_top, clip_right, clip_bottom = self._clip_tuple(clip)
+            clip_left, clip_top, clip_right, clip_bottom = self._clip_tuple(clip, scale)
             rectangles.append(
                 (
-                    node.bounds.x,
-                    node.bounds.y,
-                    node.bounds.width,
-                    node.bounds.height,
+                    self._scale(node.bounds.x, scale),
+                    self._scale(node.bounds.y, scale),
+                    self._scale(node.bounds.width, scale),
+                    self._scale(node.bounds.height, scale),
                     fill.r,
                     fill.g,
                     fill.b,
                     fill.a * effective_opacity,
-                    radius.top_left,
-                    radius.top_right,
-                    radius.bottom_right,
-                    radius.bottom_left,
+                    self._scale(radius.top_left, scale),
+                    self._scale(radius.top_right, scale),
+                    self._scale(radius.bottom_right, scale),
+                    self._scale(radius.bottom_left, scale),
                     clip_left,
                     clip_top,
                     clip_right,
@@ -405,6 +422,7 @@ class WgpuRenderer:
         if scene is None:
             return []
 
+        scale = window.scale
         texts: list[TextInstance] = []
         for node, effective_opacity, inherited_clip in scene.walk_composited():
             if node.kind is not SceneNodeKind.TEXT:
@@ -421,17 +439,17 @@ class WgpuRenderer:
             texts.append(
                 (
                     node.text,
-                    node.bounds.x,
-                    node.bounds.y,
-                    node.bounds.width,
-                    node.bounds.height,
-                    node.font_size,
+                    self._scale(node.bounds.x, scale),
+                    self._scale(node.bounds.y, scale),
+                    self._scale(node.bounds.width, scale),
+                    self._scale(node.bounds.height, scale),
+                    self._scale(node.font_size, scale),
                     fill.r,
                     fill.g,
                     fill.b,
                     fill.a * effective_opacity,
                     node.font_family,
-                    self._clip_tuple(clip),
+                    self._clip_tuple(clip, scale),
                 )
             )
         return texts
@@ -441,6 +459,7 @@ class WgpuRenderer:
         if scene is None:
             return []
 
+        scale = window.scale
         images: list[ImageInstance] = []
         for node, effective_opacity, inherited_clip in scene.walk_composited():
             if node.kind is not SceneNodeKind.IMAGE:
@@ -458,12 +477,12 @@ class WgpuRenderer:
             images.append(
                 (
                     resource_id,
-                    node.bounds.x,
-                    node.bounds.y,
-                    node.bounds.width,
-                    node.bounds.height,
+                    self._scale(node.bounds.x, scale),
+                    self._scale(node.bounds.y, scale),
+                    self._scale(node.bounds.width, scale),
+                    self._scale(node.bounds.height, scale),
                     effective_opacity,
-                    self._clip_tuple(clip),
+                    self._clip_tuple(clip, scale),
                 )
             )
         return images

@@ -13,7 +13,7 @@
 ![Windows Native](https://img.shields.io/badge/Windows-Win32%20native-0078D4?logo=windows11&logoColor=white)
 ![GPU](https://img.shields.io/badge/GPU-wgpu%2030-6E56CF)
 ![Status](https://img.shields.io/badge/status-pre--alpha-7C3AED)
-![Progress](https://img.shields.io/badge/project%20progress-16%25-00BFFF)
+![Progress](https://img.shields.io/badge/project%20progress-17%25-00BFFF)
 
 </div>
 
@@ -21,9 +21,9 @@
 
 ## Project progress
 
-**16% — 0.2 Alpha: Native Window + First Renderer in progress**
+**17% — 0.2 Alpha: Native Window + First Renderer in progress**
 
-`[███░░░░░░░░░░░░░░░░░] 16%`
+`[███░░░░░░░░░░░░░░░░░] 17%`
 
 **Completed:** `0.1 Alpha — Foundation` ✅  
 **Current milestone:** `0.2 Alpha — Native Window + First Renderer` 🚧
@@ -64,6 +64,9 @@ SwirUI is currently **pre-alpha**. APIs may change while the native renderer and
 - normalized close, resize, focus, mouse, keyboard and text-input events
 - **Win32 multi-monitor enumeration with virtual-desktop geometry, work areas, per-display scale and refresh rate**
 - **per-window active-display mapping plus normalized movement/display-change transitions**
+- **logical-DIP public window and SceneGraph geometry with explicit logical ↔ physical conversion helpers**
+- **native physical resize and pointer coordinates normalized back into logical DIPs before layout/input routing**
+- **per-monitor DPI scaling for rounded rectangles, shaped text, images and clip rectangles before GPU submission**
 - per-window effective scale reporting and normalized `WM_DPICHANGED` events
 - x64-safe Win32 handle bindings
 - visible SceneGraph bring-up renderer for Windows
@@ -99,7 +102,7 @@ SwirUI is currently **pre-alpha**. APIs may change while the native renderer and
 - **routed keyboard and text-input events through the focused component path**
 - propagation cancellation with `Event.stop_propagation()`
 - ABI3 native wheel build for Python 3.11+
-- Windows native + persistent rounded-GPU + shaped-text + image + clipping + presentation/display smoke tests on Python 3.14
+- Windows native + persistent rounded-GPU + shaped-text + image + clipping + mixed-DPI + presentation/display smoke tests on Python 3.14
 - Ruff, Mypy, coverage and Python 3.11–3.14 CI
 
 ## Native and GPU demos
@@ -133,7 +136,7 @@ python examples/gpu_image_demo.py
 python examples/high_refresh_demo.py
 ```
 
-The rectangle demo submits a prepared SwirUI `SceneGraph` into the Rust/wgpu backend. Filled rectangles are batched into one instanced draw call and per-corner radii are evaluated in the fragment shader with anti-aliased SDF edges. The text demo exercises the full `SceneGraph → Python → Rust → glyphon → wgpu` path with Unicode shaping, multiple font sizes and a persistent glyph atlas. The image demo generates RGBA pixels in memory, registers them once with the Python renderer and reuses the cached native wgpu texture through `SceneNodeKind.IMAGE`. The high-refresh demo uses a 240 FPS application ceiling and follows the active display refresh rate automatically; moving the window between monitors reports the current monitor, scale, refresh rate, effective target FPS and smoothed runtime FPS. The native renderer keeps its GPU context alive across frames and reconfigures the existing surface and text viewport on resize instead of recreating the GPU device, pipelines, glyph atlas or registered image textures.
+The rectangle demo submits a prepared SwirUI `SceneGraph` into the Rust/wgpu backend. Filled rectangles are batched into one instanced draw call and per-corner radii are evaluated in the fragment shader with anti-aliased SDF edges. The text demo exercises the full `SceneGraph → Python → Rust → glyphon → wgpu` path with Unicode shaping, multiple font sizes and a persistent glyph atlas. The image demo generates RGBA pixels in memory, registers them once with the Python renderer and reuses the cached native wgpu texture through `SceneNodeKind.IMAGE`. The high-refresh demo uses a 240 FPS application ceiling and follows the active display refresh rate automatically; moving the window between monitors reports the current monitor, scale, refresh rate, effective target FPS and smoothed runtime FPS. Scene geometry remains authored in logical DIPs while native Win32 input and persistent GPU surfaces operate in physical pixels; per-window monitor scale converts consistently at the platform and renderer boundaries. The native renderer keeps its GPU context alive across frames and reconfigures the existing surface and text viewport on resize or DPI changes instead of recreating the GPU device, pipelines, glyph atlas or registered image textures.
 
 ## Foundation API
 
@@ -178,7 +181,8 @@ SwirUI Runtime
         │
         ├── Native Platform Backend
         │     └── Win32 backend ✅
-        ├── per-window active display + refresh tracking ✅
+        ├── logical-DIP ↔ physical-pixel boundary ✅
+        ├── per-window active display + scale + refresh tracking ✅
         ├── Render Tree ✅
         ├── Scene Graph ✅
         ├── z-aware + clip-aware Scene hit testing ✅
@@ -192,6 +196,7 @@ Renderer Layer
         │
         ├── GPU surface / swapchain ✅
         ├── persistent per-window GPU context ✅
+        ├── DPI-scaled physical GPU submission ✅
         ├── VSync / present-mode policy ✅
         ├── SceneGraph rectangle submission ✅
         ├── instanced filled rectangles ✅
@@ -239,12 +244,12 @@ SwirUI Framework
 
 ## Current 0.2 Alpha focus
 
-The native Windows foundation, persistent wgpu renderer, rounded GPU primitives, shaped GPU text, persistent GPU images, hierarchical clipping/compositing, routed pointer/keyboard input, explicit present-mode policy, multi-monitor discovery and display-aware high-refresh pacing are verified. The next renderer/runtime work is:
+The native Windows foundation, persistent wgpu renderer, rounded GPU primitives, shaped GPU text, persistent GPU images, hierarchical clipping/compositing, routed pointer/keyboard input, explicit present-mode policy, robust logical-DIP/physical-pixel HiDPI handling, multi-monitor discovery and display-aware high-refresh pacing are verified. The next renderer/runtime work is:
 
-1. robust end-to-end DPI / HiDPI handling across logical layout, input and physical GPU surfaces
-2. reusable dynamic GPU buffers and broader resource caching
-3. general shape / path rendering
-4. deeper focus management and accessibility semantics
+1. reusable dynamic GPU buffers and broader resource caching
+2. general shape / path rendering
+3. deeper focus management and accessibility semantics
+4. Win32 client-area sizing hardening for exact decorated-window logical resize semantics
 
 See **[ROADMAP.md](ROADMAP.md)** for the full development plan.
 
@@ -270,6 +275,7 @@ Windows persistent rounded-rectangle GPU draw smoke test
 Windows shaped-text SceneGraph → Python → Rust/wgpu smoke test
 Windows image-resource SceneGraph → Python → Rust/wgpu smoke test
 Windows clipped mixed-scene GPU smoke test
+Windows mixed-DPI logical-DIP → physical-GPU smoke test
 Windows presentation-policy reconfiguration smoke test
 Display-aware high-refresh runtime pacing tests
 Routed keyboard focus / text-input tests

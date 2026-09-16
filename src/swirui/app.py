@@ -92,7 +92,7 @@ class App(EventEmitter):
         if not self.running:
             return 0
 
-        events = self.platform_backend.poll_events()
+        events = self._normalize_dpi_resize_order(self.platform_backend.poll_events())
         for event in events:
             self._dispatch_platform_event(event)
 
@@ -104,6 +104,31 @@ class App(EventEmitter):
         ):
             self.stop(self.exit_code)
         return len(events)
+
+    @staticmethod
+    def _normalize_dpi_resize_order(
+        events: tuple[PlatformEvent, ...],
+    ) -> list[PlatformEvent]:
+        """Ensure a new DPI scale is visible before its synchronous Win32 resize.
+
+        ``SetWindowPos`` inside ``WM_DPICHANGED`` may synchronously enqueue a
+        ``WM_SIZE`` before the backend can append its normalized DPI event. When
+        those two adjacent events target the same HWND, swap them so physical
+        resize dimensions are converted with the new scale instead of the old
+        monitor scale. Other event ordering remains untouched.
+        """
+
+        ordered = list(events)
+        for index in range(1, len(ordered)):
+            current = ordered[index]
+            previous = ordered[index - 1]
+            if (
+                current.kind is PlatformEventKind.DPI_CHANGED
+                and previous.kind is PlatformEventKind.RESIZE
+                and current.window == previous.window
+            ):
+                ordered[index - 1], ordered[index] = current, previous
+        return ordered
 
     def invalidate(self, window: Window | None = None) -> None:
         """Request a future frame for one window or every attached window."""
@@ -265,16 +290,26 @@ class App(EventEmitter):
             display=window.display,
         )
 
+    def _initial_window_scale(self) -> float:
+        """Choose the scale used to translate initial logical size to native pixels."""
+
+        displays = self.platform_backend.displays()
+        if not displays:
+            return 1.0
+        primary = next((display for display in displays if display.primary), displays[0])
+        return primary.scale
+
     def _attach_window(self, window: Window) -> None:
         if window.native_handle is not None:
             return
+        initial_scale = self._initial_window_scale()
         handle = self.platform_backend.create_window(
             NativeWindowSpec(
                 title=window.title,
-                width=window.width,
-                height=window.height,
-                min_width=window.min_width,
-                min_height=window.min_height,
+                width=max(1, round(window.width * initial_scale)),
+                height=max(1, round(window.height * initial_scale)),
+                min_width=max(1, round(window.min_width * initial_scale)),
+                min_height=max(1, round(window.min_height * initial_scale)),
             )
         )
         window._bind_native(self.platform_backend, handle)
@@ -303,7 +338,7 @@ class App(EventEmitter):
 
         def resize_surface(_event: Event) -> None:
             if self.running and window.native_handle is not None:
-                self.renderer.resize_surface(window, window.width, window.height)
+                self.renderer.resize_surface(window, window.pixel_width, window.pixel_height)
             self.invalidate(window)
 
         def display_changed(_event: Event) -> None:
@@ -320,6 +355,7 @@ class App(EventEmitter):
             window.on("scene_changed", invalidate_window),
             window.on("shown", invalidate_window),
             window.on("resized", resize_surface),
+            window.on("scale_changed", resize_surface),
             window.on("display_changed", display_changed),
             window.on("closed", close_surface),
         ]
