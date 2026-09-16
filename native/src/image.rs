@@ -8,7 +8,8 @@ use std::collections::HashMap;
 #[cfg(target_os = "windows")]
 use wgpu::util::DeviceExt;
 
-pub(crate) type ImageInstance = (String, f32, f32, f32, f32, f32);
+pub(crate) type ClipRect = (f32, f32, f32, f32);
+pub(crate) type ImageInstance = (String, f32, f32, f32, f32, f32, ClipRect);
 
 #[cfg(not(target_os = "windows"))]
 pub(crate) struct ImageSystem;
@@ -216,22 +217,36 @@ impl ImageSystem {
         }
 
         let mut values = Vec::with_capacity(images.len() * 6 * 5);
-        for (resource_id, x, y, width, height, opacity) in images {
+        for (resource_id, x, y, width, height, opacity, clip) in images {
             if !self.resources.contains_key(resource_id) {
                 return Err(PyKeyError::new_err(format!(
                     "Image resource '{resource_id}' is not registered in this GPU context."
                 )));
             }
-            let left = (*x / surface_width as f32) * 2.0 - 1.0;
-            let right = ((*x + *width) / surface_width as f32) * 2.0 - 1.0;
-            let top = 1.0 - (*y / surface_height as f32) * 2.0;
-            let bottom = 1.0 - ((*y + *height) / surface_height as f32) * 2.0;
-            push_vertex(&mut values, left, top, 0.0, 0.0, *opacity);
-            push_vertex(&mut values, right, top, 1.0, 0.0, *opacity);
-            push_vertex(&mut values, right, bottom, 1.0, 1.0, *opacity);
-            push_vertex(&mut values, left, top, 0.0, 0.0, *opacity);
-            push_vertex(&mut values, right, bottom, 1.0, 1.0, *opacity);
-            push_vertex(&mut values, left, bottom, 0.0, 1.0, *opacity);
+            let visible_left = x.max(clip.0);
+            let visible_top = y.max(clip.1);
+            let visible_right = (*x + *width).min(clip.2);
+            let visible_bottom = (*y + *height).min(clip.3);
+            if visible_right <= visible_left || visible_bottom <= visible_top {
+                return Err(PyValueError::new_err(
+                    "Image clip must intersect the image bounds before GPU submission.",
+                ));
+            }
+
+            let u0 = (visible_left - *x) / *width;
+            let v0 = (visible_top - *y) / *height;
+            let u1 = (visible_right - *x) / *width;
+            let v1 = (visible_bottom - *y) / *height;
+            let left = (visible_left / surface_width as f32) * 2.0 - 1.0;
+            let right = (visible_right / surface_width as f32) * 2.0 - 1.0;
+            let top = 1.0 - (visible_top / surface_height as f32) * 2.0;
+            let bottom = 1.0 - (visible_bottom / surface_height as f32) * 2.0;
+            push_vertex(&mut values, left, top, u0, v0, *opacity);
+            push_vertex(&mut values, right, top, u1, v0, *opacity);
+            push_vertex(&mut values, right, bottom, u1, v1, *opacity);
+            push_vertex(&mut values, left, top, u0, v0, *opacity);
+            push_vertex(&mut values, right, bottom, u1, v1, *opacity);
+            push_vertex(&mut values, left, bottom, u0, v1, *opacity);
         }
 
         let bytes = floats_to_bytes(&values);
@@ -296,16 +311,18 @@ pub(crate) fn validate_image_resource(
 }
 
 pub(crate) fn validate_image_instances(images: &[ImageInstance]) -> PyResult<()> {
-    for (resource_id, x, y, width, height, opacity) in images {
+    for (resource_id, x, y, width, height, opacity, clip) in images {
         if resource_id.trim().is_empty() {
             return Err(PyValueError::new_err("Image instance resource_id cannot be empty."));
         }
-        if ![*x, *y, *width, *height, *opacity]
-            .into_iter()
-            .all(f32::is_finite)
+        if ![
+            *x, *y, *width, *height, *opacity, clip.0, clip.1, clip.2, clip.3,
+        ]
+        .into_iter()
+        .all(f32::is_finite)
         {
             return Err(PyValueError::new_err(
-                "Image geometry and opacity must be finite.",
+                "Image geometry, opacity and clip bounds must be finite.",
             ));
         }
         if *width <= 0.0 || *height <= 0.0 {
@@ -316,6 +333,18 @@ pub(crate) fn validate_image_instances(images: &[ImageInstance]) -> PyResult<()>
         if !(0.0..=1.0).contains(opacity) {
             return Err(PyValueError::new_err(
                 "Image opacity must be between 0.0 and 1.0.",
+            ));
+        }
+        if clip.2 <= clip.0 || clip.3 <= clip.1 {
+            return Err(PyValueError::new_err(
+                "Image clip bounds must have positive width and height.",
+            ));
+        }
+        if (*x + *width).min(clip.2) <= x.max(clip.0)
+            || (*y + *height).min(clip.3) <= y.max(clip.1)
+        {
+            return Err(PyValueError::new_err(
+                "Image clip must intersect the image bounds.",
             ));
         }
     }
@@ -350,13 +379,48 @@ mod tests {
 
     #[test]
     fn validates_image_instances() {
-        let valid = ("checker".to_owned(), 10.0, 20.0, 100.0, 80.0, 0.75);
+        let valid = (
+            "checker".to_owned(),
+            10.0,
+            20.0,
+            100.0,
+            80.0,
+            0.75,
+            (0.0, 0.0, 200.0, 200.0),
+        );
         assert!(validate_image_instances(&[valid]).is_ok());
 
-        let invalid_opacity = ("checker".to_owned(), 10.0, 20.0, 100.0, 80.0, 1.5);
+        let invalid_opacity = (
+            "checker".to_owned(),
+            10.0,
+            20.0,
+            100.0,
+            80.0,
+            1.5,
+            (0.0, 0.0, 200.0, 200.0),
+        );
         assert!(validate_image_instances(&[invalid_opacity]).is_err());
 
-        let invalid_size = ("checker".to_owned(), 10.0, 20.0, 0.0, 80.0, 1.0);
+        let invalid_size = (
+            "checker".to_owned(),
+            10.0,
+            20.0,
+            0.0,
+            80.0,
+            1.0,
+            (0.0, 0.0, 200.0, 200.0),
+        );
         assert!(validate_image_instances(&[invalid_size]).is_err());
+
+        let disjoint_clip = (
+            "checker".to_owned(),
+            10.0,
+            20.0,
+            100.0,
+            80.0,
+            1.0,
+            (300.0, 300.0, 400.0, 400.0),
+        );
+        assert!(validate_image_instances(&[disjoint_clip]).is_err());
     }
 }
