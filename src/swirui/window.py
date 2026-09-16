@@ -16,6 +16,11 @@ _POINTER_EVENTS = {
     PlatformEventKind.POINTER_DOWN,
     PlatformEventKind.POINTER_UP,
 }
+_KEYBOARD_EVENTS = {
+    PlatformEventKind.KEY_DOWN,
+    PlatformEventKind.KEY_UP,
+    PlatformEventKind.TEXT_INPUT,
+}
 
 
 class Window(EventEmitter):
@@ -45,6 +50,7 @@ class Window(EventEmitter):
         self.root: Component | None = None
         self.scene: Scene | None = None
         self.hovered_scene_node: SceneNode | None = None
+        self.focused_component: Component | None = None
         self.visible = False
         self.closed = False
         self.focused = False
@@ -53,6 +59,10 @@ class Window(EventEmitter):
 
     def set_root(self, component: Component | None) -> Window:
         old_root = self.root
+        if self.focused_component is not None and not self._component_belongs_to(
+            component, self.focused_component
+        ):
+            self.focus_component(None)
         self.root = component
         self.emit("root_changed", old_root=old_root, root=component)
         return self
@@ -65,6 +75,34 @@ class Window(EventEmitter):
         self.hovered_scene_node = None
         self.emit("scene_changed", old_scene=old_scene, scene=scene)
         return self
+
+    def focus_component(self, component: Component | None) -> None:
+        """Move logical keyboard focus to a component in this window's tree.
+
+        Focus is independent from the operating-system window activation state.
+        Keyboard and text-input platform events are routed through the focused
+        component's ancestry using capture → target → bubble phases.
+        """
+
+        if component is self.focused_component:
+            return
+        if component is not None:
+            if not self._component_belongs_to(self.root, component):
+                raise ValueError("Focused component must belong to the window root tree.")
+            if not component.enabled or not component.visible:
+                raise ValueError("Focused component must be enabled and visible.")
+
+        old_component = self.focused_component
+        self.focused_component = component
+        if old_component is not None:
+            old_component.emit("focus_lost", window=self, related_target=component)
+        if component is not None:
+            component.emit("focus_gained", window=self, related_target=old_component)
+        self.emit(
+            "component_focus_changed",
+            old_component=old_component,
+            component=component,
+        )
 
     def set_title(self, title: str) -> None:
         if title == self.title:
@@ -165,6 +203,10 @@ class Window(EventEmitter):
             self._apply_pointer_event(event)
             return
 
+        if event.kind in _KEYBOARD_EVENTS:
+            self._apply_keyboard_event(event)
+            return
+
         self.emit(event.kind.value, event=event)
 
     def _set_scale(self, scale: float) -> None:
@@ -244,6 +286,24 @@ class Window(EventEmitter):
             routed_event=routed_event,
         )
 
+    def _apply_keyboard_event(self, event: PlatformEvent) -> None:
+        component_path = self._component_path_for_component(self.focused_component)
+        if self.focused_component is not None and not component_path:
+            self.focus_component(None)
+        component_target = component_path[-1] if component_path else None
+        routed_event = self._route_component_keyboard_event(
+            event.kind.value,
+            event,
+            component_path,
+        )
+        self.emit(
+            event.kind.value,
+            event=event,
+            component_target=component_target,
+            component_path=component_path,
+            routed_event=routed_event,
+        )
+
     def _component_path_for_scene_target(
         self,
         scene_target: SceneNode | None,
@@ -253,7 +313,13 @@ class Window(EventEmitter):
         if self.root is None or scene_target is None:
             return ()
         target = self.root.find(scene_target.key)
-        if target is None:
+        return self._component_path_for_component(target)
+
+    def _component_path_for_component(
+        self,
+        target: Component | None,
+    ) -> tuple[Component, ...]:
+        if self.root is None or target is None:
             return ()
 
         path: list[Component] = []
@@ -265,6 +331,10 @@ class Window(EventEmitter):
         if not path or path[0] is not self.root:
             return ()
         return tuple(path)
+
+    @staticmethod
+    def _component_belongs_to(root: Component | None, target: Component) -> bool:
+        return root is not None and any(component is target for component in root.walk())
 
     def _route_component_pointer_event(
         self,
@@ -285,6 +355,47 @@ class Window(EventEmitter):
                 "event": platform_event,
                 "scene_target": scene_target,
                 "scene_path": scene_path,
+                "component_target": target,
+                "component_path": component_path,
+            },
+        )
+
+        for component in component_path[:-1]:
+            routed.phase = EventPhase.CAPTURE
+            component.dispatch(routed, capture=True)
+            if routed.propagation_stopped:
+                return routed
+
+        routed.phase = EventPhase.TARGET
+        target.dispatch(routed, capture=True)
+        if routed.propagation_stopped:
+            return routed
+        target.dispatch(routed)
+        if routed.propagation_stopped:
+            return routed
+
+        for component in reversed(component_path[:-1]):
+            routed.phase = EventPhase.BUBBLE
+            component.dispatch(routed)
+            if routed.propagation_stopped:
+                break
+        return routed
+
+    def _route_component_keyboard_event(
+        self,
+        event_type: str,
+        platform_event: PlatformEvent,
+        component_path: tuple[Component, ...],
+    ) -> Event | None:
+        if not component_path:
+            return None
+
+        target = component_path[-1]
+        routed = Event(
+            type=event_type,
+            source=target,
+            data={
+                "event": platform_event,
                 "component_target": target,
                 "component_path": component_path,
             },
@@ -338,6 +449,7 @@ class Window(EventEmitter):
     def _mark_closed(self) -> None:
         if self.closed:
             return
+        self.focus_component(None)
         self.visible = False
         self.focused = False
         self.hovered_scene_node = None
