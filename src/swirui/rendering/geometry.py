@@ -91,12 +91,13 @@ class Color:
         if len(text) not in (6, 8):
             raise ValueError("Hex colors must use RRGGBB or RRGGBBAA format.")
         try:
-            channels = tuple(int(text[index : index + 2], 16) / 255.0 for index in range(0, len(text), 2))
+            r = int(text[0:2], 16) / 255.0
+            g = int(text[2:4], 16) / 255.0
+            b = int(text[4:6], 16) / 255.0
+            a = int(text[6:8], 16) / 255.0 if len(text) == 8 else 1.0
         except ValueError as exc:
             raise ValueError("Invalid hexadecimal color.") from exc
-        if len(channels) == 3:
-            return cls(*channels, 1.0)
-        return cls(*channels)
+        return cls(r, g, b, a)
 
     def with_alpha(self, alpha: float) -> Color:
         return Color(self.r, self.g, self.b, alpha)
