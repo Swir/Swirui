@@ -47,6 +47,7 @@ TextInstance = tuple[
     ClipRect,
 ]
 ImageInstance = tuple[str, float, float, float, float, float, ClipRect]
+PathTriangleInstance = tuple[float, ...]
 ImageResource = tuple[int, int, bytes]
 
 _DEFAULT_TEXT_COLOR = Color(1.0, 1.0, 1.0, 1.0)
@@ -57,8 +58,8 @@ class WgpuRenderer:
 
     Scene geometry is authored in logical device-independent pixels. Before
     crossing the PyO3 boundary it is converted to physical pixels using the
-    window's current per-monitor scale, keeping shapes, text, images and clip
-    rectangles aligned across mixed-DPI displays.
+    window's current per-monitor scale, keeping shapes, text, images, paths and
+    clip rectangles aligned across mixed-DPI displays.
 
     Native builds retain one persistent GPU context per window so the expensive
     instance/device/pipeline setup is not repeated for every frame. Image
@@ -88,6 +89,7 @@ class WgpuRenderer:
         self.last_rectangle_count = 0
         self.last_text_count = 0
         self.last_image_count = 0
+        self.last_path_count = 0
         self.adapter_name: str | None = None
         self.graphics_backend: str | None = None
         self.surfaces: dict[int, RenderSurface] = {}
@@ -296,16 +298,37 @@ class WgpuRenderer:
         rectangles = self._rectangle_instances(window)
         texts = self._text_instances(window)
         images = self._image_instances(window)
+        paths = self._path_instances(window)
         background = self.background
         context = self._contexts.get(window.native_handle.value)
         if context is not None:
             draw_scene = getattr(context, "draw_scene", None)
-            if rectangles or texts or images:
+            if rectangles or texts or images or paths:
                 if images and getattr(context, "register_image_rgba", None) is None:
                     raise RuntimeError(
                         "Installed SwirUI native GPU core does not support image rendering."
                     )
-                if draw_scene is not None:
+                if paths:
+                    draw_scene_with_paths = getattr(context, "draw_scene_with_paths", None)
+                    if draw_scene_with_paths is None:
+                        raise RuntimeError(
+                            "Installed SwirUI native GPU core does not support path rendering."
+                        )
+                    rectangle_count, text_count, image_count, path_count = draw_scene_with_paths(
+                        rectangles,
+                        texts,
+                        images,
+                        paths,
+                        background.r,
+                        background.g,
+                        background.b,
+                        background.a,
+                    )
+                    self.last_rectangle_count = int(rectangle_count)
+                    self.last_text_count = int(text_count)
+                    self.last_image_count = int(image_count)
+                    self.last_path_count = int(path_count)
+                elif draw_scene is not None:
                     rectangle_count, text_count, image_count = draw_scene(
                         rectangles,
                         texts,
@@ -318,6 +341,7 @@ class WgpuRenderer:
                     self.last_rectangle_count = int(rectangle_count)
                     self.last_text_count = int(text_count)
                     self.last_image_count = int(image_count)
+                    self.last_path_count = 0
                 elif texts or images:
                     raise RuntimeError(
                         "Installed SwirUI native GPU core does not support the full scene renderer."
@@ -334,14 +358,16 @@ class WgpuRenderer:
                     )
                     self.last_text_count = 0
                     self.last_image_count = 0
+                    self.last_path_count = 0
             else:
                 context.clear(background.r, background.g, background.b, background.a)
                 self.last_rectangle_count = 0
                 self.last_text_count = 0
                 self.last_image_count = 0
+                self.last_path_count = 0
             self._capture_adapter_info(context)
         else:
-            self._render_stateless(window, rectangles, texts, images)
+            self._render_stateless(window, rectangles, texts, images, paths)
 
         self.frames_rendered += 1
 
@@ -358,6 +384,7 @@ class WgpuRenderer:
         rectangles: list[RectangleInstance],
         texts: list[TextInstance],
         images: list[ImageInstance],
+        paths: list[PathTriangleInstance],
     ) -> None:
         native = self._native
         if native is None or window.native_handle is None:
@@ -365,6 +392,10 @@ class WgpuRenderer:
         if images:
             raise RuntimeError(
                 "Image rendering requires the persistent SwirUI native GPU context."
+            )
+        if paths:
+            raise RuntimeError(
+                "Path rendering requires the persistent SwirUI native GPU context."
             )
         background = self.background
         pixel_width, pixel_height = window.pixel_size
@@ -388,6 +419,7 @@ class WgpuRenderer:
             self.last_rectangle_count = int(rectangle_count)
             self.last_text_count = int(text_count)
             self.last_image_count = 0
+            self.last_path_count = 0
         elif rectangles:
             adapter_name, graphics_backend, rectangle_count = (
                 native.draw_rectangles_win32_surface(
@@ -404,6 +436,7 @@ class WgpuRenderer:
             self.last_rectangle_count = int(rectangle_count)
             self.last_text_count = 0
             self.last_image_count = 0
+            self.last_path_count = 0
         else:
             adapter_name, graphics_backend = native.clear_win32_surface(
                 window.native_handle.value,
@@ -417,6 +450,7 @@ class WgpuRenderer:
             self.last_rectangle_count = 0
             self.last_text_count = 0
             self.last_image_count = 0
+            self.last_path_count = 0
 
         self.adapter_name = str(adapter_name)
         self.graphics_backend = str(graphics_backend)
@@ -588,6 +622,39 @@ class WgpuRenderer:
                 )
             )
         return images
+
+    def _path_instances(self, window: Window) -> list[PathTriangleInstance]:
+        scene = window.scene
+        if scene is None:
+            return []
+
+        scale = window.scale
+        paths: list[PathTriangleInstance] = []
+        for node, effective_opacity, inherited_clip in scene.walk_composited():
+            if node.kind is not SceneNodeKind.PATH or node.path is None or node.fill is None:
+                continue
+            clip = self._visible_clip(scene.width, scene.height, inherited_clip)
+            if clip is None or node.path.bounds.intersection(clip) is None:
+                continue
+            fill = node.fill
+            clip_tuple = self._clip_tuple(clip, scale)
+            for triangle in node.path.triangles():
+                paths.append(
+                    (
+                        self._scale(triangle.a.x, scale),
+                        self._scale(triangle.a.y, scale),
+                        self._scale(triangle.b.x, scale),
+                        self._scale(triangle.b.y, scale),
+                        self._scale(triangle.c.x, scale),
+                        self._scale(triangle.c.y, scale),
+                        fill.r,
+                        fill.g,
+                        fill.b,
+                        fill.a * effective_opacity,
+                        *clip_tuple,
+                    )
+                )
+        return paths
 
     def _surface_for(self, window: Window) -> RenderSurface:
         self._require_initialized()
