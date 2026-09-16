@@ -75,11 +75,11 @@ def test_wgpu_core_clears_and_draws_real_win32_surface() -> None:
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Persistent GPU test requires Windows")
-def test_persistent_wgpu_renderer_draws_shaped_text_and_survives_resize() -> None:
+def test_persistent_wgpu_renderer_draws_text_images_and_survives_resize() -> None:
     native = importlib.import_module("_swirui_native")
     backend = Win32PlatformBackend()
     backend.initialize()
-    handle = backend.create_window(NativeWindowSpec("SwirUI Persistent GPU Text", 640, 420))
+    handle = backend.create_window(NativeWindowSpec("SwirUI Persistent GPU Scene", 640, 420))
     backend.show_window(handle)
     backend.poll_events()
 
@@ -89,6 +89,30 @@ def test_persistent_wgpu_renderer_draws_shaped_text_and_survives_resize() -> Non
         assert renderer.graphics_backend
         assert renderer.width == 640
         assert renderer.height == 420
+        assert renderer.image_resource_count == 0
+
+        checker = bytes(
+            [
+                255,
+                64,
+                64,
+                255,
+                64,
+                210,
+                255,
+                255,
+                64,
+                210,
+                255,
+                255,
+                255,
+                64,
+                64,
+                255,
+            ]
+        )
+        renderer.register_image_rgba8("checker", 2, 2, checker)
+        assert renderer.image_resource_count == 1
 
         rectangles = [
             (
@@ -122,7 +146,7 @@ def test_persistent_wgpu_renderer_draws_shaped_text_and_survives_resize() -> Non
         ]
         texts = [
             (
-                "SwirUI GPU text",
+                "SwirUI GPU text + images",
                 56.0,
                 62.0,
                 520.0,
@@ -147,37 +171,28 @@ def test_persistent_wgpu_renderer_draws_shaped_text_and_survives_resize() -> Non
                 1.0,
                 "Segoe UI",
             ),
-            (
-                "persistent glyph atlas",
-                56.0,
-                246.0,
-                520.0,
-                48.0,
-                26.0,
-                0.48,
-                0.90,
-                0.78,
-                1.0,
-                "Segoe UI",
-            ),
         ]
+        images = [("checker", 430.0, 232.0, 140.0, 110.0, 0.92)]
 
-        assert renderer.draw_scene(rectangles, texts) == (2, 3)
-        assert renderer.draw_scene(rectangles, texts) == (2, 3)
+        assert renderer.draw_scene_images(rectangles, texts, images) == (2, 2, 1)
+        assert renderer.draw_scene_images(rectangles, texts, images) == (2, 2, 1)
 
         backend.resize_window(handle, 720, 460)
         backend.poll_events()
         renderer.resize(720, 460)
         assert renderer.width == 720
         assert renderer.height == 460
-        assert renderer.draw_scene(rectangles, texts) == (2, 3)
+        assert renderer.draw_scene_images(rectangles, texts, images) == (2, 2, 1)
+
+        assert renderer.unregister_image("checker") is True
+        assert renderer.image_resource_count == 0
     finally:
         backend.destroy_window(handle)
         backend.shutdown()
 
 
-@pytest.mark.skipif(sys.platform != "win32", reason="SceneGraph GPU text test requires Windows")
-def test_scenegraph_text_reaches_real_wgpu_renderer() -> None:
+@pytest.mark.skipif(sys.platform != "win32", reason="SceneGraph GPU test requires Windows")
+def test_scenegraph_text_and_image_reach_real_wgpu_renderer() -> None:
     root = SceneNode(
         key="root",
         kind=SceneNodeKind.GROUP,
@@ -192,10 +207,17 @@ def test_scenegraph_text_reaches_real_wgpu_renderer() -> None:
             corner_radius=CornerRadius.uniform(28),
         ),
         SceneNode(
+            key="logo",
+            kind=SceneNodeKind.IMAGE,
+            bounds=Rect(470, 226, 120, 120),
+            resource_id="checker",
+            opacity=0.9,
+        ),
+        SceneNode(
             key="title",
             kind=SceneNodeKind.TEXT,
             bounds=Rect(70, 82, 520, 64),
-            text="SwirUI — native GPU text",
+            text="SwirUI — native GPU scene",
             fill=Color.from_hex("#EAF7FF"),
             font_size=32,
             font_family="Segoe UI",
@@ -204,7 +226,7 @@ def test_scenegraph_text_reaches_real_wgpu_renderer() -> None:
             key="subtitle",
             kind=SceneNodeKind.TEXT,
             bounds=Rect(70, 154, 520, 52),
-            text="SceneGraph → Python → Rust → glyphon",
+            text="SceneGraph → Python → Rust → wgpu",
             fill=Color.from_hex("#58C7FF"),
             font_size=21,
             font_family="Segoe UI",
@@ -212,8 +234,33 @@ def test_scenegraph_text_reaches_real_wgpu_renderer() -> None:
     )
 
     renderer = WgpuRenderer()
-    app = App("SwirUI GPU Text Integration", renderer=renderer)
-    window = Window(title="SwirUI SceneGraph GPU Text", width=680, height=440)
+    renderer.register_image_rgba8(
+        "checker",
+        2,
+        2,
+        bytes(
+            [
+                255,
+                80,
+                160,
+                255,
+                70,
+                200,
+                255,
+                255,
+                70,
+                200,
+                255,
+                255,
+                255,
+                80,
+                160,
+                255,
+            ]
+        ),
+    )
+    app = App("SwirUI GPU Scene Integration", renderer=renderer)
+    window = Window(title="SwirUI SceneGraph GPU Scene", width=680, height=440)
     window.set_scene(Scene(680, 440, root))
     app.add_window(window)
 
@@ -222,7 +269,9 @@ def test_scenegraph_text_reaches_real_wgpu_renderer() -> None:
         assert renderer.frames_rendered == 1
         assert renderer.last_rectangle_count == 1
         assert renderer.last_text_count == 2
+        assert renderer.last_image_count == 1
         assert renderer.persistent_context_count == 1
+        assert renderer.image_resource_count == 1
         assert renderer.adapter_name
         assert renderer.graphics_backend
     finally:
