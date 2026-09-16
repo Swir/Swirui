@@ -98,7 +98,7 @@ def _checker_rgba() -> bytes:
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Persistent GPU test requires Windows")
-def test_persistent_wgpu_renderer_draws_text_images_and_survives_resize() -> None:
+def test_persistent_wgpu_renderer_draws_text_images_clips_and_survives_resize() -> None:
     native = importlib.import_module("_swirui_native")
     backend = Win32PlatformBackend()
     backend.initialize()
@@ -131,6 +131,10 @@ def test_persistent_wgpu_renderer_draws_text_images_and_survives_resize() -> Non
                 24.0,
                 24.0,
                 24.0,
+                44.0,
+                48.0,
+                596.0,
+                176.0,
             ),
             (
                 28.0,
@@ -145,6 +149,10 @@ def test_persistent_wgpu_renderer_draws_text_images_and_survives_resize() -> Non
                 30.0,
                 18.0,
                 26.0,
+                28.0,
+                214.0,
+                612.0,
+                364.0,
             ),
         ]
         texts = [
@@ -160,6 +168,7 @@ def test_persistent_wgpu_renderer_draws_text_images_and_survives_resize() -> Non
                 1.0,
                 1.0,
                 "Segoe UI",
+                (80.0, 62.0, 500.0, 114.0),
             ),
             (
                 "Shaping: Zażółć gęślą jaźń ✓",
@@ -173,9 +182,20 @@ def test_persistent_wgpu_renderer_draws_text_images_and_survives_resize() -> Non
                 1.0,
                 1.0,
                 "Segoe UI",
+                (56.0, 116.0, 576.0, 164.0),
             ),
         ]
-        images = [("checker", 410.0, 236.0, 150.0, 104.0, 0.95)]
+        images = [
+            (
+                "checker",
+                410.0,
+                236.0,
+                150.0,
+                104.0,
+                0.95,
+                (438.0, 250.0, 540.0, 320.0),
+            )
+        ]
 
         assert renderer.draw_scene(rectangles, texts, images) == (2, 2, 1)
         assert renderer.draw_scene(rectangles, texts, images) == (2, 2, 1)
@@ -195,32 +215,33 @@ def test_persistent_wgpu_renderer_draws_text_images_and_survives_resize() -> Non
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="SceneGraph GPU test requires Windows")
-def test_scenegraph_text_and_image_reach_real_wgpu_renderer() -> None:
+def test_scenegraph_clipped_text_and_image_reach_real_wgpu_renderer() -> None:
     root = SceneNode(
         key="root",
         kind=SceneNodeKind.GROUP,
         bounds=Rect(0, 0, 680, 440),
     )
-    root.add(
-        SceneNode(
-            key="panel",
-            kind=SceneNodeKind.RECTANGLE,
-            bounds=Rect(36, 42, 608, 350),
-            fill=Color.from_hex("#101B30"),
-            corner_radius=CornerRadius.uniform(28),
-        ),
+    panel = SceneNode(
+        key="panel",
+        kind=SceneNodeKind.GROUP,
+        bounds=Rect(36, 42, 608, 350),
+        fill=Color.from_hex("#101B30"),
+        corner_radius=CornerRadius.uniform(28),
+        clip_to_bounds=True,
+    )
+    panel.add(
         SceneNode(
             key="preview",
             kind=SceneNodeKind.IMAGE,
-            bounds=Rect(70, 228, 180, 120),
+            bounds=Rect(10, 228, 300, 180),
             resource_id="checker",
             opacity=0.9,
         ),
         SceneNode(
             key="title",
             kind=SceneNodeKind.TEXT,
-            bounds=Rect(70, 82, 520, 64),
-            text="SwirUI — native GPU scene",
+            bounds=Rect(10, 82, 700, 64),
+            text="SwirUI — clipped native GPU scene",
             fill=Color.from_hex("#EAF7FF"),
             font_size=32,
             font_family="Segoe UI",
@@ -235,11 +256,12 @@ def test_scenegraph_text_and_image_reach_real_wgpu_renderer() -> None:
             font_family="Segoe UI",
         ),
     )
+    root.add(panel)
 
     renderer = WgpuRenderer()
     renderer.register_image_rgba("checker", 2, 2, _checker_rgba())
     app = App("SwirUI GPU Scene Integration", renderer=renderer)
-    window = Window(title="SwirUI SceneGraph GPU Image", width=680, height=440)
+    window = Window(title="SwirUI SceneGraph GPU Clip", width=680, height=440)
     window.set_scene(Scene(680, 440, root))
     app.add_window(window)
 
