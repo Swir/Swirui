@@ -43,10 +43,24 @@ _WM_MBUTTONUP = 0x0208
 _SM_CXSCREEN = 0
 _SM_CYSCREEN = 1
 _ERROR_CLASS_ALREADY_EXISTS = 1410
+_MONITORINFOF_PRIMARY = 0x00000001
+_MONITOR_DEFAULTTONEAREST = 0x00000002
+_MDT_EFFECTIVE_DPI = 0
+_PROCESS_PER_MONITOR_DPI_AWARE = 2
+_DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 = -4
 
 
 class _Point(ctypes.Structure):
     _fields_ = [("x", ctypes.c_long), ("y", ctypes.c_long)]
+
+
+class _Rect(ctypes.Structure):
+    _fields_ = [
+        ("left", ctypes.c_long),
+        ("top", ctypes.c_long),
+        ("right", ctypes.c_long),
+        ("bottom", ctypes.c_long),
+    ]
 
 
 class _Msg(ctypes.Structure):
@@ -76,6 +90,16 @@ class _WndClass(ctypes.Structure):
     ]
 
 
+class _MonitorInfoExW(ctypes.Structure):
+    _fields_ = [
+        ("cbSize", ctypes.c_ulong),
+        ("rcMonitor", _Rect),
+        ("rcWork", _Rect),
+        ("dwFlags", ctypes.c_ulong),
+        ("szDevice", ctypes.c_wchar * 32),
+    ]
+
+
 def _signed_word(value: int) -> int:
     value &= 0xFFFF
     return value - 0x10000 if value & 0x8000 else value
@@ -102,6 +126,10 @@ class Win32PlatformBackend:
         win_dll: Any = ctypes.__dict__["WinDLL"]
         self._user32: Any = win_dll("user32", use_last_error=True)
         self._kernel32: Any = win_dll("kernel32", use_last_error=True)
+        try:
+            self._shcore: Any | None = win_dll("shcore", use_last_error=True)
+        except OSError:
+            self._shcore = None
         self._configure_signatures()
 
         self._instance = self._kernel32.GetModuleHandleW(None)
@@ -114,6 +142,13 @@ class Win32PlatformBackend:
             ctypes.c_void_p,
             ctypes.c_uint,
             ctypes.c_size_t,
+            ctypes.c_ssize_t,
+        )
+        self._monitor_enum_type: Any = callback_factory(
+            ctypes.c_bool,
+            ctypes.c_void_p,
+            ctypes.c_void_p,
+            ctypes.POINTER(_Rect),
             ctypes.c_ssize_t,
         )
         self._wndproc_callback: Any = self._wndproc_type(self._wndproc)
@@ -178,10 +213,68 @@ class Win32PlatformBackend:
         self._user32.DispatchMessageW.restype = ctypes.c_ssize_t
         self._user32.GetSystemMetrics.argtypes = [ctypes.c_int]
         self._user32.GetSystemMetrics.restype = ctypes.c_int
+        self._user32.EnumDisplayMonitors.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_void_p,
+            ctypes.c_void_p,
+            ctypes.c_ssize_t,
+        ]
+        self._user32.EnumDisplayMonitors.restype = ctypes.c_bool
+        self._user32.GetMonitorInfoW.argtypes = [ctypes.c_void_p, ctypes.POINTER(_MonitorInfoExW)]
+        self._user32.GetMonitorInfoW.restype = ctypes.c_bool
+        self._user32.MonitorFromWindow.argtypes = [ctypes.c_void_p, ctypes.c_ulong]
+        self._user32.MonitorFromWindow.restype = ctypes.c_void_p
+
+        try:
+            set_dpi_context: Any = self._user32.SetProcessDpiAwarenessContext
+        except AttributeError:
+            set_dpi_context = None
+        if set_dpi_context is not None:
+            set_dpi_context.argtypes = [ctypes.c_void_p]
+            set_dpi_context.restype = ctypes.c_bool
+
+        try:
+            get_dpi_for_window: Any = self._user32.GetDpiForWindow
+        except AttributeError:
+            get_dpi_for_window = None
+        if get_dpi_for_window is not None:
+            get_dpi_for_window.argtypes = [ctypes.c_void_p]
+            get_dpi_for_window.restype = ctypes.c_uint
+
+        try:
+            get_dpi_for_system: Any = self._user32.GetDpiForSystem
+        except AttributeError:
+            get_dpi_for_system = None
+        if get_dpi_for_system is not None:
+            get_dpi_for_system.argtypes = []
+            get_dpi_for_system.restype = ctypes.c_uint
+
+        if self._shcore is not None:
+            try:
+                get_dpi_for_monitor: Any = self._shcore.GetDpiForMonitor
+            except AttributeError:
+                get_dpi_for_monitor = None
+            if get_dpi_for_monitor is not None:
+                get_dpi_for_monitor.argtypes = [
+                    ctypes.c_void_p,
+                    ctypes.c_int,
+                    ctypes.POINTER(ctypes.c_uint),
+                    ctypes.POINTER(ctypes.c_uint),
+                ]
+                get_dpi_for_monitor.restype = ctypes.c_long
+            try:
+                set_process_dpi: Any = self._shcore.SetProcessDpiAwareness
+            except AttributeError:
+                set_process_dpi = None
+            if set_process_dpi is not None:
+                set_process_dpi.argtypes = [ctypes.c_int]
+                set_process_dpi.restype = ctypes.c_long
 
     def initialize(self) -> None:
         if self._initialized:
             return
+
+        self._enable_per_monitor_dpi_awareness()
 
         window_class = _WndClass()
         window_class.style = _CS_HREDRAW | _CS_VREDRAW
@@ -198,24 +291,57 @@ class Win32PlatformBackend:
         self._initialized = True
 
     def displays(self) -> tuple[DisplayInfo, ...]:
+        """Enumerate every Win32 monitor with virtual-desktop geometry and scale."""
+
         self._require_initialized()
-        width = int(self._user32.GetSystemMetrics(_SM_CXSCREEN))
-        height = int(self._user32.GetSystemMetrics(_SM_CYSCREEN))
-        scale = 1.0
+        displays: list[DisplayInfo] = []
 
-        try:
-            get_dpi: Any = self._user32.GetDpiForSystem
-        except AttributeError:
-            get_dpi = None
+        def collect_monitor(
+            monitor: int | None,
+            _hdc: int | None,
+            _rect: ctypes.POINTER(_Rect),
+            _data: int,
+        ) -> bool:
+            if not monitor:
+                return True
+            info = _MonitorInfoExW()
+            info.cbSize = ctypes.sizeof(_MonitorInfoExW)
+            if not self._user32.GetMonitorInfoW(ctypes.c_void_p(monitor), ctypes.byref(info)):
+                return True
 
-        if get_dpi is not None:
-            get_dpi.argtypes = []
-            get_dpi.restype = ctypes.c_uint
-            dpi = int(get_dpi())
-            if dpi > 0:
-                scale = dpi / 96.0
+            monitor_rect = info.rcMonitor
+            work_rect = info.rcWork
+            width = int(monitor_rect.right - monitor_rect.left)
+            height = int(monitor_rect.bottom - monitor_rect.top)
+            work_width = int(work_rect.right - work_rect.left)
+            work_height = int(work_rect.bottom - work_rect.top)
+            if width <= 0 or height <= 0 or work_width <= 0 or work_height <= 0:
+                return True
 
-        return (DisplayInfo("Primary display", width, height, scale=scale, primary=True),)
+            displays.append(
+                DisplayInfo(
+                    name=str(info.szDevice) or f"Display {len(displays) + 1}",
+                    width=width,
+                    height=height,
+                    scale=self._monitor_scale(int(monitor)),
+                    primary=bool(info.dwFlags & _MONITORINFOF_PRIMARY),
+                    x=int(monitor_rect.left),
+                    y=int(monitor_rect.top),
+                    work_x=int(work_rect.left),
+                    work_y=int(work_rect.top),
+                    work_width=work_width,
+                    work_height=work_height,
+                )
+            )
+            return True
+
+        callback = self._monitor_enum_type(collect_monitor)
+        enumerated = bool(self._user32.EnumDisplayMonitors(None, None, callback, 0))
+        if not enumerated or not displays:
+            return (self._fallback_primary_display(),)
+
+        displays.sort(key=lambda item: (not item.primary, item.y, item.x, item.name))
+        return tuple(displays)
 
     def create_window(self, spec: NativeWindowSpec) -> NativeWindowHandle:
         self._require_initialized()
@@ -239,6 +365,25 @@ class Win32PlatformBackend:
         handle = NativeWindowHandle(int(hwnd))
         self._windows.add(handle)
         return handle
+
+    def window_scale(self, handle: NativeWindowHandle) -> float:
+        """Return the effective per-monitor scale for an existing native window."""
+
+        self._require_window(handle)
+        hwnd = ctypes.c_void_p(handle.value)
+        try:
+            get_dpi: Any = self._user32.GetDpiForWindow
+        except AttributeError:
+            get_dpi = None
+        if get_dpi is not None:
+            dpi = int(get_dpi(hwnd))
+            if dpi > 0:
+                return dpi / 96.0
+
+        monitor = self._user32.MonitorFromWindow(hwnd, _MONITOR_DEFAULTTONEAREST)
+        if monitor:
+            return self._monitor_scale(int(monitor))
+        return self._system_scale()
 
     def show_window(self, handle: NativeWindowHandle) -> None:
         self._require_window(handle)
@@ -288,6 +433,68 @@ class Win32PlatformBackend:
         self._windows.clear()
         self._events.clear()
         self._initialized = False
+
+    def _enable_per_monitor_dpi_awareness(self) -> None:
+        try:
+            set_context: Any = self._user32.SetProcessDpiAwarenessContext
+        except AttributeError:
+            set_context = None
+        if set_context is not None:
+            if set_context(ctypes.c_void_p(_DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2)):
+                return
+
+        if self._shcore is not None:
+            try:
+                set_awareness: Any = self._shcore.SetProcessDpiAwareness
+            except AttributeError:
+                set_awareness = None
+            if set_awareness is not None:
+                set_awareness(_PROCESS_PER_MONITOR_DPI_AWARE)
+
+    def _monitor_scale(self, monitor: int) -> float:
+        if self._shcore is not None:
+            try:
+                get_dpi: Any = self._shcore.GetDpiForMonitor
+            except AttributeError:
+                get_dpi = None
+            if get_dpi is not None:
+                dpi_x = ctypes.c_uint(0)
+                dpi_y = ctypes.c_uint(0)
+                result = int(
+                    get_dpi(
+                        ctypes.c_void_p(monitor),
+                        _MDT_EFFECTIVE_DPI,
+                        ctypes.byref(dpi_x),
+                        ctypes.byref(dpi_y),
+                    )
+                )
+                if result == 0 and dpi_x.value > 0:
+                    return float(dpi_x.value) / 96.0
+        return self._system_scale()
+
+    def _system_scale(self) -> float:
+        try:
+            get_dpi: Any = self._user32.GetDpiForSystem
+        except AttributeError:
+            get_dpi = None
+        if get_dpi is not None:
+            dpi = int(get_dpi())
+            if dpi > 0:
+                return dpi / 96.0
+        return 1.0
+
+    def _fallback_primary_display(self) -> DisplayInfo:
+        width = int(self._user32.GetSystemMetrics(_SM_CXSCREEN))
+        height = int(self._user32.GetSystemMetrics(_SM_CYSCREEN))
+        return DisplayInfo(
+            "Primary display",
+            max(width, 1),
+            max(height, 1),
+            scale=self._system_scale(),
+            primary=True,
+            work_width=max(width, 1),
+            work_height=max(height, 1),
+        )
 
     def _wndproc(self, hwnd: int | None, message: int, wparam: int, lparam: int) -> int:
         if hwnd:
