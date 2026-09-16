@@ -4,6 +4,7 @@
 //! in dedicated modules so the native core can grow without turning this file
 //! into a monolithic backend.
 
+mod image;
 mod renderer;
 mod text;
 
