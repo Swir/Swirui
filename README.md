@@ -9,7 +9,7 @@
 [![CI](https://github.com/Swir/Swirui/actions/workflows/ci.yml/badge.svg)](https://github.com/Swir/Swirui/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/Python-3.11%20%7C%203.12%20%7C%203.13%20%7C%203.14-3776AB?logo=python&logoColor=white)
 ![Status](https://img.shields.io/badge/status-pre--alpha-7C3AED)
-![Progress](https://img.shields.io/badge/project%20progress-3%25-00BFFF)
+![Progress](https://img.shields.io/badge/project%20progress-4%25-00BFFF)
 
 </div>
 
@@ -17,10 +17,11 @@
 
 ## Project progress
 
-**3% — 0.1 Alpha Foundation complete ✅**
+**4% — 0.2 Alpha Native Window + First Renderer in progress**
 
-`[█░░░░░░░░░░░░░░░░░░░] 3%`
+`[█░░░░░░░░░░░░░░░░░░░] 4%`
 
+**Completed:** `0.1 Alpha — Foundation` ✅  
 **Current milestone:** `0.2 Alpha — Native Window + First Renderer`
 
 The percentage reflects completed and tested roadmap work. It is not increased for ideas, mockups or unfinished prototypes.
@@ -79,6 +80,9 @@ Python API
    │
 SwirUI Runtime
    │
+   ├── Render Tree
+   ├── Scene Graph
+   ├── Frame Scheduler
    ├── Renderer abstraction
    ├── Platform abstraction
    └── Native bridge
@@ -166,7 +170,17 @@ The foundation now includes:
 
 ## Current milestone — 0.2 Alpha: Native Window + First Renderer
 
-The next milestone moves SwirUI from the framework foundation toward visible UI output. It targets the native desktop window backend, event-loop integration, input dispatch, render tree, scene graph, frame scheduler, GPU surface, basic shapes/text/images, compositing, DPI handling and high-refresh-rate scheduling.
+Already implemented and verified in 0.2:
+
+- backend-neutral geometry and color primitives
+- retained render tree
+- renderer-ready scene graph
+- invalidation-driven frame scheduler
+- deterministic rendering tests
+- strict Ruff + Mypy verification
+- test matrix on Python 3.11–3.14
+
+Next targets are native window/event-loop integration, input dispatch and the first real GPU surface. After that come basic shapes, rounded rectangles, text, images, clipping/compositing, DPI handling and high-refresh-rate presentation.
 
 See **[ROADMAP.md](ROADMAP.md)** for the complete plan.
 
@@ -176,7 +190,7 @@ SwirUI will not claim to be faster than another framework without measurements. 
 
 ## Project status
 
-SwirUI is experimental and not ready for production applications yet. The 0.1 architecture foundation is complete and development is moving into the first native/rendering milestone.
+SwirUI is experimental and not ready for production applications yet. The 0.1 architecture foundation is complete and 0.2 rendering architecture is actively being implemented.
 
 ---
 
