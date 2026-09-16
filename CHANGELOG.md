@@ -34,6 +34,9 @@ The project uses semantic versioning where practical during pre-alpha developmen
 - Pointer-down focus handoff from a hit-tested SceneNode to the matching focusable Component.
 - Focus lifecycle events (`focus_gained`, `focus_lost`, `component_focus_changed`) and automatic focus clearing when the root is replaced or the window closes.
 - Automated focus-routing coverage for Unicode text input, propagation cancellation, traversal, pointer focus handoff and invalid focus targets.
+- Runtime `App.set_target_fps()` retargeting for all current and future window frame schedulers.
+- Cross-window `App.seconds_until_next_frame()` deadline reporting and frame events that expose the active target FPS and frame interval.
+- Automated high-refresh pacing coverage for runtime 60 → 120/144 Hz retargeting and sub-poll-interval frame deadlines.
 
 ### Changed
 - The wgpu renderer now reports submitted rectangle, text and image counts independently.
@@ -43,6 +46,7 @@ The project uses semantic versioning where practical during pre-alpha developmen
 - Rounded-rectangle instances now carry clip bounds through Python → Rust → WGSL while the legacy 12-float direct native rectangle interface remains accepted for compatibility.
 - Image vertices are cropped before draw submission so clipping preserves the correct source UV region instead of stretching the visible portion.
 - Win32 smoke tests use process-unique native window classes to avoid stale process-wide WNDPROC callbacks when multiple backend instances are exercised in one pytest process.
+- Native event-loop idle sleeps now shorten to the nearest pending frame deadline instead of quantizing 120/144+ Hz targets to a fixed 4 ms polling cadence.
 
 ## [0.1.0a1] - 2026-09-16
 
