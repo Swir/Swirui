@@ -21,6 +21,10 @@ The project uses semantic versioning where practical during pre-alpha developmen
 - Native image sampling with reusable linear sampler, alpha blending and per-node opacity.
 - Windows GPU image smoke coverage including resource upload, repeated mixed rectangle/text/image frames, resize and resource removal.
 - `examples/gpu_image_demo.py` with a dependency-free procedural image uploaded once and reused by the persistent GPU context.
+- Content-addressed GPU image caching that deduplicates byte-identical RGBA payloads across logical resource ids while preserving reference-safe lifetime, alias rebinding and transactional multi-context rollback.
+- GPU image-cache telemetry for logical resources, unique native resources, aliases, retained bytes, cache hits and actual native uploads.
+- Backend-neutral `Path2D` polygon geometry with deterministic ear-clipping tessellation, finite-coordinate validation and self-intersection rejection.
+- `SceneNodeKind.PATH` validation plus geometry-accurate path hit testing so pointer targeting follows the polygon rather than only its bounding box.
 - Hierarchical `SceneNode.clip_to_bounds` clipping with retained cumulative clip propagation through nested scene groups.
 - Clip-aware GPU paths for all current primitive kinds: per-instance rectangle shader clipping, glyphon `TextBounds` clipping and image-quad cropping with UV remapping.
 - Cumulative ancestor opacity propagation for rectangles, shaped text and images, with fully transparent subtree pruning before GPU resource preparation.
