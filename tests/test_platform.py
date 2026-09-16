@@ -95,22 +95,28 @@ def test_app_dispatches_platform_events_to_window() -> None:
     assert window.display is None
     handle = window.native_handle
 
+    # Platform coordinates are physical pixels. At 150% scale, the 1350x1050
+    # physical resize and 49.5x66 pointer position map to 900x700 and 33x44 DIPs.
     backend.post_event(
-        PlatformEvent(PlatformEventKind.RESIZE, handle, width=900, height=700)
+        PlatformEvent(PlatformEventKind.RESIZE, handle, width=1350, height=1050)
     )
     backend.post_event(PlatformEvent(PlatformEventKind.DPI_CHANGED, handle, scale=1.5))
     backend.post_event(PlatformEvent(PlatformEventKind.DISPLAY_CHANGED, handle))
     backend.post_event(
-        PlatformEvent(PlatformEventKind.POINTER_MOVE, handle, x=33.0, y=44.0)
+        PlatformEvent(PlatformEventKind.POINTER_MOVE, handle, x=49.5, y=66.0)
     )
 
     processed = app.process_events()
 
     assert processed == 4
     assert (window.width, window.height) == (900, 700)
+    assert window.pixel_size == (1350, 1050)
     assert window.scale == 1.5
     assert scale_changes == [(1.0, 1.5)]
     assert len(pointer_events) == 1
+    pointer_event = pointer_events[0]
+    assert pointer_event.x == pytest.approx(33.0)
+    assert pointer_event.y == pytest.approx(44.0)
 
     backend.post_event(PlatformEvent(PlatformEventKind.CLOSE, handle))
     app.process_events()
