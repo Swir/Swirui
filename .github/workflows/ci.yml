@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-v3-${{ github.workflow }}-${{ github.ref }}
+  group: ci-v4-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -118,5 +118,5 @@ jobs:
       - name: Create and paint real Win32 window
         run: pytest tests/test_windows_backend.py -q
 
-      - name: Clear and draw real Win32 surface through wgpu
+      - name: Draw persistent rounded rectangles through wgpu
         run: pytest tests/test_windows_gpu_bridge.py -q
