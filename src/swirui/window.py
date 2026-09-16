@@ -8,7 +8,14 @@ from .core import Component, EventEmitter
 from .platforms import NativeWindowHandle, PlatformBackend, PlatformEvent, PlatformEventKind
 
 if TYPE_CHECKING:
-    from .rendering.scene import Scene
+    from .rendering.scene import Scene, SceneNode
+
+
+_POINTER_EVENTS = {
+    PlatformEventKind.POINTER_MOVE,
+    PlatformEventKind.POINTER_DOWN,
+    PlatformEventKind.POINTER_UP,
+}
 
 
 class Window(EventEmitter):
@@ -36,6 +43,7 @@ class Window(EventEmitter):
         self.min_height = min_height
         self.root: Component | None = None
         self.scene: Scene | None = None
+        self.hovered_scene_node: SceneNode | None = None
         self.visible = False
         self.closed = False
         self.focused = False
@@ -53,6 +61,7 @@ class Window(EventEmitter):
 
         old_scene = self.scene
         self.scene = scene
+        self.hovered_scene_node = None
         self.emit("scene_changed", old_scene=old_scene, scene=scene)
         return self
 
@@ -91,6 +100,7 @@ class Window(EventEmitter):
             if self._platform_backend is not None and self.native_handle is not None:
                 self._platform_backend.hide_window(self.native_handle)
             self.visible = False
+            self.hovered_scene_node = None
             self.emit("hidden")
 
     def close(self) -> None:
@@ -142,13 +152,34 @@ class Window(EventEmitter):
                 self.emit("focus_changed", focused=focused)
             return
 
+        if event.kind in _POINTER_EVENTS:
+            self._apply_pointer_event(event)
+            return
+
         self.emit(event.kind.value, event=event)
+
+    def _apply_pointer_event(self, event: PlatformEvent) -> None:
+        path: tuple[SceneNode, ...] = ()
+        if self.scene is not None and event.x is not None and event.y is not None:
+            path = self.scene.hit_path_xy(event.x, event.y)
+        target = path[-1] if path else None
+
+        if event.kind is PlatformEventKind.POINTER_MOVE and target is not self.hovered_scene_node:
+            previous = self.hovered_scene_node
+            self.hovered_scene_node = target
+            if previous is not None:
+                self.emit("pointer_leave", event=event, target=previous)
+            if target is not None:
+                self.emit("pointer_enter", event=event, target=target, path=path)
+
+        self.emit(event.kind.value, event=event, target=target, path=path)
 
     def _mark_closed(self) -> None:
         if self.closed:
             return
         self.visible = False
         self.focused = False
+        self.hovered_scene_node = None
         self.closed = True
         self.emit("closed")
 
