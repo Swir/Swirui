@@ -2,8 +2,13 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from .core import Component, EventEmitter
 from .platforms import NativeWindowHandle, PlatformBackend, PlatformEvent, PlatformEventKind
+
+if TYPE_CHECKING:
+    from .rendering.scene import Scene
 
 
 class Window(EventEmitter):
@@ -30,6 +35,7 @@ class Window(EventEmitter):
         self.min_width = min_width
         self.min_height = min_height
         self.root: Component | None = None
+        self.scene: Scene | None = None
         self.visible = False
         self.closed = False
         self.focused = False
@@ -40,6 +46,14 @@ class Window(EventEmitter):
         old_root = self.root
         self.root = component
         self.emit("root_changed", old_root=old_root, root=component)
+        return self
+
+    def set_scene(self, scene: Scene | None) -> Window:
+        """Attach a prepared render scene and invalidate the next frame."""
+
+        old_scene = self.scene
+        self.scene = scene
+        self.emit("scene_changed", old_scene=old_scene, scene=scene)
         return self
 
     def set_title(self, title: str) -> None:
