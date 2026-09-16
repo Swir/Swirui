@@ -119,8 +119,10 @@ class App(EventEmitter):
     def set_target_fps(self, target_fps: int) -> None:
         """Retarget every attached frame scheduler without recreating windows.
 
-        The change is immediate for current windows and is also stored in the
-        application config so windows attached later inherit the same ceiling.
+        ``target_fps`` is an application ceiling. Native windows cap that value
+        to the active display refresh rate so a 144 Hz application naturally
+        runs at 60 Hz on a 60 Hz display and retargets when moved between screens.
+        Headless windows keep the configured ceiling unchanged.
         """
 
         if target_fps <= 0:
@@ -130,13 +132,23 @@ class App(EventEmitter):
             return
 
         self.config.target_fps = target_fps
-        for scheduler in self._frame_schedulers.values():
-            scheduler.target_fps = target_fps
+        for window in self._frame_schedulers:
+            self._retarget_window_scheduler(window)
         self.emit(
             "target_fps_changed",
             old_target_fps=old_target_fps,
             target_fps=target_fps,
         )
+
+    def window_target_fps(self, window: Window) -> int:
+        """Return the effective frame-rate ceiling for one application window."""
+
+        if window not in self.windows:
+            raise ValueError("Window does not belong to this application.")
+        scheduler = self._frame_schedulers.get(window)
+        if scheduler is not None:
+            return scheduler.target_fps
+        return self._effective_target_fps(window)
 
     def seconds_until_next_frame(self, now: float | None = None) -> float | None:
         """Return the earliest pending frame deadline across visible windows."""
@@ -173,6 +185,10 @@ class App(EventEmitter):
                     frame_number=stats.frame_number,
                     frame_time=frame_time,
                     target_fps=scheduler.target_fps,
+                    configured_target_fps=self.config.target_fps,
+                    display_refresh_rate_hz=(
+                        window.display.refresh_rate_hz if window.display is not None else None
+                    ),
                     frame_interval=scheduler.frame_interval,
                     frame_delta=stats.last_frame_delta,
                     instantaneous_fps=stats.instantaneous_fps,
@@ -223,6 +239,32 @@ class App(EventEmitter):
             return _IDLE_POLL_SECONDS
         return min(_IDLE_POLL_SECONDS, max(0.0, frame_wait))
 
+    def _effective_target_fps(self, window: Window) -> int:
+        display = window.display
+        if display is None:
+            return self.config.target_fps
+        display_limit = max(1, round(display.refresh_rate_hz))
+        return min(self.config.target_fps, display_limit)
+
+    def _retarget_window_scheduler(self, window: Window) -> None:
+        scheduler = self._frame_schedulers.get(window)
+        if scheduler is None:
+            return
+        target_fps = self._effective_target_fps(window)
+        old_target_fps = scheduler.target_fps
+        if target_fps == old_target_fps:
+            return
+        scheduler.target_fps = target_fps
+        scheduler.invalidate()
+        self.emit(
+            "window_target_fps_changed",
+            window=window,
+            old_target_fps=old_target_fps,
+            target_fps=target_fps,
+            configured_target_fps=self.config.target_fps,
+            display=window.display,
+        )
+
     def _attach_window(self, window: Window) -> None:
         if window.native_handle is not None:
             return
@@ -237,7 +279,7 @@ class App(EventEmitter):
         )
         window._bind_native(self.platform_backend, handle)
         self.renderer.create_surface(window)
-        self._frame_schedulers[window] = FrameScheduler(self.config.target_fps)
+        self._frame_schedulers[window] = FrameScheduler(self._effective_target_fps(window))
 
     def _dispatch_platform_event(self, event: PlatformEvent) -> None:
         window = next(
@@ -264,6 +306,10 @@ class App(EventEmitter):
                 self.renderer.resize_surface(window, window.width, window.height)
             self.invalidate(window)
 
+        def display_changed(_event: Event) -> None:
+            self._retarget_window_scheduler(window)
+            self.invalidate(window)
+
         def close_surface(_event: Event) -> None:
             if window.native_handle is not None:
                 self.renderer.destroy_surface(window)
@@ -274,6 +320,7 @@ class App(EventEmitter):
             window.on("scene_changed", invalidate_window),
             window.on("shown", invalidate_window),
             window.on("resized", resize_surface),
+            window.on("display_changed", display_changed),
             window.on("closed", close_surface),
         ]
 
