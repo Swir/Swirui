@@ -6,6 +6,7 @@ from .scene import Scene, SceneNode, SceneNodeKind
 from .scheduler import FrameScheduler, FrameStats
 from .surface import RenderSurface
 from .tree import RenderNode, RenderTree
+from .wgpu_renderer import WgpuRenderer
 from .windows_gdi import Win32PreviewRenderer
 
 __all__ = [
@@ -24,5 +25,6 @@ __all__ = [
     "SceneNode",
     "SceneNodeKind",
     "Size",
+    "WgpuRenderer",
     "Win32PreviewRenderer",
 ]
