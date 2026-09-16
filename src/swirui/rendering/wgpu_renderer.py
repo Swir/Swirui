@@ -162,13 +162,19 @@ class WgpuRenderer:
         native = self._native
         context_factory = getattr(native, "Win32GpuRenderer", None) if native is not None else None
         if context_factory is not None:
-            context = context_factory(
-                handle,
-                window.width,
-                window.height,
-                self.presentation_mode.value,
-                self.maximum_frame_latency,
-            )
+            if (
+                self.presentation_mode is PresentationMode.AUTO_VSYNC
+                and self.maximum_frame_latency == 1
+            ):
+                context = context_factory(handle, window.width, window.height)
+            else:
+                context = context_factory(
+                    handle,
+                    window.width,
+                    window.height,
+                    self.presentation_mode.value,
+                    self.maximum_frame_latency,
+                )
             self._contexts[handle] = context
             self._upload_registered_images(context)
             self._capture_adapter_info(context)
