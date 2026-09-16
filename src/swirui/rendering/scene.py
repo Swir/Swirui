@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 
 from .geometry import Color, CornerRadius, Point, Rect
+from .path import PathGeometry
 
 
 class SceneNodeKind(StrEnum):
@@ -14,6 +15,7 @@ class SceneNodeKind(StrEnum):
     RECTANGLE = "rectangle"
     TEXT = "text"
     IMAGE = "image"
+    PATH = "path"
 
 
 @dataclass(slots=True)
@@ -31,6 +33,7 @@ class SceneNode:
     font_size: float = 16.0
     font_family: str = "Segoe UI"
     resource_id: str | None = None
+    path: PathGeometry | None = None
     children: list[SceneNode] = field(default_factory=list)
     clip_to_bounds: bool = False
 
@@ -46,6 +49,13 @@ class SceneNode:
                 raise ValueError("Text scene nodes require a font_family.")
         if self.kind is SceneNodeKind.IMAGE and self.resource_id is None:
             raise ValueError("Image scene nodes require a resource_id.")
+        if self.kind is SceneNodeKind.PATH:
+            if self.path is None:
+                raise ValueError("Path scene nodes require PathGeometry.")
+            if not self.path.closed:
+                raise ValueError("Filled path scene nodes require closed PathGeometry.")
+            if self.fill is None:
+                raise ValueError("Filled path scene nodes require a fill color.")
 
     def add(self, *children: SceneNode) -> SceneNode:
         for child in children:
