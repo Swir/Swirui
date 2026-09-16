@@ -1,4 +1,5 @@
-from swirui import App, Window
+from swirui import App, Component, Window
+from swirui.core import EventPhase
 from swirui.platforms import NullPlatformBackend, PlatformEvent, PlatformEventKind, PointerButton
 from swirui.rendering import Color, NullRenderer, Rect, Scene, SceneNode, SceneNodeKind
 
@@ -23,6 +24,24 @@ def _scene() -> tuple[Scene, SceneNode, SceneNode]:
     return Scene(640, 400, root), back, front
 
 
+def _components() -> tuple[Component, Component, Component]:
+    root = Component("root", key="root")
+    back = Component("back", key="back")
+    front = Component("front", key="front")
+    root.add(back, front)
+    return root, back, front
+
+
+def _pointer_down(handle: object) -> PlatformEvent:
+    return PlatformEvent(
+        PlatformEventKind.POINTER_DOWN,
+        handle,
+        x=100,
+        y=100,
+        button=PointerButton.LEFT,
+    )
+
+
 def test_pointer_down_contains_topmost_target_and_scene_path() -> None:
     backend = NullPlatformBackend()
     app = App(platform_backend=backend, renderer=NullRenderer())
@@ -35,15 +54,7 @@ def test_pointer_down_contains_topmost_target_and_scene_path() -> None:
     received = []
     window.on("pointer_down", received.append)
     assert window.native_handle is not None
-    backend.post_event(
-        PlatformEvent(
-            PlatformEventKind.POINTER_DOWN,
-            window.native_handle,
-            x=100,
-            y=100,
-            button=PointerButton.LEFT,
-        )
-    )
+    backend.post_event(_pointer_down(window.native_handle))
 
     assert app.process_events() == 1
     assert len(received) == 1
@@ -103,5 +114,83 @@ def test_pointer_move_emits_enter_and_leave_when_hover_target_changes() -> None:
 
     assert entered == ["front", "back"]
     assert left == ["front", "back"]
+
+    app.stop()
+
+
+def test_pointer_event_routes_capture_target_and_bubble_through_components() -> None:
+    backend = NullPlatformBackend()
+    app = App(platform_backend=backend, renderer=NullRenderer())
+    window = Window(width=640, height=400)
+    scene, _back_scene, front_scene = _scene()
+    root, _back_component, front = _components()
+    window.set_root(root)
+    window.set_scene(scene)
+    app.add_window(window)
+    app.start()
+    assert window.native_handle is not None
+
+    route: list[tuple[str, EventPhase, object, object | None]] = []
+    root.on(
+        "pointer_down",
+        lambda event: route.append(("root-capture", event.phase, event.source, event.current_target)),
+        capture=True,
+    )
+    front.on(
+        "pointer_down",
+        lambda event: route.append(("front", event.phase, event.source, event.current_target)),
+    )
+    root.on(
+        "pointer_down",
+        lambda event: route.append(("root-bubble", event.phase, event.source, event.current_target)),
+    )
+
+    window_events = []
+    window.on("pointer_down", window_events.append)
+    backend.post_event(_pointer_down(window.native_handle))
+
+    assert app.process_events() == 1
+    assert [(name, phase) for name, phase, _source, _current in route] == [
+        ("root-capture", EventPhase.CAPTURE),
+        ("front", EventPhase.TARGET),
+        ("root-bubble", EventPhase.BUBBLE),
+    ]
+    assert all(source is front for _name, _phase, source, _current in route)
+    assert route[0][3] is root
+    assert route[1][3] is front
+    assert route[2][3] is root
+
+    assert window_events[0].data["target"] is front_scene
+    assert window_events[0].data["component_target"] is front
+    assert window_events[0].data["component_path"] == (root, front)
+
+    app.stop()
+
+
+def test_capture_handler_can_stop_component_pointer_propagation() -> None:
+    backend = NullPlatformBackend()
+    app = App(platform_backend=backend, renderer=NullRenderer())
+    window = Window(width=640, height=400)
+    scene, _back_scene, _front_scene = _scene()
+    root, _back_component, front = _components()
+    window.set_root(root)
+    window.set_scene(scene)
+    app.add_window(window)
+    app.start()
+    assert window.native_handle is not None
+
+    received: list[str] = []
+
+    def stop_at_root(event: object) -> None:
+        received.append("root-capture")
+        event.stop_propagation()  # type: ignore[attr-defined]
+
+    root.on("pointer_down", stop_at_root, capture=True)
+    front.on("pointer_down", lambda _event: received.append("front"))
+    root.on("pointer_down", lambda _event: received.append("root-bubble"))
+
+    backend.post_event(_pointer_down(window.native_handle))
+    assert app.process_events() == 1
+    assert received == ["root-capture"]
 
     app.stop()
