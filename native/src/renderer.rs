@@ -1,3 +1,4 @@
+use crate::text::{TextInstance, TextSystem};
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 
@@ -21,6 +22,7 @@ struct PersistentGpuContext {
     frame_buffer: wgpu::Buffer,
     bind_group_layout: wgpu::BindGroupLayout,
     pipeline: wgpu::RenderPipeline,
+    text_system: TextSystem,
     adapter_name: String,
     graphics_backend: String,
 }
@@ -113,6 +115,7 @@ impl PersistentGpuContext {
             multiview_mask: None,
             cache: None,
         });
+        let text_system = TextSystem::new(&device, &queue, config.format, width, height);
 
         Ok(Self {
             _instance: instance,
@@ -123,6 +126,7 @@ impl PersistentGpuContext {
             frame_buffer,
             bind_group_layout,
             pipeline,
+            text_system,
             adapter_name: info.name,
             graphics_backend: info.backend.to_string(),
         })
@@ -135,6 +139,7 @@ impl PersistentGpuContext {
         self.surface.configure(&self.device, &self.config);
         let frame_uniforms = floats_to_bytes(&[width as f32, height as f32, 0.0, 0.0]);
         self.queue.write_buffer(&self.frame_buffer, 0, &frame_uniforms);
+        self.text_system.resize(&self.queue, width, height);
         Ok(())
     }
 
@@ -178,41 +183,83 @@ impl PersistentGpuContext {
     }
 
     fn draw_rectangles(
-        &self,
+        &mut self,
         rectangles: &[RectangleInstance],
         background_red: f64,
         background_green: f64,
         background_blue: f64,
         background_alpha: f64,
     ) -> PyResult<usize> {
+        let (rectangle_count, _text_count) = self.draw_scene(
+            rectangles,
+            &[],
+            background_red,
+            background_green,
+            background_blue,
+            background_alpha,
+        )?;
+        Ok(rectangle_count)
+    }
+
+    fn draw_scene(
+        &mut self,
+        rectangles: &[RectangleInstance],
+        texts: &[TextInstance],
+        background_red: f64,
+        background_green: f64,
+        background_blue: f64,
+        background_alpha: f64,
+    ) -> PyResult<(usize, usize)> {
         validate_color(
             background_red,
             background_green,
             background_blue,
             background_alpha,
         )?;
-        validate_rectangles(rectangles)?;
+        if !rectangles.is_empty() {
+            validate_rectangles(rectangles)?;
+        }
+        if rectangles.is_empty() && texts.is_empty() {
+            self.clear(
+                background_red,
+                background_green,
+                background_blue,
+                background_alpha,
+            )?;
+            return Ok((0, 0));
+        }
+        if !texts.is_empty() {
+            self.text_system
+                .prepare(&self.device, &self.queue, texts)?;
+        }
 
-        let rectangle_data = rectangle_bytes(rectangles);
-        let rectangle_buffer = self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("SwirUI rounded rectangle instances"),
-            contents: &rectangle_data,
-            usage: wgpu::BufferUsages::STORAGE,
-        });
-        let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("SwirUI persistent rectangle bind group"),
-            layout: &self.bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: self.frame_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: rectangle_buffer.as_entire_binding(),
-                },
-            ],
-        });
+        let rectangle_resources = if rectangles.is_empty() {
+            None
+        } else {
+            let rectangle_data = rectangle_bytes(rectangles);
+            let rectangle_buffer =
+                self.device
+                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("SwirUI rounded rectangle instances"),
+                        contents: &rectangle_data,
+                        usage: wgpu::BufferUsages::STORAGE,
+                    });
+            let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("SwirUI persistent rectangle bind group"),
+                layout: &self.bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: self.frame_buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: rectangle_buffer.as_entire_binding(),
+                    },
+                ],
+            });
+            Some((rectangle_buffer, bind_group))
+        };
 
         let frame = acquire_surface_texture(&self.surface)?;
         let view = frame
@@ -221,11 +268,11 @@ impl PersistentGpuContext {
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("SwirUI persistent rectangle encoder"),
+                label: Some("SwirUI persistent scene encoder"),
             });
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("SwirUI persistent rounded rectangle pass"),
+                label: Some("SwirUI persistent scene pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &view,
                     depth_slice: None,
@@ -245,14 +292,23 @@ impl PersistentGpuContext {
                 occlusion_query_set: None,
                 multiview_mask: None,
             });
-            render_pass.set_pipeline(&self.pipeline);
-            render_pass.set_bind_group(0, &bind_group, &[]);
-            render_pass.draw(0..6, 0..rectangles.len() as u32);
+
+            if let Some((_rectangle_buffer, bind_group)) = rectangle_resources.as_ref() {
+                render_pass.set_pipeline(&self.pipeline);
+                render_pass.set_bind_group(0, bind_group, &[]);
+                render_pass.draw(0..6, 0..rectangles.len() as u32);
+            }
+            if !texts.is_empty() {
+                self.text_system.render(&mut render_pass)?;
+            }
         }
 
         self.queue.submit([encoder.finish()]);
         self.queue.present(frame);
-        Ok(rectangles.len())
+        if !texts.is_empty() {
+            self.text_system.trim();
+        }
+        Ok((rectangles.len(), texts.len()))
     }
 }
 
@@ -309,7 +365,7 @@ impl PyWin32GpuRenderer {
         background_alpha=1.0
     ))]
     fn draw_rectangles(
-        &self,
+        &mut self,
         rectangles: Vec<RectangleInstance>,
         background_red: f64,
         background_green: f64,
@@ -318,6 +374,33 @@ impl PyWin32GpuRenderer {
     ) -> PyResult<usize> {
         self.context.draw_rectangles(
             &rectangles,
+            background_red,
+            background_green,
+            background_blue,
+            background_alpha,
+        )
+    }
+
+    #[pyo3(signature = (
+        rectangles,
+        texts,
+        background_red=0.027,
+        background_green=0.043,
+        background_blue=0.078,
+        background_alpha=1.0
+    ))]
+    fn draw_scene(
+        &mut self,
+        rectangles: Vec<RectangleInstance>,
+        texts: Vec<TextInstance>,
+        background_red: f64,
+        background_green: f64,
+        background_blue: f64,
+        background_alpha: f64,
+    ) -> PyResult<(usize, usize)> {
+        self.context.draw_scene(
+            &rectangles,
+            &texts,
             background_red,
             background_green,
             background_blue,
@@ -365,7 +448,7 @@ pub(crate) fn draw_rectangles_win32_surface(
     background_blue: f64,
     background_alpha: f64,
 ) -> PyResult<(String, String, usize)> {
-    let context = PersistentGpuContext::new(hwnd, width, height)?;
+    let mut context = PersistentGpuContext::new(hwnd, width, height)?;
     let count = context.draw_rectangles(
         &rectangles,
         background_red,
