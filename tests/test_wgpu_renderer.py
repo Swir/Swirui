@@ -1,6 +1,14 @@
 from swirui import App, Window
 from swirui.platforms import NullPlatformBackend
-from swirui.rendering import Color, Rect, Scene, SceneNode, SceneNodeKind, WgpuRenderer
+from swirui.rendering import (
+    Color,
+    CornerRadius,
+    Rect,
+    Scene,
+    SceneNode,
+    SceneNodeKind,
+    WgpuRenderer,
+)
 
 
 class FakeNativeGpu:
@@ -69,6 +77,7 @@ def _rectangle_scene(width: int = 800, height: int = 500) -> Scene:
             bounds=Rect(40, 50, 240, 120),
             fill=Color.from_hex("#008CFF"),
             opacity=0.75,
+            corner_radius=CornerRadius(12, 18, 24, 30),
         ),
         SceneNode(
             key="ignored-text",
@@ -102,6 +111,7 @@ def test_wgpu_renderer_submits_scene_rectangles() -> None:
     assert isinstance(submitted, list)
     assert submitted[0][:4] == (40, 50, 240, 120)
     assert submitted[0][7] == 0.75
+    assert submitted[0][8:] == (12, 18, 24, 30)
 
     app.stop()
 
