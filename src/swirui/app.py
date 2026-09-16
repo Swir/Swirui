@@ -216,6 +216,7 @@ class App(EventEmitter):
 
         self._window_unsubscribers[window] = [
             window.on("root_changed", invalidate_window),
+            window.on("scene_changed", invalidate_window),
             window.on("shown", invalidate_window),
             window.on("resized", resize_surface),
             window.on("closed", close_surface),
