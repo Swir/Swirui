@@ -13,7 +13,7 @@
 ![Windows Native](https://img.shields.io/badge/Windows-Win32%20native-0078D4?logo=windows11&logoColor=white)
 ![GPU](https://img.shields.io/badge/GPU-wgpu%2030-6E56CF)
 ![Status](https://img.shields.io/badge/status-pre--alpha-7C3AED)
-![Progress](https://img.shields.io/badge/project%20progress-17%25-00BFFF)
+![Progress](https://img.shields.io/badge/project%20progress-18%25-00BFFF)
 
 </div>
 
@@ -21,9 +21,9 @@
 
 ## Project progress
 
-**17% — 0.2 Alpha: Native Window + First Renderer in progress**
+**18% — 0.2 Alpha: Native Window + First Renderer in progress**
 
-`[███░░░░░░░░░░░░░░░░░] 17%`
+`[████░░░░░░░░░░░░░░░░] 18%`
 
 **Completed:** `0.1 Alpha — Foundation` ✅  
 **Current milestone:** `0.2 Alpha — Native Window + First Renderer` 🚧
@@ -49,6 +49,8 @@ SwirUI is currently **pre-alpha**. APIs may change while the native renderer and
 - retained `RenderTree`
 - renderer-ready `SceneGraph`
 - geometry and RGBA/HEX color primitives
+- **backend-neutral `Path2D` polygon geometry with deterministic ear-clipping tessellation**
+- **geometry-accurate `SceneNodeKind.PATH` pointer hit testing instead of bounding-box-only targeting**
 - invalidation-driven `FrameScheduler`
 - backend-neutral `RenderSurface` lifecycle
 - render scheduling connected to `AppConfig.target_fps`
@@ -86,6 +88,8 @@ SwirUI is currently **pre-alpha**. APIs may change while the native renderer and
 - **SceneNodeKind.TEXT → Python WgpuRenderer → Rust/glyphon/wgpu submission**
 - Unicode shaping and text rendering verified on a real Win32 HWND
 - **persistent RGBA8 GPU image resources with cached wgpu textures/views/bind groups**
+- **content-addressed image cache sharing byte-identical native GPU textures across logical resource ids**
+- reference-safe image aliases, transactional multi-context upload rollback and cache telemetry
 - **SceneNodeKind.IMAGE → Python resource registry → Rust/wgpu texture submission**
 - linear texture sampling, alpha blending and per-image opacity
 - registered image resources survive repeated frames and surface resize inside the persistent GPU context
@@ -136,7 +140,7 @@ python examples/gpu_image_demo.py
 python examples/high_refresh_demo.py
 ```
 
-The rectangle demo submits a prepared SwirUI `SceneGraph` into the Rust/wgpu backend. Filled rectangles are batched into one instanced draw call and per-corner radii are evaluated in the fragment shader with anti-aliased SDF edges. The text demo exercises the full `SceneGraph → Python → Rust → glyphon → wgpu` path with Unicode shaping, multiple font sizes and a persistent glyph atlas. The image demo generates RGBA pixels in memory, registers them once with the Python renderer and reuses the cached native wgpu texture through `SceneNodeKind.IMAGE`. The high-refresh demo uses a 240 FPS application ceiling and follows the active display refresh rate automatically; moving the window between monitors reports the current monitor, scale, refresh rate, effective target FPS and smoothed runtime FPS. Scene geometry remains authored in logical DIPs while native Win32 input and persistent GPU surfaces operate in physical pixels; per-window monitor scale converts consistently at the platform and renderer boundaries. The native renderer keeps its GPU context alive across frames and reconfigures the existing surface and text viewport on resize or DPI changes instead of recreating the GPU device, pipelines, glyph atlas or registered image textures.
+The rectangle demo submits a prepared SwirUI `SceneGraph` into the Rust/wgpu backend. Filled rectangles are batched into one instanced draw call and per-corner radii are evaluated in the fragment shader with anti-aliased SDF edges. The text demo exercises the full `SceneGraph → Python → Rust → glyphon → wgpu` path with Unicode shaping, multiple font sizes and a persistent glyph atlas. The image demo generates RGBA pixels in memory, registers them once with the Python renderer and reuses the cached native wgpu texture through `SceneNodeKind.IMAGE`; byte-identical image registrations under different logical ids share one retained native texture. The high-refresh demo uses a 240 FPS application ceiling and follows the active display refresh rate automatically; moving the window between monitors reports the current monitor, scale, refresh rate, effective target FPS and smoothed runtime FPS. Scene geometry remains authored in logical DIPs while native Win32 input and persistent GPU surfaces operate in physical pixels; per-window monitor scale converts consistently at the platform and renderer boundaries. The native renderer keeps its GPU context alive across frames and reconfigures the existing surface and text viewport on resize or DPI changes instead of recreating the GPU device, pipelines, glyph atlas or registered image textures.
 
 ## Foundation API
 
@@ -185,7 +189,8 @@ SwirUI Runtime
         ├── per-window active display + scale + refresh tracking ✅
         ├── Render Tree ✅
         ├── Scene Graph ✅
-        ├── z-aware + clip-aware Scene hit testing ✅
+        ├── Path2D polygon geometry + tessellation foundation ✅
+        ├── z-aware + clip-aware + path-aware Scene hit testing ✅
         ├── SceneNode → Component mapping ✅
         ├── Render Surface lifecycle ✅
         ├── display-aware deadline Frame Scheduler ✅
@@ -202,8 +207,9 @@ Renderer Layer
         ├── instanced filled rectangles ✅
         ├── anti-aliased per-corner rounded rectangles ✅
         ├── shaped text + persistent glyph atlas ✅
-        ├── persistent RGBA image textures ✅
+        ├── persistent content-addressed RGBA image cache ✅
         ├── hierarchical clipping / opacity compositing ✅
+        ├── native PATH triangle submission ← NEXT
         └── effects / shaders
         │
 Native Core
@@ -244,10 +250,10 @@ SwirUI Framework
 
 ## Current 0.2 Alpha focus
 
-The native Windows foundation, persistent wgpu renderer, rounded GPU primitives, shaped GPU text, persistent GPU images, hierarchical clipping/compositing, routed pointer/keyboard input, explicit present-mode policy, robust logical-DIP/physical-pixel HiDPI handling, multi-monitor discovery and display-aware high-refresh pacing are verified. The next renderer/runtime work is:
+The native Windows foundation, persistent wgpu renderer, rounded GPU primitives, shaped GPU text, persistent content-addressed GPU images, hierarchical clipping/compositing, routed pointer/keyboard input, explicit present-mode policy, robust logical-DIP/physical-pixel HiDPI handling, multi-monitor discovery and display-aware high-refresh pacing are verified. The backend-neutral `Path2D` geometry/tessellation contract is now in place. The next renderer/runtime work is:
 
-1. reusable dynamic GPU buffers and broader resource caching
-2. general shape / path rendering
+1. native `SceneNodeKind.PATH` triangle submission through Rust/wgpu
+2. path clipping/compositing and a real Win32 path smoke test
 3. deeper focus management and accessibility semantics
 4. Win32 client-area sizing hardening for exact decorated-window logical resize semantics
 
