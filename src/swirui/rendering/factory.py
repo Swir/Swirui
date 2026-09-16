@@ -5,12 +5,14 @@ from __future__ import annotations
 import importlib
 import sys
 
+from swirui.core import AppConfig
+
 from .base import NullRenderer, Renderer
 from .wgpu_renderer import WgpuRenderer
 from .windows_gdi import Win32PreviewRenderer
 
 
-def create_renderer() -> Renderer:
+def create_renderer(config: AppConfig | None = None) -> Renderer:
     """Return the best renderer currently available for this platform.
 
     Windows prefers the Rust/wgpu backend whenever the native extension is
@@ -26,4 +28,10 @@ def create_renderer() -> Renderer:
         native = importlib.import_module("_swirui_native")
     except ImportError:
         return Win32PreviewRenderer()
-    return WgpuRenderer(native_module=native)
+
+    runtime = config or AppConfig()
+    return WgpuRenderer(
+        native_module=native,
+        presentation_mode=runtime.presentation_mode,
+        maximum_frame_latency=runtime.maximum_frame_latency,
+    )
