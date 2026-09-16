@@ -34,12 +34,29 @@ class CacheContext:
         self.height = height
 
 
+class FailingCacheContext(CacheContext):
+    def register_image_rgba(
+        self, resource_id: str, width: int, height: int, rgba: bytes
+    ) -> None:
+        raise RuntimeError("synthetic GPU upload failure")
+
+
 class CacheNative:
     def __init__(self) -> None:
         self.contexts: list[CacheContext] = []
 
     def Win32GpuRenderer(self, hwnd: int, width: int, height: int) -> CacheContext:
         context = CacheContext(hwnd, width, height)
+        self.contexts.append(context)
+        return context
+
+
+class PartiallyFailingCacheNative(CacheNative):
+    def Win32GpuRenderer(self, hwnd: int, width: int, height: int) -> CacheContext:
+        if self.contexts:
+            context = FailingCacheContext(hwnd, width, height)
+        else:
+            context = CacheContext(hwnd, width, height)
         self.contexts.append(context)
         return context
 
@@ -186,4 +203,33 @@ def test_new_context_receives_each_unique_cached_resource_once() -> None:
     for context in native.contexts:
         assert len(context.register_calls) == 2
 
+    app.stop()
+
+
+def test_failed_multi_context_upload_rolls_back_without_cache_mutation() -> None:
+    native = PartiallyFailingCacheNative()
+    renderer = WgpuRenderer(native_module=native)
+    app = App(platform_backend=NullPlatformBackend(), renderer=renderer)
+    app.add_window(Window(width=320, height=240))
+    app.add_window(Window(width=400, height=300))
+    app.start()
+
+    first, failing = native.contexts
+    pixels = bytes((100, 120, 140, 255))
+
+    try:
+        renderer.register_image_rgba("transactional", 1, 1, pixels)
+    except RuntimeError as exc:
+        assert str(exc) == "synthetic GPU upload failure"
+    else:
+        raise AssertionError("Expected synthetic upload failure")
+
+    assert renderer.image_resource_count == 0
+    assert renderer.image_gpu_resource_count == 0
+    assert renderer.image_resource_bytes == 0
+    assert renderer.image_native_uploads == 0
+    assert first.register_calls == [("transactional", 1, 1, pixels)]
+    assert first.unregister_calls == ["transactional"]
+    assert first.resources == {}
+    assert failing.resources == {}
     app.stop()
