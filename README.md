@@ -13,7 +13,7 @@
 ![Windows Native](https://img.shields.io/badge/Windows-Win32%20native-0078D4?logo=windows11&logoColor=white)
 ![GPU](https://img.shields.io/badge/GPU-wgpu%2030-6E56CF)
 ![Status](https://img.shields.io/badge/status-pre--alpha-7C3AED)
-![Progress](https://img.shields.io/badge/project%20progress-17%25-00BFFF)
+![Progress](https://img.shields.io/badge/project%20progress-19%25-00BFFF)
 
 </div>
 
@@ -21,9 +21,9 @@
 
 ## Project progress
 
-**17% — 0.2 Alpha: Native Window + First Renderer in progress**
+**19% — 0.2 Alpha: Native Window + First Renderer in progress**
 
-`[███░░░░░░░░░░░░░░░░░] 17%`
+`[████░░░░░░░░░░░░░░░░] 19%`
 
 **Completed:** `0.1 Alpha — Foundation` ✅  
 **Current milestone:** `0.2 Alpha — Native Window + First Renderer` 🚧
@@ -49,6 +49,9 @@ SwirUI is currently **pre-alpha**. APIs may change while the native renderer and
 - retained `RenderTree`
 - renderer-ready `SceneGraph`
 - geometry and RGBA/HEX color primitives
+- **backend-neutral `Path2D` polygon geometry with deterministic convex/concave tessellation**
+- **SceneNodeKind.PATH → Python WgpuRenderer → persistent Rust/wgpu triangle rendering**
+- path-aware hit testing, clipping, cumulative opacity and reusable native shape buffers
 - invalidation-driven `FrameScheduler`
 - backend-neutral `RenderSurface` lifecycle
 - render scheduling connected to `AppConfig.target_fps`
@@ -66,7 +69,7 @@ SwirUI is currently **pre-alpha**. APIs may change while the native renderer and
 - **per-window active-display mapping plus normalized movement/display-change transitions**
 - **logical-DIP public window and SceneGraph geometry with explicit logical ↔ physical conversion helpers**
 - **native physical resize and pointer coordinates normalized back into logical DIPs before layout/input routing**
-- **per-monitor DPI scaling for rounded rectangles, shaped text, images and clip rectangles before GPU submission**
+- **per-monitor DPI scaling for rounded rectangles, paths, shaped text, images and clip rectangles before GPU submission**
 - per-window effective scale reporting and normalized `WM_DPICHANGED` events
 - x64-safe Win32 handle bindings
 - visible SceneGraph bring-up renderer for Windows
@@ -80,18 +83,18 @@ SwirUI is currently **pre-alpha**. APIs may change while the native renderer and
 - runtime native presentation reconfiguration verified on a real Win32/wgpu context
 - **instanced anti-aliased rounded-rectangle GPU pipeline**
 - **per-corner `CornerRadius` rendered by a WGSL SDF shader**
-- **SceneGraph → Python WgpuRenderer → Rust/wgpu primitive submission**
 - **native shaped text rendering with glyphon + cosmic-text**
 - **persistent font system, glyph atlas, viewport and Swash cache**
-- **SceneNodeKind.TEXT → Python WgpuRenderer → Rust/glyphon/wgpu submission**
 - Unicode shaping and text rendering verified on a real Win32 HWND
 - **persistent RGBA8 GPU image resources with cached wgpu textures/views/bind groups**
+- **content-addressed image cache sharing byte-identical native GPU textures across logical resource ids**
+- reference-safe image aliases, transactional multi-context upload rollback and cache telemetry
 - **SceneNodeKind.IMAGE → Python resource registry → Rust/wgpu texture submission**
 - linear texture sampling, alpha blending and per-image opacity
 - registered image resources survive repeated frames and surface resize inside the persistent GPU context
-- rounded rectangles, images and shaped text rendered in the same native GPU scene pass
+- rounded rectangles, paths, images and shaped text rendered in the same native GPU scene
 - **hierarchical `clip_to_bounds` clipping with cumulative ancestor opacity**
-- clip-aware rectangles, glyphon text bounds and image UV cropping in the native GPU scene
+- clip-aware rectangles, filled paths, glyphon text bounds and image UV cropping in the native GPU scene
 - clip-aware SceneGraph hit testing and fully clipped subtree pruning
 - automatic renderer selection: wgpu first on Windows, temporary GDI preview fallback when the native core is unavailable
 - z-aware SceneGraph hit testing with painter-order handling
@@ -102,7 +105,7 @@ SwirUI is currently **pre-alpha**. APIs may change while the native renderer and
 - **routed keyboard and text-input events through the focused component path**
 - propagation cancellation with `Event.stop_propagation()`
 - ABI3 native wheel build for Python 3.11+
-- Windows native + persistent rounded-GPU + shaped-text + image + clipping + mixed-DPI + presentation/display smoke tests on Python 3.14
+- Windows native + rounded-GPU + path + shaped-text + image + clipping + mixed-DPI + presentation/display smoke tests on Python 3.14
 - Ruff, Mypy, coverage and Python 3.11–3.14 CI
 
 ## Native and GPU demos
@@ -133,10 +136,11 @@ cd ..
 python examples/gpu_rectangles_demo.py
 python examples/gpu_text_demo.py
 python examples/gpu_image_demo.py
+python examples/gpu_paths_demo.py
 python examples/high_refresh_demo.py
 ```
 
-The rectangle demo submits a prepared SwirUI `SceneGraph` into the Rust/wgpu backend. Filled rectangles are batched into one instanced draw call and per-corner radii are evaluated in the fragment shader with anti-aliased SDF edges. The text demo exercises the full `SceneGraph → Python → Rust → glyphon → wgpu` path with Unicode shaping, multiple font sizes and a persistent glyph atlas. The image demo generates RGBA pixels in memory, registers them once with the Python renderer and reuses the cached native wgpu texture through `SceneNodeKind.IMAGE`. The high-refresh demo uses a 240 FPS application ceiling and follows the active display refresh rate automatically; moving the window between monitors reports the current monitor, scale, refresh rate, effective target FPS and smoothed runtime FPS. Scene geometry remains authored in logical DIPs while native Win32 input and persistent GPU surfaces operate in physical pixels; per-window monitor scale converts consistently at the platform and renderer boundaries. The native renderer keeps its GPU context alive across frames and reconfigures the existing surface and text viewport on resize or DPI changes instead of recreating the GPU device, pipelines, glyph atlas or registered image textures.
+The rectangle demo submits prepared SwirUI rectangles into the persistent Rust/wgpu backend. Filled rectangles are batched into one instanced draw call and per-corner radii are evaluated in the fragment shader with anti-aliased SDF edges. The path demo exercises deterministic convex/concave `Path2D` tessellation and the full `SceneGraph → Python → Rust/wgpu` filled-triangle path with clipping and alpha compositing. The text demo exercises Unicode shaping through glyphon/cosmic-text and a persistent glyph atlas. The image demo generates RGBA pixels in memory, registers them once and reuses cached native textures; byte-identical image registrations under different logical ids share one retained native texture. The high-refresh demo follows the active display refresh rate automatically. Scene geometry remains authored in logical DIPs while native Win32 input and persistent GPU surfaces operate in physical pixels.
 
 ## Foundation API
 
@@ -185,7 +189,8 @@ SwirUI Runtime
         ├── per-window active display + scale + refresh tracking ✅
         ├── Render Tree ✅
         ├── Scene Graph ✅
-        ├── z-aware + clip-aware Scene hit testing ✅
+        ├── Path2D polygon geometry + tessellation ✅
+        ├── z-aware + clip-aware + path-aware Scene hit testing ✅
         ├── SceneNode → Component mapping ✅
         ├── Render Surface lifecycle ✅
         ├── display-aware deadline Frame Scheduler ✅
@@ -198,11 +203,10 @@ Renderer Layer
         ├── persistent per-window GPU context ✅
         ├── DPI-scaled physical GPU submission ✅
         ├── VSync / present-mode policy ✅
-        ├── SceneGraph rectangle submission ✅
-        ├── instanced filled rectangles ✅
-        ├── anti-aliased per-corner rounded rectangles ✅
+        ├── instanced anti-aliased rounded rectangles ✅
+        ├── filled convex/concave Path2D triangles ✅
         ├── shaped text + persistent glyph atlas ✅
-        ├── persistent RGBA image textures ✅
+        ├── persistent content-addressed RGBA image cache ✅
         ├── hierarchical clipping / opacity compositing ✅
         └── effects / shaders
         │
@@ -244,12 +248,12 @@ SwirUI Framework
 
 ## Current 0.2 Alpha focus
 
-The native Windows foundation, persistent wgpu renderer, rounded GPU primitives, shaped GPU text, persistent GPU images, hierarchical clipping/compositing, routed pointer/keyboard input, explicit present-mode policy, robust logical-DIP/physical-pixel HiDPI handling, multi-monitor discovery and display-aware high-refresh pacing are verified. The next renderer/runtime work is:
+The native Windows foundation, persistent wgpu renderer, rounded and general filled GPU shapes, shaped GPU text, persistent content-addressed GPU images, hierarchical clipping/compositing, routed pointer/keyboard input, explicit present-mode policy, robust logical-DIP/physical-pixel HiDPI handling, multi-monitor discovery and display-aware high-refresh pacing are verified. The largest remaining 0.2 hardening work is:
 
-1. reusable dynamic GPU buffers and broader resource caching
-2. general shape / path rendering
-3. deeper focus management and accessibility semantics
-4. Win32 client-area sizing hardening for exact decorated-window logical resize semantics
+1. exact decorated-window client-area sizing across create/resize and DPI transitions
+2. deeper focus management and accessibility semantics
+3. performance budgets and regression benchmarks for retained rendering
+4. cross-platform native backend expansion after the Windows gate is hardened
 
 See **[ROADMAP.md](ROADMAP.md)** for the full development plan.
 
@@ -272,6 +276,7 @@ Windows active-display / refresh-rate mapping smoke test
 Windows WM_DISPLAYCHANGE / WM_DPICHANGED normalization smoke tests
 Windows wgpu clear/present smoke test
 Windows persistent rounded-rectangle GPU draw smoke test
+Windows filled Path2D SceneGraph → Python → Rust/wgpu smoke test
 Windows shaped-text SceneGraph → Python → Rust/wgpu smoke test
 Windows image-resource SceneGraph → Python → Rust/wgpu smoke test
 Windows clipped mixed-scene GPU smoke test
