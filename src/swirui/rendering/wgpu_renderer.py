@@ -27,6 +27,21 @@ RectangleInstance = tuple[
     float,
     float,
 ]
+TextInstance = tuple[
+    str,
+    float,
+    float,
+    float,
+    float,
+    float,
+    float,
+    float,
+    float,
+    float,
+    str,
+]
+
+_DEFAULT_TEXT_COLOR = Color(1.0, 1.0, 1.0, 1.0)
 
 
 class WgpuRenderer:
@@ -50,6 +65,7 @@ class WgpuRenderer:
         self.initialized = False
         self.frames_rendered = 0
         self.last_rectangle_count = 0
+        self.last_text_count = 0
         self.adapter_name: str | None = None
         self.graphics_backend: str | None = None
         self.surfaces: dict[int, RenderSurface] = {}
@@ -119,25 +135,45 @@ class WgpuRenderer:
             raise RuntimeError("Native GPU core is unavailable.")
 
         rectangles = self._rectangle_instances(window)
+        texts = self._text_instances(window)
         background = self.background
         context = self._contexts.get(window.native_handle.value)
         if context is not None:
-            if rectangles:
-                self.last_rectangle_count = int(
-                    context.draw_rectangles(
+            draw_scene = getattr(context, "draw_scene", None)
+            if rectangles or texts:
+                if draw_scene is not None:
+                    rectangle_count, text_count = draw_scene(
                         rectangles,
+                        texts,
                         background.r,
                         background.g,
                         background.b,
                         background.a,
                     )
-                )
+                    self.last_rectangle_count = int(rectangle_count)
+                    self.last_text_count = int(text_count)
+                elif texts:
+                    raise RuntimeError(
+                        "Installed SwirUI native GPU core does not support shaped text rendering."
+                    )
+                else:
+                    self.last_rectangle_count = int(
+                        context.draw_rectangles(
+                            rectangles,
+                            background.r,
+                            background.g,
+                            background.b,
+                            background.a,
+                        )
+                    )
+                    self.last_text_count = 0
             else:
                 context.clear(background.r, background.g, background.b, background.a)
                 self.last_rectangle_count = 0
+                self.last_text_count = 0
             self._capture_adapter_info(context)
         else:
-            self._render_stateless(window, rectangles)
+            self._render_stateless(window, rectangles, texts)
 
         self.frames_rendered += 1
 
@@ -152,12 +188,32 @@ class WgpuRenderer:
         self,
         window: Window,
         rectangles: list[RectangleInstance],
+        texts: list[TextInstance],
     ) -> None:
         native = self._native
         if native is None or window.native_handle is None:
             raise RuntimeError("Native GPU core is unavailable.")
         background = self.background
-        if rectangles:
+        if texts:
+            draw_scene = getattr(native, "draw_scene_win32_surface", None)
+            if draw_scene is None:
+                raise RuntimeError(
+                    "Installed SwirUI native GPU core does not support shaped text rendering."
+                )
+            adapter_name, graphics_backend, rectangle_count, text_count = draw_scene(
+                window.native_handle.value,
+                window.width,
+                window.height,
+                rectangles,
+                texts,
+                background.r,
+                background.g,
+                background.b,
+                background.a,
+            )
+            self.last_rectangle_count = int(rectangle_count)
+            self.last_text_count = int(text_count)
+        elif rectangles:
             adapter_name, graphics_backend, rectangle_count = (
                 native.draw_rectangles_win32_surface(
                     window.native_handle.value,
@@ -171,6 +227,7 @@ class WgpuRenderer:
                 )
             )
             self.last_rectangle_count = int(rectangle_count)
+            self.last_text_count = 0
         else:
             adapter_name, graphics_backend = native.clear_win32_surface(
                 window.native_handle.value,
@@ -182,6 +239,7 @@ class WgpuRenderer:
                 background.a,
             )
             self.last_rectangle_count = 0
+            self.last_text_count = 0
 
         self.adapter_name = str(adapter_name)
         self.graphics_backend = str(graphics_backend)
@@ -223,6 +281,38 @@ class WgpuRenderer:
                 )
             )
         return rectangles
+
+    def _text_instances(self, window: Window) -> list[TextInstance]:
+        scene = window.scene
+        if scene is None:
+            return []
+
+        texts: list[TextInstance] = []
+        for node in scene.walk():
+            if node.kind is not SceneNodeKind.TEXT:
+                continue
+            if not node.text or node.opacity <= 0.0:
+                continue
+            if node.bounds.width <= 0.0 or node.bounds.height <= 0.0:
+                continue
+
+            fill = node.fill or _DEFAULT_TEXT_COLOR
+            texts.append(
+                (
+                    node.text,
+                    node.bounds.x,
+                    node.bounds.y,
+                    node.bounds.width,
+                    node.bounds.height,
+                    node.font_size,
+                    fill.r,
+                    fill.g,
+                    fill.b,
+                    fill.a * node.opacity,
+                    node.font_family,
+                )
+            )
+        return texts
 
     def _surface_for(self, window: Window) -> RenderSurface:
         self._require_initialized()
