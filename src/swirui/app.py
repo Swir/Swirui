@@ -92,7 +92,7 @@ class App(EventEmitter):
         if not self.running:
             return 0
 
-        events = self.platform_backend.poll_events()
+        events = self._normalize_dpi_resize_order(self.platform_backend.poll_events())
         for event in events:
             self._dispatch_platform_event(event)
 
@@ -104,6 +104,29 @@ class App(EventEmitter):
         ):
             self.stop(self.exit_code)
         return len(events)
+
+    @staticmethod
+    def _normalize_dpi_resize_order(events: list[PlatformEvent]) -> list[PlatformEvent]:
+        """Ensure a new DPI scale is visible before its synchronous Win32 resize.
+
+        ``SetWindowPos`` inside ``WM_DPICHANGED`` may synchronously enqueue a
+        ``WM_SIZE`` before the backend can append its normalized DPI event. When
+        those two adjacent events target the same HWND, swap them so physical
+        resize dimensions are converted with the new scale instead of the old
+        monitor scale. Other event ordering remains untouched.
+        """
+
+        ordered = list(events)
+        for index in range(1, len(ordered)):
+            current = ordered[index]
+            previous = ordered[index - 1]
+            if (
+                current.kind is PlatformEventKind.DPI_CHANGED
+                and previous.kind is PlatformEventKind.RESIZE
+                and current.window == previous.window
+            ):
+                ordered[index - 1], ordered[index] = current, previous
+        return ordered
 
     def invalidate(self, window: Window | None = None) -> None:
         """Request a future frame for one window or every attached window."""
