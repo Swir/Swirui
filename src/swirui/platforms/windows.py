@@ -39,6 +39,7 @@ _WM_RBUTTONDOWN = 0x0204
 _WM_RBUTTONUP = 0x0205
 _WM_MBUTTONDOWN = 0x0207
 _WM_MBUTTONUP = 0x0208
+_WM_DPICHANGED = 0x02E0
 
 _SM_CXSCREEN = 0
 _SM_CYSCREEN = 1
@@ -512,6 +513,29 @@ class Win32PlatformBackend:
                         height=(int(lparam) >> 16) & 0xFFFF,
                     )
                 )
+            elif message == _WM_DPICHANGED:
+                dpi_x = int(wparam) & 0xFFFF
+                scale = dpi_x / 96.0 if dpi_x > 0 else self.window_scale(handle)
+                if lparam:
+                    suggested = ctypes.cast(
+                        ctypes.c_void_p(lparam), ctypes.POINTER(_Rect)
+                    ).contents
+                    width = int(suggested.right - suggested.left)
+                    height = int(suggested.bottom - suggested.top)
+                    if width > 0 and height > 0:
+                        self._user32.SetWindowPos(
+                            ctypes.c_void_p(hwnd),
+                            None,
+                            int(suggested.left),
+                            int(suggested.top),
+                            width,
+                            height,
+                            _SWP_NOZORDER | _SWP_NOACTIVATE,
+                        )
+                self._events.append(
+                    PlatformEvent(PlatformEventKind.DPI_CHANGED, handle, scale=scale)
+                )
+                return 0
             elif message == _WM_SETFOCUS:
                 self._events.append(PlatformEvent(PlatformEventKind.FOCUS, handle, focused=True))
             elif message == _WM_KILLFOCUS:
