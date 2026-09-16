@@ -118,5 +118,5 @@ jobs:
       - name: Create and paint real Win32 window
         run: pytest tests/test_windows_backend.py -q
 
-      - name: Draw persistent rounded rectangles through wgpu
+      - name: Draw persistent GPU scene with shaped text through wgpu
         run: pytest tests/test_windows_gpu_bridge.py -q
