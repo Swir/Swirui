@@ -331,10 +331,10 @@ class WgpuRenderer:
             return []
 
         rectangles: list[RectangleInstance] = []
-        for node in scene.walk():
+        for node, effective_opacity in scene.walk_with_opacity():
             if node.kind not in (SceneNodeKind.GROUP, SceneNodeKind.RECTANGLE):
                 continue
-            if node.fill is None or node.opacity <= 0.0:
+            if node.fill is None:
                 continue
             if node.bounds.width <= 0.0 or node.bounds.height <= 0.0:
                 continue
@@ -350,7 +350,7 @@ class WgpuRenderer:
                     fill.r,
                     fill.g,
                     fill.b,
-                    fill.a * node.opacity,
+                    fill.a * effective_opacity,
                     radius.top_left,
                     radius.top_right,
                     radius.bottom_right,
@@ -365,10 +365,10 @@ class WgpuRenderer:
             return []
 
         texts: list[TextInstance] = []
-        for node in scene.walk():
+        for node, effective_opacity in scene.walk_with_opacity():
             if node.kind is not SceneNodeKind.TEXT:
                 continue
-            if not node.text or node.opacity <= 0.0:
+            if not node.text:
                 continue
             if node.bounds.width <= 0.0 or node.bounds.height <= 0.0:
                 continue
@@ -385,7 +385,7 @@ class WgpuRenderer:
                     fill.r,
                     fill.g,
                     fill.b,
-                    fill.a * node.opacity,
+                    fill.a * effective_opacity,
                     node.font_family,
                 )
             )
@@ -397,10 +397,8 @@ class WgpuRenderer:
             return []
 
         images: list[ImageInstance] = []
-        for node in scene.walk():
+        for node, effective_opacity in scene.walk_with_opacity():
             if node.kind is not SceneNodeKind.IMAGE:
-                continue
-            if node.opacity <= 0.0:
                 continue
             if node.bounds.width <= 0.0 or node.bounds.height <= 0.0:
                 continue
@@ -416,7 +414,7 @@ class WgpuRenderer:
                     node.bounds.y,
                     node.bounds.width,
                     node.bounds.height,
-                    node.opacity,
+                    effective_opacity,
                 )
             )
         return images
