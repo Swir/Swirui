@@ -1,5 +1,5 @@
 from swirui import App, Component, Window
-from swirui.core import EventPhase
+from swirui.core import Event, EventPhase
 from swirui.platforms import NullPlatformBackend, PlatformEvent, PlatformEventKind
 
 
@@ -9,7 +9,7 @@ def _focused_app() -> tuple[App, NullPlatformBackend, Window, Component, Compone
     window = Window()
     root = Component("root", key="root")
     panel = Component("panel", key="panel")
-    field = Component("field", key="field")
+    field = Component("field", key="field", focusable=True)
     panel.add(field)
     root.add(panel)
     window.set_root(root)
@@ -52,9 +52,9 @@ def test_keyboard_event_routes_capture_target_and_bubble() -> None:
 
 
 def test_text_input_routes_only_to_focused_branch() -> None:
-    app, backend, window, root, panel, field = _focused_app()
+    app, backend, window, root, _panel, field = _focused_app()
     assert window.native_handle is not None
-    other = Component("other", key="other")
+    other = Component("other", key="other", focusable=True)
     root.add(other)
     seen: list[tuple[str, str | None]] = []
 
@@ -85,9 +85,9 @@ def test_keyboard_capture_can_stop_propagation_before_target() -> None:
     assert window.native_handle is not None
     calls: list[str] = []
 
-    def stop_at_root(event: object) -> None:
+    def stop_at_root(event: Event) -> None:
         calls.append("root")
-        event.stop_propagation()  # type: ignore[attr-defined]
+        event.stop_propagation()
 
     root.on("key_up", stop_at_root, capture=True)
     field.on("key_up", lambda _event: calls.append("field"))
@@ -108,8 +108,8 @@ def test_keyboard_capture_can_stop_propagation_before_target() -> None:
 def test_component_focus_lifecycle_and_root_replacement() -> None:
     window = Window()
     root = Component("root")
-    first = Component("first")
-    second = Component("second")
+    first = Component("first", focusable=True)
+    second = Component("second", focusable=True)
     root.add(first, second)
     window.set_root(root)
     lifecycle: list[str] = []
@@ -128,11 +128,29 @@ def test_component_focus_lifecycle_and_root_replacement() -> None:
     assert window.focused_component is None
 
 
-def test_focus_rejects_component_outside_root_or_disabled() -> None:
+def test_focus_next_wraps_and_skips_ineligible_components() -> None:
     window = Window()
     root = Component("root")
-    inside = Component("inside")
-    outside = Component("outside")
+    first = Component("first", focusable=True)
+    disabled = Component("disabled", focusable=True)
+    disabled.enabled = False
+    hidden = Component("hidden", focusable=True)
+    hidden.visible = False
+    second = Component("second", focusable=True)
+    root.add(first, disabled, hidden, second)
+    window.set_root(root)
+
+    assert window.focus_next() is first
+    assert window.focus_next() is second
+    assert window.focus_next() is first
+    assert window.focus_next(reverse=True) is second
+
+
+def test_focus_rejects_component_outside_root_nonfocusable_or_disabled() -> None:
+    window = Window()
+    root = Component("root")
+    inside = Component("inside", focusable=True)
+    outside = Component("outside", focusable=True)
     root.add(inside)
     window.set_root(root)
 
@@ -142,6 +160,15 @@ def test_focus_rejects_component_outside_root_or_disabled() -> None:
         assert "root tree" in str(exc)
     else:
         raise AssertionError("focus_component accepted a component outside the root tree")
+
+    nonfocusable = Component("nonfocusable")
+    root.add(nonfocusable)
+    try:
+        window.focus_component(nonfocusable)
+    except ValueError as exc:
+        assert "focusable" in str(exc)
+    else:
+        raise AssertionError("focus_component accepted a non-focusable component")
 
     inside.enabled = False
     try:
