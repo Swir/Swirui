@@ -159,6 +159,101 @@ def test_wgpu_renderer_submits_scene_rectangles_and_text() -> None:
     app.stop()
 
 
+def test_wgpu_renderer_inherits_group_opacity_across_mixed_primitives() -> None:
+    native = FakePersistentNative()
+    renderer = WgpuRenderer(native_module=native)
+    renderer.register_image_rgba("pixel", 1, 1, bytes((255, 255, 255, 255)))
+
+    root = SceneNode(
+        key="root",
+        kind=SceneNodeKind.GROUP,
+        bounds=Rect(0, 0, 640, 360),
+        opacity=0.5,
+    )
+    layer = SceneNode(
+        key="layer",
+        kind=SceneNodeKind.GROUP,
+        bounds=Rect(0, 0, 640, 360),
+        opacity=0.5,
+    )
+    layer.add(
+        SceneNode(
+            key="rect",
+            kind=SceneNodeKind.RECTANGLE,
+            bounds=Rect(20, 30, 120, 60),
+            fill=Color(0.2, 0.4, 0.8, 0.5),
+            opacity=0.8,
+        ),
+        SceneNode(
+            key="text",
+            kind=SceneNodeKind.TEXT,
+            bounds=Rect(30, 110, 220, 40),
+            text="Inherited alpha",
+            fill=Color(1.0, 1.0, 1.0, 1.0),
+            opacity=0.6,
+        ),
+        SceneNode(
+            key="image",
+            kind=SceneNodeKind.IMAGE,
+            bounds=Rect(280, 40, 100, 100),
+            resource_id="pixel",
+            opacity=0.4,
+        ),
+    )
+    root.add(layer)
+
+    app = App(platform_backend=NullPlatformBackend(), renderer=renderer)
+    window = Window(width=640, height=360)
+    window.set_scene(Scene(640, 360, root))
+    app.add_window(window)
+    app.start()
+
+    context = native.contexts[0]
+    rectangles, texts, images = context.scene_calls[0][:3]
+    assert isinstance(rectangles, list)
+    assert isinstance(texts, list)
+    assert isinstance(images, list)
+    assert rectangles[0][7] == 0.1
+    assert texts[0][9] == 0.15
+    assert images[0][5] == 0.1
+
+    app.stop()
+
+
+def test_wgpu_renderer_skips_fully_transparent_subtree_before_resource_lookup() -> None:
+    native = FakePersistentNative()
+    renderer = WgpuRenderer(native_module=native)
+    root = SceneNode(
+        key="root",
+        kind=SceneNodeKind.GROUP,
+        bounds=Rect(0, 0, 640, 360),
+        opacity=0.0,
+    )
+    root.add(
+        SceneNode(
+            key="hidden-image",
+            kind=SceneNodeKind.IMAGE,
+            bounds=Rect(20, 20, 100, 100),
+            resource_id="not-registered",
+        )
+    )
+
+    app = App(platform_backend=NullPlatformBackend(), renderer=renderer)
+    window = Window(width=640, height=360)
+    window.set_scene(Scene(640, 360, root))
+    app.add_window(window)
+    app.start()
+
+    context = native.contexts[0]
+    assert context.scene_calls == []
+    assert len(context.clear_calls) == 1
+    assert renderer.last_rectangle_count == 0
+    assert renderer.last_text_count == 0
+    assert renderer.last_image_count == 0
+
+    app.stop()
+
+
 def test_wgpu_renderer_uploads_and_submits_registered_image() -> None:
     native = FakePersistentNative()
     renderer = WgpuRenderer(native_module=native)
