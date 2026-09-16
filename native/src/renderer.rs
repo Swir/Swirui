@@ -1,4 +1,5 @@
 use crate::image::{ImageInstance, ImageSystem};
+use crate::shape::{ShapeSystem, ShapeVertex};
 use crate::text::{TextInstance, TextSystem};
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
@@ -31,6 +32,7 @@ struct PersistentGpuContext {
     rectangle_capacity: usize,
     text_system: TextSystem,
     image_system: ImageSystem,
+    shape_system: ShapeSystem,
     adapter_name: String,
     graphics_backend: String,
 }
@@ -145,6 +147,7 @@ impl PersistentGpuContext {
         );
         let text_system = TextSystem::new(&device, &queue, config.format, width, height);
         let image_system = ImageSystem::new(&device, config.format);
+        let shape_system = ShapeSystem::new(&device, config.format, &frame_buffer);
 
         Ok(Self {
             _instance: instance,
@@ -160,6 +163,7 @@ impl PersistentGpuContext {
             rectangle_capacity,
             text_system,
             image_system,
+            shape_system,
             adapter_name: info.name,
             graphics_backend: info.backend.to_string(),
         })
@@ -250,8 +254,9 @@ impl PersistentGpuContext {
         background_blue: f64,
         background_alpha: f64,
     ) -> PyResult<usize> {
-        let (rectangle_count, _text_count, _image_count) = self.draw_scene(
+        let (rectangle_count, _text_count, _image_count, _shape_count) = self.draw_scene_with_paths(
             rectangles,
+            &[],
             &[],
             &[],
             background_red,
@@ -272,6 +277,30 @@ impl PersistentGpuContext {
         background_blue: f64,
         background_alpha: f64,
     ) -> PyResult<(usize, usize, usize)> {
+        let (rectangle_count, text_count, image_count, _shape_count) = self.draw_scene_with_paths(
+            rectangles,
+            texts,
+            images,
+            &[],
+            background_red,
+            background_green,
+            background_blue,
+            background_alpha,
+        )?;
+        Ok((rectangle_count, text_count, image_count))
+    }
+
+    fn draw_scene_with_paths(
+        &mut self,
+        rectangles: &[RectangleInstance],
+        texts: &[TextInstance],
+        images: &[ImageInstance],
+        shapes: &[ShapeVertex],
+        background_red: f64,
+        background_green: f64,
+        background_blue: f64,
+        background_alpha: f64,
+    ) -> PyResult<(usize, usize, usize, usize)> {
         validate_color(
             background_red,
             background_green,
@@ -285,14 +314,14 @@ impl PersistentGpuContext {
             self.queue
                 .write_buffer(&self.rectangle_buffer, 0, &rectangle_data);
         }
-        if rectangles.is_empty() && texts.is_empty() && images.is_empty() {
+        if rectangles.is_empty() && texts.is_empty() && images.is_empty() && shapes.is_empty() {
             self.clear(
                 background_red,
                 background_green,
                 background_blue,
                 background_alpha,
             )?;
-            return Ok((0, 0, 0));
+            return Ok((0, 0, 0, 0));
         }
         if !texts.is_empty() {
             self.text_system.prepare(&self.device, &self.queue, texts)?;
@@ -304,6 +333,9 @@ impl PersistentGpuContext {
             self.config.width,
             self.config.height,
         )?;
+        let shapes_prepared =
+            self.shape_system
+                .prepare_vertices(&self.device, &self.queue, shapes)?;
 
         let frame = acquire_surface_texture(&self.surface)?;
         let view = frame
@@ -342,6 +374,9 @@ impl PersistentGpuContext {
                 render_pass.set_bind_group(0, &self.rectangle_bind_group, &[]);
                 render_pass.draw(0..6, 0..rectangles.len() as u32);
             }
+            if shapes_prepared {
+                self.shape_system.render(&mut render_pass, shapes.len())?;
+            }
             if images_prepared {
                 self.image_system.render(&mut render_pass, images)?;
             }
@@ -355,7 +390,7 @@ impl PersistentGpuContext {
         if !texts.is_empty() {
             self.text_system.trim();
         }
-        Ok((rectangles.len(), texts.len(), images.len()))
+        Ok((rectangles.len(), texts.len(), images.len(), shapes.len() / 3))
     }
 
     fn ensure_rectangle_capacity(&mut self, required: usize) -> PyResult<()> {
@@ -453,6 +488,11 @@ impl PyWin32GpuRenderer {
     }
 
     #[getter]
+    fn shape_vertex_capacity(&self) -> usize {
+        self.context.shape_system.vertex_capacity()
+    }
+
+    #[getter]
     fn image_resource_count(&self) -> usize {
         self.context.image_system.resource_count()
     }
@@ -541,6 +581,39 @@ impl PyWin32GpuRenderer {
             &rectangles,
             &texts,
             &images,
+            background_red,
+            background_green,
+            background_blue,
+            background_alpha,
+        )
+    }
+
+    #[pyo3(signature = (
+        rectangles,
+        texts,
+        images,
+        shapes,
+        background_red=0.027,
+        background_green=0.043,
+        background_blue=0.078,
+        background_alpha=1.0
+    ))]
+    fn draw_scene_with_paths(
+        &mut self,
+        rectangles: Vec<RectangleInstance>,
+        texts: Vec<TextInstance>,
+        images: Vec<ImageInstance>,
+        shapes: Vec<ShapeVertex>,
+        background_red: f64,
+        background_green: f64,
+        background_blue: f64,
+        background_alpha: f64,
+    ) -> PyResult<(usize, usize, usize, usize)> {
+        self.context.draw_scene_with_paths(
+            &rectangles,
+            &texts,
+            &images,
+            &shapes,
             background_red,
             background_green,
             background_blue,
