@@ -17,9 +17,11 @@
 
 ## Project progress
 
-**3% — Foundation in progress**
+**3% — 0.1 Alpha Foundation complete ✅**
 
 `[█░░░░░░░░░░░░░░░░░░░] 3%`
+
+**Current milestone:** `0.2 Alpha — Native Window + First Renderer`
 
 The percentage reflects completed and tested roadmap work. It is not increased for ideas, mockups or unfinished prototypes.
 
@@ -27,7 +29,7 @@ The percentage reflects completed and tested roadmap work. It is not increased f
 
 SwirUI is being designed as a complete application framework for Python rather than a skin over an existing widget toolkit. The long-term architecture combines a simple Python API with a high-performance native/GPU rendering core, reactive state, responsive layouts, advanced animation, desktop integration, visual tooling and AI-assisted development.
 
-The project is currently **pre-alpha**. The public API will change while the foundation is built.
+The project is currently **pre-alpha**. The public API may change while the renderer, native backends and widget systems are developed.
 
 ## Core goals
 
@@ -42,11 +44,10 @@ The project is currently **pre-alpha**. The public API will change while the fou
 - **AI-ready architecture** — AI-generated layouts remain ordinary editable SwirUI components.
 - **Cross-platform direction** — Windows, Linux and macOS are the primary desktop targets.
 
-## First API direction
+## Foundation API
 
 ```python
-from swirui import App, Window
-from swirui.core import Component, State
+from swirui import App, Component, State, Window
 
 counter = State(0)
 
@@ -63,7 +64,7 @@ counter.set(1)
 app.run()
 ```
 
-> The current runtime is intentionally minimal. Native windows and GPU rendering arrive in later milestones; the foundation first establishes stable lifecycle, component, event and state contracts.
+> The current runtime is intentionally minimal. The completed 0.1 foundation establishes lifecycle, component, event, state, renderer and platform contracts. Native windows and the first real rendering pipeline are the focus of 0.2 Alpha.
 
 ## Architecture direction
 
@@ -146,20 +147,26 @@ python -m pip install -e ".[dev]"
 pytest
 ```
 
-## Current milestone — 0.1 Alpha: Foundation
+## Completed milestone — 0.1 Alpha: Foundation
 
-The first milestone establishes contracts that everything else will depend on:
+The foundation now includes:
 
 - application lifecycle
 - window model
-- component tree
+- component tree with cycle protection and reparenting
 - event system
-- reactive state
-- logging and configuration foundations
-- renderer abstraction
-- platform abstraction
-- test suite
-- CI across supported Python versions
+- thread-safe reactive state
+- logging and runtime configuration
+- renderer abstraction and headless renderer
+- platform abstraction and headless platform backend
+- automated tests
+- strict Ruff and Mypy quality gates
+- CI verified on Python 3.11, 3.12, 3.13 and 3.14
+- architecture documentation
+
+## Current milestone — 0.2 Alpha: Native Window + First Renderer
+
+The next milestone moves SwirUI from the framework foundation toward visible UI output. It targets the native desktop window backend, event-loop integration, input dispatch, render tree, scene graph, frame scheduler, GPU surface, basic shapes/text/images, compositing, DPI handling and high-refresh-rate scheduling.
 
 See **[ROADMAP.md](ROADMAP.md)** for the complete plan.
 
@@ -169,7 +176,7 @@ SwirUI will not claim to be faster than another framework without measurements. 
 
 ## Project status
 
-SwirUI is experimental and not ready for production applications yet. The repository is being developed in public from its architecture foundation upward.
+SwirUI is experimental and not ready for production applications yet. The 0.1 architecture foundation is complete and development is moving into the first native/rendering milestone.
 
 ---
 
