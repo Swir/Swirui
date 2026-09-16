@@ -106,7 +106,9 @@ class App(EventEmitter):
         return len(events)
 
     @staticmethod
-    def _normalize_dpi_resize_order(events: list[PlatformEvent]) -> list[PlatformEvent]:
+    def _normalize_dpi_resize_order(
+        events: tuple[PlatformEvent, ...],
+    ) -> list[PlatformEvent]:
         """Ensure a new DPI scale is visible before its synchronous Win32 resize.
 
         ``SetWindowPos`` inside ``WM_DPICHANGED`` may synchronously enqueue a
