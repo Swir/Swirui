@@ -12,7 +12,11 @@ from .surface import RenderSurface
 
 @runtime_checkable
 class Renderer(Protocol):
-    """Backend contract for turning component trees into presented frames."""
+    """Backend contract for turning component trees into presented frames.
+
+    Surface dimensions are physical pixels. Window and scene geometry remain
+    logical device-independent pixels at the public framework boundary.
+    """
 
     @property
     def name(self) -> str: ...
@@ -47,7 +51,8 @@ class NullRenderer:
         self._require_initialized()
         if window.native_handle is None:
             raise RuntimeError("A native window handle is required before creating a surface.")
-        surface = RenderSurface(window.native_handle, window.width, window.height)
+        pixel_width, pixel_height = window.pixel_size
+        surface = RenderSurface(window.native_handle, pixel_width, pixel_height)
         self.surfaces[window.native_handle.value] = surface
         return surface
 
