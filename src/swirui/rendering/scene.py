@@ -6,12 +6,13 @@ from collections.abc import Iterator
 from dataclasses import dataclass, field
 from enum import StrEnum
 
-from .geometry import Color, CornerRadius, Point, Rect
+from .geometry import Color, CornerRadius, Path2D, Point, Rect
 
 
 class SceneNodeKind(StrEnum):
     GROUP = "group"
     RECTANGLE = "rectangle"
+    PATH = "path"
     TEXT = "text"
     IMAGE = "image"
 
@@ -27,6 +28,7 @@ class SceneNode:
     z_index: int = 0
     fill: Color | None = None
     corner_radius: CornerRadius = field(default_factory=CornerRadius)
+    path: Path2D | None = None
     text: str | None = None
     font_size: float = 16.0
     font_family: str = "Segoe UI"
@@ -37,6 +39,11 @@ class SceneNode:
     def __post_init__(self) -> None:
         if not 0.0 <= self.opacity <= 1.0:
             raise ValueError("opacity must be between 0.0 and 1.0.")
+        if self.kind is SceneNodeKind.PATH:
+            if self.path is None:
+                raise ValueError("Path scene nodes require Path2D geometry.")
+            if self.fill is None:
+                raise ValueError("Path scene nodes require a fill color.")
         if self.kind is SceneNodeKind.TEXT:
             if self.text is None:
                 raise ValueError("Text scene nodes require text content.")
@@ -133,11 +140,22 @@ class SceneNode:
             if child_path:
                 return (self, *child_path)
 
-        if self.bounds.contains(point) and (
-            self.kind is not SceneNodeKind.GROUP or self.fill is not None
-        ):
+        if self._contains_visual_point(point):
             return (self,)
         return ()
+
+    def _contains_visual_point(self, point: Point) -> bool:
+        if not self.bounds.contains(point):
+            return False
+        if self.kind is SceneNodeKind.GROUP:
+            return self.fill is not None
+        if self.kind is SceneNodeKind.PATH:
+            path = self.path
+            if path is None:
+                return False
+            local = Point(point.x - self.bounds.x, point.y - self.bounds.y)
+            return path.contains(local)
+        return True
 
 
 @dataclass(slots=True)
