@@ -1,0 +1,121 @@
+from swirui import App, Window
+from swirui.platforms import NullPlatformBackend
+from swirui.rendering import WgpuRenderer
+
+
+class CacheContext:
+    adapter_name = "Cache Test GPU"
+    graphics_backend = "cache-test"
+
+    def __init__(self, hwnd: int, width: int, height: int) -> None:
+        self.hwnd = hwnd
+        self.width = width
+        self.height = height
+        self.register_calls: list[tuple[str, int, int, bytes]] = []
+        self.unregister_calls: list[str] = []
+        self.resources: dict[str, tuple[int, int, bytes]] = {}
+
+    def register_image_rgba(
+        self, resource_id: str, width: int, height: int, rgba: bytes
+    ) -> None:
+        data = bytes(rgba)
+        self.register_calls.append((resource_id, width, height, data))
+        self.resources[resource_id] = (width, height, data)
+
+    def unregister_image(self, resource_id: str) -> bool:
+        self.unregister_calls.append(resource_id)
+        return self.resources.pop(resource_id, None) is not None
+
+    def clear(self, *_background: object) -> None:
+        return None
+
+    def resize(self, width: int, height: int) -> None:
+        self.width = width
+        self.height = height
+
+
+class CacheNative:
+    def __init__(self) -> None:
+        self.contexts: list[CacheContext] = []
+
+    def Win32GpuRenderer(self, hwnd: int, width: int, height: int) -> CacheContext:
+        context = CacheContext(hwnd, width, height)
+        self.contexts.append(context)
+        return context
+
+
+def test_identical_image_registration_is_a_gpu_cache_hit() -> None:
+    native = CacheNative()
+    renderer = WgpuRenderer(native_module=native)
+    pixels = bytes((10, 20, 30, 255))
+    renderer.register_image_rgba("logo", 1, 1, pixels)
+
+    app = App(platform_backend=NullPlatformBackend(), renderer=renderer)
+    app.add_window(Window(width=320, height=240))
+    app.start()
+
+    context = native.contexts[0]
+    assert renderer.image_resource_count == 1
+    assert renderer.image_resource_bytes == 4
+    assert renderer.image_native_uploads == 1
+    assert renderer.image_cache_hits == 0
+    assert context.register_calls == [("logo", 1, 1, pixels)]
+
+    renderer.register_image_rgba("logo", 1, 1, pixels)
+    renderer.register_image_rgba("logo", 1, 1, bytearray(pixels))
+
+    assert renderer.image_cache_hits == 2
+    assert renderer.image_native_uploads == 1
+    assert context.register_calls == [("logo", 1, 1, pixels)]
+
+    replacement = bytes((200, 100, 50, 255))
+    renderer.register_image_rgba("logo", 1, 1, replacement)
+
+    assert renderer.image_cache_hits == 2
+    assert renderer.image_native_uploads == 2
+    assert renderer.image_resource_bytes == 4
+    assert context.register_calls[-1] == ("logo", 1, 1, replacement)
+    assert context.resources["logo"] == (1, 1, replacement)
+
+    assert renderer.unregister_image("missing") is False
+    assert context.unregister_calls == []
+    assert renderer.unregister_image("logo") is True
+    assert context.unregister_calls == ["logo"]
+    assert renderer.image_resource_count == 0
+    assert renderer.image_resource_bytes == 0
+    app.stop()
+
+
+def test_new_context_receives_latest_cached_resource_once() -> None:
+    native = CacheNative()
+    renderer = WgpuRenderer(native_module=native)
+    first = bytes((1, 2, 3, 255))
+    latest = bytes((4, 5, 6, 255))
+    renderer.register_image_rgba("shared", 1, 1, first)
+    renderer.register_image_rgba("shared", 1, 1, latest)
+
+    app = App(platform_backend=NullPlatformBackend(), renderer=renderer)
+    first_window = Window(width=320, height=240)
+    second_window = Window(width=400, height=300)
+    app.add_window(first_window)
+    app.add_window(second_window)
+    app.start()
+
+    assert len(native.contexts) == 2
+    assert renderer.image_native_uploads == 2
+    for context in native.contexts:
+        assert context.register_calls == [("shared", 1, 1, latest)]
+
+    renderer.register_image_rgba("shared", 1, 1, latest)
+    assert renderer.image_cache_hits == 1
+    assert renderer.image_native_uploads == 2
+    for context in native.contexts:
+        assert len(context.register_calls) == 1
+
+    changed = bytes((9, 8, 7, 255))
+    renderer.register_image_rgba("shared", 1, 1, changed)
+    assert renderer.image_native_uploads == 4
+    for context in native.contexts:
+        assert context.register_calls[-1] == ("shared", 1, 1, changed)
+
+    app.stop()
