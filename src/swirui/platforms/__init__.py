@@ -1,5 +1,17 @@
-"""Operating-system backend contracts."""
+"""Operating-system backend contracts and event primitives."""
 
-from .base import DisplayInfo, NullPlatformBackend, PlatformBackend
+from .base import DisplayInfo, NativeWindowSpec, NullPlatformBackend, PlatformBackend
+from .events import NativeWindowHandle, PlatformEvent, PlatformEventKind, PointerButton
+from .factory import create_platform_backend
 
-__all__ = ["DisplayInfo", "NullPlatformBackend", "PlatformBackend"]
+__all__ = [
+    "DisplayInfo",
+    "NativeWindowHandle",
+    "NativeWindowSpec",
+    "NullPlatformBackend",
+    "PlatformBackend",
+    "PlatformEvent",
+    "PlatformEventKind",
+    "PointerButton",
+    "create_platform_backend",
+]
