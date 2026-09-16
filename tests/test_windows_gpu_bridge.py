@@ -17,10 +17,18 @@ from swirui.rendering import (
 )
 
 
+def _isolated_backend(label: str) -> Win32PlatformBackend:
+    """Use a unique Win32 class for each in-process native smoke lifecycle."""
+
+    backend = Win32PlatformBackend()
+    backend._class_name = f"SwirUI.NativeSmoke.{label}.{id(backend):x}"
+    return backend
+
+
 @pytest.mark.skipif(sys.platform != "win32", reason="Native GPU bridge test requires Windows")
 def test_wgpu_core_clears_and_draws_real_win32_surface() -> None:
     native = importlib.import_module("_swirui_native")
-    backend = Win32PlatformBackend()
+    backend = _isolated_backend("stateless")
     backend.initialize()
     handle = backend.create_window(NativeWindowSpec("SwirUI wgpu CI Smoke", 640, 420))
     backend.show_window(handle)
@@ -100,7 +108,7 @@ def _checker_rgba() -> bytes:
 @pytest.mark.skipif(sys.platform != "win32", reason="Persistent GPU test requires Windows")
 def test_persistent_wgpu_renderer_draws_text_images_clips_and_survives_resize() -> None:
     native = importlib.import_module("_swirui_native")
-    backend = Win32PlatformBackend()
+    backend = _isolated_backend("persistent")
     backend.initialize()
     handle = backend.create_window(NativeWindowSpec("SwirUI Persistent GPU Scene", 640, 420))
     backend.show_window(handle)
@@ -294,7 +302,8 @@ def test_scenegraph_clipped_text_and_image_reach_real_wgpu_renderer() -> None:
 
     renderer = WgpuRenderer()
     renderer.register_image_rgba("checker", 2, 2, _checker_rgba())
-    app = App("SwirUI GPU Scene Integration", renderer=renderer)
+    backend = _isolated_backend("scenegraph")
+    app = App("SwirUI GPU Scene Integration", platform_backend=backend, renderer=renderer)
     window = Window(title="SwirUI SceneGraph GPU Clip", width=680, height=440)
     window.set_scene(Scene(680, 440, root))
     app.add_window(window)
