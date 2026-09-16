@@ -6,7 +6,15 @@ import pytest
 from swirui import App, Window
 from swirui.platforms import NativeWindowSpec
 from swirui.platforms.windows import Win32PlatformBackend
-from swirui.rendering import Color, CornerRadius, Rect, Scene, SceneNode, SceneNodeKind, WgpuRenderer
+from swirui.rendering import (
+    Color,
+    CornerRadius,
+    Rect,
+    Scene,
+    SceneNode,
+    SceneNodeKind,
+    WgpuRenderer,
+)
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Native GPU bridge test requires Windows")
@@ -37,7 +45,20 @@ def test_wgpu_core_clears_and_draws_real_win32_surface() -> None:
             420,
             [
                 (32.0, 36.0, 260.0, 120.0, 0.0, 0.55, 1.0, 1.0, 28.0, 28.0, 28.0, 28.0),
-                (330.0, 80.0, 180.0, 220.0, 0.10, 0.18, 0.34, 0.92, 12.0, 30.0, 18.0, 24.0),
+                (
+                    330.0,
+                    80.0,
+                    180.0,
+                    220.0,
+                    0.10,
+                    0.18,
+                    0.34,
+                    0.92,
+                    12.0,
+                    30.0,
+                    18.0,
+                    24.0,
+                ),
                 (96.0, 230.0, 380.0, 96.0, 0.42, 0.18, 1.0, 0.82, 32.0, 8.0, 32.0, 8.0),
             ],
             0.027,
@@ -70,13 +91,75 @@ def test_persistent_wgpu_renderer_draws_shaped_text_and_survives_resize() -> Non
         assert renderer.height == 420
 
         rectangles = [
-            (28.0, 34.0, 584.0, 150.0, 0.04, 0.11, 0.20, 1.0, 24.0, 24.0, 24.0, 24.0),
-            (28.0, 214.0, 584.0, 150.0, 0.10, 0.18, 0.34, 0.92, 18.0, 30.0, 18.0, 26.0),
+            (
+                28.0,
+                34.0,
+                584.0,
+                150.0,
+                0.04,
+                0.11,
+                0.20,
+                1.0,
+                24.0,
+                24.0,
+                24.0,
+                24.0,
+            ),
+            (
+                28.0,
+                214.0,
+                584.0,
+                150.0,
+                0.10,
+                0.18,
+                0.34,
+                0.92,
+                18.0,
+                30.0,
+                18.0,
+                26.0,
+            ),
         ]
         texts = [
-            ("SwirUI GPU text", 56.0, 62.0, 520.0, 52.0, 32.0, 0.92, 0.97, 1.0, 1.0, "Segoe UI"),
-            ("Shaping: Zażółć gęślą jaźń ✓", 56.0, 116.0, 520.0, 48.0, 22.0, 0.35, 0.78, 1.0, 1.0, "Segoe UI"),
-            ("persistent glyph atlas", 56.0, 246.0, 520.0, 48.0, 26.0, 0.48, 0.90, 0.78, 1.0, "Segoe UI"),
+            (
+                "SwirUI GPU text",
+                56.0,
+                62.0,
+                520.0,
+                52.0,
+                32.0,
+                0.92,
+                0.97,
+                1.0,
+                1.0,
+                "Segoe UI",
+            ),
+            (
+                "Shaping: Zażółć gęślą jaźń ✓",
+                56.0,
+                116.0,
+                520.0,
+                48.0,
+                22.0,
+                0.35,
+                0.78,
+                1.0,
+                1.0,
+                "Segoe UI",
+            ),
+            (
+                "persistent glyph atlas",
+                56.0,
+                246.0,
+                520.0,
+                48.0,
+                26.0,
+                0.48,
+                0.90,
+                0.78,
+                1.0,
+                "Segoe UI",
+            ),
         ]
 
         assert renderer.draw_scene(rectangles, texts) == (2, 3)
