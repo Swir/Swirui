@@ -22,6 +22,8 @@ def test_geometry_and_color_primitives() -> None:
     assert not rect.contains(Point(111, 70))
     assert rect.intersects(Rect(100, 60, 20, 20))
     assert not rect.intersects(Rect(200, 200, 10, 10))
+    assert rect.intersection(Rect(80, 40, 60, 60)) == Rect(80, 40, 30, 30)
+    assert rect.intersection(Rect(200, 200, 10, 10)) is None
 
     color = Color.from_hex("#00A8FFFF")
     assert color == Color(0.0, 168 / 255.0, 1.0, 1.0)
@@ -73,6 +75,79 @@ def test_scene_validates_specialized_nodes() -> None:
         SceneNode("invalid", SceneNodeKind.TEXT, Rect(0, 0, 10, 10))
 
 
+def test_scene_composited_walk_inherits_opacity_and_nested_clips() -> None:
+    root = SceneNode(
+        "root",
+        SceneNodeKind.GROUP,
+        Rect(0, 0, 500, 400),
+        opacity=0.8,
+    )
+    outer = SceneNode(
+        "outer",
+        SceneNodeKind.GROUP,
+        Rect(40, 50, 240, 180),
+        opacity=0.5,
+        clip_to_bounds=True,
+    )
+    inner = SceneNode(
+        "inner",
+        SceneNodeKind.GROUP,
+        Rect(100, 20, 240, 160),
+        opacity=0.5,
+        clip_to_bounds=True,
+    )
+    child = SceneNode(
+        "child",
+        SceneNodeKind.RECTANGLE,
+        Rect(60, 70, 300, 120),
+        fill=Color.from_hex("#55AAFF"),
+        opacity=0.5,
+    )
+    inner.add(child)
+    outer.add(inner)
+    root.add(outer)
+
+    composited = {
+        node.key: (opacity, clip) for node, opacity, clip in Scene(500, 400, root).walk_composited()
+    }
+
+    assert composited["root"] == (pytest.approx(0.8), None)
+    assert composited["outer"] == (pytest.approx(0.4), Rect(40, 50, 240, 180))
+    assert composited["inner"] == (pytest.approx(0.2), Rect(100, 50, 180, 130))
+    assert composited["child"] == (pytest.approx(0.1), Rect(100, 50, 180, 130))
+
+
+def test_scene_composited_walk_prunes_empty_clipped_subtree() -> None:
+    root = SceneNode("root", SceneNodeKind.GROUP, Rect(0, 0, 500, 400))
+    outer = SceneNode(
+        "outer",
+        SceneNodeKind.GROUP,
+        Rect(20, 20, 80, 80),
+        clip_to_bounds=True,
+    )
+    outside = SceneNode(
+        "outside",
+        SceneNodeKind.GROUP,
+        Rect(200, 200, 80, 80),
+        clip_to_bounds=True,
+    )
+    outside.add(
+        SceneNode(
+            "never",
+            SceneNodeKind.RECTANGLE,
+            Rect(210, 210, 20, 20),
+            fill=Color.from_hex("#FFFFFF"),
+        )
+    )
+    outer.add(outside)
+    root.add(outer)
+
+    assert [node.key for node, _opacity, _clip in Scene(500, 400, root).walk_composited()] == [
+        "root",
+        "outer",
+    ]
+
+
 def test_scene_hit_testing_returns_topmost_visual_and_path() -> None:
     root = SceneNode("root", SceneNodeKind.GROUP, Rect(0, 0, 800, 600))
     panel = SceneNode("panel", SceneNodeKind.GROUP, Rect(20, 20, 400, 300))
@@ -108,6 +183,28 @@ def test_scene_hit_testing_returns_topmost_visual_and_path() -> None:
     assert target is front
     assert [node.key for node in path] == ["root", "panel", "front"]
     assert scene.hit_test(Point(700, 500)) is None
+
+
+def test_scene_hit_testing_respects_clipping_ancestors() -> None:
+    root = SceneNode("root", SceneNodeKind.GROUP, Rect(0, 0, 400, 300))
+    panel = SceneNode(
+        "panel",
+        SceneNodeKind.GROUP,
+        Rect(40, 40, 100, 100),
+        clip_to_bounds=True,
+    )
+    oversized = SceneNode(
+        "oversized",
+        SceneNodeKind.RECTANGLE,
+        Rect(20, 20, 220, 180),
+        fill=Color.from_hex("#00A8FF"),
+    )
+    panel.add(oversized)
+    root.add(panel)
+    scene = Scene(400, 300, root)
+
+    assert scene.hit_test(Point(80, 80)) is oversized
+    assert scene.hit_test(Point(180, 80)) is None
 
 
 def test_scene_hit_testing_uses_later_insertion_for_equal_z() -> None:
