@@ -22,7 +22,7 @@ def test_window_root_resize_and_close() -> None:
 
 
 def test_app_lifecycle() -> None:
-    app = App("Test")
+    app = App("Test", platform_backend=NullPlatformBackend())
     window = app.add_window(Window())
 
     exit_code = app.run()
@@ -30,11 +30,13 @@ def test_app_lifecycle() -> None:
     assert exit_code == 0
     assert app.running is True
     assert window.visible is True
+    assert window.native_handle is not None
 
     app.stop(7)
     assert app.running is False
     assert app.exit_code == 7
     assert window.closed is True
+    assert window.native_handle is None
 
 
 def test_headless_backends() -> None:
