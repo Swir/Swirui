@@ -13,7 +13,7 @@
 ![Windows Native](https://img.shields.io/badge/Windows-Win32%20native-0078D4?logo=windows11&logoColor=white)
 ![GPU](https://img.shields.io/badge/GPU-wgpu%2030-6E56CF)
 ![Status](https://img.shields.io/badge/status-pre--alpha-7C3AED)
-![Progress](https://img.shields.io/badge/project%20progress-7%25-00BFFF)
+![Progress](https://img.shields.io/badge/project%20progress-8%25-00BFFF)
 
 </div>
 
@@ -21,9 +21,9 @@
 
 ## Project progress
 
-**7% — 0.2 Alpha: Native Window + First Renderer in progress**
+**8% — 0.2 Alpha: Native Window + First Renderer in progress**
 
-`[█░░░░░░░░░░░░░░░░░░░] 7%`
+`[██░░░░░░░░░░░░░░░░░░] 8%`
 
 **Completed:** `0.1 Alpha — Foundation` ✅  
 **Current milestone:** `0.2 Alpha — Native Window + First Renderer` 🚧
@@ -63,6 +63,8 @@ SwirUI is currently **pre-alpha**. APIs may change while the native renderer and
 - **real wgpu surface creation from SwirUI's Win32 HWND**
 - **GPU adapter/device/queue creation and swapchain configuration**
 - **verified GPU clear → submit → present on Windows CI**
+- **persistent wgpu context per native window**
+- **persistent surface/device/queue/pipeline reuse across frames and resize**
 - **instanced filled-rectangle GPU pipeline with a single draw call for the batch**
 - **SceneGraph → Python WgpuRenderer → Rust/wgpu rectangle submission**
 - automatic renderer selection: wgpu first on Windows, temporary GDI preview fallback when the native core is unavailable
@@ -100,7 +102,7 @@ cd ..
 python examples/gpu_rectangles_demo.py
 ```
 
-The GPU demo submits a prepared SwirUI `SceneGraph` into the Rust/wgpu backend and renders its filled rectangles through an instanced GPU pipeline. Rounded corners, native text and images are intentionally still open renderer milestones.
+The GPU demo submits a prepared SwirUI `SceneGraph` into the Rust/wgpu backend and renders its filled rectangles through an instanced GPU pipeline. The native renderer now keeps its GPU context alive across frames and reconfigures the existing surface on resize instead of recreating the GPU device and pipeline. Rounded corners, native text and images are intentionally still open renderer milestones.
 
 ## Foundation API
 
@@ -155,6 +157,7 @@ SwirUI Runtime
 Renderer Layer
         │
         ├── GPU surface / swapchain ✅
+        ├── persistent per-window GPU context ✅
         ├── SceneGraph rectangle submission ✅
         ├── instanced filled rectangles ✅
         ├── rounded rectangles ← NEXT
@@ -200,16 +203,16 @@ SwirUI Framework
 
 ## Current 0.2 Alpha focus
 
-The native Windows foundation, real wgpu presentation and first SceneGraph GPU primitive path are now verified. The next renderer/runtime work is:
+The native Windows foundation, real wgpu presentation, first SceneGraph GPU primitive path and persistent per-window GPU context are now verified. The next renderer/runtime work is:
 
-1. persistent wgpu renderer context per window instead of recreating GPU state per frame
-2. anti-aliased GPU rounded rectangles using `CornerRadius`
-3. native text and image rendering
-4. clipping and compositing
-5. component-level mapping and routed/capture/bubbling input
-6. robust DPI / HiDPI and multi-monitor handling
-7. display-aware high-refresh presentation
-8. present-mode selection and frame pacing
+1. anti-aliased GPU rounded rectangles using `CornerRadius`
+2. native text and image rendering
+3. clipping and compositing
+4. routed/capture/bubbling input over scene/component paths
+5. robust DPI / HiDPI and multi-monitor handling
+6. display-aware high-refresh presentation
+7. present-mode selection and frame pacing
+8. GPU resource reuse/caching for dynamic scene data
 
 See **[ROADMAP.md](ROADMAP.md)** for the full development plan.
 
@@ -230,6 +233,7 @@ cargo test
 Windows native smoke test
 Windows wgpu clear/present smoke test
 Windows real instanced-rectangle GPU draw smoke test
+Windows persistent GPU context multi-frame + resize smoke test
 ```
 
 SwirUI will not claim to outperform another framework without reproducible measurements. Planned benchmarks include startup time, RAM, CPU/GPU usage, frame time, input latency, component creation, large lists and animation performance.
