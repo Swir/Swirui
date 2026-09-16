@@ -73,6 +73,63 @@ def test_scene_validates_specialized_nodes() -> None:
         SceneNode("invalid", SceneNodeKind.TEXT, Rect(0, 0, 10, 10))
 
 
+def test_scene_hit_testing_returns_topmost_visual_and_path() -> None:
+    root = SceneNode("root", SceneNodeKind.GROUP, Rect(0, 0, 800, 600))
+    panel = SceneNode("panel", SceneNodeKind.GROUP, Rect(20, 20, 400, 300))
+    back = SceneNode(
+        "back",
+        SceneNodeKind.RECTANGLE,
+        Rect(60, 60, 180, 140),
+        fill=Color.from_hex("#112233"),
+        z_index=1,
+    )
+    front = SceneNode(
+        "front",
+        SceneNodeKind.RECTANGLE,
+        Rect(80, 80, 180, 140),
+        fill=Color.from_hex("#00A8FF"),
+        z_index=10,
+    )
+    invisible = SceneNode(
+        "invisible",
+        SceneNodeKind.RECTANGLE,
+        Rect(80, 80, 180, 140),
+        fill=Color.from_hex("#FFFFFF"),
+        opacity=0.0,
+        z_index=50,
+    )
+    panel.add(back, front, invisible)
+    root.add(panel)
+    scene = Scene(800, 600, root)
+
+    target = scene.hit_test(Point(100, 100))
+    path = scene.hit_path(Point(100, 100))
+
+    assert target is front
+    assert [node.key for node in path] == ["root", "panel", "front"]
+    assert scene.hit_test(Point(700, 500)) is None
+
+
+def test_scene_hit_testing_uses_later_insertion_for_equal_z() -> None:
+    root = SceneNode("root", SceneNodeKind.GROUP, Rect(0, 0, 400, 300))
+    first = SceneNode(
+        "first",
+        SceneNodeKind.RECTANGLE,
+        Rect(20, 20, 100, 100),
+        fill=Color.from_hex("#111111"),
+    )
+    second = SceneNode(
+        "second",
+        SceneNodeKind.RECTANGLE,
+        Rect(20, 20, 100, 100),
+        fill=Color.from_hex("#222222"),
+    )
+    root.add(first, second)
+    scene = Scene(400, 300, root)
+
+    assert scene.hit_test(Point(40, 40)) is second
+
+
 def test_frame_scheduler_is_invalidation_driven() -> None:
     scheduler = FrameScheduler(target_fps=120)
 
