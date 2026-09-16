@@ -38,7 +38,19 @@ struct PersistentGpuContext {
 #[cfg(target_os = "windows")]
 impl PersistentGpuContext {
     fn new(hwnd: isize, width: u32, height: u32) -> PyResult<Self> {
+        Self::new_configured(hwnd, width, height, "auto_vsync", 1)
+    }
+
+    fn new_configured(
+        hwnd: isize,
+        width: u32,
+        height: u32,
+        presentation_mode: &str,
+        maximum_frame_latency: u32,
+    ) -> PyResult<Self> {
         validate_dimensions(width, height)?;
+        validate_frame_latency(maximum_frame_latency)?;
+        let present_mode = parse_present_mode(presentation_mode)?;
 
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle());
         let surface = create_win32_surface(&instance, hwnd)?;
@@ -53,8 +65,8 @@ impl PersistentGpuContext {
         let mut config = surface
             .get_default_config(&adapter, width, height)
             .ok_or_else(|| PyRuntimeError::new_err("The selected GPU cannot configure this surface."))?;
-        config.present_mode = wgpu::PresentMode::AutoVsync;
-        config.desired_maximum_frame_latency = 1;
+        config.present_mode = present_mode;
+        config.desired_maximum_frame_latency = maximum_frame_latency;
         surface.configure(&device, &config);
 
         let frame_uniforms = floats_to_bytes(&[width as f32, height as f32, 0.0, 0.0]);
@@ -161,6 +173,18 @@ impl PersistentGpuContext {
         let frame_uniforms = floats_to_bytes(&[width as f32, height as f32, 0.0, 0.0]);
         self.queue.write_buffer(&self.frame_buffer, 0, &frame_uniforms);
         self.text_system.resize(&self.queue, width, height);
+        Ok(())
+    }
+
+    fn configure_presentation(
+        &mut self,
+        presentation_mode: &str,
+        maximum_frame_latency: u32,
+    ) -> PyResult<()> {
+        validate_frame_latency(maximum_frame_latency)?;
+        self.config.present_mode = parse_present_mode(presentation_mode)?;
+        self.config.desired_maximum_frame_latency = maximum_frame_latency;
+        self.surface.configure(&self.device, &self.config);
         Ok(())
     }
 
@@ -363,9 +387,28 @@ pub(crate) struct PyWin32GpuRenderer {
 #[pymethods]
 impl PyWin32GpuRenderer {
     #[new]
-    fn new(hwnd: isize, width: u32, height: u32) -> PyResult<Self> {
+    #[pyo3(signature = (
+        hwnd,
+        width,
+        height,
+        presentation_mode="auto_vsync",
+        maximum_frame_latency=1
+    ))]
+    fn new(
+        hwnd: isize,
+        width: u32,
+        height: u32,
+        presentation_mode: &str,
+        maximum_frame_latency: u32,
+    ) -> PyResult<Self> {
         Ok(Self {
-            context: PersistentGpuContext::new(hwnd, width, height)?,
+            context: PersistentGpuContext::new_configured(
+                hwnd,
+                width,
+                height,
+                presentation_mode,
+                maximum_frame_latency,
+            )?,
         })
     }
 
@@ -390,6 +433,16 @@ impl PyWin32GpuRenderer {
     }
 
     #[getter]
+    fn presentation_mode(&self) -> &'static str {
+        present_mode_name(self.context.config.present_mode)
+    }
+
+    #[getter]
+    fn maximum_frame_latency(&self) -> u32 {
+        self.context.config.desired_maximum_frame_latency
+    }
+
+    #[getter]
     fn rectangle_capacity(&self) -> usize {
         self.context.rectangle_capacity
     }
@@ -410,6 +463,15 @@ impl PyWin32GpuRenderer {
 
     fn resize(&mut self, width: u32, height: u32) -> PyResult<()> {
         self.context.resize(width, height)
+    }
+
+    fn configure_presentation(
+        &mut self,
+        presentation_mode: &str,
+        maximum_frame_latency: u32,
+    ) -> PyResult<()> {
+        self.context
+            .configure_presentation(presentation_mode, maximum_frame_latency)
     }
 
     fn register_image_rgba(
@@ -611,6 +673,36 @@ fn validate_color(red: f64, green: f64, blue: f64, alpha: f64) -> PyResult<()> {
         ));
     }
     Ok(())
+}
+
+fn validate_frame_latency(maximum_frame_latency: u32) -> PyResult<()> {
+    if maximum_frame_latency == 0 {
+        return Err(PyValueError::new_err(
+            "maximum_frame_latency must be greater than zero.",
+        ));
+    }
+    Ok(())
+}
+
+fn parse_present_mode(mode: &str) -> PyResult<wgpu::PresentMode> {
+    match mode {
+        "auto_vsync" => Ok(wgpu::PresentMode::AutoVsync),
+        "auto_no_vsync" => Ok(wgpu::PresentMode::AutoNoVsync),
+        _ => Err(PyValueError::new_err(
+            "presentation_mode must be 'auto_vsync' or 'auto_no_vsync'.",
+        )),
+    }
+}
+
+fn present_mode_name(mode: wgpu::PresentMode) -> &'static str {
+    match mode {
+        wgpu::PresentMode::AutoVsync => "auto_vsync",
+        wgpu::PresentMode::AutoNoVsync => "auto_no_vsync",
+        wgpu::PresentMode::Fifo => "fifo",
+        wgpu::PresentMode::FifoRelaxed => "fifo_relaxed",
+        wgpu::PresentMode::Immediate => "immediate",
+        wgpu::PresentMode::Mailbox => "mailbox",
+    }
 }
 
 fn validate_rectangles(rectangles: &[RectangleInstance]) -> PyResult<()> {
@@ -827,6 +919,19 @@ mod tests {
         assert!(validate_color(0.0, 0.5, 1.0, 1.0).is_ok());
         assert!(validate_color(-0.1, 0.5, 1.0, 1.0).is_err());
         assert!(validate_color(0.0, 0.5, 1.1, 1.0).is_err());
+    }
+
+    #[test]
+    fn validates_presentation_configuration() {
+        assert_eq!(parse_present_mode("auto_vsync").unwrap(), wgpu::PresentMode::AutoVsync);
+        assert_eq!(
+            parse_present_mode("auto_no_vsync").unwrap(),
+            wgpu::PresentMode::AutoNoVsync
+        );
+        assert!(parse_present_mode("immediate").is_err());
+        assert!(validate_frame_latency(1).is_ok());
+        assert!(validate_frame_latency(2).is_ok());
+        assert!(validate_frame_latency(0).is_err());
     }
 
     #[test]
