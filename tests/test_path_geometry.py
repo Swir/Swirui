@@ -55,6 +55,23 @@ def test_concave_path_tessellation_preserves_polygon_area() -> None:
     assert isclose(_triangle_area_sum(path), abs(path.signed_area))
 
 
+def test_concave_path_contains_uses_exact_polygon_not_only_bounds() -> None:
+    path = PathGeometry.polygon(
+        Point(0, 0),
+        Point(100, 0),
+        Point(100, 40),
+        Point(40, 40),
+        Point(40, 100),
+        Point(0, 100),
+    )
+
+    assert path.contains(Point(80, 20)) is True
+    assert path.contains(Point(20, 80)) is True
+    assert path.contains(Point(80, 80)) is False
+    assert path.contains(Point(40, 70)) is True
+    assert path.contains(Point(120, 20)) is False
+
+
 def test_duplicate_terminal_point_is_normalized_for_closed_paths() -> None:
     origin = Point(0, 0)
     path = PathGeometry((origin, Point(80, 0), Point(40, 60), origin))
@@ -88,6 +105,7 @@ def test_open_polyline_is_valid_but_not_fill_tessellatable() -> None:
     assert path.closed is False
     assert path.signed_area == 0.0
     assert path.bounds == Rect(0, 0, 50, 10)
+    assert path.contains(Point(20, 10)) is False
     with pytest.raises(ValueError, match="Open paths"):
         path.triangles()
 
@@ -126,3 +144,24 @@ def test_scene_path_node_requires_closed_filled_geometry() -> None:
             fill=Color.from_hex("#FFFFFF"),
             path=PathGeometry.polyline(Point(0, 0), Point(50, 20)),
         )
+
+
+def test_scene_path_hit_testing_respects_concavity() -> None:
+    polygon = PathGeometry.polygon(
+        Point(0, 0),
+        Point(100, 0),
+        Point(100, 40),
+        Point(40, 40),
+        Point(40, 100),
+        Point(0, 100),
+    )
+    node = SceneNode(
+        key="l-shape",
+        kind=SceneNodeKind.PATH,
+        bounds=polygon.bounds,
+        fill=Color.from_hex("#00A8FF"),
+        path=polygon,
+    )
+
+    assert node.hit_test(Point(20, 80)) is node
+    assert node.hit_test(Point(80, 80)) is None
