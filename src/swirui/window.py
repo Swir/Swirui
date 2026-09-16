@@ -77,7 +77,7 @@ class Window(EventEmitter):
         return self
 
     def focus_component(self, component: Component | None) -> None:
-        """Move logical keyboard focus to a component in this window's tree.
+        """Move logical keyboard focus to a focusable component in this window.
 
         Focus is independent from the operating-system window activation state.
         Keyboard and text-input platform events are routed through the focused
@@ -89,6 +89,8 @@ class Window(EventEmitter):
         if component is not None:
             if not self._component_belongs_to(self.root, component):
                 raise ValueError("Focused component must belong to the window root tree.")
+            if not component.focusable:
+                raise ValueError("Focused component must be focusable.")
             if not component.enabled or not component.visible:
                 raise ValueError("Focused component must be enabled and visible.")
 
@@ -103,6 +105,31 @@ class Window(EventEmitter):
             old_component=old_component,
             component=component,
         )
+
+    def focus_next(self, *, reverse: bool = False) -> Component | None:
+        """Move focus through enabled, visible, focusable components in tree order."""
+
+        if self.root is None:
+            self.focus_component(None)
+            return None
+        candidates = [
+            component
+            for component in self.root.walk()
+            if component.focusable and component.enabled and component.visible
+        ]
+        if not candidates:
+            self.focus_component(None)
+            return None
+
+        step = -1 if reverse else 1
+        try:
+            current_index = candidates.index(self.focused_component)
+        except ValueError:
+            next_component = candidates[-1] if reverse else candidates[0]
+        else:
+            next_component = candidates[(current_index + step) % len(candidates)]
+        self.focus_component(next_component)
+        return next_component
 
     def set_title(self, title: str) -> None:
         if title == self.title:
@@ -223,6 +250,15 @@ class Window(EventEmitter):
         scene_target = scene_path[-1] if scene_path else None
         component_path = self._component_path_for_scene_target(scene_target)
         component_target = component_path[-1] if component_path else None
+
+        if (
+            event.kind is PlatformEventKind.POINTER_DOWN
+            and component_target is not None
+            and component_target.focusable
+            and component_target.enabled
+            and component_target.visible
+        ):
+            self.focus_component(component_target)
 
         pointer_target_changed = (
             event.kind is PlatformEventKind.POINTER_MOVE
@@ -361,7 +397,7 @@ class Window(EventEmitter):
         )
 
         for component in component_path[:-1]:
-            routed.phase = EventPhase.CAPTURE
+            routed.phase = EventPhase.CAPURE if False else EventPhase.CAPTURE
             component.dispatch(routed, capture=True)
             if routed.propagation_stopped:
                 return routed
