@@ -4,9 +4,9 @@
 
 ## Project progress
 
-**Overall completion: 5%**
+**Overall completion: 6%**
 
-`[█░░░░░░░░░░░░░░░░░░░] 5%`
+`[█░░░░░░░░░░░░░░░░░░░] 6%`
 
 Progress is based on implemented and verified roadmap work. Ideas, mockups and unfinished prototypes do not increase the percentage.
 
@@ -63,7 +63,10 @@ Progress is based on implemented and verified roadmap work. Ideas, mockups and u
 - [x] Backend-neutral `RenderSurface` lifecycle
 - [x] Runtime surface recreation on resize
 - [x] `AppConfig.target_fps` connected to frame scheduling
-- [ ] Real GPU surface / swapchain
+- [x] Real GPU surface / swapchain on Windows via Rust + wgpu
+- [x] GPU adapter/device/queue creation
+- [x] Verified clear → submit → present to a real SwirUI HWND
+- [x] ABI3 PyO3 native wheel build for Python 3.11+
 - [ ] Scene submission to GPU renderer
 - [ ] Shapes and rounded rectangles
 - [ ] Text rendering
@@ -344,6 +347,9 @@ AI output must remain ordinary, editable SwirUI code.
 - [x] Unit-test foundation
 - [x] Headless native-window test backend
 - [x] Windows real-native-window smoke test
+- [x] Windows real-wgpu surface/present smoke test
+- [x] Rust native-core check and unit tests
+- [x] ABI3 native extension build on Windows
 - [x] Python 3.11–3.14 test matrix
 - [x] Ruff quality gate
 - [x] Mypy quality gate
@@ -382,9 +388,23 @@ swirui package
 
 ## Native Core
 
-Performance-critical systems are planned to migrate progressively to Rust while preserving Python as the public developer API.
+Python remains the public developer API while performance-critical systems migrate progressively to Rust.
 
-Primary candidates:
+Current native foundation:
+
+- [x] Rust 2024 native crate
+- [x] PyO3 bridge
+- [x] Maturin native build project
+- [x] wgpu 30 renderer foundation
+- [x] Windows HWND + DisplayHandle surface bridge
+- [x] hardware adapter with software fallback selection
+- [x] ABI3 Python 3.11+ native wheel
+- [ ] persistent renderer context per window
+- [ ] GPU scene command stream
+- [ ] GPU resource cache
+- [ ] native text/image pipeline
+
+Primary future candidates:
 
 - GPU rendering
 - scene preparation
