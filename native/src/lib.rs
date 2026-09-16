@@ -5,6 +5,7 @@
 //! into a monolithic backend.
 
 mod image;
+mod path;
 mod renderer;
 mod text;
 
