@@ -95,13 +95,21 @@ def test_real_wgpu_surface_tracks_logical_scene_across_dpi_scales() -> None:
     app = App("SwirUI HiDPI GPU Smoke", platform_backend=backend, renderer=renderer)
     window = Window(title="SwirUI HiDPI GPU Smoke", width=680, height=440)
     window.set_scene(_hidpi_scene())
-    pointer_targets: list[str | None] = []
-    window.on(
-        "pointer_move",
-        lambda event: pointer_targets.append(
-            event.data["target"].key if event.data["target"] is not None else None
-        ),
-    )
+    pointer_observations: list[tuple[float | None, float | None, str | None]] = []
+
+    def capture_pointer(event: object) -> None:
+        data = getattr(event, "data")
+        platform_event = data["event"]
+        target = data["target"]
+        pointer_observations.append(
+            (
+                platform_event.x,
+                platform_event.y,
+                target.key if target is not None else None,
+            )
+        )
+
+    window.on("pointer_move", capture_pointer)
     app.add_window(window)
 
     try:
@@ -122,7 +130,12 @@ def test_real_wgpu_surface_tracks_logical_scene_across_dpi_scales() -> None:
             PlatformEvent(PlatformEventKind.POINTER_MOVE, handle, x=225.0, y=120.0)
         )
         app.process_events()
-        assert pointer_targets[-1] == "card"
+        assert any(
+            x == pytest.approx(150.0)
+            and y == pytest.approx(80.0)
+            and target == "card"
+            for x, y, target in pointer_observations
+        )
 
         backend.forced_scale = 2.0
         backend.resize_window(handle, 1360, 880)
@@ -138,11 +151,17 @@ def test_real_wgpu_surface_tracks_logical_scene_across_dpi_scales() -> None:
         assert (surface.width, surface.height) == (1360, 880)
         assert renderer.persistent_context_count == 1
 
+        pointer_observations.clear()
         backend.post_test_event(
             PlatformEvent(PlatformEventKind.POINTER_MOVE, handle, x=300.0, y=160.0)
         )
         app.process_events()
-        assert pointer_targets[-1] == "card"
+        assert any(
+            x == pytest.approx(150.0)
+            and y == pytest.approx(80.0)
+            and target == "card"
+            for x, y, target in pointer_observations
+        )
 
         renderer.render(window, None)
         assert renderer.last_rectangle_count == 1
