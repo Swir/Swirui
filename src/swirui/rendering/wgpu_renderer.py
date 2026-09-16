@@ -356,7 +356,8 @@ class WgpuRenderer:
                         self.last_path_count = 0
                     elif texts or images:
                         raise RuntimeError(
-                            "Installed SwirUI native GPU core does not support the full scene renderer."
+                            "Installed SwirUI native GPU core does not support "
+                            "the full scene renderer."
                         )
                     else:
                         self.last_rectangle_count = int(
