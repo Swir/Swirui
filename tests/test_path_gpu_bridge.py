@@ -177,12 +177,13 @@ def test_wgpu_renderer_scales_path_geometry_and_clip_to_physical_pixels() -> Non
     app = App(platform_backend=NullPlatformBackend(), renderer=renderer)
     window = Window(width=200, height=120)
     window.set_scene(Scene(200, 120, root))
-    window.scale = 1.5
     app.add_window(window)
 
     app.start()
     try:
-        paths = native.contexts[0].path_calls[0][3]
+        window.scale = 1.5
+        renderer.render(window, None)
+        paths = native.contexts[0].path_calls[-1][3]
         assert isinstance(paths, list)
         assert len(paths) == 1
         assert paths[0][:6] == (15.0, 30.0, 135.0, 30.0, 75.0, 105.0)
