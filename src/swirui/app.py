@@ -18,6 +18,8 @@ from .platforms import (
 from .rendering import FrameScheduler, Renderer, create_renderer
 from .window import Window
 
+_IDLE_POLL_SECONDS = 0.004
+
 
 class App(EventEmitter):
     """Top-level SwirUI application object."""
@@ -114,6 +116,43 @@ class App(EventEmitter):
         for scheduler in self._frame_schedulers.values():
             scheduler.invalidate()
 
+    def set_target_fps(self, target_fps: int) -> None:
+        """Retarget every attached frame scheduler without recreating windows.
+
+        The change is immediate for current windows and is also stored in the
+        application config so windows attached later inherit the same ceiling.
+        """
+
+        if target_fps <= 0:
+            raise ValueError("target_fps must be positive.")
+        old_target_fps = self.config.target_fps
+        if target_fps == old_target_fps:
+            return
+
+        self.config.target_fps = target_fps
+        for scheduler in self._frame_schedulers.values():
+            scheduler.target_fps = target_fps
+        self.emit(
+            "target_fps_changed",
+            old_target_fps=old_target_fps,
+            target_fps=target_fps,
+        )
+
+    def seconds_until_next_frame(self, now: float | None = None) -> float | None:
+        """Return the earliest pending frame deadline across visible windows."""
+
+        if not self.running:
+            return None
+        frame_time = time.monotonic() if now is None else now
+        waits: list[float] = []
+        for window, scheduler in self._frame_schedulers.items():
+            if window.closed or not window.visible:
+                continue
+            wait = scheduler.seconds_until_due(frame_time)
+            if wait is not None:
+                waits.append(wait)
+        return min(waits) if waits else None
+
     def render_pending(self, now: float | None = None) -> int:
         """Render invalidated windows whose frame interval has elapsed."""
 
@@ -133,6 +172,8 @@ class App(EventEmitter):
                     window=window,
                     frame_number=stats.frame_number,
                     frame_time=frame_time,
+                    target_fps=scheduler.target_fps,
+                    frame_interval=scheduler.frame_interval,
                     frame_delta=stats.last_frame_delta,
                     instantaneous_fps=stats.instantaneous_fps,
                     smoothed_fps=stats.smoothed_fps,
@@ -160,7 +201,8 @@ class App(EventEmitter):
 
         The headless backend remains non-blocking for deterministic tests and CI.
         Native backends keep pumping events until all application windows close
-        or :meth:`stop` is called.
+        or :meth:`stop` is called. Idle sleeps are shortened to the nearest frame
+        deadline so 120/144+ Hz targets are not quantized by a fixed poll delay.
         """
 
         self.start()
@@ -170,8 +212,16 @@ class App(EventEmitter):
         while self.running:
             processed = self.process_events()
             if self.running and processed == 0:
-                time.sleep(0.004)
+                sleep_seconds = self._idle_sleep_seconds()
+                if sleep_seconds > 0.0:
+                    time.sleep(sleep_seconds)
         return self.exit_code
+
+    def _idle_sleep_seconds(self, now: float | None = None) -> float:
+        frame_wait = self.seconds_until_next_frame(now)
+        if frame_wait is None:
+            return _IDLE_POLL_SECONDS
+        return min(_IDLE_POLL_SECONDS, max(0.0, frame_wait))
 
     def _attach_window(self, window: Window) -> None:
         if window.native_handle is not None:
