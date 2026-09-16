@@ -1,3 +1,4 @@
+use crate::image::{ImageInstance, ImageSystem};
 use crate::text::{TextInstance, TextSystem};
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
@@ -22,6 +23,7 @@ struct PersistentGpuContext {
     frame_buffer: wgpu::Buffer,
     bind_group_layout: wgpu::BindGroupLayout,
     pipeline: wgpu::RenderPipeline,
+    image_system: ImageSystem,
     text_system: TextSystem,
     adapter_name: String,
     graphics_backend: String,
@@ -115,6 +117,7 @@ impl PersistentGpuContext {
             multiview_mask: None,
             cache: None,
         });
+        let image_system = ImageSystem::new(&device, config.format);
         let text_system = TextSystem::new(&device, &queue, config.format, width, height);
 
         Ok(Self {
@@ -126,6 +129,7 @@ impl PersistentGpuContext {
             frame_buffer,
             bind_group_layout,
             pipeline,
+            image_system,
             text_system,
             adapter_name: info.name,
             graphics_backend: info.backend.to_string(),
@@ -141,6 +145,27 @@ impl PersistentGpuContext {
         self.queue.write_buffer(&self.frame_buffer, 0, &frame_uniforms);
         self.text_system.resize(&self.queue, width, height);
         Ok(())
+    }
+
+    fn upload_image(
+        &mut self,
+        resource_id: &str,
+        width: u32,
+        height: u32,
+        rgba: &[u8],
+    ) -> PyResult<()> {
+        self.image_system.upload_rgba8(
+            &self.device,
+            &self.queue,
+            resource_id,
+            width,
+            height,
+            rgba,
+        )
+    }
+
+    fn remove_image(&mut self, resource_id: &str) -> bool {
+        self.image_system.remove(resource_id)
     }
 
     fn clear(&self, red: f64, green: f64, blue: f64, alpha: f64) -> PyResult<()> {
@@ -190,8 +215,9 @@ impl PersistentGpuContext {
         background_blue: f64,
         background_alpha: f64,
     ) -> PyResult<usize> {
-        let (rectangle_count, _text_count) = self.draw_scene(
+        let (rectangle_count, _text_count, _image_count) = self.draw_scene(
             rectangles,
+            &[],
             &[],
             background_red,
             background_green,
@@ -205,11 +231,12 @@ impl PersistentGpuContext {
         &mut self,
         rectangles: &[RectangleInstance],
         texts: &[TextInstance],
+        images: &[ImageInstance],
         background_red: f64,
         background_green: f64,
         background_blue: f64,
         background_alpha: f64,
-    ) -> PyResult<(usize, usize)> {
+    ) -> PyResult<(usize, usize, usize)> {
         validate_color(
             background_red,
             background_green,
@@ -219,19 +246,24 @@ impl PersistentGpuContext {
         if !rectangles.is_empty() {
             validate_rectangles(rectangles)?;
         }
-        if rectangles.is_empty() && texts.is_empty() {
+        if rectangles.is_empty() && texts.is_empty() && images.is_empty() {
             self.clear(
                 background_red,
                 background_green,
                 background_blue,
                 background_alpha,
             )?;
-            return Ok((0, 0));
+            return Ok((0, 0, 0));
         }
         if !texts.is_empty() {
-            self.text_system
-                .prepare(&self.device, &self.queue, texts)?;
+            self.text_system.prepare(&self.device, &self.queue, texts)?;
         }
+        let image_draws = self.image_system.prepare_draws(
+            &self.device,
+            self.config.width,
+            self.config.height,
+            images,
+        )?;
 
         let rectangle_resources = if rectangles.is_empty() {
             None
@@ -298,6 +330,7 @@ impl PersistentGpuContext {
                 render_pass.set_bind_group(0, bind_group, &[]);
                 render_pass.draw(0..6, 0..rectangles.len() as u32);
             }
+            self.image_system.render(&mut render_pass, &image_draws);
             if !texts.is_empty() {
                 self.text_system.render(&mut render_pass)?;
             }
@@ -308,7 +341,7 @@ impl PersistentGpuContext {
         if !texts.is_empty() {
             self.text_system.trim();
         }
-        Ok((rectangles.len(), texts.len()))
+        Ok((rectangles.len(), texts.len(), images.len()))
     }
 }
 
@@ -352,6 +385,20 @@ impl PyWin32GpuRenderer {
         self.context.resize(width, height)
     }
 
+    fn upload_image(
+        &mut self,
+        resource_id: &str,
+        width: u32,
+        height: u32,
+        rgba: Vec<u8>,
+    ) -> PyResult<()> {
+        self.context.upload_image(resource_id, width, height, &rgba)
+    }
+
+    fn remove_image(&mut self, resource_id: &str) -> bool {
+        self.context.remove_image(resource_id)
+    }
+
     #[pyo3(signature = (red=0.027, green=0.043, blue=0.078, alpha=1.0))]
     fn clear(&self, red: f64, green: f64, blue: f64, alpha: f64) -> PyResult<()> {
         self.context.clear(red, green, blue, alpha)
@@ -384,6 +431,7 @@ impl PyWin32GpuRenderer {
     #[pyo3(signature = (
         rectangles,
         texts,
+        images,
         background_red=0.027,
         background_green=0.043,
         background_blue=0.078,
@@ -393,14 +441,16 @@ impl PyWin32GpuRenderer {
         &mut self,
         rectangles: Vec<RectangleInstance>,
         texts: Vec<TextInstance>,
+        images: Vec<ImageInstance>,
         background_red: f64,
         background_green: f64,
         background_blue: f64,
         background_alpha: f64,
-    ) -> PyResult<(usize, usize)> {
+    ) -> PyResult<(usize, usize, usize)> {
         self.context.draw_scene(
             &rectangles,
             &texts,
+            &images,
             background_red,
             background_green,
             background_blue,
