@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass(frozen=True, slots=True)
@@ -20,6 +20,9 @@ class Size:
 class Point:
     x: float = 0.0
     y: float = 0.0
+
+
+Triangle = tuple[Point, Point, Point]
 
 
 @dataclass(frozen=True, slots=True)
@@ -89,11 +92,13 @@ class Path2D:
     """A simple closed polygon path expressed in local logical coordinates.
 
     The first renderer implementation supports filled straight-line paths. Both
-    convex and concave simple polygons are accepted and deterministically
-    tessellated into triangles before crossing the native renderer boundary.
+    convex and concave simple polygons are accepted. Validation and deterministic
+    ear-clipping tessellation happen once when immutable path geometry is created,
+    so retained scenes can reuse the prepared triangle tuple on every frame.
     """
 
     points: tuple[Point, ...]
+    _triangles: tuple[Triangle, ...] = field(init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
         points = self.points
@@ -105,9 +110,13 @@ class Path2D:
             raise ValueError("Path2D vertices must use finite coordinates.")
         if len({(point.x, point.y) for point in points}) != len(points):
             raise ValueError("Path2D vertices must be unique except for an optional closing point.")
+        if _has_self_intersection(points):
+            raise ValueError("Path2D requires a simple polygon without self-intersections.")
         if abs(_signed_area(points)) <= 1.0e-9:
             raise ValueError("Path2D requires a non-zero enclosed area.")
+
         object.__setattr__(self, "points", points)
+        object.__setattr__(self, "_triangles", _triangulate_polygon(points))
 
     @classmethod
     def polygon(cls, *points: Point) -> Path2D:
@@ -120,6 +129,10 @@ class Path2D:
         left = min(xs)
         top = min(ys)
         return Rect(left, top, max(xs) - left, max(ys) - top)
+
+    @property
+    def triangle_count(self) -> int:
+        return len(self._triangles)
 
     def contains(self, point: Point) -> bool:
         """Return whether ``point`` lies inside or on the polygon boundary."""
@@ -134,56 +147,17 @@ class Path2D:
             if not intersects:
                 continue
             denominator = previous.y - current.y
-            crossing_x = (previous.x - current.x) * (point.y - current.y) / denominator + current.x
+            crossing_x = (
+                (previous.x - current.x) * (point.y - current.y) / denominator + current.x
+            )
             if point.x < crossing_x:
                 inside = not inside
         return inside
 
-    def triangulate(self) -> tuple[tuple[Point, Point, Point], ...]:
-        """Tessellate a simple convex or concave polygon using deterministic ear clipping."""
+    def triangulate(self) -> tuple[Triangle, ...]:
+        """Return the immutable triangle cache prepared during path construction."""
 
-        points = self.points
-        counter_clockwise = _signed_area(points) > 0.0
-        indices = list(range(len(points)))
-        triangles: list[tuple[Point, Point, Point]] = []
-        epsilon = 1.0e-9
-
-        while len(indices) > 3:
-            ear_found = False
-            for position, current_index in enumerate(indices):
-                previous_index = indices[position - 1]
-                next_index = indices[(position + 1) % len(indices)]
-                a = points[previous_index]
-                b = points[current_index]
-                c = points[next_index]
-                cross = _cross(a, b, c)
-                if counter_clockwise:
-                    if cross <= epsilon:
-                        continue
-                elif cross >= -epsilon:
-                    continue
-
-                if any(
-                    _point_in_triangle(points[candidate], a, b, c, epsilon)
-                    for candidate in indices
-                    if candidate not in (previous_index, current_index, next_index)
-                ):
-                    continue
-
-                triangles.append((a, b, c))
-                del indices[position]
-                ear_found = True
-                break
-
-            if not ear_found:
-                raise ValueError(
-                    "Path2D could not be tessellated; the polygon may self-intersect "
-                    "or be degenerate."
-                )
-
-        a, b, c = (points[index] for index in indices)
-        triangles.append((a, b, c))
-        return tuple(triangles)
+        return self._triangles
 
 
 @dataclass(frozen=True, slots=True)
@@ -246,3 +220,80 @@ def _point_on_segment(point: Point, a: Point, b: Point) -> bool:
         min(a.x, b.x) - epsilon <= point.x <= max(a.x, b.x) + epsilon
         and min(a.y, b.y) - epsilon <= point.y <= max(a.y, b.y) + epsilon
     )
+
+
+def _segments_intersect(a: Point, b: Point, c: Point, d: Point) -> bool:
+    epsilon = 1.0e-9
+    ab_c = _cross(a, b, c)
+    ab_d = _cross(a, b, d)
+    cd_a = _cross(c, d, a)
+    cd_b = _cross(c, d, b)
+
+    if ab_c * ab_d < -epsilon and cd_a * cd_b < -epsilon:
+        return True
+    return (
+        (abs(ab_c) <= epsilon and _point_on_segment(c, a, b))
+        or (abs(ab_d) <= epsilon and _point_on_segment(d, a, b))
+        or (abs(cd_a) <= epsilon and _point_on_segment(a, c, d))
+        or (abs(cd_b) <= epsilon and _point_on_segment(b, c, d))
+    )
+
+
+def _has_self_intersection(points: tuple[Point, ...]) -> bool:
+    count = len(points)
+    for first_index in range(count):
+        first_next = (first_index + 1) % count
+        for second_index in range(first_index + 1, count):
+            second_next = (second_index + 1) % count
+            second_edge = (second_index, second_next)
+            if first_index in second_edge or first_next in second_edge:
+                continue
+            if _segments_intersect(
+                points[first_index],
+                points[first_next],
+                points[second_index],
+                points[second_next],
+            ):
+                return True
+    return False
+
+
+def _triangulate_polygon(points: tuple[Point, ...]) -> tuple[Triangle, ...]:
+    counter_clockwise = _signed_area(points) > 0.0
+    indices = list(range(len(points)))
+    triangles: list[Triangle] = []
+    epsilon = 1.0e-9
+
+    while len(indices) > 3:
+        ear_found = False
+        for position, current_index in enumerate(indices):
+            previous_index = indices[position - 1]
+            next_index = indices[(position + 1) % len(indices)]
+            a = points[previous_index]
+            b = points[current_index]
+            c = points[next_index]
+            cross = _cross(a, b, c)
+            if counter_clockwise:
+                if cross <= epsilon:
+                    continue
+            elif cross >= -epsilon:
+                continue
+
+            if any(
+                _point_in_triangle(points[candidate], a, b, c, epsilon)
+                for candidate in indices
+                if candidate not in (previous_index, current_index, next_index)
+            ):
+                continue
+
+            triangles.append((a, b, c))
+            del indices[position]
+            ear_found = True
+            break
+
+        if not ear_found:
+            raise ValueError("Path2D could not be tessellated deterministically.")
+
+    a, b, c = (points[index] for index in indices)
+    triangles.append((a, b, c))
+    return tuple(triangles)

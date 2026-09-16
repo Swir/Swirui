@@ -6,6 +6,7 @@ from swirui.rendering import Color, Path2D, Point, Rect, SceneNode, SceneNodeKin
 def test_path2d_triangulates_convex_and_concave_polygons() -> None:
     triangle = Path2D.polygon(Point(0, 0), Point(100, 0), Point(20, 80))
     assert len(triangle.triangulate()) == 1
+    assert triangle.triangle_count == 1
 
     concave = Path2D.polygon(
         Point(0, 0),
@@ -17,7 +18,25 @@ def test_path2d_triangulates_convex_and_concave_polygons() -> None:
     )
     triangles = concave.triangulate()
     assert len(triangles) == 4
+    assert concave.triangle_count == 4
     assert sum(abs(_triangle_area(*item)) for item in triangles) == pytest.approx(8800.0)
+
+
+def test_path2d_tessellation_is_prepared_once_and_reused() -> None:
+    path = Path2D.polygon(
+        Point(0, 0),
+        Point(100, 0),
+        Point(100, 40),
+        Point(40, 40),
+        Point(40, 100),
+        Point(0, 100),
+    )
+
+    first = path.triangulate()
+    second = path.triangulate()
+
+    assert first is second
+    assert path.triangle_count == len(first) == 4
 
 
 def test_path2d_accepts_explicit_closing_point_and_reports_bounds() -> None:
@@ -40,6 +59,17 @@ def test_path2d_rejects_invalid_geometry() -> None:
         Path2D.polygon(Point(0, 0), Point(10, 0), Point(10, 0), Point(0, 10))
     with pytest.raises(ValueError, match="non-zero"):
         Path2D.polygon(Point(0, 0), Point(10, 10), Point(20, 20))
+
+
+def test_path2d_rejects_self_intersecting_polygon_before_rendering() -> None:
+    with pytest.raises(ValueError, match="self-intersections"):
+        Path2D.polygon(
+            Point(0, 0),
+            Point(4, 4),
+            Point(0, 4),
+            Point(4, 0),
+            Point(2, 5),
+        )
 
 
 def test_path2d_contains_inside_boundary_and_outside_points() -> None:
