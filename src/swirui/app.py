@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from .core import EventEmitter
+from types import TracebackType
+
+from .core import AppConfig, EventEmitter, configure_logging
 from .window import Window
 
 
@@ -14,9 +16,11 @@ class App(EventEmitter):
     be tested before the native/GPU backend is introduced.
     """
 
-    def __init__(self, name: str = "SwirUI App") -> None:
+    def __init__(self, name: str = "SwirUI App", *, config: AppConfig | None = None) -> None:
         super().__init__()
         self.name = name
+        self.config = config or AppConfig()
+        self.logger = configure_logging(debug=self.config.debug)
         self.windows: list[Window] = []
         self.running = False
         self.exit_code = 0
@@ -38,6 +42,7 @@ class App(EventEmitter):
         if self.running:
             return
         self.running = True
+        self.logger.debug("Starting application %s", self.name)
         self.emit("started")
         for window in self.windows:
             if not window.closed:
@@ -53,6 +58,7 @@ class App(EventEmitter):
                 window.close()
         self.running = False
         self.emit("stopped", exit_code=exit_code)
+        self.logger.debug("Stopped application %s with code %d", self.name, exit_code)
 
     def run(self) -> int:
         """Start the foundation lifecycle and return its exit code.
@@ -67,5 +73,11 @@ class App(EventEmitter):
         self.start()
         return self
 
-    def __exit__(self, exc_type: object, exc: object, traceback: object) -> None:
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        del exc_type, traceback
         self.stop(1 if exc is not None else 0)
