@@ -19,15 +19,48 @@ class FakeNativeGpu:
         return ("Fake GPU", "test-backend")
 
 
-def test_wgpu_renderer_submits_scene_rectangles() -> None:
-    native = FakeNativeGpu()
-    renderer = WgpuRenderer(native_module=native)
-    app = App(platform_backend=NullPlatformBackend(), renderer=renderer)
-    window = Window(title="GPU scene", width=800, height=500)
+class FakePersistentContext:
+    adapter_name = "Persistent Fake GPU"
+    graphics_backend = "persistent-test-backend"
+
+    def __init__(self, hwnd: int, width: int, height: int) -> None:
+        self.hwnd = hwnd
+        self.width = width
+        self.height = height
+        self.draw_calls: list[tuple[object, ...]] = []
+        self.clear_calls: list[tuple[object, ...]] = []
+        self.resize_calls: list[tuple[int, int]] = []
+
+    def draw_rectangles(self, rectangles: object, *background: object) -> int:
+        self.draw_calls.append((rectangles, *background))
+        assert isinstance(rectangles, list)
+        return len(rectangles)
+
+    def clear(self, *background: object) -> None:
+        self.clear_calls.append(background)
+
+    def resize(self, width: int, height: int) -> None:
+        self.width = width
+        self.height = height
+        self.resize_calls.append((width, height))
+
+
+class FakePersistentNative(FakeNativeGpu):
+    def __init__(self) -> None:
+        super().__init__()
+        self.contexts: list[FakePersistentContext] = []
+
+    def Win32GpuRenderer(self, hwnd: int, width: int, height: int) -> FakePersistentContext:
+        context = FakePersistentContext(hwnd, width, height)
+        self.contexts.append(context)
+        return context
+
+
+def _rectangle_scene(width: int = 800, height: int = 500) -> Scene:
     root = SceneNode(
         key="root",
         kind=SceneNodeKind.GROUP,
-        bounds=Rect(0, 0, 800, 500),
+        bounds=Rect(0, 0, width, height),
     )
     root.add(
         SceneNode(
@@ -45,7 +78,15 @@ def test_wgpu_renderer_submits_scene_rectangles() -> None:
             fill=Color.from_hex("#FFFFFF"),
         ),
     )
-    window.set_scene(Scene(800, 500, root))
+    return Scene(width, height, root)
+
+
+def test_wgpu_renderer_submits_scene_rectangles() -> None:
+    native = FakeNativeGpu()
+    renderer = WgpuRenderer(native_module=native)
+    app = App(platform_backend=NullPlatformBackend(), renderer=renderer)
+    window = Window(title="GPU scene", width=800, height=500)
+    window.set_scene(_rectangle_scene())
     app.add_window(window)
 
     app.start()
@@ -91,3 +132,32 @@ def test_wgpu_renderer_clears_when_scene_has_no_rectangles() -> None:
     assert native.rectangle_calls == []
 
     app.stop()
+
+
+def test_wgpu_renderer_reuses_persistent_context_and_resizes_it() -> None:
+    native = FakePersistentNative()
+    renderer = WgpuRenderer(native_module=native)
+    app = App(platform_backend=NullPlatformBackend(), renderer=renderer)
+    window = Window(title="Persistent GPU", width=800, height=500)
+    window.set_scene(_rectangle_scene())
+    app.add_window(window)
+
+    app.start()
+
+    assert len(native.contexts) == 1
+    assert renderer.persistent_context_count == 1
+    context = native.contexts[0]
+    assert len(context.draw_calls) == 1
+    assert renderer.adapter_name == "Persistent Fake GPU"
+    assert renderer.graphics_backend == "persistent-test-backend"
+
+    renderer.render(window, None)
+    assert len(context.draw_calls) == 2
+    assert len(native.contexts) == 1
+
+    renderer.resize_surface(window, 900, 600)
+    assert context.resize_calls == [(900, 600)]
+    assert (context.width, context.height) == (900, 600)
+
+    app.stop()
+    assert renderer.persistent_context_count == 0
