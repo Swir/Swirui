@@ -397,7 +397,7 @@ class Window(EventEmitter):
         )
 
         for component in component_path[:-1]:
-            routed.phase = EventPhase.CAPURE if False else EventPhase.CAPTURE
+            routed.phase = EventPhase.CAPTURE
             component.dispatch(routed, capture=True)
             if routed.propagation_stopped:
                 return routed
