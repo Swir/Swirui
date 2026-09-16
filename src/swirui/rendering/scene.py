@@ -119,7 +119,8 @@ class SceneNode:
         Children with larger ``z_index`` values win. Equal z-index values use
         later insertion as the topmost visual, matching painter-style ordering.
         Transparent groups participate in the ancestry path but are not direct
-        visual hit targets unless they have a fill.
+        visual hit targets unless they have a fill. Path nodes use their exact
+        polygon geometry rather than only the rectangular scene bounds.
         """
 
         path = self.hit_path(point)
@@ -143,11 +144,18 @@ class SceneNode:
             if child_path:
                 return (self, *child_path)
 
-        if self.bounds.contains(point) and (
-            self.kind is not SceneNodeKind.GROUP or self.fill is not None
-        ):
+        if self._visual_contains(point):
             return (self,)
         return ()
+
+    def _visual_contains(self, point: Point) -> bool:
+        if not self.bounds.contains(point):
+            return False
+        if self.kind is SceneNodeKind.GROUP:
+            return self.fill is not None
+        if self.kind is SceneNodeKind.PATH:
+            return self.path is not None and self.path.contains(point)
+        return True
 
 
 @dataclass(slots=True)
