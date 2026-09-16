@@ -47,10 +47,10 @@ class PathGeometry:
         if any(points[index] == points[index + 1] for index in range(len(points) - 1)):
             raise ValueError("Path cannot contain consecutive duplicate points.")
         if self.closed:
-            if abs(self.signed_area) <= _EPSILON:
-                raise ValueError("Closed path must enclose a non-zero area.")
             if not _is_simple_polygon(points):
                 raise ValueError("Closed path must be a simple non-self-intersecting polygon.")
+            if abs(self.signed_area) <= _EPSILON:
+                raise ValueError("Closed path must enclose a non-zero area.")
 
     @classmethod
     def polygon(cls, *points: Point) -> PathGeometry:
@@ -76,11 +76,7 @@ class PathGeometry:
     def signed_area(self) -> float:
         if not self.closed:
             return 0.0
-        total = 0.0
-        for index, point in enumerate(self.points):
-            following = self.points[(index + 1) % len(self.points)]
-            total += point.x * following.y - following.x * point.y
-        return total * 0.5
+        return _polygon_signed_area(self.points)
 
     @property
     def clockwise(self) -> bool:
@@ -149,8 +145,6 @@ def _is_simple_polygon(points: tuple[Point, ...]) -> bool:
         a = points[first]
         b = points[(first + 1) % count]
         for second in range(first + 1, count):
-            if second == first:
-                continue
             if second == (first + 1) % count:
                 continue
             if first == (second + 1) % count:
@@ -209,7 +203,9 @@ def _triangulate(points: tuple[Point, ...]) -> tuple[Triangle, ...]:
         if not ear_found or iterations > maximum_iterations:
             raise ValueError("Path tessellation failed; polygon may be degenerate.")
 
-    a, b, c = (points[index] for index in indices)
+    a = points[indices[0]]
+    b = points[indices[1]]
+    c = points[indices[2]]
     if _cross(a, b, c) <= _EPSILON:
         raise ValueError("Path tessellation produced a degenerate final triangle.")
     triangles.append(Triangle(a, b, c))
