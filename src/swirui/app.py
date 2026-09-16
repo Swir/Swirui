@@ -265,16 +265,26 @@ class App(EventEmitter):
             display=window.display,
         )
 
+    def _initial_window_scale(self) -> float:
+        """Choose the scale used to translate initial logical size to native pixels."""
+
+        displays = self.platform_backend.displays()
+        if not displays:
+            return 1.0
+        primary = next((display for display in displays if display.primary), displays[0])
+        return primary.scale
+
     def _attach_window(self, window: Window) -> None:
         if window.native_handle is not None:
             return
+        initial_scale = self._initial_window_scale()
         handle = self.platform_backend.create_window(
             NativeWindowSpec(
                 title=window.title,
-                width=window.width,
-                height=window.height,
-                min_width=window.min_width,
-                min_height=window.min_height,
+                width=max(1, round(window.width * initial_scale)),
+                height=max(1, round(window.height * initial_scale)),
+                min_width=max(1, round(window.min_width * initial_scale)),
+                min_height=max(1, round(window.min_height * initial_scale)),
             )
         )
         window._bind_native(self.platform_backend, handle)
