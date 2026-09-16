@@ -4,9 +4,9 @@
 
 ## Project progress
 
-**Overall completion: 7%**
+**Overall completion: 8%**
 
-`[█░░░░░░░░░░░░░░░░░░░] 7%`
+`[██░░░░░░░░░░░░░░░░░░] 8%`
 
 Progress is based on implemented and verified roadmap work. Ideas, mockups and unfinished prototypes do not increase the percentage.
 
@@ -74,7 +74,9 @@ Progress is based on implemented and verified roadmap work. Ideas, mockups and u
 - [x] SceneGraph rectangle submission to the GPU renderer
 - [x] Instanced filled-rectangle GPU pipeline
 - [x] Single draw call for a batch of rectangle instances
-- [ ] Persistent wgpu renderer context per window
+- [x] Persistent wgpu renderer context per window
+- [x] Surface/device/queue/pipeline reused across frames
+- [x] Persistent GPU context survives resize/reconfiguration
 - [ ] Anti-aliased GPU rounded rectangles using `CornerRadius`
 - [ ] General shape / path rendering
 - [ ] Text rendering
@@ -358,6 +360,7 @@ AI output must remain ordinary, editable SwirUI code.
 - [x] Windows real-native-window smoke test
 - [x] Windows real-wgpu surface/present smoke test
 - [x] Windows real-wgpu instanced rectangle draw smoke test
+- [x] Windows persistent GPU context multi-frame + resize smoke test
 - [x] Rust native-core check and unit tests
 - [x] ABI3 native extension build on Windows
 - [x] Python 3.11–3.14 test matrix
@@ -412,7 +415,8 @@ Current native foundation:
 - [x] ABI3 Python 3.11+ native wheel
 - [x] Python SceneGraph → native wgpu rectangle bridge
 - [x] instanced GPU rectangle pipeline
-- [ ] persistent renderer context per window
+- [x] persistent renderer context per window
+- [x] context reuse across multiple frames and resize
 - [ ] GPU resource cache
 - [ ] native rounded-rectangle pipeline
 - [ ] native text/image pipeline
