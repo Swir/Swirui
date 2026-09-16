@@ -303,7 +303,7 @@ class App(EventEmitter):
 
         def resize_surface(_event: Event) -> None:
             if self.running and window.native_handle is not None:
-                self.renderer.resize_surface(window, window.width, window.height)
+                self.renderer.resize_surface(window, window.pixel_width, window.pixel_height)
             self.invalidate(window)
 
         def display_changed(_event: Event) -> None:
@@ -320,6 +320,7 @@ class App(EventEmitter):
             window.on("scene_changed", invalidate_window),
             window.on("shown", invalidate_window),
             window.on("resized", resize_surface),
+            window.on("scale_changed", resize_surface),
             window.on("display_changed", display_changed),
             window.on("closed", close_surface),
         ]
