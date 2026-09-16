@@ -122,11 +122,11 @@ class Window(EventEmitter):
             return None
 
         step = -1 if reverse else 1
-        try:
-            current_index = candidates.index(self.focused_component)
-        except ValueError:
+        current = self.focused_component
+        if current is None or current not in candidates:
             next_component = candidates[-1] if reverse else candidates[0]
         else:
+            current_index = candidates.index(current)
             next_component = candidates[(current_index + step) % len(candidates)]
         self.focus_component(next_component)
         return next_component
