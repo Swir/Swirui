@@ -299,7 +299,7 @@ class Win32PlatformBackend:
         def collect_monitor(
             monitor: int | None,
             _hdc: int | None,
-            _rect: ctypes.POINTER(_Rect),
+            _rect: Any,
             _data: int,
         ) -> bool:
             if not monitor:
@@ -439,9 +439,10 @@ class Win32PlatformBackend:
             set_context: Any = self._user32.SetProcessDpiAwarenessContext
         except AttributeError:
             set_context = None
-        if set_context is not None:
-            if set_context(ctypes.c_void_p(_DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2)):
-                return
+        if set_context is not None and set_context(
+            ctypes.c_void_p(_DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2)
+        ):
+            return
 
         if self._shcore is not None:
             try:
