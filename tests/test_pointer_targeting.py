@@ -1,5 +1,5 @@
 from swirui import App, Component, Window
-from swirui.core import EventPhase
+from swirui.core import Event, EventPhase
 from swirui.platforms import NullPlatformBackend, PlatformEvent, PlatformEventKind, PointerButton
 from swirui.rendering import Color, NullRenderer, Rect, Scene, SceneNode, SceneNodeKind
 
@@ -133,7 +133,9 @@ def test_pointer_event_routes_capture_target_and_bubble_through_components() -> 
     route: list[tuple[str, EventPhase, object, object | None]] = []
     root.on(
         "pointer_down",
-        lambda event: route.append(("root-capture", event.phase, event.source, event.current_target)),
+        lambda event: route.append(
+            ("root-capture", event.phase, event.source, event.current_target)
+        ),
         capture=True,
     )
     front.on(
@@ -142,7 +144,9 @@ def test_pointer_event_routes_capture_target_and_bubble_through_components() -> 
     )
     root.on(
         "pointer_down",
-        lambda event: route.append(("root-bubble", event.phase, event.source, event.current_target)),
+        lambda event: route.append(
+            ("root-bubble", event.phase, event.source, event.current_target)
+        ),
     )
 
     window_events = []
@@ -181,9 +185,9 @@ def test_capture_handler_can_stop_component_pointer_propagation() -> None:
 
     received: list[str] = []
 
-    def stop_at_root(event: object) -> None:
+    def stop_at_root(event: Event) -> None:
         received.append("root-capture")
-        event.stop_propagation()  # type: ignore[attr-defined]
+        event.stop_propagation()
 
     root.on("pointer_down", stop_at_root, capture=True)
     front.on("pointer_down", lambda _event: received.append("front"))
