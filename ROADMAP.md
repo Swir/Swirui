@@ -4,9 +4,9 @@
 
 ## Project progress
 
-**Overall completion: 13%**
+**Overall completion: 14%**
 
-`[███░░░░░░░░░░░░░░░░░] 13%`
+`[███░░░░░░░░░░░░░░░░░] 14%`
 
 Progress is based on implemented and verified roadmap work. Ideas, mockups and unfinished prototypes do not increase the percentage.
 
@@ -68,6 +68,7 @@ Progress is based on implemented and verified roadmap work. Ideas, mockups and u
 - [x] Backend-neutral `RenderSurface` lifecycle
 - [x] Runtime surface recreation on resize
 - [x] `AppConfig.target_fps` connected to frame scheduling
+- [x] Runtime target-FPS retargeting and deadline-aware frame pacing
 - [x] Real GPU surface / swapchain on Windows via Rust + wgpu
 - [x] GPU adapter/device/queue creation
 - [x] Verified clear → submit → present to a real SwirUI HWND
@@ -88,7 +89,7 @@ Progress is based on implemented and verified roadmap work. Ideas, mockups and u
 - [ ] Robust DPI / HiDPI handling
 - [ ] Multi-monitor support
 - [ ] Display-aware 60 / 120 / 144+ Hz presentation
-- [ ] VSync / present-mode selection
+- [x] VSync / present-mode selection
 
 ### 0.2 gate
 
@@ -304,7 +305,7 @@ Progress is based on implemented and verified roadmap work. Ideas, mockups and u
 - [ ] Cancellation
 - [ ] Progress reporting
 - [ ] Performance budgets
-- [ ] Frame-time telemetry
+- [x] Frame-time telemetry
 
 ## Plugin System & Marketplace
 
@@ -370,6 +371,8 @@ AI output must remain ordinary, editable SwirUI code.
 - [x] Windows per-corner rounded-rectangle shader smoke test
 - [x] Windows shaped-text SceneGraph → Python → Rust/wgpu smoke test
 - [x] Windows image-resource SceneGraph → Python → Rust/wgpu smoke test
+- [x] Windows presentation-policy reconfiguration smoke test
+- [x] High-refresh runtime pacing tests
 - [x] Rust native-core check and unit tests
 - [x] ABI3 native extension build on Windows
 - [x] Python 3.11–3.14 test matrix
