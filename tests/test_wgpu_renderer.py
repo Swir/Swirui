@@ -1,8 +1,11 @@
+import pytest
+
 from swirui import App, Window
 from swirui.platforms import NullPlatformBackend
 from swirui.rendering import (
     Color,
     CornerRadius,
+    ImageResource,
     Rect,
     Scene,
     SceneNode,
@@ -45,9 +48,23 @@ class FakePersistentContext:
         self.width = width
         self.height = height
         self.scene_calls: list[tuple[object, ...]] = []
+        self.image_scene_calls: list[tuple[object, ...]] = []
         self.draw_calls: list[tuple[object, ...]] = []
         self.clear_calls: list[tuple[object, ...]] = []
         self.resize_calls: list[tuple[int, int]] = []
+        self.registered_images: dict[str, tuple[int, int, bytes]] = {}
+
+    def register_image_rgba8(
+        self,
+        resource_id: str,
+        width: int,
+        height: int,
+        rgba8: bytes,
+    ) -> None:
+        self.registered_images[resource_id] = (width, height, rgba8)
+
+    def unregister_image(self, resource_id: str) -> bool:
+        return self.registered_images.pop(resource_id, None) is not None
 
     def draw_scene(
         self,
@@ -59,6 +76,19 @@ class FakePersistentContext:
         assert isinstance(rectangles, list)
         assert isinstance(texts, list)
         return (len(rectangles), len(texts))
+
+    def draw_scene_images(
+        self,
+        rectangles: object,
+        texts: object,
+        images: object,
+        *background: object,
+    ) -> tuple[int, int, int]:
+        self.image_scene_calls.append((rectangles, texts, images, *background))
+        assert isinstance(rectangles, list)
+        assert isinstance(texts, list)
+        assert isinstance(images, list)
+        return (len(rectangles), len(texts), len(images))
 
     def draw_rectangles(self, rectangles: object, *background: object) -> int:
         self.draw_calls.append((rectangles, *background))
@@ -114,6 +144,24 @@ def _mixed_scene(width: int = 800, height: int = 500) -> Scene:
     return Scene(width, height, root)
 
 
+def _image_scene(width: int = 800, height: int = 500) -> Scene:
+    root = SceneNode(
+        key="root",
+        kind=SceneNodeKind.GROUP,
+        bounds=Rect(0, 0, width, height),
+    )
+    root.add(
+        SceneNode(
+            key="image",
+            kind=SceneNodeKind.IMAGE,
+            bounds=Rect(120, 90, 256, 192),
+            resource_id="checker",
+            opacity=0.65,
+        )
+    )
+    return Scene(width, height, root)
+
+
 def test_wgpu_renderer_submits_scene_rectangles_and_text() -> None:
     native = FakeNativeGpu()
     renderer = WgpuRenderer(native_module=native)
@@ -127,6 +175,7 @@ def test_wgpu_renderer_submits_scene_rectangles_and_text() -> None:
     assert renderer.frames_rendered == 1
     assert renderer.last_rectangle_count == 1
     assert renderer.last_text_count == 1
+    assert renderer.last_image_count == 0
     assert renderer.adapter_name == "Fake GPU"
     assert renderer.graphics_backend == "test-backend"
     assert len(native.scene_calls) == 1
@@ -177,6 +226,7 @@ def test_wgpu_renderer_uses_white_for_unfilled_text() -> None:
     assert submitted_texts[0][6:10] == (1.0, 1.0, 1.0, 0.5)
     assert renderer.last_rectangle_count == 0
     assert renderer.last_text_count == 1
+    assert renderer.last_image_count == 0
 
     app.stop()
 
@@ -204,6 +254,7 @@ def test_wgpu_renderer_clears_when_scene_has_no_drawables() -> None:
     assert renderer.frames_rendered == 1
     assert renderer.last_rectangle_count == 0
     assert renderer.last_text_count == 0
+    assert renderer.last_image_count == 0
     assert len(native.clear_calls) == 1
     assert native.scene_calls == []
     assert native.rectangle_calls == []
@@ -227,6 +278,7 @@ def test_wgpu_renderer_reuses_persistent_context_and_resizes_it() -> None:
     assert len(context.scene_calls) == 1
     assert renderer.last_rectangle_count == 1
     assert renderer.last_text_count == 1
+    assert renderer.last_image_count == 0
     assert renderer.adapter_name == "Persistent Fake GPU"
     assert renderer.graphics_backend == "persistent-test-backend"
 
@@ -240,3 +292,68 @@ def test_wgpu_renderer_reuses_persistent_context_and_resizes_it() -> None:
 
     app.stop()
     assert renderer.persistent_context_count == 0
+
+
+def test_wgpu_renderer_uploads_and_submits_registered_images() -> None:
+    native = FakePersistentNative()
+    renderer = WgpuRenderer(native_module=native)
+    pixels = bytes(
+        [
+            255,
+            0,
+            0,
+            255,
+            0,
+            255,
+            0,
+            255,
+            0,
+            0,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+        ]
+    )
+    resource = renderer.register_image_rgba8("checker", 2, 2, pixels)
+    assert isinstance(resource, ImageResource)
+    assert renderer.image_resource_count == 1
+
+    app = App(platform_backend=NullPlatformBackend(), renderer=renderer)
+    window = Window(title="GPU image", width=800, height=500)
+    window.set_scene(_image_scene())
+    app.add_window(window)
+
+    app.start()
+
+    context = native.contexts[0]
+    assert context.registered_images["checker"] == (2, 2, pixels)
+    assert len(context.image_scene_calls) == 1
+    submitted_images = context.image_scene_calls[0][2]
+    assert isinstance(submitted_images, list)
+    assert submitted_images == [("checker", 120, 90, 256, 192, 0.65)]
+    assert renderer.last_rectangle_count == 0
+    assert renderer.last_text_count == 0
+    assert renderer.last_image_count == 1
+
+    assert renderer.unregister_image("checker") is True
+    assert renderer.image_resource_count == 0
+    assert context.registered_images == {}
+
+    app.stop()
+
+
+def test_wgpu_renderer_rejects_unregistered_scene_image() -> None:
+    native = FakePersistentNative()
+    renderer = WgpuRenderer(native_module=native)
+    app = App(platform_backend=NullPlatformBackend(), renderer=renderer)
+    window = Window(title="Missing GPU image", width=800, height=500)
+    window.set_scene(_image_scene())
+    app.add_window(window)
+
+    with pytest.raises(RuntimeError, match="unregistered resource"):
+        app.start()
+
+    app.stop()
