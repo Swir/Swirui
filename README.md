@@ -13,7 +13,7 @@
 ![Windows Native](https://img.shields.io/badge/Windows-Win32%20native-0078D4?logo=windows11&logoColor=white)
 ![GPU](https://img.shields.io/badge/GPU-wgpu%2030-6E56CF)
 ![Status](https://img.shields.io/badge/status-pre--alpha-7C3AED)
-![Progress](https://img.shields.io/badge/project%20progress-11%25-00BFFF)
+![Progress](https://img.shields.io/badge/project%20progress-13%25-00BFFF)
 
 </div>
 
@@ -21,9 +21,9 @@
 
 ## Project progress
 
-**11% — 0.2 Alpha: Native Window + First Renderer in progress**
+**13% — 0.2 Alpha: Native Window + First Renderer in progress**
 
-`[██░░░░░░░░░░░░░░░░░░] 11%`
+`[███░░░░░░░░░░░░░░░░░] 13%`
 
 **Completed:** `0.1 Alpha — Foundation` ✅  
 **Current milestone:** `0.2 Alpha — Native Window + First Renderer` 🚧
@@ -57,6 +57,7 @@ SwirUI is currently **pre-alpha**. APIs may change while the native renderer and
 - real Win32 window creation without Tkinter, Qt or SDL
 - native Windows event pump
 - normalized close, resize, focus, mouse, keyboard and text-input events
+- Win32 display enumeration, per-window effective scale reporting and normalized `WM_DPICHANGED` events
 - x64-safe Win32 handle bindings
 - visible SceneGraph bring-up renderer for Windows
 - **Rust 2024 native core with wgpu 30 + PyO3**
@@ -77,14 +78,19 @@ SwirUI is currently **pre-alpha**. APIs may change while the native renderer and
 - linear texture sampling, alpha blending and per-image opacity
 - registered image resources survive repeated frames and surface resize inside the persistent GPU context
 - rounded rectangles, images and shaped text rendered in the same native GPU scene pass
+- **hierarchical `clip_to_bounds` clipping with cumulative ancestor opacity**
+- clip-aware rectangles, glyphon text bounds and image UV cropping in the native GPU scene
+- clip-aware SceneGraph hit testing and fully clipped subtree pruning
 - automatic renderer selection: wgpu first on Windows, temporary GDI preview fallback when the native core is unavailable
 - z-aware SceneGraph hit testing with painter-order handling
 - SceneNode-to-Component mapping by stable key
 - routed pointer input through **capture → target → bubble** phases
 - pointer target/path enrichment plus `pointer_enter` / `pointer_leave` transitions
+- **focusable component contract with pointer-down focus handoff and deterministic focus traversal**
+- **routed keyboard and text-input events through the focused component path**
 - propagation cancellation with `Event.stop_propagation()`
 - ABI3 native wheel build for Python 3.11+
-- Windows native + persistent rounded-GPU + shaped-text + image smoke tests on Python 3.14
+- Windows native + persistent rounded-GPU + shaped-text + image + clipping smoke tests on Python 3.14
 - Ruff, Mypy, coverage and Python 3.11–3.14 CI
 
 ## Native and GPU demos
@@ -164,11 +170,12 @@ SwirUI Runtime
         │     └── Win32 backend ✅
         ├── Render Tree ✅
         ├── Scene Graph ✅
-        ├── z-aware Scene hit testing ✅
+        ├── z-aware + clip-aware Scene hit testing ✅
         ├── SceneNode → Component mapping ✅
         ├── Render Surface lifecycle ✅
         ├── Frame Scheduler ✅
-        └── capture / target / bubble input routing ✅
+        ├── pointer capture / target / bubble routing ✅
+        └── focused keyboard / text-input routing ✅
         │
 Renderer Layer
         │
@@ -179,7 +186,7 @@ Renderer Layer
         ├── anti-aliased per-corner rounded rectangles ✅
         ├── shaped text + persistent glyph atlas ✅
         ├── persistent RGBA image textures ✅
-        ├── clipping / compositing ← NEXT
+        ├── hierarchical clipping / opacity compositing ✅
         └── effects / shaders
         │
 Native Core
@@ -220,14 +227,14 @@ SwirUI Framework
 
 ## Current 0.2 Alpha focus
 
-The native Windows foundation, persistent wgpu renderer, rounded GPU primitives, shaped GPU text, persistent GPU images and routed component pointer input are verified. The next renderer/runtime work is:
+The native Windows foundation, persistent wgpu renderer, rounded GPU primitives, shaped GPU text, persistent GPU images, hierarchical clipping/compositing and routed pointer/keyboard input are verified. The next renderer/runtime work is:
 
-1. clipping and compositing
-2. robust DPI / HiDPI and multi-monitor handling
-3. display-aware high-refresh presentation
-4. present-mode selection and frame pacing
-5. reusable dynamic GPU buffers and broader resource caching
-6. keyboard focus routing and accessibility groundwork
+1. robust DPI / HiDPI and multi-monitor handling
+2. display-aware high-refresh presentation
+3. present-mode selection and frame pacing
+4. reusable dynamic GPU buffers and broader resource caching
+5. general shape / path rendering
+6. deeper focus management and accessibility semantics
 
 See **[ROADMAP.md](ROADMAP.md)** for the full development plan.
 
@@ -250,6 +257,8 @@ Windows wgpu clear/present smoke test
 Windows persistent rounded-rectangle GPU draw smoke test
 Windows shaped-text SceneGraph → Python → Rust/wgpu smoke test
 Windows image-resource SceneGraph → Python → Rust/wgpu smoke test
+Windows clipped mixed-scene GPU smoke test
+Routed keyboard focus / text-input tests
 ```
 
 SwirUI will not claim to outperform another framework without reproducible measurements. Planned benchmarks include startup time, RAM, CPU/GPU usage, frame time, input latency, component creation, large lists and animation performance.

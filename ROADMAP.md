@@ -4,9 +4,9 @@
 
 ## Project progress
 
-**Overall completion: 11%**
+**Overall completion: 13%**
 
-`[██░░░░░░░░░░░░░░░░░░] 11%`
+`[███░░░░░░░░░░░░░░░░░] 13%`
 
 Progress is based on implemented and verified roadmap work. Ideas, mockups and unfinished prototypes do not increase the percentage.
 
@@ -84,7 +84,7 @@ Progress is based on implemented and verified roadmap work. Ideas, mockups and u
 - [ ] General shape / path rendering
 - [x] Text rendering
 - [x] Image rendering
-- [ ] Clipping and compositing
+- [x] Clipping and compositing
 - [ ] Robust DPI / HiDPI handling
 - [ ] Multi-monitor support
 - [ ] Display-aware 60 / 120 / 144+ Hz presentation
@@ -271,7 +271,7 @@ Progress is based on implemented and verified roadmap work. Ideas, mockups and u
 - [x] Scene-level pointer hit testing and hover transitions
 - [x] Capture / target / bubble pointer routing
 - [x] Event propagation cancellation
-- [ ] Keyboard focus routing
+- [x] Keyboard focus routing
 - [ ] Touch / gestures
 - [ ] Pen / pressure
 - [ ] Gamepad navigation

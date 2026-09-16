@@ -28,6 +28,12 @@ The project uses semantic versioning where practical during pre-alpha developmen
 - Rectangle intersection geometry used by retained-scene clipping and renderer culling.
 - Windows mixed-scene GPU smoke coverage for clipped rounded rectangles, shaped text and images across repeated frames and resize.
 - Win32 display enumeration, per-window scale reporting and normalized `WM_DPICHANGED` events as groundwork for full DPI/HiDPI and multi-monitor support.
+- Focusable component contract with per-window logical keyboard focus.
+- Capture → target → bubble routing for focused `key_down`, `key_up` and `text_input` events with propagation cancellation.
+- Deterministic forward/reverse focus traversal across enabled, visible, focusable components.
+- Pointer-down focus handoff from a hit-tested SceneNode to the matching focusable Component.
+- Focus lifecycle events (`focus_gained`, `focus_lost`, `component_focus_changed`) and automatic focus clearing when the root is replaced or the window closes.
+- Automated focus-routing coverage for Unicode text input, propagation cancellation, traversal, pointer focus handoff and invalid focus targets.
 
 ### Changed
 - The wgpu renderer now reports submitted rectangle, text and image counts independently.
