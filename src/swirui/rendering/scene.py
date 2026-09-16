@@ -16,6 +16,36 @@ class SceneNodeKind(StrEnum):
     IMAGE = "image"
 
 
+@dataclass(frozen=True, slots=True)
+class ImageResource:
+    """Immutable RGBA8 image payload referenced by scene image nodes.
+
+    ``revision`` is increased by :meth:`Scene.register_image_rgba8` whenever a
+    resource ID is replaced. Renderer backends can use it to avoid transferring
+    unchanged pixel data every frame.
+    """
+
+    resource_id: str
+    width: int
+    height: int
+    rgba: bytes
+    revision: int = 1
+
+    def __post_init__(self) -> None:
+        if not self.resource_id:
+            raise ValueError("Image resources require a non-empty resource_id.")
+        if self.width <= 0 or self.height <= 0:
+            raise ValueError("Image resource dimensions must be positive.")
+        expected = self.width * self.height * 4
+        if len(self.rgba) != expected:
+            raise ValueError(
+                f"RGBA8 image data requires exactly {expected} bytes for "
+                f"{self.width}x{self.height} pixels."
+            )
+        if self.revision <= 0:
+            raise ValueError("Image resource revision must be positive.")
+
+
 @dataclass(slots=True)
 class SceneNode:
     """A render-backend friendly node in the prepared scene graph."""
@@ -43,7 +73,7 @@ class SceneNode:
                 raise ValueError("Text scene nodes require a positive font_size.")
             if not self.font_family:
                 raise ValueError("Text scene nodes require a font_family.")
-        if self.kind is SceneNodeKind.IMAGE and self.resource_id is None:
+        if self.kind is SceneNodeKind.IMAGE and not self.resource_id:
             raise ValueError("Image scene nodes require a resource_id.")
 
     def add(self, *children: SceneNode) -> SceneNode:
@@ -105,13 +135,43 @@ class Scene:
     height: float
     root: SceneNode
     generation: int = 0
+    resources: dict[str, ImageResource] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if self.width < 0 or self.height < 0:
             raise ValueError("Scene dimensions cannot be negative.")
+        if any(key != resource.resource_id for key, resource in self.resources.items()):
+            raise ValueError("Scene image-resource keys must match their resource_id values.")
 
     def touch(self) -> None:
         self.generation += 1
+
+    def register_image_rgba8(
+        self,
+        resource_id: str,
+        width: int,
+        height: int,
+        rgba: bytes | bytearray | memoryview,
+    ) -> ImageResource:
+        """Register or replace one tightly packed RGBA8 image resource."""
+
+        previous = self.resources.get(resource_id)
+        revision = 1 if previous is None else previous.revision + 1
+        resource = ImageResource(resource_id, width, height, bytes(rgba), revision)
+        self.resources[resource_id] = resource
+        self.touch()
+        return resource
+
+    def remove_image_resource(self, resource_id: str) -> ImageResource | None:
+        """Remove an image resource and invalidate the scene when it existed."""
+
+        resource = self.resources.pop(resource_id, None)
+        if resource is not None:
+            self.touch()
+        return resource
+
+    def image_resource(self, resource_id: str) -> ImageResource | None:
+        return self.resources.get(resource_id)
 
     def walk(self) -> Iterator[SceneNode]:
         yield from self.root.walk()
