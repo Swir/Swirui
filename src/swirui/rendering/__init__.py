@@ -6,6 +6,7 @@ from .scene import Scene, SceneNode, SceneNodeKind
 from .scheduler import FrameScheduler, FrameStats
 from .surface import RenderSurface
 from .tree import RenderNode, RenderTree
+from .windows_gdi import Win32PreviewRenderer
 
 __all__ = [
     "Color",
@@ -23,4 +24,5 @@ __all__ = [
     "SceneNode",
     "SceneNodeKind",
     "Size",
+    "Win32PreviewRenderer",
 ]
