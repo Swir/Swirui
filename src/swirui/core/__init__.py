@@ -2,7 +2,7 @@
 
 from .component import Component
 from .config import AppConfig, VisualQuality
-from .events import Event, EventEmitter
+from .events import Event, EventEmitter, EventPhase
 from .logging import configure_logging, get_logger
 from .state import State
 
@@ -11,6 +11,7 @@ __all__ = [
     "Component",
     "Event",
     "EventEmitter",
+    "EventPhase",
     "State",
     "VisualQuality",
     "configure_logging",
