@@ -6,7 +6,16 @@ import pytest
 from swirui import App, Window
 from swirui.platforms import NativeWindowSpec
 from swirui.platforms.windows import Win32PlatformBackend
-from swirui.rendering import Color, Path2D, Point, Rect, Scene, SceneNode, SceneNodeKind, WgpuRenderer
+from swirui.rendering import (
+    Color,
+    Path2D,
+    Point,
+    Rect,
+    Scene,
+    SceneNode,
+    SceneNodeKind,
+    WgpuRenderer,
+)
 
 
 def _shape_vertices() -> list[tuple[float, ...]]:
