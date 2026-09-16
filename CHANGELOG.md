@@ -21,9 +21,14 @@ The project uses semantic versioning where practical during pre-alpha developmen
 - Native image sampling with reusable linear sampler, alpha blending and per-node opacity.
 - Windows GPU image smoke coverage including resource upload, repeated mixed rectangle/text/image frames, resize and resource removal.
 - `examples/gpu_image_demo.py` with a dependency-free procedural image uploaded once and reused by the persistent GPU context.
+- Content-addressed GPU image caching that deduplicates byte-identical RGBA payloads across logical resource ids while preserving reference-safe lifetime, alias rebinding and transactional multi-context rollback.
+- GPU image-cache telemetry for logical resources, unique native resources, aliases, retained bytes, cache hits and actual native uploads.
+- Backend-neutral `Path2D` filled-polygon geometry with deterministic convex/concave ear-clipping tessellation and geometry-accurate hit testing.
+- `SceneNodeKind.PATH` submission through Python into a persistent clipped/alpha-blended Rust/wgpu triangle pipeline with reusable GPU buffers.
+- `examples/gpu_paths_demo.py` plus real Windows Path2D smoke coverage across persistent frames and resize.
 - Hierarchical `SceneNode.clip_to_bounds` clipping with retained cumulative clip propagation through nested scene groups.
-- Clip-aware GPU paths for all current primitive kinds: per-instance rectangle shader clipping, glyphon `TextBounds` clipping and image-quad cropping with UV remapping.
-- Cumulative ancestor opacity propagation for rectangles, shaped text and images, with fully transparent subtree pruning before GPU resource preparation.
+- Clip-aware GPU paths for all current primitive kinds: rectangle shader clipping, filled-path clipping, glyphon `TextBounds` clipping and image-quad cropping with UV remapping.
+- Cumulative ancestor opacity propagation for rectangles, paths, shaped text and images, with fully transparent subtree pruning before GPU resource preparation.
 - Clip-aware SceneGraph hit testing so descendants outside a clipping ancestor cannot receive pointer hits.
 - Rectangle intersection geometry used by retained-scene clipping and renderer culling.
 - Windows mixed-scene GPU smoke coverage for clipped rounded rectangles, shaped text and images across repeated frames and resize.
@@ -45,13 +50,14 @@ The project uses semantic versioning where practical during pre-alpha developmen
 - Cross-window `App.seconds_until_next_frame()` deadline reporting and frame events that expose the active target FPS and frame interval.
 - Automated high-refresh pacing coverage for runtime 60 → 120/144 Hz retargeting and sub-poll-interval frame deadlines.
 - End-to-end logical-DIP window geometry with explicit logical ↔ physical conversion helpers and physical-pixel renderer surfaces.
-- Per-monitor DPI scaling for GPU rectangles, per-corner radii, shaped text, images and clip rectangles before Python → Rust/wgpu submission.
+- Per-monitor DPI scaling for GPU rectangles, paths, per-corner radii, shaped text, images and clip rectangles before Python → Rust/wgpu submission.
 - Native physical pointer and resize input normalization back into logical DIPs before SceneGraph hit testing and routed component input.
 - Deterministic 150% → 200% scale-transition coverage plus a real Win32/wgpu mixed-DPI smoke test that verifies rectangles, Unicode text, images, input coordinates and persistent surface reconfiguration.
 
 ### Changed
-- The wgpu renderer now reports submitted rectangle, text and image counts independently.
+- The wgpu renderer now reports submitted rectangle, path, text and image counts independently.
 - Registered image resources are uploaded automatically into newly created native window contexts and can be replaced or removed at runtime.
+- Byte-identical image resources registered under different logical ids now share one native GPU texture allocation.
 - Text scene nodes use white as the renderer default when no explicit fill color is supplied, matching the temporary GDI preview behavior.
 - Installed native cores that lack shaped-text or image-resource support now fail explicitly instead of silently dropping scene nodes.
 - Rounded-rectangle instances now carry clip bounds through Python → Rust → WGSL while the legacy 12-float direct native rectangle interface remains accepted for compatibility.
