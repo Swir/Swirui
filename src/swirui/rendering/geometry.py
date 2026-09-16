@@ -177,7 +177,8 @@ class Path2D:
 
             if not ear_found:
                 raise ValueError(
-                    "Path2D could not be tessellated; the polygon may self-intersect or be degenerate."
+                    "Path2D could not be tessellated; the polygon may self-intersect "
+                    "or be degenerate."
                 )
 
         a, b, c = (points[index] for index in indices)
