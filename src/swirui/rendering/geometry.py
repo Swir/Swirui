@@ -245,12 +245,8 @@ def _has_self_intersection(points: tuple[Point, ...]) -> bool:
         first_next = (first_index + 1) % count
         for second_index in range(first_index + 1, count):
             second_next = (second_index + 1) % count
-            if (
-                first_index == second_index
-                or first_index == second_next
-                or first_next == second_index
-                or first_next == second_next
-            ):
+            second_edge = (second_index, second_next)
+            if first_index in second_edge or first_next in second_edge:
                 continue
             if _segments_intersect(
                 points[first_index],
