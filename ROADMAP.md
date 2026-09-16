@@ -4,9 +4,9 @@
 
 ## Project progress
 
-**Overall completion: 16%**
+**Overall completion: 17%**
 
-`[███░░░░░░░░░░░░░░░░░] 16%`
+`[███░░░░░░░░░░░░░░░░░] 17%`
 
 Progress is based on implemented and verified roadmap work. Ideas, mockups and unfinished prototypes do not increase the percentage.
 
@@ -86,7 +86,7 @@ Progress is based on implemented and verified roadmap work. Ideas, mockups and u
 - [x] Text rendering
 - [x] Image rendering
 - [x] Clipping and compositing
-- [ ] Robust DPI / HiDPI handling
+- [x] Robust DPI / HiDPI handling
 - [x] Multi-monitor support
 - [x] Display-aware 60 / 120 / 144+ Hz presentation
 - [x] VSync / present-mode selection
@@ -373,6 +373,7 @@ AI output must remain ordinary, editable SwirUI code.
 - [x] Windows per-corner rounded-rectangle shader smoke test
 - [x] Windows shaped-text SceneGraph → Python → Rust/wgpu smoke test
 - [x] Windows image-resource SceneGraph → Python → Rust/wgpu smoke test
+- [x] Windows mixed-DPI logical-DIP → physical-GPU smoke test
 - [x] Windows presentation-policy reconfiguration smoke test
 - [x] Display-aware high-refresh runtime pacing tests
 - [x] Rust native-core check and unit tests
