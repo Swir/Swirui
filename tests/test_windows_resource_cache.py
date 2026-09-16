@@ -13,12 +13,13 @@ from swirui.rendering import Rect, Scene, SceneNode, SceneNodeKind, WgpuRenderer
     sys.platform != "win32",
     reason="Win32 GPU resource cache smoke requires Windows",
 )
-def test_real_wgpu_image_cache_skips_identical_texture_reupload() -> None:
+def test_real_wgpu_image_cache_shares_texture_across_logical_ids() -> None:
     backend = Win32PlatformBackend()
     renderer = WgpuRenderer()
     first = bytes((20, 150, 255, 255))
     changed = bytes((255, 100, 40, 255))
     renderer.register_image_rgba("cached-pixel", 1, 1, first)
+    renderer.register_image_rgba("cached-pixel-copy", 1, 1, first)
 
     root = SceneNode("root", SceneNodeKind.GROUP, Rect(0, 0, 360, 240))
     root.add(
@@ -26,7 +27,7 @@ def test_real_wgpu_image_cache_skips_identical_texture_reupload() -> None:
             "image",
             SceneNodeKind.IMAGE,
             Rect(80, 50, 180, 120),
-            resource_id="cached-pixel",
+            resource_id="cached-pixel-copy",
         )
     )
     window = Window(title="SwirUI GPU Resource Cache Smoke", width=360, height=240)
@@ -39,27 +40,42 @@ def test_real_wgpu_image_cache_skips_identical_texture_reupload() -> None:
         assert window.native_handle is not None
         context = renderer._contexts[window.native_handle.value]
         assert renderer.last_image_count == 1
-        assert renderer.image_resource_count == 1
+        assert renderer.image_resource_count == 2
+        assert renderer.image_gpu_resource_count == 1
+        assert renderer.image_alias_count == 1
         assert renderer.image_resource_bytes == 4
         assert renderer.image_native_uploads == 1
-        assert renderer.image_cache_hits == 0
+        assert renderer.image_cache_hits == 1
         assert context.image_resource_count == 1
         assert context.image_resource_size("cached-pixel") == (1, 1)
 
-        renderer.register_image_rgba("cached-pixel", 1, 1, first)
-        assert renderer.image_cache_hits == 1
+        renderer.register_image_rgba("cached-pixel-copy", 1, 1, first)
+        assert renderer.image_cache_hits == 2
         assert renderer.image_native_uploads == 1
         assert context.image_resource_count == 1
 
-        renderer.register_image_rgba("cached-pixel", 1, 1, changed)
-        assert renderer.image_cache_hits == 1
+        renderer.register_image_rgba("cached-pixel-copy", 1, 1, changed)
+        assert renderer.image_cache_hits == 2
         assert renderer.image_native_uploads == 2
-        assert context.image_resource_count == 1
+        assert renderer.image_resource_count == 2
+        assert renderer.image_gpu_resource_count == 2
+        assert renderer.image_alias_count == 0
+        assert renderer.image_resource_bytes == 8
+        assert context.image_resource_count == 2
         assert context.image_resource_size("cached-pixel") == (1, 1)
+        assert context.image_resource_size("cached-pixel-copy") == (1, 1)
 
         renderer.render(window, None)
         assert renderer.last_image_count == 1
         assert renderer.adapter_name
         assert renderer.graphics_backend
+
+        assert renderer.unregister_image("cached-pixel") is True
+        assert context.image_resource_count == 1
+        assert renderer.image_gpu_resource_count == 1
+        assert renderer.unregister_image("cached-pixel-copy") is True
+        assert context.image_resource_count == 0
+        assert renderer.image_resource_count == 0
+        assert renderer.image_gpu_resource_count == 0
     finally:
         app.stop()
