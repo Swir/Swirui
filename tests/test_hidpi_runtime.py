@@ -9,7 +9,15 @@ from swirui.platforms import (
     PlatformEvent,
     PlatformEventKind,
 )
-from swirui.rendering import Color, Rect, Scene, SceneNode, SceneNodeKind, WgpuRenderer
+from swirui.rendering import (
+    Color,
+    CornerRadius,
+    Rect,
+    Scene,
+    SceneNode,
+    SceneNodeKind,
+    WgpuRenderer,
+)
 
 
 class ScaledNullBackend(NullPlatformBackend):
@@ -114,7 +122,7 @@ def _scene() -> Scene:
             kind=SceneNodeKind.RECTANGLE,
             bounds=Rect(80, 40, 200, 100),
             fill=Color.from_hex("#008CFF"),
-            corner_radius=12,
+            corner_radius=CornerRadius.uniform(12),
         ),
         SceneNode(
             key="label",
