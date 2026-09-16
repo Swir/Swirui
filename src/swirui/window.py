@@ -166,7 +166,11 @@ class Window(EventEmitter):
         component_path = self._component_path_for_scene_target(scene_target)
         component_target = component_path[-1] if component_path else None
 
-        if event.kind is PlatformEventKind.POINTER_MOVE and scene_target is not self.hovered_scene_node:
+        pointer_target_changed = (
+            event.kind is PlatformEventKind.POINTER_MOVE
+            and scene_target is not self.hovered_scene_node
+        )
+        if pointer_target_changed:
             previous_scene_target = self.hovered_scene_node
             previous_component_path = self._component_path_for_scene_target(previous_scene_target)
             previous_component_target = (
