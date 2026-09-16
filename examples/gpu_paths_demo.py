@@ -4,7 +4,16 @@ Build and install the native module from ``native/`` before running this example
 """
 
 from swirui import App, AppConfig, Window
-from swirui.rendering import Color, Path2D, Point, Rect, Scene, SceneNode, SceneNodeKind, WgpuRenderer
+from swirui.rendering import (
+    Color,
+    Path2D,
+    Point,
+    Rect,
+    Scene,
+    SceneNode,
+    SceneNodeKind,
+    WgpuRenderer,
+)
 
 WIDTH = 1120
 HEIGHT = 700
@@ -28,7 +37,10 @@ root.add(
         "subtitle",
         SceneNodeKind.TEXT,
         Rect(70, 120, 960, 44),
-        text="Concave polygon tessellation → Python bridge → persistent Rust/wgpu triangle pipeline",
+        text=(
+            "Concave polygon tessellation → Python bridge → persistent "
+            "Rust/wgpu triangle pipeline"
+        ),
         fill=Color.from_hex("#58C7FF"),
         font_size=19,
     ),
