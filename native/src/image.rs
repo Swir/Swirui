@@ -28,6 +28,9 @@ pub(crate) struct ImageSystem {
     images: HashMap<String, GpuImage>,
 }
 
+#[cfg(not(target_os = "windows"))]
+pub(crate) struct ImageSystem;
+
 #[cfg(target_os = "windows")]
 impl ImageSystem {
     pub(crate) fn new(device: &wgpu::Device, format: wgpu::TextureFormat) -> Self {
