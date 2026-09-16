@@ -4,9 +4,9 @@
 
 ## Project progress
 
-**Overall completion: 17%**
+**Overall completion: 19%**
 
-`[███░░░░░░░░░░░░░░░░░] 17%`
+`[████░░░░░░░░░░░░░░░░] 19%`
 
 Progress is based on implemented and verified roadmap work. Ideas, mockups and unfinished prototypes do not increase the percentage.
 
@@ -82,7 +82,7 @@ Progress is based on implemented and verified roadmap work. Ideas, mockups and u
 - [x] Anti-aliased GPU rounded rectangles using `CornerRadius`
 - [x] Per-corner radii carried through Python → Rust → WGSL
 - [x] SDF/fwidth rounded-edge antialiasing
-- [ ] General shape / path rendering
+- [x] General shape / path rendering
 - [x] Text rendering
 - [x] Image rendering
 - [x] Clipping and compositing
@@ -373,6 +373,7 @@ AI output must remain ordinary, editable SwirUI code.
 - [x] Windows per-corner rounded-rectangle shader smoke test
 - [x] Windows shaped-text SceneGraph → Python → Rust/wgpu smoke test
 - [x] Windows image-resource SceneGraph → Python → Rust/wgpu smoke test
+- [x] Windows filled Path2D SceneGraph → Python → Rust/wgpu smoke test
 - [x] Windows mixed-DPI logical-DIP → physical-GPU smoke test
 - [x] Windows presentation-policy reconfiguration smoke test
 - [x] Display-aware high-refresh runtime pacing tests
@@ -435,9 +436,10 @@ Current native foundation:
 - [x] context reuse across multiple frames and resize
 - [x] native per-corner rounded-rectangle pipeline
 - [x] native renderer split into dedicated Rust module
-- [ ] GPU resource cache
+- [x] GPU resource cache
 - [x] native text pipeline
 - [x] native image pipeline
+- [x] native filled-path pipeline
 
 Primary future candidates:
 
