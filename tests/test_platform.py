@@ -1,5 +1,8 @@
+import pytest
+
 from swirui import App, Window
 from swirui.platforms import (
+    DisplayInfo,
     NativeWindowSpec,
     NullPlatformBackend,
     PlatformEvent,
@@ -8,11 +11,41 @@ from swirui.platforms import (
 )
 
 
+def test_display_info_exposes_virtual_and_work_area_geometry() -> None:
+    display = DisplayInfo(
+        "Secondary",
+        2560,
+        1440,
+        scale=1.5,
+        x=-2560,
+        y=120,
+        work_x=-2560,
+        work_y=120,
+        work_width=2560,
+        work_height=1380,
+    )
+
+    assert display.x == -2560
+    assert display.y == 120
+    assert display.effective_work_width == 2560
+    assert display.effective_work_height == 1380
+
+    fallback_work_area = DisplayInfo("Primary", 1920, 1080)
+    assert fallback_work_area.effective_work_width == 1920
+    assert fallback_work_area.effective_work_height == 1080
+
+    with pytest.raises(ValueError, match="Display dimensions"):
+        DisplayInfo("Invalid", 0, 1080)
+    with pytest.raises(ValueError, match="Display scale"):
+        DisplayInfo("Invalid", 1920, 1080, scale=0.0)
+
+
 def test_headless_native_window_contract() -> None:
     backend = NullPlatformBackend()
     backend.initialize()
 
     handle = backend.create_window(NativeWindowSpec("Demo", 800, 600))
+    assert backend.window_scale(handle) == 1.0
     backend.show_window(handle)
     backend.set_window_title(handle, "Updated")
     backend.resize_window(handle, 1024, 768)
