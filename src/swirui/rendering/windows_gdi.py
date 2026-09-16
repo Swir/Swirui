@@ -226,7 +226,11 @@ class Win32PreviewRenderer:
         self._user32.ReleaseDC.restype = ctypes.c_int
         self._user32.GetClientRect.argtypes = [ctypes.c_void_p, ctypes.POINTER(_WinRect)]
         self._user32.GetClientRect.restype = ctypes.c_bool
-        self._user32.FillRect.argtypes = [ctypes.c_void_p, ctypes.POINTER(_WinRect), ctypes.c_void_p]
+        self._user32.FillRect.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(_WinRect),
+            ctypes.c_void_p,
+        ]
         self._user32.FillRect.restype = ctypes.c_int
 
         self._gdi32.CreateSolidBrush.argtypes = [ctypes.c_uint32]
