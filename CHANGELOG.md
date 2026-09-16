@@ -12,6 +12,9 @@ The project uses semantic versioning where practical during pre-alpha developmen
 - Python 3.11–3.14 development target.
 - Foundation for application, window, component, event and reactive state systems.
 - Initial automated test and CI direction.
+- Backend-neutral `PathGeometry` and `Triangle` primitives for vector-path authoring in logical DIPs.
+- Deterministic ear-clipping tessellation for validated simple convex and concave polygons with winding normalization and area-preserving tests.
+- Exact point-in-polygon hit testing for filled SceneGraph path nodes, including concave geometry and boundary hits.
 - Persistent native shaped-text subsystem using glyphon/cosmic-text inside the Rust/wgpu renderer.
 - SceneGraph text submission through the Python `WgpuRenderer` bridge into the persistent native GPU context.
 - Windows GPU text smoke coverage including Unicode shaping, repeated frames and resize.
@@ -50,6 +53,7 @@ The project uses semantic versioning where practical during pre-alpha developmen
 - Deterministic 150% → 200% scale-transition coverage plus a real Win32/wgpu mixed-DPI smoke test that verifies rectangles, Unicode text, images, input coordinates and persistent surface reconfiguration.
 
 ### Changed
+- SceneGraph path nodes now validate closed filled geometry before renderer submission and use polygon-accurate pointer targeting instead of rectangular-bounds-only hits.
 - The wgpu renderer now reports submitted rectangle, text and image counts independently.
 - Registered image resources are uploaded automatically into newly created native window contexts and can be replaced or removed at runtime.
 - Text scene nodes use white as the renderer default when no explicit fill color is supplied, matching the temporary GDI preview behavior.
