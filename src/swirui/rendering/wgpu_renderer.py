@@ -10,6 +10,7 @@ from swirui.core import Component
 from swirui.window import Window
 
 from .geometry import Color
+from .resources import ImageResource
 from .scene import SceneNodeKind
 from .surface import RenderSurface
 
@@ -40,6 +41,7 @@ TextInstance = tuple[
     float,
     str,
 ]
+ImageInstance = tuple[str, float, float, float, float, float]
 
 _DEFAULT_TEXT_COLOR = Color(1.0, 1.0, 1.0, 1.0)
 
@@ -48,9 +50,9 @@ class WgpuRenderer:
     """Submit prepared SwirUI scenes to the native Rust/wgpu renderer.
 
     Native builds retain one persistent GPU context per window so the expensive
-    instance/device/pipeline setup is not repeated for every frame. The stateless
-    function path remains as a compatibility fallback for test doubles and older
-    development native modules.
+    instance/device/pipeline setup is not repeated for every frame. Image pixels
+    are uploaded once per resource registration and then reused from the native
+    GPU cache until replaced or explicitly removed.
     """
 
     name = "wgpu"
@@ -66,15 +68,62 @@ class WgpuRenderer:
         self.frames_rendered = 0
         self.last_rectangle_count = 0
         self.last_text_count = 0
+        self.last_image_count = 0
         self.adapter_name: str | None = None
         self.graphics_backend: str | None = None
         self.surfaces: dict[int, RenderSurface] = {}
         self._contexts: dict[int, Any] = {}
+        self._images: dict[str, ImageResource] = {}
         self._native: Any | None = native_module
 
     @property
     def persistent_context_count(self) -> int:
         return len(self._contexts)
+
+    @property
+    def image_resource_count(self) -> int:
+        return len(self._images)
+
+    def register_image(self, resource: ImageResource) -> None:
+        """Register or replace an immutable RGBA8 image resource.
+
+        Existing native contexts receive the upload immediately. Contexts created
+        later replay the Python registry, so multi-window rendering shares one
+        stable public resource id without requiring application-side reuploads.
+        """
+
+        self._images[resource.resource_id] = resource
+        for context in self._contexts.values():
+            register = getattr(context, "register_image_rgba8", None)
+            if register is None:
+                raise RuntimeError(
+                    "Installed SwirUI native GPU core does not support image resources."
+                )
+            register(resource.resource_id, resource.width, resource.height, resource.rgba8)
+
+    def register_image_rgba8(
+        self,
+        resource_id: str,
+        width: int,
+        height: int,
+        rgba8: bytes,
+    ) -> ImageResource:
+        """Create and register a tightly packed RGBA8 image resource."""
+
+        resource = ImageResource(resource_id, width, height, rgba8)
+        self.register_image(resource)
+        return resource
+
+    def unregister_image(self, resource_id: str) -> bool:
+        """Remove an image from Python and all currently alive native contexts."""
+
+        removed = self._images.pop(resource_id, None) is not None
+        native_removed = False
+        for context in self._contexts.values():
+            unregister = getattr(context, "unregister_image", None)
+            if unregister is not None:
+                native_removed = bool(unregister(resource_id)) or native_removed
+        return removed or native_removed
 
     def initialize(self) -> None:
         if self.initialized:
@@ -104,6 +153,7 @@ class WgpuRenderer:
         if context_factory is not None:
             context = context_factory(handle, window.width, window.height)
             self._contexts[handle] = context
+            self._upload_registered_images(context)
             self._capture_adapter_info(context)
         return surface
 
@@ -136,11 +186,30 @@ class WgpuRenderer:
 
         rectangles = self._rectangle_instances(window)
         texts = self._text_instances(window)
+        images = self._image_instances(window)
         background = self.background
         context = self._contexts.get(window.native_handle.value)
         if context is not None:
-            draw_scene = getattr(context, "draw_scene", None)
-            if rectangles or texts:
+            if images:
+                draw_scene_images = getattr(context, "draw_scene_images", None)
+                if draw_scene_images is None:
+                    raise RuntimeError(
+                        "Installed SwirUI native GPU core does not support image rendering."
+                    )
+                rectangle_count, text_count, image_count = draw_scene_images(
+                    rectangles,
+                    texts,
+                    images,
+                    background.r,
+                    background.g,
+                    background.b,
+                    background.a,
+                )
+                self.last_rectangle_count = int(rectangle_count)
+                self.last_text_count = int(text_count)
+                self.last_image_count = int(image_count)
+            elif rectangles or texts:
+                draw_scene = getattr(context, "draw_scene", None)
                 if draw_scene is not None:
                     rectangle_count, text_count = draw_scene(
                         rectangles,
@@ -167,13 +236,20 @@ class WgpuRenderer:
                         )
                     )
                     self.last_text_count = 0
+                self.last_image_count = 0
             else:
                 context.clear(background.r, background.g, background.b, background.a)
                 self.last_rectangle_count = 0
                 self.last_text_count = 0
+                self.last_image_count = 0
             self._capture_adapter_info(context)
         else:
+            if images:
+                raise RuntimeError(
+                    "Image rendering requires the persistent native Win32 GPU context."
+                )
             self._render_stateless(window, rectangles, texts)
+            self.last_image_count = 0
 
         self.frames_rendered += 1
 
@@ -244,6 +320,17 @@ class WgpuRenderer:
         self.adapter_name = str(adapter_name)
         self.graphics_backend = str(graphics_backend)
 
+    def _upload_registered_images(self, context: Any) -> None:
+        if not self._images:
+            return
+        register = getattr(context, "register_image_rgba8", None)
+        if register is None:
+            raise RuntimeError(
+                "Installed SwirUI native GPU core does not support image resources."
+            )
+        for resource in self._images.values():
+            register(resource.resource_id, resource.width, resource.height, resource.rgba8)
+
     def _capture_adapter_info(self, context: Any) -> None:
         self.adapter_name = str(context.adapter_name)
         self.graphics_backend = str(context.graphics_backend)
@@ -313,6 +400,37 @@ class WgpuRenderer:
                 )
             )
         return texts
+
+    def _image_instances(self, window: Window) -> list[ImageInstance]:
+        scene = window.scene
+        if scene is None:
+            return []
+
+        images: list[ImageInstance] = []
+        for node in scene.walk():
+            if node.kind is not SceneNodeKind.IMAGE:
+                continue
+            if node.opacity <= 0.0:
+                continue
+            if node.bounds.width <= 0.0 or node.bounds.height <= 0.0:
+                continue
+            resource_id = node.resource_id
+            if resource_id is None or resource_id not in self._images:
+                raise RuntimeError(
+                    f"Scene image node {node.key!r} references an unregistered resource "
+                    f"{resource_id!r}."
+                )
+            images.append(
+                (
+                    resource_id,
+                    node.bounds.x,
+                    node.bounds.y,
+                    node.bounds.width,
+                    node.bounds.height,
+                    node.opacity,
+                )
+            )
+        return images
 
     def _surface_for(self, window: Window) -> RenderSurface:
         self._require_initialized()
