@@ -13,7 +13,7 @@
 ![Windows Native](https://img.shields.io/badge/Windows-Win32%20native-0078D4?logo=windows11&logoColor=white)
 ![GPU](https://img.shields.io/badge/GPU-wgpu%2030-6E56CF)
 ![Status](https://img.shields.io/badge/status-pre--alpha-7C3AED)
-![Progress](https://img.shields.io/badge/project%20progress-10%25-00BFFF)
+![Progress](https://img.shields.io/badge/project%20progress-11%25-00BFFF)
 
 </div>
 
@@ -21,9 +21,9 @@
 
 ## Project progress
 
-**10% — 0.2 Alpha: Native Window + First Renderer in progress**
+**11% — 0.2 Alpha: Native Window + First Renderer in progress**
 
-`[██░░░░░░░░░░░░░░░░░░] 10%`
+`[██░░░░░░░░░░░░░░░░░░] 11%`
 
 **Completed:** `0.1 Alpha — Foundation` ✅  
 **Current milestone:** `0.2 Alpha — Native Window + First Renderer` 🚧
@@ -73,6 +73,12 @@ SwirUI is currently **pre-alpha**. APIs may change while the native renderer and
 - **SceneNodeKind.TEXT → Python WgpuRenderer → Rust/glyphon/wgpu submission**
 - Unicode shaping and text rendering verified on a real Win32 HWND
 - text and rounded rectangles rendered through the same persistent GPU scene context
+- **persistent native RGBA8 texture cache with filtered wgpu image sampling**
+- **`ImageResource` registration, replacement and removal through stable resource IDs**
+- **SceneNodeKind.IMAGE → Python WgpuRenderer → Rust/wgpu textured-quad submission**
+- registered image pixels uploaded once and reused by multiple image nodes and rendered frames
+- image resources replayed automatically into native contexts created after registration
+- rectangles, images and shaped text rendered through one persistent GPU scene pass
 - automatic renderer selection: wgpu first on Windows, temporary GDI preview fallback when the native core is unavailable
 - z-aware SceneGraph hit testing with painter-order handling
 - SceneNode-to-Component mapping by stable key
@@ -80,7 +86,7 @@ SwirUI is currently **pre-alpha**. APIs may change while the native renderer and
 - pointer target/path enrichment plus `pointer_enter` / `pointer_leave` transitions
 - propagation cancellation with `Event.stop_propagation()`
 - ABI3 native wheel build for Python 3.11+
-- Windows native + persistent rounded-GPU + shaped-text smoke tests on Python 3.14
+- Windows native + persistent rounded-GPU + shaped-text + image smoke tests on Python 3.14
 - Ruff, Mypy, coverage and Python 3.11–3.14 CI
 
 ## Native and GPU demos
@@ -110,9 +116,10 @@ maturin develop --release
 cd ..
 python examples/gpu_rectangles_demo.py
 python examples/gpu_text_demo.py
+python examples/gpu_images_demo.py
 ```
 
-The rectangle demo submits a prepared SwirUI `SceneGraph` into the Rust/wgpu backend. Filled rectangles are batched into one instanced draw call and per-corner radii are evaluated in the fragment shader with anti-aliased SDF edges. The text demo exercises the full `SceneGraph → Python → Rust → glyphon → wgpu` path with Unicode shaping, multiple font sizes and a persistent glyph atlas. The native renderer keeps its GPU context alive across frames and reconfigures the existing surface and text viewport on resize instead of recreating the GPU device and pipelines.
+The rectangle demo submits a prepared SwirUI `SceneGraph` into the Rust/wgpu backend. Filled rectangles are batched into one instanced draw call and per-corner radii are evaluated in the fragment shader with anti-aliased SDF edges. The text demo exercises the full `SceneGraph → Python → Rust → glyphon → wgpu` path with Unicode shaping, multiple font sizes and a persistent glyph atlas. The image demo generates RGBA8 pixels without an external decoder, uploads the resource once, then reuses it from multiple `IMAGE` nodes with independent geometry and opacity. The native renderer keeps its GPU context, text atlas and image resources alive across frames and reconfigures the existing surface/viewports on resize instead of recreating the GPU device and pipelines.
 
 ## Foundation API
 
@@ -173,8 +180,8 @@ Renderer Layer
         ├── instanced filled rectangles ✅
         ├── anti-aliased per-corner rounded rectangles ✅
         ├── shaped text + persistent glyph atlas ✅
-        ├── images ← NEXT
-        ├── clipping / compositing
+        ├── persistent RGBA8 images + texture cache ✅
+        ├── clipping / compositing ← NEXT
         └── effects / shaders
         │
 Native Core
@@ -215,15 +222,14 @@ SwirUI Framework
 
 ## Current 0.2 Alpha focus
 
-The native Windows foundation, persistent wgpu renderer, rounded GPU primitives, shaped GPU text and routed component pointer input are verified. The next renderer/runtime work is:
+The native Windows foundation, persistent wgpu renderer, rounded GPU primitives, shaped GPU text, persistent GPU images and routed component pointer input are verified. The next renderer/runtime work is:
 
-1. image rendering
-2. clipping and compositing
-3. robust DPI / HiDPI and multi-monitor handling
-4. display-aware high-refresh presentation
-5. present-mode selection and frame pacing
-6. reusable dynamic GPU buffers/resource caching
-7. keyboard focus routing and accessibility groundwork
+1. clipping and compositing
+2. robust DPI / HiDPI and multi-monitor handling
+3. display-aware high-refresh presentation
+4. present-mode selection and frame pacing
+5. reusable dynamic GPU buffers and broader resource caching
+6. keyboard focus routing and accessibility groundwork
 
 See **[ROADMAP.md](ROADMAP.md)** for the full development plan.
 
@@ -245,6 +251,7 @@ Windows native smoke test
 Windows wgpu clear/present smoke test
 Windows persistent rounded-rectangle GPU draw smoke test
 Windows shaped-text SceneGraph → Python → Rust/wgpu smoke test
+Windows persistent RGBA8 image upload/draw + SceneGraph smoke test
 ```
 
 SwirUI will not claim to outperform another framework without reproducible measurements. Planned benchmarks include startup time, RAM, CPU/GPU usage, frame time, input latency, component creation, large lists and animation performance.
