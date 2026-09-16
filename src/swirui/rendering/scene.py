@@ -32,6 +32,7 @@ class SceneNode:
     font_family: str = "Segoe UI"
     resource_id: str | None = None
     children: list[SceneNode] = field(default_factory=list)
+    clip_to_bounds: bool = False
 
     def __post_init__(self) -> None:
         if not 0.0 <= self.opacity <= 1.0:
@@ -63,21 +64,41 @@ class SceneNode:
         self,
         inherited_opacity: float = 1.0,
     ) -> Iterator[tuple[SceneNode, float]]:
-        """Yield painter-ordered nodes with opacity inherited from all ancestors.
+        """Yield painter-ordered nodes with opacity inherited from all ancestors."""
 
-        The returned opacity is the product of this node's opacity and each
-        ancestor opacity. Fully transparent subtrees are skipped entirely so
-        render backends do not prepare resources or GPU work that cannot be
-        visible. This is the shared retained-scene basis for compositing.
+        for node, opacity, _clip in self.walk_composited(inherited_opacity, None):
+            yield node, opacity
+
+    def walk_composited(
+        self,
+        inherited_opacity: float = 1.0,
+        inherited_clip: Rect | None = None,
+    ) -> Iterator[tuple[SceneNode, float, Rect | None]]:
+        """Yield painter-ordered nodes with cumulative opacity and rectangular clip.
+
+        ``clip_to_bounds`` intersects this node's bounds with the inherited clip
+        and applies the result to the node and its full subtree. Empty clipped
+        subtrees are discarded before renderer resource preparation. A ``None``
+        clip means no ancestor has requested clipping.
         """
 
         effective_opacity = inherited_opacity * self.opacity
         if effective_opacity <= 0.0:
             return
 
-        yield self, effective_opacity
+        effective_clip = inherited_clip
+        if self.clip_to_bounds:
+            effective_clip = (
+                self.bounds
+                if inherited_clip is None
+                else inherited_clip.intersection(self.bounds)
+            )
+            if effective_clip is None:
+                return
+
+        yield self, effective_opacity, effective_clip
         for child in sorted(self.children, key=lambda item: item.z_index):
-            yield from child.walk_with_opacity(effective_opacity)
+            yield from child.walk_composited(effective_opacity, effective_clip)
 
     def contains(self, target: SceneNode) -> bool:
         return any(node is target for node in self.walk())
@@ -98,6 +119,8 @@ class SceneNode:
         """Return the ancestry path from this node to the topmost visual hit."""
 
         if self.opacity <= 0.0:
+            return ()
+        if self.clip_to_bounds and not self.bounds.contains(point):
             return ()
 
         ordered_children = sorted(
@@ -140,6 +163,11 @@ class Scene:
         """Yield painter-ordered nodes with cumulative scene opacity."""
 
         yield from self.root.walk_with_opacity()
+
+    def walk_composited(self) -> Iterator[tuple[SceneNode, float, Rect | None]]:
+        """Yield painter-ordered nodes with cumulative opacity and clip bounds."""
+
+        yield from self.root.walk_composited()
 
     def hit_test(self, point: Point) -> SceneNode | None:
         return self.root.hit_test(point)
