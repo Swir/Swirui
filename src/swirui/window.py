@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from .core import Component, EventEmitter
+from .platforms import NativeWindowHandle, PlatformBackend, PlatformEvent, PlatformEventKind
 
 
 class Window(EventEmitter):
-    """Framework-level window model independent of the native backend."""
+    """Framework-level window model independent of a specific native backend."""
 
     def __init__(
         self,
@@ -31,12 +32,24 @@ class Window(EventEmitter):
         self.root: Component | None = None
         self.visible = False
         self.closed = False
+        self.focused = False
+        self.native_handle: NativeWindowHandle | None = None
+        self._platform_backend: PlatformBackend | None = None
 
     def set_root(self, component: Component | None) -> Window:
         old_root = self.root
         self.root = component
         self.emit("root_changed", old_root=old_root, root=component)
         return self
+
+    def set_title(self, title: str) -> None:
+        if title == self.title:
+            return
+        old_title = self.title
+        self.title = title
+        if self._platform_backend is not None and self.native_handle is not None:
+            self._platform_backend.set_window_title(self.native_handle, title)
+        self.emit("title_changed", old_title=old_title, title=title)
 
     def resize(self, width: int, height: int) -> None:
         width = max(width, self.min_width)
@@ -46,24 +59,82 @@ class Window(EventEmitter):
         old_size = (self.width, self.height)
         self.width = width
         self.height = height
+        if self._platform_backend is not None and self.native_handle is not None:
+            self._platform_backend.resize_window(self.native_handle, width, height)
         self.emit("resized", old_size=old_size, size=(width, height))
 
     def show(self) -> None:
         if self.closed:
             raise RuntimeError("A closed window cannot be shown again.")
         if not self.visible:
+            if self._platform_backend is not None and self.native_handle is not None:
+                self._platform_backend.show_window(self.native_handle)
             self.visible = True
             self.emit("shown")
 
     def hide(self) -> None:
         if self.visible:
+            if self._platform_backend is not None and self.native_handle is not None:
+                self._platform_backend.hide_window(self.native_handle)
             self.visible = False
             self.emit("hidden")
 
     def close(self) -> None:
         if self.closed:
             return
+        if self._platform_backend is not None and self.native_handle is not None:
+            self._platform_backend.destroy_window(self.native_handle)
+        self._mark_closed()
+        self._unbind_native()
+
+    def _bind_native(self, backend: PlatformBackend, handle: NativeWindowHandle) -> None:
+        if self.native_handle is not None:
+            raise RuntimeError("Window is already bound to a native handle.")
+        self._platform_backend = backend
+        self.native_handle = handle
+        self.emit("native_bound", handle=handle)
+
+    def _unbind_native(self) -> None:
+        if self.native_handle is None:
+            self._platform_backend = None
+            return
+        old_handle = self.native_handle
+        self.native_handle = None
+        self._platform_backend = None
+        self.emit("native_unbound", handle=old_handle)
+
+    def _apply_platform_event(self, event: PlatformEvent) -> None:
+        if event.kind is PlatformEventKind.CLOSE:
+            self._mark_closed()
+            self._unbind_native()
+            return
+
+        if event.kind is PlatformEventKind.RESIZE:
+            if event.width is None or event.height is None:
+                return
+            width = max(event.width, self.min_width)
+            height = max(event.height, self.min_height)
+            if (width, height) != (self.width, self.height):
+                old_size = (self.width, self.height)
+                self.width = width
+                self.height = height
+                self.emit("resized", old_size=old_size, size=(width, height))
+            return
+
+        if event.kind is PlatformEventKind.FOCUS:
+            focused = bool(event.focused)
+            if focused != self.focused:
+                self.focused = focused
+                self.emit("focus_changed", focused=focused)
+            return
+
+        self.emit(event.kind.value, event=event)
+
+    def _mark_closed(self) -> None:
+        if self.closed:
+            return
         self.visible = False
+        self.focused = False
         self.closed = True
         self.emit("closed")
 
