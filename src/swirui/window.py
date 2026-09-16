@@ -5,7 +5,13 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from .core import Component, Event, EventEmitter, EventPhase
-from .platforms import NativeWindowHandle, PlatformBackend, PlatformEvent, PlatformEventKind
+from .platforms import (
+    DisplayInfo,
+    NativeWindowHandle,
+    PlatformBackend,
+    PlatformEvent,
+    PlatformEventKind,
+)
 
 if TYPE_CHECKING:
     from .rendering.scene import Scene, SceneNode
@@ -47,6 +53,7 @@ class Window(EventEmitter):
         self.min_width = min_width
         self.min_height = min_height
         self.scale = 1.0
+        self.display: DisplayInfo | None = None
         self.root: Component | None = None
         self.scene: Scene | None = None
         self.hovered_scene_node: SceneNode | None = None
@@ -185,15 +192,18 @@ class Window(EventEmitter):
         initial_scale = backend.window_scale(handle)
         if initial_scale > 0.0:
             self.scale = initial_scale
-        self.emit("native_bound", handle=handle, scale=self.scale)
+        self._refresh_display()
+        self.emit("native_bound", handle=handle, scale=self.scale, display=self.display)
 
     def _unbind_native(self) -> None:
         if self.native_handle is None:
             self._platform_backend = None
+            self.display = None
             return
         old_handle = self.native_handle
         self.native_handle = None
         self._platform_backend = None
+        self.display = None
         self.emit("native_unbound", handle=old_handle)
 
     def _apply_platform_event(self, event: PlatformEvent) -> None:
@@ -217,6 +227,11 @@ class Window(EventEmitter):
         if event.kind is PlatformEventKind.DPI_CHANGED:
             if event.scale is not None and event.scale > 0.0:
                 self._set_scale(event.scale)
+            self._refresh_display()
+            return
+
+        if event.kind is PlatformEventKind.DISPLAY_CHANGED:
+            self._refresh_display()
             return
 
         if event.kind is PlatformEventKind.FOCUS:
@@ -242,6 +257,24 @@ class Window(EventEmitter):
         old_scale = self.scale
         self.scale = scale
         self.emit("scale_changed", old_scale=old_scale, scale=scale)
+
+    def _refresh_display(self) -> None:
+        backend = self._platform_backend
+        handle = self.native_handle
+        if backend is None or handle is None:
+            return
+        resolver = getattr(backend, "window_display", None)
+        display = resolver(handle) if callable(resolver) else None
+        self._set_display(display)
+
+    def _set_display(self, display: DisplayInfo | None) -> None:
+        if display == self.display:
+            return
+        old_display = self.display
+        self.display = display
+        if display is not None:
+            self._set_scale(display.scale)
+        self.emit("display_changed", old_display=old_display, display=display)
 
     def _apply_pointer_event(self, event: PlatformEvent) -> None:
         scene_path: tuple[SceneNode, ...] = ()
@@ -493,7 +526,9 @@ class Window(EventEmitter):
         self.emit("closed")
 
     def __repr__(self) -> str:
+        display_name = self.display.name if self.display is not None else None
         return (
             f"Window(title={self.title!r}, width={self.width}, height={self.height}, "
-            f"scale={self.scale}, visible={self.visible}, closed={self.closed})"
+            f"scale={self.scale}, display={display_name!r}, visible={self.visible}, "
+            f"closed={self.closed})"
         )
