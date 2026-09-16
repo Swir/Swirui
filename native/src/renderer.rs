@@ -11,7 +11,9 @@ use std::num::NonZeroIsize;
 use wgpu::util::DeviceExt;
 
 type RectangleInstance = Vec<f32>;
-const RECTANGLE_INSTANCE_FLOATS: usize = 12;
+const LEGACY_RECTANGLE_INSTANCE_FLOATS: usize = 12;
+const RECTANGLE_INSTANCE_FLOATS: usize = 16;
+const UNBOUNDED_CLIP: [f32; 4] = [-1.0e9, -1.0e9, 1.0e9, 1.0e9];
 
 #[cfg(target_os = "windows")]
 struct PersistentGpuContext {
@@ -599,14 +601,17 @@ fn validate_rectangles(rectangles: &[RectangleInstance]) -> PyResult<()> {
     }
 
     for rectangle in rectangles {
-        if rectangle.len() != RECTANGLE_INSTANCE_FLOATS {
+        if !matches!(
+            rectangle.len(),
+            LEGACY_RECTANGLE_INSTANCE_FLOATS | RECTANGLE_INSTANCE_FLOATS
+        ) {
             return Err(PyValueError::new_err(format!(
-                "Rectangle instances require {RECTANGLE_INSTANCE_FLOATS} floats: x, y, width, height, rgba and four corner radii."
+                "Rectangle instances require either {LEGACY_RECTANGLE_INSTANCE_FLOATS} legacy floats or {RECTANGLE_INSTANCE_FLOATS} floats with clip bounds."
             )));
         }
         if !rectangle.iter().copied().all(f32::is_finite) {
             return Err(PyValueError::new_err(
-                "Rectangle geometry, colors and corner radii must be finite.",
+                "Rectangle geometry, colors, corner radii and clip bounds must be finite.",
             ));
         }
         if rectangle[2] <= 0.0 || rectangle[3] <= 0.0 {
@@ -627,6 +632,13 @@ fn validate_rectangles(rectangles: &[RectangleInstance]) -> PyResult<()> {
                 "Rectangle corner radii cannot be negative.",
             ));
         }
+        if rectangle.len() == RECTANGLE_INSTANCE_FLOATS
+            && (rectangle[14] <= rectangle[12] || rectangle[15] <= rectangle[13])
+        {
+            return Err(PyValueError::new_err(
+                "Rectangle clip bounds must have positive width and height.",
+            ));
+        }
     }
     Ok(())
 }
@@ -645,6 +657,9 @@ fn rectangle_bytes(rectangles: &[RectangleInstance]) -> Vec<u8> {
     let mut values = Vec::with_capacity(rectangles.len() * RECTANGLE_INSTANCE_FLOATS);
     for rectangle in rectangles {
         values.extend_from_slice(rectangle);
+        if rectangle.len() == LEGACY_RECTANGLE_INSTANCE_FLOATS {
+            values.extend_from_slice(&UNBOUNDED_CLIP);
+        }
     }
     floats_to_bytes(&values)
 }
@@ -728,6 +743,13 @@ mod tests {
         ]
     }
 
+    fn clipped_rectangle() -> RectangleInstance {
+        vec![
+            20.0, 30.0, 100.0, 50.0, 0.0, 0.5, 1.0, 1.0, 12.0, 18.0, 22.0, 8.0, 30.0, 35.0,
+            90.0, 70.0,
+        ]
+    }
+
     #[test]
     fn rejects_zero_surface_size() {
         assert!(validate_dimensions(0, 100).is_err());
@@ -744,6 +766,7 @@ mod tests {
     #[test]
     fn validates_rounded_rectangle_instances() {
         assert!(validate_rectangles(&[valid_rectangle()]).is_ok());
+        assert!(validate_rectangles(&[clipped_rectangle()]).is_ok());
         assert!(validate_rectangles(&[]).is_err());
 
         let mut wrong_length = valid_rectangle();
@@ -761,5 +784,9 @@ mod tests {
         let mut negative_radius = valid_rectangle();
         negative_radius[8] = -1.0;
         assert!(validate_rectangles(&[negative_radius]).is_err());
+
+        let mut invalid_clip = clipped_rectangle();
+        invalid_clip[14] = invalid_clip[12];
+        assert!(validate_rectangles(&[invalid_clip]).is_err());
     }
 }
