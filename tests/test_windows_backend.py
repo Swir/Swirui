@@ -53,12 +53,17 @@ def test_win32_backend_creates_real_native_window() -> None:
         assert display.width > 0
         assert display.height > 0
         assert display.scale > 0.0
+        assert display.refresh_rate_hz > 1.0
         assert display.effective_work_width > 0
         assert display.effective_work_height > 0
 
     handle = backend.create_window(NativeWindowSpec("SwirUI CI Native Smoke", 640, 420))
     assert handle.value > 0
     assert backend.window_scale(handle) > 0.0
+    active_display = backend.window_display(handle)
+    assert active_display is not None
+    assert active_display.refresh_rate_hz > 1.0
+    assert active_display.scale == pytest.approx(backend.window_scale(handle))
 
     backend.set_window_title(handle, "SwirUI CI Native Smoke Updated")
     backend.resize_window(handle, 700, 460)
@@ -96,8 +101,42 @@ def test_win32_backend_normalizes_real_dpi_change_message() -> None:
 
         events = backend.poll_events()
         dpi_events = [event for event in events if event.kind is PlatformEventKind.DPI_CHANGED]
+        display_events = [
+            event for event in events if event.kind is PlatformEventKind.DISPLAY_CHANGED
+        ]
         assert len(dpi_events) == 1
         assert dpi_events[0].scale == pytest.approx(1.5)
+        assert display_events
+    finally:
+        backend.destroy_window(handle)
+        backend.shutdown()
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Win32 display smoke test requires Windows")
+def test_win32_backend_normalizes_display_configuration_change() -> None:
+    backend = _isolated_backend("display")
+    backend.initialize()
+    handle = backend.create_window(NativeWindowSpec("SwirUI Display Smoke", 640, 420))
+
+    try:
+        win_dll: Any = ctypes.__dict__["WinDLL"]
+        user32: Any = win_dll("user32", use_last_error=True)
+        user32.SendMessageW.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint,
+            ctypes.c_size_t,
+            ctypes.c_ssize_t,
+        ]
+        user32.SendMessageW.restype = ctypes.c_ssize_t
+        user32.SendMessageW(ctypes.c_void_p(handle.value), 0x007E, 32, 0)
+
+        events = backend.poll_events()
+        display_events = [
+            event for event in events if event.kind is PlatformEventKind.DISPLAY_CHANGED
+        ]
+        assert display_events
+        assert all(event.window == handle for event in display_events)
+        assert backend.window_display(handle) is not None
     finally:
         backend.destroy_window(handle)
         backend.shutdown()
@@ -142,6 +181,8 @@ def test_win32_preview_renderer_paints_scene_into_real_window() -> None:
     app.start()
 
     assert window.native_handle is not None
+    assert window.display is not None
+    assert window.display.refresh_rate_hz > 1.0
     assert renderer.frames_rendered == 1
     assert window.native_handle.value in renderer.surfaces
 
