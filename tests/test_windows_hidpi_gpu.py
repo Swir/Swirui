@@ -137,8 +137,14 @@ def test_real_wgpu_surface_tracks_logical_scene_across_dpi_scales() -> None:
             for x, y, target in pointer_observations
         )
 
+        # WM_SIZE reports client pixels, while SetWindowPos consumes an outer-window
+        # size. Inject the normalized client-size event directly so this smoke test
+        # exercises the runtime DPI ordering/scaling contract without conflating it
+        # with non-client frame metrics (covered independently by the Win32 backend).
         backend.forced_scale = 2.0
-        backend.resize_window(handle, 1360, 880)
+        backend.post_test_event(
+            PlatformEvent(PlatformEventKind.RESIZE, handle, width=1360, height=880)
+        )
         backend.post_test_event(
             PlatformEvent(PlatformEventKind.DPI_CHANGED, handle, scale=2.0)
         )
