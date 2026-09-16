@@ -76,23 +76,32 @@ def test_app_dispatches_platform_events_to_window() -> None:
     app = App("Events", platform_backend=backend)
     window = app.add_window(Window(width=640, height=480))
     pointer_events: list[object] = []
+    scale_changes: list[tuple[float, float]] = []
 
     window.on("pointer_move", lambda event: pointer_events.append(event.data["event"]))
+    window.on(
+        "scale_changed",
+        lambda event: scale_changes.append((event.data["old_scale"], event.data["scale"])),
+    )
     app.start()
     assert window.native_handle is not None
+    assert window.scale == 1.0
     handle = window.native_handle
 
     backend.post_event(
         PlatformEvent(PlatformEventKind.RESIZE, handle, width=900, height=700)
     )
+    backend.post_event(PlatformEvent(PlatformEventKind.DPI_CHANGED, handle, scale=1.5))
     backend.post_event(
         PlatformEvent(PlatformEventKind.POINTER_MOVE, handle, x=33.0, y=44.0)
     )
 
     processed = app.process_events()
 
-    assert processed == 2
+    assert processed == 3
     assert (window.width, window.height) == (900, 700)
+    assert window.scale == 1.5
+    assert scale_changes == [(1.0, 1.5)]
     assert len(pointer_events) == 1
 
     backend.post_event(PlatformEvent(PlatformEventKind.CLOSE, handle))
