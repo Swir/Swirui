@@ -28,6 +28,13 @@ The project uses semantic versioning where practical during pre-alpha developmen
 - Rectangle intersection geometry used by retained-scene clipping and renderer culling.
 - Windows mixed-scene GPU smoke coverage for clipped rounded rectangles, shaped text and images across repeated frames and resize.
 - Win32 display enumeration, per-window scale reporting and normalized `WM_DPICHANGED` events as groundwork for full DPI/HiDPI and multi-monitor support.
+- Active-display refresh-rate discovery through Win32/GDI with per-window monitor mapping.
+- Normalized Win32 display-transition events from window movement, display configuration changes and DPI transitions.
+- Per-window display metadata containing virtual-desktop geometry, work area, UI scale, primary-display state and active refresh rate.
+- Monitor-aware frame pacing that caps each native window to `min(AppConfig.target_fps, active_display_refresh_rate)` and retargets automatically when the window changes displays.
+- Frame telemetry exposing configured target FPS, effective per-window target FPS and active display refresh rate.
+- Deterministic 60 Hz → 144 Hz monitor-transition pacing coverage plus real Win32 refresh-rate/display mapping smoke tests.
+- `examples/high_refresh_demo.py` now demonstrates live display-aware pacing and reports monitor scale, refresh rate and effective target FPS while moving between monitors.
 - Focusable component contract with per-window logical keyboard focus.
 - Capture → target → bubble routing for focused `key_down`, `key_up` and `text_input` events with propagation cancellation.
 - Deterministic forward/reverse focus traversal across enabled, visible, focusable components.
@@ -47,6 +54,8 @@ The project uses semantic versioning where practical during pre-alpha developmen
 - Image vertices are cropped before draw submission so clipping preserves the correct source UV region instead of stretching the visible portion.
 - Win32 smoke tests use process-unique native window classes to avoid stale process-wide WNDPROC callbacks when multiple backend instances are exercised in one pytest process.
 - Native event-loop idle sleeps now shorten to the nearest pending frame deadline instead of quantizing 120/144+ Hz targets to a fixed 4 ms polling cadence.
+- `AppConfig.target_fps` is now an application ceiling for native windows rather than an unconditional per-window target; headless rendering keeps the configured value unchanged.
+- `DisplayInfo` keeps its existing positional field ordering while adding refresh-rate metadata at the end of the public dataclass contract.
 
 ## [0.1.0a1] - 2026-09-16
 
