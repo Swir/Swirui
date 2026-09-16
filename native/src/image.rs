@@ -1,11 +1,17 @@
-use pyo3::exceptions::{PyKeyError, PyValueError};
+use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
-use std::collections::HashMap;
 
+#[cfg(target_os = "windows")]
+use pyo3::exceptions::PyKeyError;
+#[cfg(target_os = "windows")]
+use std::collections::HashMap;
 #[cfg(target_os = "windows")]
 use wgpu::util::DeviceExt;
 
 pub(crate) type ImageInstance = (String, f32, f32, f32, f32, f32);
+
+#[cfg(not(target_os = "windows"))]
+pub(crate) struct ImageSystem;
 
 #[cfg(target_os = "windows")]
 struct ImageResource {
