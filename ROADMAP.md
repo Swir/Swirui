@@ -4,9 +4,9 @@
 
 ## Project progress
 
-**Overall completion: 17%**
+**Overall completion: 18%**
 
-`[███░░░░░░░░░░░░░░░░░] 17%`
+`[████░░░░░░░░░░░░░░░░] 18%`
 
 Progress is based on implemented and verified roadmap work. Ideas, mockups and unfinished prototypes do not increase the percentage.
 
@@ -435,7 +435,7 @@ Current native foundation:
 - [x] context reuse across multiple frames and resize
 - [x] native per-corner rounded-rectangle pipeline
 - [x] native renderer split into dedicated Rust module
-- [ ] GPU resource cache
+- [x] GPU resource cache
 - [x] native text pipeline
 - [x] native image pipeline
 
