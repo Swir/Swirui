@@ -18,6 +18,12 @@ from swirui.rendering import (
 )
 
 
+def _isolated_backend(label: str) -> Win32PlatformBackend:
+    backend = Win32PlatformBackend()
+    backend._class_name = f"SwirUI.PathSmoke.{label}.{id(backend):x}"
+    return backend
+
+
 def _shape_vertices() -> list[tuple[float, ...]]:
     color = (0.0, 0.55, 1.0, 0.9)
     clip = (40.0, 40.0, 600.0, 380.0)
@@ -36,7 +42,7 @@ def _shape_vertices() -> list[tuple[float, ...]]:
 @pytest.mark.skipif(sys.platform != "win32", reason="Native GPU path smoke requires Windows")
 def test_native_wgpu_draws_persistent_filled_paths_and_survives_resize() -> None:
     native = importlib.import_module("_swirui_native")
-    backend = Win32PlatformBackend()
+    backend = _isolated_backend("native")
     backend.initialize()
     handle = backend.create_window(NativeWindowSpec("SwirUI GPU Path Smoke", 640, 420))
     backend.show_window(handle)
@@ -104,7 +110,12 @@ def test_scenegraph_concave_path_reaches_real_wgpu_renderer() -> None:
     root.add(panel)
 
     renderer = WgpuRenderer()
-    app = App("SwirUI GPU Path Integration", renderer=renderer)
+    backend = _isolated_backend("scenegraph")
+    app = App(
+        "SwirUI GPU Path Integration",
+        platform_backend=backend,
+        renderer=renderer,
+    )
     window = Window(title="SwirUI SceneGraph Paths", width=680, height=440)
     window.set_scene(Scene(680, 440, root))
     app.add_window(window)
