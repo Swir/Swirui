@@ -13,7 +13,20 @@ from .geometry import Color
 from .scene import SceneNodeKind
 from .surface import RenderSurface
 
-RectangleInstance = tuple[float, float, float, float, float, float, float, float]
+RectangleInstance = tuple[
+    float,
+    float,
+    float,
+    float,
+    float,
+    float,
+    float,
+    float,
+    float,
+    float,
+    float,
+    float,
+]
 
 
 class WgpuRenderer:
@@ -192,6 +205,7 @@ class WgpuRenderer:
                 continue
 
             fill = node.fill
+            radius = node.corner_radius
             rectangles.append(
                 (
                     node.bounds.x,
@@ -202,6 +216,10 @@ class WgpuRenderer:
                     fill.g,
                     fill.b,
                     fill.a * node.opacity,
+                    radius.top_left,
+                    radius.top_right,
+                    radius.bottom_right,
+                    radius.bottom_left,
                 )
             )
         return rectangles
