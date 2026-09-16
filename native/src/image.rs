@@ -11,6 +11,10 @@ use wgpu::util::DeviceExt;
 pub(crate) type ClipRect = (f32, f32, f32, f32);
 pub(crate) type ImageInstance = (String, f32, f32, f32, f32, f32, ClipRect);
 
+const IMAGE_VERTEX_FLOATS: usize = 5;
+const IMAGE_VERTICES_PER_INSTANCE: usize = 6;
+const INITIAL_IMAGE_CAPACITY: usize = 8;
+
 #[cfg(not(target_os = "windows"))]
 pub(crate) struct ImageSystem;
 
@@ -29,6 +33,8 @@ pub(crate) struct ImageSystem {
     pipeline: wgpu::RenderPipeline,
     sampler: wgpu::Sampler,
     resources: HashMap<String, ImageResource>,
+    vertex_buffer: wgpu::Buffer,
+    vertex_capacity: usize,
 }
 
 #[cfg(target_os = "windows")]
@@ -72,7 +78,7 @@ impl ImageSystem {
                 entry_point: Some("vs_main"),
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
                 buffers: &[Some(wgpu::VertexBufferLayout {
-                    array_stride: 5 * 4,
+                    array_stride: (IMAGE_VERTEX_FLOATS * std::mem::size_of::<f32>()) as u64,
                     step_mode: wgpu::VertexStepMode::Vertex,
                     attributes: &[
                         wgpu::VertexAttribute {
@@ -119,12 +125,16 @@ impl ImageSystem {
             mipmap_filter: wgpu::MipmapFilterMode::Nearest,
             ..Default::default()
         });
+        let vertex_capacity = INITIAL_IMAGE_CAPACITY;
+        let vertex_buffer = create_vertex_buffer(device, vertex_capacity);
 
         Self {
             bind_group_layout,
             pipeline,
             sampler,
             resources: HashMap::new(),
+            vertex_buffer,
+            vertex_capacity,
         }
     }
 
@@ -199,16 +209,21 @@ impl ImageSystem {
             .map(|resource| (resource.width, resource.height))
     }
 
+    pub(crate) fn vertex_capacity(&self) -> usize {
+        self.vertex_capacity
+    }
+
     pub(crate) fn prepare_vertices(
-        &self,
+        &mut self,
         device: &wgpu::Device,
+        queue: &wgpu::Queue,
         images: &[ImageInstance],
         surface_width: u32,
         surface_height: u32,
-    ) -> PyResult<Option<wgpu::Buffer>> {
+    ) -> PyResult<bool> {
         validate_image_instances(images)?;
         if images.is_empty() {
-            return Ok(None);
+            return Ok(false);
         }
         if surface_width == 0 || surface_height == 0 {
             return Err(PyValueError::new_err(
@@ -216,7 +231,10 @@ impl ImageSystem {
             ));
         }
 
-        let mut values = Vec::with_capacity(images.len() * 6 * 5);
+        self.ensure_vertex_capacity(device, images.len())?;
+        let mut values = Vec::with_capacity(
+            images.len() * IMAGE_VERTICES_PER_INSTANCE * IMAGE_VERTEX_FLOATS,
+        );
         for (resource_id, x, y, width, height, opacity, clip) in images {
             if !self.resources.contains_key(resource_id) {
                 return Err(PyKeyError::new_err(format!(
@@ -250,23 +268,17 @@ impl ImageSystem {
         }
 
         let bytes = floats_to_bytes(&values);
-        Ok(Some(device.create_buffer_init(
-            &wgpu::util::BufferInitDescriptor {
-                label: Some("SwirUI image vertices"),
-                contents: &bytes,
-                usage: wgpu::BufferUsages::VERTEX,
-            },
-        )))
+        queue.write_buffer(&self.vertex_buffer, 0, &bytes);
+        Ok(true)
     }
 
     pub(crate) fn render(
         &self,
         pass: &mut wgpu::RenderPass<'_>,
-        vertex_buffer: &wgpu::Buffer,
         images: &[ImageInstance],
     ) -> PyResult<()> {
         pass.set_pipeline(&self.pipeline);
-        pass.set_vertex_buffer(0, vertex_buffer.slice(..));
+        pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
         for (index, image) in images.iter().enumerate() {
             let resource = self.resources.get(&image.0).ok_or_else(|| {
                 PyKeyError::new_err(format!(
@@ -275,10 +287,20 @@ impl ImageSystem {
                 ))
             })?;
             pass.set_bind_group(0, &resource.bind_group, &[]);
-            let start = u32::try_from(index * 6)
+            let start = u32::try_from(index * IMAGE_VERTICES_PER_INSTANCE)
                 .map_err(|_| PyValueError::new_err("Too many images in one GPU frame."))?;
-            pass.draw(start..start + 6, 0..1);
+            pass.draw(start..start + IMAGE_VERTICES_PER_INSTANCE as u32, 0..1);
         }
+        Ok(())
+    }
+
+    fn ensure_vertex_capacity(&mut self, device: &wgpu::Device, required: usize) -> PyResult<()> {
+        let capacity = next_image_capacity(self.vertex_capacity, required)?;
+        if capacity == self.vertex_capacity {
+            return Ok(());
+        }
+        self.vertex_buffer = create_vertex_buffer(device, capacity);
+        self.vertex_capacity = capacity;
         Ok(())
     }
 }
@@ -349,6 +371,31 @@ pub(crate) fn validate_image_instances(images: &[ImageInstance]) -> PyResult<()>
         }
     }
     Ok(())
+}
+
+fn next_image_capacity(current: usize, required: usize) -> PyResult<usize> {
+    if required <= current {
+        return Ok(current);
+    }
+    required
+        .checked_next_power_of_two()
+        .ok_or_else(|| PyValueError::new_err("Image batch is too large for GPU buffering."))
+}
+
+#[cfg(target_os = "windows")]
+fn create_vertex_buffer(device: &wgpu::Device, capacity: usize) -> wgpu::Buffer {
+    let floats = capacity
+        .saturating_mul(IMAGE_VERTICES_PER_INSTANCE)
+        .saturating_mul(IMAGE_VERTEX_FLOATS);
+    let size = floats
+        .saturating_mul(std::mem::size_of::<f32>())
+        .max(std::mem::size_of::<f32>()) as u64;
+    device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("SwirUI reusable image vertices"),
+        size,
+        usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    })
 }
 
 #[cfg(target_os = "windows")]
@@ -422,5 +469,14 @@ mod tests {
             (300.0, 300.0, 400.0, 400.0),
         );
         assert!(validate_image_instances(&[disjoint_clip]).is_err());
+    }
+
+    #[test]
+    fn image_buffer_capacity_grows_geometrically_and_never_shrinks() {
+        assert_eq!(next_image_capacity(INITIAL_IMAGE_CAPACITY, 1).unwrap(), 8);
+        assert_eq!(next_image_capacity(INITIAL_IMAGE_CAPACITY, 8).unwrap(), 8);
+        assert_eq!(next_image_capacity(INITIAL_IMAGE_CAPACITY, 9).unwrap(), 16);
+        assert_eq!(next_image_capacity(16, 17).unwrap(), 32);
+        assert_eq!(next_image_capacity(32, 2).unwrap(), 32);
     }
 }
