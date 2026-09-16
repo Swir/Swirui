@@ -11,7 +11,13 @@ from .events import EventEmitter
 class Component(EventEmitter):
     """Base object for every visual and logical UI component."""
 
-    def __init__(self, name: str | None = None, *, key: str | None = None) -> None:
+    def __init__(
+        self,
+        name: str | None = None,
+        *,
+        key: str | None = None,
+        focusable: bool = False,
+    ) -> None:
         super().__init__()
         self.name = name or self.__class__.__name__
         self.key = key or uuid4().hex
@@ -19,6 +25,7 @@ class Component(EventEmitter):
         self.children: list[Component] = []
         self.enabled = True
         self.visible = True
+        self.focusable = focusable
 
     def add(self, *children: Component) -> Component:
         for child in children:
