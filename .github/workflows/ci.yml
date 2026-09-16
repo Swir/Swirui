@@ -106,7 +106,8 @@ jobs:
         run: cargo check --manifest-path native/Cargo.toml --all-targets
 
       - name: Build PyO3 extension
-        run: maturin build --manifest-path native/Cargo.toml --release --interpreter python --out dist-native
+        working-directory: native
+        run: maturin build --release --interpreter python --out ../dist-native
 
       - name: Install PyO3 extension
         shell: pwsh
