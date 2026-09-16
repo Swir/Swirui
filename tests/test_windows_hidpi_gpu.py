@@ -5,6 +5,7 @@ import sys
 import pytest
 
 from swirui import App, Window
+from swirui.core import Event
 from swirui.platforms import DisplayInfo, NativeWindowHandle, PlatformEvent, PlatformEventKind
 from swirui.platforms.windows import Win32PlatformBackend
 from swirui.rendering import (
@@ -97,10 +98,9 @@ def test_real_wgpu_surface_tracks_logical_scene_across_dpi_scales() -> None:
     window.set_scene(_hidpi_scene())
     pointer_observations: list[tuple[float | None, float | None, str | None]] = []
 
-    def capture_pointer(event: object) -> None:
-        data = getattr(event, "data")
-        platform_event = data["event"]
-        target = data["target"]
+    def capture_pointer(event: Event) -> None:
+        platform_event = event.data["event"]
+        target = event.data["target"]
         pointer_observations.append(
             (
                 platform_event.x,
