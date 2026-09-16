@@ -23,11 +23,17 @@ def test_win32_backend_creates_real_native_window() -> None:
 
     displays = backend.displays()
     assert displays
-    assert displays[0].width > 0
-    assert displays[0].height > 0
+    assert any(display.primary for display in displays)
+    for display in displays:
+        assert display.width > 0
+        assert display.height > 0
+        assert display.scale > 0.0
+        assert display.effective_work_width > 0
+        assert display.effective_work_height > 0
 
     handle = backend.create_window(NativeWindowSpec("SwirUI CI Native Smoke", 640, 420))
     assert handle.value > 0
+    assert backend.window_scale(handle) > 0.0
 
     backend.set_window_title(handle, "SwirUI CI Native Smoke Updated")
     backend.resize_window(handle, 700, 460)
