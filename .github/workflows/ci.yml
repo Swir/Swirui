@@ -118,5 +118,11 @@ jobs:
       - name: Create and paint real Win32 window
         run: pytest tests/test_windows_backend.py -q
 
-      - name: Draw GPU scene, mixed-DPI path and verify presentation policy
-        run: pytest tests/test_windows_gpu_bridge.py tests/test_windows_hidpi_gpu.py tests/test_windows_presentation.py -q
+      - name: Draw native GPU scene
+        run: pytest tests/test_windows_gpu_bridge.py -q
+
+      - name: Verify mixed-DPI GPU path
+        run: pytest tests/test_windows_hidpi_gpu.py -q
+
+      - name: Verify presentation policy
+        run: pytest tests/test_windows_presentation.py -q
