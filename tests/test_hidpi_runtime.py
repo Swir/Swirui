@@ -198,10 +198,17 @@ def test_hidpi_runtime_keeps_scene_and_input_in_logical_dips() -> None:
     assert window.pixel_size == (1200, 900)
     assert context.resize_calls[-1] == (1200, 900)
 
+    # Win32 SetWindowPos during WM_DPICHANGED can enqueue WM_SIZE first.
+    # The runtime normalizes that adjacent pair so the physical 1600x1200
+    # resize is interpreted using the incoming 200% scale, preserving 800x600 DIPs.
     backend.scale = 2.0
+    backend.post_event(
+        PlatformEvent(PlatformEventKind.RESIZE, handle, width=1600, height=1200)
+    )
     backend.post_event(PlatformEvent(PlatformEventKind.DPI_CHANGED, handle, scale=2.0))
     app.process_events()
     assert window.scale == 2.0
+    assert (window.width, window.height) == (800, 600)
     assert window.pixel_size == (1600, 1200)
     assert context.resize_calls[-1] == (1600, 1200)
 
