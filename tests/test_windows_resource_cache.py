@@ -9,7 +9,10 @@ from swirui.platforms.windows import Win32PlatformBackend
 from swirui.rendering import Rect, Scene, SceneNode, SceneNodeKind, WgpuRenderer
 
 
-@pytest.mark.skipif(sys.platform != "win32", reason="Win32 GPU resource cache smoke requires Windows")
+@pytest.mark.skipif(
+    sys.platform != "win32",
+    reason="Win32 GPU resource cache smoke requires Windows",
+)
 def test_real_wgpu_image_cache_skips_identical_texture_reupload() -> None:
     backend = Win32PlatformBackend()
     renderer = WgpuRenderer()
