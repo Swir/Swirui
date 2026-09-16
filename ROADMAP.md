@@ -14,7 +14,7 @@ Progress is based on completed and tested roadmap work. Ideas, mockups and unfin
 
 ## 0.1 Alpha — Foundation
 
-**Status:** In progress
+**Status:** Complete ✅
 
 - [x] Repository initialized
 - [x] Package metadata and development tooling
@@ -28,10 +28,12 @@ Progress is based on completed and tested roadmap work. Ideas, mockups and unfin
 - [x] Renderer abstraction
 - [x] Platform abstraction
 - [x] Automated tests
-- [ ] CI verified on Python 3.11–3.14
+- [x] CI verified on Python 3.11–3.14
 - [x] Architecture documentation
 
 ## 0.2 Alpha — Native Window + First Renderer
+
+**Status:** Next milestone
 
 - [ ] Native desktop window backend
 - [ ] Event loop integration
