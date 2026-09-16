@@ -5,6 +5,7 @@ use glyphon::{
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 
+pub(crate) type ClipRect = (f32, f32, f32, f32);
 pub(crate) type TextInstance = (
     String,
     f32,
@@ -17,6 +18,7 @@ pub(crate) type TextInstance = (
     f32,
     f32,
     String,
+    ClipRect,
 );
 
 pub(crate) struct TextSystem {
@@ -85,6 +87,7 @@ impl TextSystem {
                 _blue,
                 _alpha,
                 family,
+                _clip,
             ) = text;
             let metrics = Metrics::new(*font_size, *font_size * 1.25);
             let mut buffer = Buffer::new(&mut self.font_system, metrics);
@@ -108,17 +111,22 @@ impl TextSystem {
                 blue,
                 alpha,
                 _family,
+                clip,
             ) = text;
+            let left = (*x).max(clip.0);
+            let top = (*y).max(clip.1);
+            let right = (*x + *width).min(clip.2);
+            let bottom = (*y + *height).min(clip.3);
             TextArea {
                 buffer,
                 left: *x,
                 top: *y,
                 scale: 1.0,
                 bounds: TextBounds {
-                    left: float_to_i32(*x),
-                    top: float_to_i32(*y),
-                    right: float_to_i32(*x + *width),
-                    bottom: float_to_i32(*y + *height),
+                    left: float_to_i32(left),
+                    top: float_to_i32(top),
+                    right: float_to_i32(right),
+                    bottom: float_to_i32(bottom),
                 },
                 default_color: Color::rgba(
                     channel_to_u8(*red),
@@ -172,6 +180,7 @@ pub(crate) fn validate_texts(texts: &[TextInstance]) -> PyResult<()> {
             blue,
             alpha,
             family,
+            clip,
         ) = text;
         if content.is_empty() {
             return Err(PyValueError::new_err("Text content cannot be empty."));
@@ -179,12 +188,15 @@ pub(crate) fn validate_texts(texts: &[TextInstance]) -> PyResult<()> {
         if family.is_empty() {
             return Err(PyValueError::new_err("Text font family cannot be empty."));
         }
-        if ![*x, *y, *width, *height, *font_size, *red, *green, *blue, *alpha]
-            .into_iter()
-            .all(f32::is_finite)
+        if ![
+            *x, *y, *width, *height, *font_size, *red, *green, *blue, *alpha, clip.0, clip.1,
+            clip.2, clip.3,
+        ]
+        .into_iter()
+        .all(f32::is_finite)
         {
             return Err(PyValueError::new_err(
-                "Text geometry, size and color channels must be finite.",
+                "Text geometry, size, color channels and clip bounds must be finite.",
             ));
         }
         if *width <= 0.0 || *height <= 0.0 || *font_size <= 0.0 {
@@ -198,6 +210,18 @@ pub(crate) fn validate_texts(texts: &[TextInstance]) -> PyResult<()> {
         {
             return Err(PyValueError::new_err(
                 "Text color channels must be between 0.0 and 1.0.",
+            ));
+        }
+        if clip.2 <= clip.0 || clip.3 <= clip.1 {
+            return Err(PyValueError::new_err(
+                "Text clip bounds must have positive width and height.",
+            ));
+        }
+        if (*x + *width).min(clip.2) <= (*x).max(clip.0)
+            || (*y + *height).min(clip.3) <= (*y).max(clip.1)
+        {
+            return Err(PyValueError::new_err(
+                "Text clip must intersect the text bounds.",
             ));
         }
     }
@@ -229,6 +253,7 @@ mod tests {
             1.0,
             1.0,
             "Segoe UI".to_owned(),
+            (0.0, 0.0, 640.0, 480.0),
         )
     }
 
@@ -243,5 +268,9 @@ mod tests {
         let mut invalid_color = valid_text();
         invalid_color.8 = 1.5;
         assert!(validate_texts(&[invalid_color]).is_err());
+
+        let mut disjoint_clip = valid_text();
+        disjoint_clip.11 = (500.0, 500.0, 600.0, 600.0);
+        assert!(validate_texts(&[disjoint_clip]).is_err());
     }
 }
