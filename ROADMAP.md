@@ -4,9 +4,9 @@
 
 ## Project progress
 
-**Overall completion: 9%**
+**Overall completion: 10%**
 
-`[██░░░░░░░░░░░░░░░░░░] 9%`
+`[██░░░░░░░░░░░░░░░░░░] 10%`
 
 Progress is based on implemented and verified roadmap work. Ideas, mockups and unfinished prototypes do not increase the percentage.
 
@@ -82,7 +82,7 @@ Progress is based on implemented and verified roadmap work. Ideas, mockups and u
 - [x] Per-corner radii carried through Python → Rust → WGSL
 - [x] SDF/fwidth rounded-edge antialiasing
 - [ ] General shape / path rendering
-- [ ] Text rendering
+- [x] Text rendering
 - [ ] Image rendering
 - [ ] Clipping and compositing
 - [ ] Robust DPI / HiDPI handling
@@ -368,6 +368,7 @@ AI output must remain ordinary, editable SwirUI code.
 - [x] Windows real-wgpu instanced rectangle draw smoke test
 - [x] Windows persistent GPU context multi-frame + resize smoke test
 - [x] Windows per-corner rounded-rectangle shader smoke test
+- [x] Windows shaped-text SceneGraph → Python → Rust/wgpu smoke test
 - [x] Rust native-core check and unit tests
 - [x] ABI3 native extension build on Windows
 - [x] Python 3.11–3.14 test matrix
@@ -428,7 +429,7 @@ Current native foundation:
 - [x] native per-corner rounded-rectangle pipeline
 - [x] native renderer split into dedicated Rust module
 - [ ] GPU resource cache
-- [ ] native text pipeline
+- [x] native text pipeline
 - [ ] native image pipeline
 
 Primary future candidates:
