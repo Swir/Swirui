@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from contextlib import suppress
 from threading import RLock
 from typing import Generic, TypeVar
 
@@ -57,11 +58,8 @@ class State(Generic[T]):
             subscriber(current)
 
         def unsubscribe() -> None:
-            with self._lock:
-                try:
-                    self._subscribers.remove(subscriber)
-                except ValueError:
-                    pass
+            with self._lock, suppress(ValueError):
+                self._subscribers.remove(subscriber)
 
         return unsubscribe
 
