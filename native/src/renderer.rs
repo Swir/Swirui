@@ -13,6 +13,7 @@ use wgpu::util::DeviceExt;
 type RectangleInstance = Vec<f32>;
 const LEGACY_RECTANGLE_INSTANCE_FLOATS: usize = 12;
 const RECTANGLE_INSTANCE_FLOATS: usize = 16;
+const INITIAL_RECTANGLE_CAPACITY: usize = 16;
 const UNBOUNDED_CLIP: [f32; 4] = [-1.0e9, -1.0e9, 1.0e9, 1.0e9];
 
 #[cfg(target_os = "windows")]
@@ -25,6 +26,9 @@ struct PersistentGpuContext {
     frame_buffer: wgpu::Buffer,
     bind_group_layout: wgpu::BindGroupLayout,
     pipeline: wgpu::RenderPipeline,
+    rectangle_buffer: wgpu::Buffer,
+    rectangle_bind_group: wgpu::BindGroup,
+    rectangle_capacity: usize,
     text_system: TextSystem,
     image_system: ImageSystem,
     adapter_name: String,
@@ -119,6 +123,14 @@ impl PersistentGpuContext {
             multiview_mask: None,
             cache: None,
         });
+        let rectangle_capacity = INITIAL_RECTANGLE_CAPACITY;
+        let rectangle_buffer = create_rectangle_buffer(&device, rectangle_capacity);
+        let rectangle_bind_group = create_rectangle_bind_group(
+            &device,
+            &bind_group_layout,
+            &frame_buffer,
+            &rectangle_buffer,
+        );
         let text_system = TextSystem::new(&device, &queue, config.format, width, height);
         let image_system = ImageSystem::new(&device, config.format);
 
@@ -131,6 +143,9 @@ impl PersistentGpuContext {
             frame_buffer,
             bind_group_layout,
             pipeline,
+            rectangle_buffer,
+            rectangle_bind_group,
+            rectangle_capacity,
             text_system,
             image_system,
             adapter_name: info.name,
@@ -241,6 +256,10 @@ impl PersistentGpuContext {
         )?;
         if !rectangles.is_empty() {
             validate_rectangles(rectangles)?;
+            self.ensure_rectangle_capacity(rectangles.len())?;
+            let rectangle_data = rectangle_bytes(rectangles);
+            self.queue
+                .write_buffer(&self.rectangle_buffer, 0, &rectangle_data);
         }
         if rectangles.is_empty() && texts.is_empty() && images.is_empty() {
             self.clear(
@@ -254,40 +273,13 @@ impl PersistentGpuContext {
         if !texts.is_empty() {
             self.text_system.prepare(&self.device, &self.queue, texts)?;
         }
-        let image_vertex_buffer = self.image_system.prepare_vertices(
+        let images_prepared = self.image_system.prepare_vertices(
             &self.device,
+            &self.queue,
             images,
             self.config.width,
             self.config.height,
         )?;
-
-        let rectangle_resources = if rectangles.is_empty() {
-            None
-        } else {
-            let rectangle_data = rectangle_bytes(rectangles);
-            let rectangle_buffer =
-                self.device
-                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                        label: Some("SwirUI rounded rectangle instances"),
-                        contents: &rectangle_data,
-                        usage: wgpu::BufferUsages::STORAGE,
-                    });
-            let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("SwirUI persistent rectangle bind group"),
-                layout: &self.bind_group_layout,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: self.frame_buffer.as_entire_binding(),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: rectangle_buffer.as_entire_binding(),
-                    },
-                ],
-            });
-            Some((rectangle_buffer, bind_group))
-        };
 
         let frame = acquire_surface_texture(&self.surface)?;
         let view = frame
@@ -321,13 +313,13 @@ impl PersistentGpuContext {
                 multiview_mask: None,
             });
 
-            if let Some((_rectangle_buffer, bind_group)) = rectangle_resources.as_ref() {
+            if !rectangles.is_empty() {
                 render_pass.set_pipeline(&self.pipeline);
-                render_pass.set_bind_group(0, bind_group, &[]);
+                render_pass.set_bind_group(0, &self.rectangle_bind_group, &[]);
                 render_pass.draw(0..6, 0..rectangles.len() as u32);
             }
-            if let Some(vertex_buffer) = image_vertex_buffer.as_ref() {
-                self.image_system.render(&mut render_pass, vertex_buffer, images)?;
+            if images_prepared {
+                self.image_system.render(&mut render_pass, images)?;
             }
             if !texts.is_empty() {
                 self.text_system.render(&mut render_pass)?;
@@ -340,6 +332,24 @@ impl PersistentGpuContext {
             self.text_system.trim();
         }
         Ok((rectangles.len(), texts.len(), images.len()))
+    }
+
+    fn ensure_rectangle_capacity(&mut self, required: usize) -> PyResult<()> {
+        let capacity = next_rectangle_capacity(self.rectangle_capacity, required)?;
+        if capacity == self.rectangle_capacity {
+            return Ok(());
+        }
+        let buffer = create_rectangle_buffer(&self.device, capacity);
+        let bind_group = create_rectangle_bind_group(
+            &self.device,
+            &self.bind_group_layout,
+            &self.frame_buffer,
+            &buffer,
+        );
+        self.rectangle_buffer = buffer;
+        self.rectangle_bind_group = bind_group;
+        self.rectangle_capacity = capacity;
+        Ok(())
     }
 }
 
@@ -377,6 +387,16 @@ impl PyWin32GpuRenderer {
     #[getter]
     fn height(&self) -> u32 {
         self.context.config.height
+    }
+
+    #[getter]
+    fn rectangle_capacity(&self) -> usize {
+        self.context.rectangle_capacity
+    }
+
+    #[getter]
+    fn image_vertex_capacity(&self) -> usize {
+        self.context.image_system.vertex_capacity()
     }
 
     #[getter]
@@ -643,6 +663,52 @@ fn validate_rectangles(rectangles: &[RectangleInstance]) -> PyResult<()> {
     Ok(())
 }
 
+fn next_rectangle_capacity(current: usize, required: usize) -> PyResult<usize> {
+    if required <= current {
+        return Ok(current);
+    }
+    required
+        .checked_next_power_of_two()
+        .ok_or_else(|| PyValueError::new_err("Rectangle batch is too large for GPU buffering."))
+}
+
+#[cfg(target_os = "windows")]
+fn create_rectangle_buffer(device: &wgpu::Device, capacity: usize) -> wgpu::Buffer {
+    let size = capacity
+        .saturating_mul(RECTANGLE_INSTANCE_FLOATS)
+        .saturating_mul(std::mem::size_of::<f32>())
+        .max(std::mem::size_of::<f32>()) as u64;
+    device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("SwirUI reusable rectangle instances"),
+        size,
+        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    })
+}
+
+#[cfg(target_os = "windows")]
+fn create_rectangle_bind_group(
+    device: &wgpu::Device,
+    layout: &wgpu::BindGroupLayout,
+    frame_buffer: &wgpu::Buffer,
+    rectangle_buffer: &wgpu::Buffer,
+) -> wgpu::BindGroup {
+    device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("SwirUI persistent rectangle bind group"),
+        layout,
+        entries: &[
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: frame_buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: rectangle_buffer.as_entire_binding(),
+            },
+        ],
+    })
+}
+
 #[cfg(target_os = "windows")]
 fn floats_to_bytes(values: &[f32]) -> Vec<u8> {
     let mut bytes = Vec::with_capacity(std::mem::size_of_val(values));
@@ -788,5 +854,23 @@ mod tests {
         let mut invalid_clip = clipped_rectangle();
         invalid_clip[14] = invalid_clip[12];
         assert!(validate_rectangles(&[invalid_clip]).is_err());
+    }
+
+    #[test]
+    fn rectangle_buffer_capacity_grows_geometrically_and_never_shrinks() {
+        assert_eq!(
+            next_rectangle_capacity(INITIAL_RECTANGLE_CAPACITY, 1).unwrap(),
+            16
+        );
+        assert_eq!(
+            next_rectangle_capacity(INITIAL_RECTANGLE_CAPACITY, 16).unwrap(),
+            16
+        );
+        assert_eq!(
+            next_rectangle_capacity(INITIAL_RECTANGLE_CAPACITY, 17).unwrap(),
+            32
+        );
+        assert_eq!(next_rectangle_capacity(32, 33).unwrap(), 64);
+        assert_eq!(next_rectangle_capacity(64, 2).unwrap(), 64);
     }
 }
