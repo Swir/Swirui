@@ -1,7 +1,6 @@
 import pytest
 
-from swirui.rendering import NullRenderer, WgpuRenderer, Win32PreviewRenderer
-from swirui.rendering import factory
+from swirui.rendering import NullRenderer, WgpuRenderer, Win32PreviewRenderer, factory
 
 
 def test_renderer_factory_is_headless_off_windows(monkeypatch: pytest.MonkeyPatch) -> None:
