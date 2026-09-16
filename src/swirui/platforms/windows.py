@@ -89,16 +89,20 @@ class Win32PlatformBackend:
         if sys.platform != "win32":
             raise RuntimeError("Win32PlatformBackend can only run on Windows.")
 
-        win_dll: Any = getattr(ctypes, "WinDLL")
+        win_dll: Any = ctypes.__dict__["WinDLL"]
         self._user32: Any = win_dll("user32", use_last_error=True)
         self._kernel32: Any = win_dll("kernel32", use_last_error=True)
+        self._configure_signatures()
+
         self._events: deque[PlatformEvent] = deque()
         self._windows: set[NativeWindowHandle] = set()
         self._initialized = False
         self._class_name = "SwirUI.NativeWindow"
-        self._instance = self._kernel32.GetModuleHandleW(None)
+        self._instance: int | None = self._kernel32.GetModuleHandleW(None)
+        if not self._instance:
+            raise OSError(self._last_error(), "GetModuleHandleW failed for SwirUI.")
 
-        callback_factory: Any = getattr(ctypes, "WINFUNCTYPE", ctypes.CFUNCTYPE)
+        callback_factory: Any = ctypes.__dict__.get("WINFUNCTYPE", ctypes.CFUNCTYPE)
         self._wndproc_type: Any = callback_factory(
             ctypes.c_ssize_t,
             ctypes.c_void_p,
@@ -107,13 +111,67 @@ class Win32PlatformBackend:
             ctypes.c_ssize_t,
         )
         self._wndproc_callback: Any = self._wndproc_type(self._wndproc)
-        self._configure_signatures()
 
     def _configure_signatures(self) -> None:
-        self._user32.DefWindowProcW.restype = ctypes.c_ssize_t
-        self._user32.CreateWindowExW.restype = ctypes.c_void_p
-        self._user32.RegisterClassW.restype = ctypes.c_ushort
+        self._kernel32.GetModuleHandleW.argtypes = [ctypes.c_wchar_p]
         self._kernel32.GetModuleHandleW.restype = ctypes.c_void_p
+
+        self._user32.RegisterClassW.argtypes = [ctypes.POINTER(_WndClass)]
+        self._user32.RegisterClassW.restype = ctypes.c_ushort
+        self._user32.CreateWindowExW.argtypes = [
+            ctypes.c_ulong,
+            ctypes.c_wchar_p,
+            ctypes.c_wchar_p,
+            ctypes.c_ulong,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_void_p,
+            ctypes.c_void_p,
+            ctypes.c_void_p,
+            ctypes.c_void_p,
+        ]
+        self._user32.CreateWindowExW.restype = ctypes.c_void_p
+        self._user32.DefWindowProcW.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint,
+            ctypes.c_size_t,
+            ctypes.c_ssize_t,
+        ]
+        self._user32.DefWindowProcW.restype = ctypes.c_ssize_t
+        self._user32.ShowWindow.argtypes = [ctypes.c_void_p, ctypes.c_int]
+        self._user32.ShowWindow.restype = ctypes.c_bool
+        self._user32.UpdateWindow.argtypes = [ctypes.c_void_p]
+        self._user32.UpdateWindow.restype = ctypes.c_bool
+        self._user32.DestroyWindow.argtypes = [ctypes.c_void_p]
+        self._user32.DestroyWindow.restype = ctypes.c_bool
+        self._user32.SetWindowTextW.argtypes = [ctypes.c_void_p, ctypes.c_wchar_p]
+        self._user32.SetWindowTextW.restype = ctypes.c_bool
+        self._user32.SetWindowPos.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_void_p,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_uint,
+        ]
+        self._user32.SetWindowPos.restype = ctypes.c_bool
+        self._user32.PeekMessageW.argtypes = [
+            ctypes.POINTER(_Msg),
+            ctypes.c_void_p,
+            ctypes.c_uint,
+            ctypes.c_uint,
+            ctypes.c_uint,
+        ]
+        self._user32.PeekMessageW.restype = ctypes.c_bool
+        self._user32.TranslateMessage.argtypes = [ctypes.POINTER(_Msg)]
+        self._user32.TranslateMessage.restype = ctypes.c_bool
+        self._user32.DispatchMessageW.argtypes = [ctypes.POINTER(_Msg)]
+        self._user32.DispatchMessageW.restype = ctypes.c_ssize_t
+        self._user32.GetSystemMetrics.argtypes = [ctypes.c_int]
+        self._user32.GetSystemMetrics.restype = ctypes.c_int
 
     def initialize(self) -> None:
         if self._initialized:
@@ -128,8 +186,7 @@ class Win32PlatformBackend:
 
         atom = self._user32.RegisterClassW(ctypes.byref(window_class))
         if not atom:
-            get_last_error: Any = getattr(ctypes, "get_last_error")
-            error = int(get_last_error())
+            error = self._last_error()
             if error != _ERROR_CLASS_ALREADY_EXISTS:
                 raise OSError(error, "RegisterClassW failed for SwirUI.")
 
@@ -140,8 +197,10 @@ class Win32PlatformBackend:
         width = int(self._user32.GetSystemMetrics(_SM_CXSCREEN))
         height = int(self._user32.GetSystemMetrics(_SM_CYSCREEN))
         scale = 1.0
-        get_dpi = getattr(self._user32, "GetDpiForSystem", None)
+        get_dpi = self._user32.__dict__.get("GetDpiForSystem")
         if get_dpi is not None:
+            get_dpi.argtypes = []
+            get_dpi.restype = ctypes.c_uint
             dpi = int(get_dpi())
             if dpi > 0:
                 scale = dpi / 96.0
@@ -164,9 +223,7 @@ class Win32PlatformBackend:
             None,
         )
         if not hwnd:
-            get_last_error: Any = getattr(ctypes, "get_last_error")
-            error = int(get_last_error())
-            raise OSError(error, "CreateWindowExW failed for SwirUI.")
+            raise OSError(self._last_error(), "CreateWindowExW failed for SwirUI.")
 
         handle = NativeWindowHandle(int(hwnd))
         self._windows.add(handle)
@@ -296,6 +353,11 @@ class Win32PlatformBackend:
         if message in (_WM_RBUTTONDOWN, _WM_RBUTTONUP):
             return PointerButton.RIGHT
         return PointerButton.MIDDLE
+
+    @staticmethod
+    def _last_error() -> int:
+        get_last_error: Any = ctypes.__dict__["get_last_error"]
+        return int(get_last_error())
 
     def _require_initialized(self) -> None:
         if not self._initialized:
