@@ -82,6 +82,23 @@ class PathGeometry:
     def clockwise(self) -> bool:
         return self.signed_area < 0.0
 
+    def contains(self, point: Point) -> bool:
+        """Return whether a point is inside a closed path, including its boundary."""
+
+        if not self.closed or not self.bounds.contains(point):
+            return False
+        crossings = 0
+        for index, a in enumerate(self.points):
+            b = self.points[(index + 1) % len(self.points)]
+            if _on_segment(a, b, point):
+                return True
+            if (a.y > point.y) == (b.y > point.y):
+                continue
+            intersection_x = (b.x - a.x) * (point.y - a.y) / (b.y - a.y) + a.x
+            if intersection_x > point.x:
+                crossings += 1
+        return crossings % 2 == 1
+
     def triangles(self) -> tuple[Triangle, ...]:
         """Tessellate a simple closed polygon using deterministic ear clipping.
 
