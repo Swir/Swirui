@@ -49,3 +49,37 @@ def test_wgpu_core_clears_and_draws_real_win32_surface() -> None:
     finally:
         backend.destroy_window(handle)
         backend.shutdown()
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Persistent GPU test requires Windows")
+def test_persistent_wgpu_renderer_survives_multiple_frames_and_resize() -> None:
+    native = importlib.import_module("_swirui_native")
+    backend = Win32PlatformBackend()
+    backend.initialize()
+    handle = backend.create_window(NativeWindowSpec("SwirUI Persistent GPU", 640, 420))
+    backend.show_window(handle)
+    backend.poll_events()
+
+    try:
+        renderer = native.Win32GpuRenderer(handle.value, 640, 420)
+        assert renderer.adapter_name
+        assert renderer.graphics_backend
+        assert renderer.width == 640
+        assert renderer.height == 420
+
+        rectangles = [
+            (28.0, 34.0, 250.0, 116.0, 0.0, 0.55, 1.0, 1.0),
+            (320.0, 70.0, 190.0, 210.0, 0.42, 0.18, 1.0, 0.88),
+        ]
+        assert renderer.draw_rectangles(rectangles) == 2
+        assert renderer.draw_rectangles(rectangles) == 2
+
+        backend.resize_window(handle, 720, 460)
+        backend.poll_events()
+        renderer.resize(720, 460)
+        assert renderer.width == 720
+        assert renderer.height == 460
+        assert renderer.draw_rectangles(rectangles) == 2
+    finally:
+        backend.destroy_window(handle)
+        backend.shutdown()
