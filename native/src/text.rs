@@ -19,7 +19,6 @@ pub(crate) type TextInstance = (
     String,
 );
 
-#[cfg(target_os = "windows")]
 pub(crate) struct TextSystem {
     font_system: FontSystem,
     swash_cache: SwashCache,
@@ -29,7 +28,6 @@ pub(crate) struct TextSystem {
     renderer: TextRenderer,
 }
 
-#[cfg(target_os = "windows")]
 impl TextSystem {
     pub(crate) fn new(
         device: &wgpu::Device,
@@ -142,13 +140,17 @@ impl TextSystem {
                 areas,
                 &mut self.swash_cache,
             )
-            .map_err(|error| PyRuntimeError::new_err(format!("GPU text preparation failed: {error}")))
+            .map_err(|error| {
+                PyRuntimeError::new_err(format!("GPU text preparation failed: {error:?}"))
+            })
     }
 
     pub(crate) fn render(&self, pass: &mut wgpu::RenderPass<'_>) -> PyResult<()> {
         self.renderer
             .render(&self.atlas, &self.viewport, pass)
-            .map_err(|error| PyRuntimeError::new_err(format!("GPU text rendering failed: {error}")))
+            .map_err(|error| {
+                PyRuntimeError::new_err(format!("GPU text rendering failed: {error:?}"))
+            })
     }
 
     pub(crate) fn trim(&mut self) {
@@ -202,12 +204,10 @@ pub(crate) fn validate_texts(texts: &[TextInstance]) -> PyResult<()> {
     Ok(())
 }
 
-#[cfg(target_os = "windows")]
 fn channel_to_u8(channel: f32) -> u8 {
     (channel * 255.0).round() as u8
 }
 
-#[cfg(target_os = "windows")]
 fn float_to_i32(value: f32) -> i32 {
     value.round().clamp(i32::MIN as f32, i32::MAX as f32) as i32
 }
