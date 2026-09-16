@@ -4,9 +4,9 @@
 
 ## Project progress
 
-**Overall completion: 14%**
+**Overall completion: 16%**
 
-`[███░░░░░░░░░░░░░░░░░] 14%`
+`[███░░░░░░░░░░░░░░░░░] 16%`
 
 Progress is based on implemented and verified roadmap work. Ideas, mockups and unfinished prototypes do not increase the percentage.
 
@@ -87,8 +87,8 @@ Progress is based on implemented and verified roadmap work. Ideas, mockups and u
 - [x] Image rendering
 - [x] Clipping and compositing
 - [ ] Robust DPI / HiDPI handling
-- [ ] Multi-monitor support
-- [ ] Display-aware 60 / 120 / 144+ Hz presentation
+- [x] Multi-monitor support
+- [x] Display-aware 60 / 120 / 144+ Hz presentation
 - [x] VSync / present-mode selection
 
 ### 0.2 gate
@@ -365,6 +365,8 @@ AI output must remain ordinary, editable SwirUI code.
 - [x] Unit-test foundation
 - [x] Headless native-window test backend
 - [x] Windows real-native-window smoke test
+- [x] Windows active-display / refresh-rate mapping smoke test
+- [x] Windows `WM_DISPLAYCHANGE` / `WM_DPICHANGED` normalization smoke tests
 - [x] Windows real-wgpu surface/present smoke test
 - [x] Windows real-wgpu instanced rectangle draw smoke test
 - [x] Windows persistent GPU context multi-frame + resize smoke test
@@ -372,7 +374,7 @@ AI output must remain ordinary, editable SwirUI code.
 - [x] Windows shaped-text SceneGraph → Python → Rust/wgpu smoke test
 - [x] Windows image-resource SceneGraph → Python → Rust/wgpu smoke test
 - [x] Windows presentation-policy reconfiguration smoke test
-- [x] High-refresh runtime pacing tests
+- [x] Display-aware high-refresh runtime pacing tests
 - [x] Rust native-core check and unit tests
 - [x] ABI3 native extension build on Windows
 - [x] Python 3.11–3.14 test matrix
