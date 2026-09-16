@@ -11,6 +11,8 @@ use pyo3::prelude::*;
 use raw_window_handle::{RawWindowHandle, Win32WindowHandle, WindowsDisplayHandle};
 #[cfg(target_os = "windows")]
 use std::num::NonZeroIsize;
+#[cfg(target_os = "windows")]
+use wgpu::util::DeviceExt;
 
 #[pyfunction]
 fn core_version() -> &'static str {
@@ -107,6 +109,181 @@ fn clear_win32_surface(
     Ok((info.name, info.backend.to_string()))
 }
 
+#[cfg(target_os = "windows")]
+#[pyfunction]
+#[pyo3(signature = (
+    hwnd,
+    width,
+    height,
+    rectangles,
+    background_red=0.027,
+    background_green=0.043,
+    background_blue=0.078,
+    background_alpha=1.0
+))]
+fn draw_rectangles_win32_surface(
+    hwnd: isize,
+    width: u32,
+    height: u32,
+    rectangles: Vec<(f32, f32, f32, f32, f32, f32, f32, f32)>,
+    background_red: f64,
+    background_green: f64,
+    background_blue: f64,
+    background_alpha: f64,
+) -> PyResult<(String, String, usize)> {
+    validate_dimensions(width, height)?;
+    validate_color(
+        background_red,
+        background_green,
+        background_blue,
+        background_alpha,
+    )?;
+    validate_rectangles(&rectangles)?;
+
+    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle());
+    let surface = create_win32_surface(&instance, hwnd)?;
+    let adapter = request_present_adapter(&instance, &surface)?;
+    let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
+        label: Some("SwirUI rectangle GPU device"),
+        ..Default::default()
+    }))
+    .map_err(|error| PyRuntimeError::new_err(format!("GPU device creation failed: {error}")))?;
+
+    let mut config = surface
+        .get_default_config(&adapter, width, height)
+        .ok_or_else(|| PyRuntimeError::new_err("The selected GPU cannot configure this surface."))?;
+    config.present_mode = wgpu::PresentMode::AutoVsync;
+    config.desired_maximum_frame_latency = 1;
+    surface.configure(&device, &config);
+
+    let frame_uniforms = floats_to_bytes(&[width as f32, height as f32, 0.0, 0.0]);
+    let rectangle_data = rectangle_bytes(&rectangles);
+    let frame_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("SwirUI frame uniforms"),
+        contents: &frame_uniforms,
+        usage: wgpu::BufferUsages::UNIFORM,
+    });
+    let rectangle_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("SwirUI rectangle instances"),
+        contents: &rectangle_data,
+        usage: wgpu::BufferUsages::STORAGE,
+    });
+
+    let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: Some("SwirUI rectangle bind group layout"),
+        entries: &[
+            wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::VERTEX,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 1,
+                visibility: wgpu::ShaderStages::VERTEX,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: true },
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+        ],
+    });
+    let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("SwirUI rectangle bind group"),
+        layout: &bind_group_layout,
+        entries: &[
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: frame_buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: rectangle_buffer.as_entire_binding(),
+            },
+        ],
+    });
+    let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        label: Some("SwirUI rectangle pipeline layout"),
+        bind_group_layouts: &[Some(&bind_group_layout)],
+        immediate_size: 0,
+    });
+    let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: Some("SwirUI rectangle shader"),
+        source: wgpu::ShaderSource::Wgsl(include_str!("rectangles.wgsl").into()),
+    });
+    let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: Some("SwirUI rectangle pipeline"),
+        layout: Some(&pipeline_layout),
+        vertex: wgpu::VertexState {
+            module: &shader,
+            entry_point: Some("vs_main"),
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
+            buffers: &[],
+        },
+        primitive: wgpu::PrimitiveState::default(),
+        depth_stencil: None,
+        multisample: wgpu::MultisampleState::default(),
+        fragment: Some(wgpu::FragmentState {
+            module: &shader,
+            entry_point: Some("fs_main"),
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
+            targets: &[Some(wgpu::ColorTargetState {
+                format: config.format,
+                blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+                write_mask: wgpu::ColorWrites::ALL,
+            })],
+        }),
+        multiview_mask: None,
+        cache: None,
+    });
+
+    let frame = acquire_surface_texture(&surface)?;
+    let view = frame
+        .texture
+        .create_view(&wgpu::TextureViewDescriptor::default());
+    let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+        label: Some("SwirUI rectangle command encoder"),
+    });
+    {
+        let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("SwirUI rectangle pass"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: &view,
+                depth_slice: None,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color {
+                        r: background_red,
+                        g: background_green,
+                        b: background_blue,
+                        a: background_alpha,
+                    }),
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+            multiview_mask: None,
+        });
+        render_pass.set_pipeline(&pipeline);
+        render_pass.set_bind_group(0, &bind_group, &[]);
+        render_pass.draw(0..6, 0..rectangles.len() as u32);
+    }
+
+    queue.submit([encoder.finish()]);
+    queue.present(frame);
+
+    let info = adapter.get_info();
+    Ok((info.name, info.backend.to_string(), rectangles.len()))
+}
+
 #[cfg(not(target_os = "windows"))]
 #[pyfunction]
 #[pyo3(signature = (hwnd, width, height, red=0.027, green=0.043, blue=0.078, alpha=1.0))]
@@ -122,6 +299,43 @@ fn clear_win32_surface(
     let _ = (hwnd, width, height, red, green, blue, alpha);
     Err(PyRuntimeError::new_err(
         "clear_win32_surface is only available on Windows.",
+    ))
+}
+
+#[cfg(not(target_os = "windows"))]
+#[pyfunction]
+#[pyo3(signature = (
+    hwnd,
+    width,
+    height,
+    rectangles,
+    background_red=0.027,
+    background_green=0.043,
+    background_blue=0.078,
+    background_alpha=1.0
+))]
+fn draw_rectangles_win32_surface(
+    hwnd: isize,
+    width: u32,
+    height: u32,
+    rectangles: Vec<(f32, f32, f32, f32, f32, f32, f32, f32)>,
+    background_red: f64,
+    background_green: f64,
+    background_blue: f64,
+    background_alpha: f64,
+) -> PyResult<(String, String, usize)> {
+    let _ = (
+        hwnd,
+        width,
+        height,
+        rectangles,
+        background_red,
+        background_green,
+        background_blue,
+        background_alpha,
+    );
+    Err(PyRuntimeError::new_err(
+        "draw_rectangles_win32_surface is only available on Windows.",
     ))
 }
 
@@ -161,6 +375,58 @@ fn validate_color(red: f64, green: f64, blue: f64, alpha: f64) -> PyResult<()> {
         ));
     }
     Ok(())
+}
+
+#[cfg_attr(not(any(test, target_os = "windows")), allow(dead_code))]
+fn validate_rectangles(rectangles: &[(f32, f32, f32, f32, f32, f32, f32, f32)]) -> PyResult<()> {
+    if rectangles.is_empty() {
+        return Err(PyValueError::new_err(
+            "At least one rectangle is required for GPU submission.",
+        ));
+    }
+
+    for &(x, y, width, height, red, green, blue, alpha) in rectangles {
+        if ![x, y, width, height, red, green, blue, alpha]
+            .into_iter()
+            .all(f32::is_finite)
+        {
+            return Err(PyValueError::new_err(
+                "Rectangle geometry and color channels must be finite.",
+            ));
+        }
+        if width <= 0.0 || height <= 0.0 {
+            return Err(PyValueError::new_err(
+                "Rectangle width and height must be greater than zero.",
+            ));
+        }
+        if [red, green, blue, alpha]
+            .into_iter()
+            .any(|channel| !(0.0..=1.0).contains(&channel))
+        {
+            return Err(PyValueError::new_err(
+                "Rectangle color channels must be between 0.0 and 1.0.",
+            ));
+        }
+    }
+    Ok(())
+}
+
+#[cfg(target_os = "windows")]
+fn floats_to_bytes(values: &[f32]) -> Vec<u8> {
+    let mut bytes = Vec::with_capacity(std::mem::size_of_val(values));
+    for value in values {
+        bytes.extend_from_slice(&value.to_ne_bytes());
+    }
+    bytes
+}
+
+#[cfg(target_os = "windows")]
+fn rectangle_bytes(rectangles: &[(f32, f32, f32, f32, f32, f32, f32, f32)]) -> Vec<u8> {
+    let mut values = Vec::with_capacity(rectangles.len() * 8);
+    for &(x, y, width, height, red, green, blue, alpha) in rectangles {
+        values.extend_from_slice(&[x, y, width, height, red, green, blue, alpha]);
+    }
+    floats_to_bytes(&values)
 }
 
 #[cfg(target_os = "windows")]
@@ -238,6 +504,7 @@ fn _swirui_native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(enabled_backends, module)?)?;
     module.add_function(wrap_pyfunction!(probe_adapter, module)?)?;
     module.add_function(wrap_pyfunction!(clear_win32_surface, module)?)?;
+    module.add_function(wrap_pyfunction!(draw_rectangles_win32_surface, module)?)?;
     Ok(())
 }
 
@@ -261,5 +528,18 @@ mod tests {
         assert!(validate_color(0.0, 0.5, 1.0, 1.0).is_ok());
         assert!(validate_color(-0.1, 0.5, 1.0, 1.0).is_err());
         assert!(validate_color(0.0, 0.5, 1.1, 1.0).is_err());
+    }
+
+    #[test]
+    fn validates_rectangle_instances() {
+        let valid = [(20.0, 30.0, 100.0, 50.0, 0.0, 0.5, 1.0, 1.0)];
+        assert!(validate_rectangles(&valid).is_ok());
+        assert!(validate_rectangles(&[]).is_err());
+
+        let zero_width = [(20.0, 30.0, 0.0, 50.0, 0.0, 0.5, 1.0, 1.0)];
+        assert!(validate_rectangles(&zero_width).is_err());
+
+        let invalid_color = [(20.0, 30.0, 100.0, 50.0, 0.0, 1.5, 1.0, 1.0)];
+        assert!(validate_rectangles(&invalid_color).is_err());
     }
 }
