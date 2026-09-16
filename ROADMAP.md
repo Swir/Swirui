@@ -18,18 +18,18 @@ Progress is based on completed and tested roadmap work. Ideas, mockups and unfin
 
 - [x] Repository initialized
 - [x] Package metadata and development tooling
-- [ ] Application lifecycle
-- [ ] Window lifecycle/model
-- [ ] Component tree
-- [ ] Event system
-- [ ] Reactive State
-- [ ] Configuration system
-- [ ] Logging system
-- [ ] Renderer abstraction
-- [ ] Platform abstraction
-- [ ] Automated tests
-- [ ] CI for Python 3.11–3.14
-- [ ] Architecture documentation
+- [x] Application lifecycle
+- [x] Window lifecycle/model
+- [x] Component tree
+- [x] Event system
+- [x] Reactive State
+- [x] Configuration system
+- [x] Logging system
+- [x] Renderer abstraction
+- [x] Platform abstraction
+- [x] Automated tests
+- [ ] CI verified on Python 3.11–3.14
+- [x] Architecture documentation
 
 ## 0.2 Alpha — Native Window + First Renderer
 
