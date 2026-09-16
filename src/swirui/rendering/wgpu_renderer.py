@@ -61,11 +61,11 @@ class WgpuRenderer:
     rectangles aligned across mixed-DPI displays.
 
     Native builds retain one persistent GPU context per window so the expensive
-    instance/device/pipeline setup is not repeated for every frame. Images are
-    registered once as RGBA resources and uploaded into every active native GPU
-    context, while scene nodes only submit lightweight resource references.
-    Re-registering byte-identical image content is a cache hit and does not
-    recreate textures in active GPU contexts.
+    instance/device/pipeline setup is not repeated for every frame. Image
+    registrations are content-addressed: byte-identical RGBA resources share a
+    single native texture even when applications expose them under different
+    logical resource ids. Logical ids are rebound transactionally while native
+    textures stay alive until their final alias is released.
     """
 
     name = "wgpu"
@@ -93,6 +93,8 @@ class WgpuRenderer:
         self.surfaces: dict[int, RenderSurface] = {}
         self._contexts: dict[int, Any] = {}
         self._image_resources: dict[str, ImageResource] = {}
+        self._image_aliases: dict[str, str] = {}
+        self._image_content_index: dict[ImageResource, str] = {}
         self._image_cache_hits = 0
         self._image_native_uploads = 0
         self._native: Any | None = native_module
@@ -103,17 +105,31 @@ class WgpuRenderer:
 
     @property
     def image_resource_count(self) -> int:
+        """Return the number of logical image ids registered by the application."""
+
+        return len(self._image_aliases)
+
+    @property
+    def image_gpu_resource_count(self) -> int:
+        """Return the number of unique RGBA payloads retained for native upload."""
+
         return len(self._image_resources)
 
     @property
+    def image_alias_count(self) -> int:
+        """Return logical image ids currently sharing an existing GPU resource."""
+
+        return self.image_resource_count - self.image_gpu_resource_count
+
+    @property
     def image_resource_bytes(self) -> int:
-        """Return CPU-side RGBA bytes retained by the persistent image cache."""
+        """Return unique CPU-side RGBA bytes retained by the persistent cache."""
 
         return sum(len(resource[2]) for resource in self._image_resources.values())
 
     @property
     def image_cache_hits(self) -> int:
-        """Return byte-identical image registrations skipped by the cache."""
+        """Return same-id and cross-id registrations served by the image cache."""
 
         return self._image_cache_hits
 
@@ -144,12 +160,13 @@ class WgpuRenderer:
         height: int,
         rgba: bytes | bytearray | memoryview,
     ) -> None:
-        """Register or replace a cached RGBA8 image used by IMAGE scene nodes.
+        """Register or replace an RGBA8 image used by IMAGE scene nodes.
 
-        Byte-identical re-registration is intentionally a no-op. Changed image
-        dimensions or pixels replace the cached resource and are uploaded once
-        to each active persistent native context. Future contexts receive only
-        the latest cached resource when their surface is created.
+        Byte-identical content is cached globally inside this renderer. A second
+        logical resource id that references identical dimensions and RGBA bytes
+        becomes an alias of the already-uploaded native texture instead of
+        allocating another GPU resource. Rebinding one alias to different pixels
+        leaves the old texture alive while other aliases still reference it.
         """
 
         if not resource_id.strip():
@@ -165,10 +182,22 @@ class WgpuRenderer:
             )
 
         resource = (width, height, data)
-        if self._image_resources.get(resource_id) == resource:
+        previous_native_id = self._image_aliases.get(resource_id)
+        if previous_native_id is not None:
+            previous_resource = self._image_resources[previous_native_id]
+            if previous_resource == resource:
+                self._image_cache_hits += 1
+                return
+
+        cached_native_id = self._image_content_index.get(resource)
+        if cached_native_id is not None:
+            self._image_aliases[resource_id] = cached_native_id
             self._image_cache_hits += 1
+            if previous_native_id is not None and previous_native_id != cached_native_id:
+                self._release_native_image_if_unused(previous_native_id)
             return
 
+        native_id = self._allocate_native_image_id(resource_id)
         registrations: list[tuple[Any, Any]] = []
         for context in self._contexts.values():
             register = getattr(context, "register_image_rgba", None)
@@ -178,21 +207,32 @@ class WgpuRenderer:
                 )
             registrations.append((context, register))
 
-        self._image_resources[resource_id] = resource
-        for _context, register in registrations:
-            register(resource_id, width, height, data)
-            self._image_native_uploads += 1
+        uploaded_contexts: list[Any] = []
+        try:
+            for context, register in registrations:
+                register(native_id, width, height, data)
+                uploaded_contexts.append(context)
+        except Exception:
+            for context in uploaded_contexts:
+                unregister = getattr(context, "unregister_image", None)
+                if unregister is not None:
+                    unregister(native_id)
+            raise
+
+        self._image_resources[native_id] = resource
+        self._image_content_index[resource] = native_id
+        self._image_aliases[resource_id] = native_id
+        self._image_native_uploads += len(uploaded_contexts)
+        if previous_native_id is not None and previous_native_id != native_id:
+            self._release_native_image_if_unused(previous_native_id)
 
     def unregister_image(self, resource_id: str) -> bool:
-        """Remove an image resource from Python and every active GPU context."""
+        """Remove one logical image id and release its GPU texture when unreferenced."""
 
-        removed = self._image_resources.pop(resource_id, None) is not None
-        if not removed:
+        native_id = self._image_aliases.pop(resource_id, None)
+        if native_id is None:
             return False
-        for context in self._contexts.values():
-            unregister = getattr(context, "unregister_image", None)
-            if unregister is not None:
-                unregister(resource_id)
+        self._release_native_image_if_unused(native_id)
         return True
 
     def create_surface(self, window: Window) -> RenderSurface:
@@ -389,9 +429,29 @@ class WgpuRenderer:
             raise RuntimeError(
                 "Installed SwirUI native GPU core does not support image resources."
             )
-        for resource_id, (width, height, data) in self._image_resources.items():
-            register(resource_id, width, height, data)
+        for native_id, (width, height, data) in self._image_resources.items():
+            register(native_id, width, height, data)
             self._image_native_uploads += 1
+
+    def _allocate_native_image_id(self, preferred: str) -> str:
+        if preferred not in self._image_resources:
+            return preferred
+        suffix = 1
+        while f"{preferred}#{suffix}" in self._image_resources:
+            suffix += 1
+        return f"{preferred}#{suffix}"
+
+    def _release_native_image_if_unused(self, native_id: str) -> None:
+        if native_id in self._image_aliases.values():
+            return
+        resource = self._image_resources.pop(native_id, None)
+        if resource is None:
+            return
+        self._image_content_index.pop(resource, None)
+        for context in self._contexts.values():
+            unregister = getattr(context, "unregister_image", None)
+            if unregister is not None:
+                unregister(native_id)
 
     def _capture_adapter_info(self, context: Any) -> None:
         self.adapter_name = str(context.adapter_name)
@@ -511,13 +571,14 @@ class WgpuRenderer:
             if clip is None or node.bounds.intersection(clip) is None:
                 continue
             resource_id = node.resource_id
-            if resource_id is None or resource_id not in self._image_resources:
+            native_id = self._image_aliases.get(resource_id) if resource_id is not None else None
+            if native_id is None:
                 raise RuntimeError(
                     f"Scene image resource {resource_id!r} is not registered with WgpuRenderer."
                 )
             images.append(
                 (
-                    resource_id,
+                    native_id,
                     self._scale(node.bounds.x, scale),
                     self._scale(node.bounds.y, scale),
                     self._scale(node.bounds.width, scale),
