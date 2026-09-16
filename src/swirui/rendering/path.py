@@ -151,9 +151,7 @@ def _segments_intersect(a: Point, b: Point, c: Point, d: Point) -> bool:
         return True
     if o3 == 0 and _on_segment(c, d, a):
         return True
-    if o4 == 0 and _on_segment(c, d, b):
-        return True
-    return False
+    return bool(o4 == 0 and _on_segment(c, d, b))
 
 
 def _is_simple_polygon(points: tuple[Point, ...]) -> bool:
