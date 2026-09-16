@@ -13,8 +13,17 @@ from swirui.rendering import (
 
 class FakeNativeGpu:
     def __init__(self) -> None:
+        self.scene_calls: list[tuple[object, ...]] = []
         self.rectangle_calls: list[tuple[object, ...]] = []
         self.clear_calls: list[tuple[object, ...]] = []
+
+    def draw_scene_win32_surface(self, *args: object) -> tuple[str, str, int, int]:
+        self.scene_calls.append(args)
+        rectangles = args[3]
+        texts = args[4]
+        assert isinstance(rectangles, list)
+        assert isinstance(texts, list)
+        return ("Fake GPU", "test-backend", len(rectangles), len(texts))
 
     def draw_rectangles_win32_surface(self, *args: object) -> tuple[str, str, int]:
         self.rectangle_calls.append(args)
@@ -35,9 +44,21 @@ class FakePersistentContext:
         self.hwnd = hwnd
         self.width = width
         self.height = height
+        self.scene_calls: list[tuple[object, ...]] = []
         self.draw_calls: list[tuple[object, ...]] = []
         self.clear_calls: list[tuple[object, ...]] = []
         self.resize_calls: list[tuple[int, int]] = []
+
+    def draw_scene(
+        self,
+        rectangles: object,
+        texts: object,
+        *background: object,
+    ) -> tuple[int, int]:
+        self.scene_calls.append((rectangles, texts, *background))
+        assert isinstance(rectangles, list)
+        assert isinstance(texts, list)
+        return (len(rectangles), len(texts))
 
     def draw_rectangles(self, rectangles: object, *background: object) -> int:
         self.draw_calls.append((rectangles, *background))
@@ -64,7 +85,7 @@ class FakePersistentNative(FakeNativeGpu):
         return context
 
 
-def _rectangle_scene(width: int = 800, height: int = 500) -> Scene:
+def _mixed_scene(width: int = 800, height: int = 500) -> Scene:
     root = SceneNode(
         key="root",
         kind=SceneNodeKind.GROUP,
@@ -80,43 +101,87 @@ def _rectangle_scene(width: int = 800, height: int = 500) -> Scene:
             corner_radius=CornerRadius(12, 18, 24, 30),
         ),
         SceneNode(
-            key="ignored-text",
+            key="title",
             kind=SceneNodeKind.TEXT,
-            bounds=Rect(50, 70, 160, 30),
+            bounds=Rect(50, 70, 160, 36),
             text="SwirUI",
-            fill=Color.from_hex("#FFFFFF"),
+            fill=Color.from_hex("#EAF7FF"),
+            opacity=0.8,
+            font_size=24,
+            font_family="Segoe UI",
         ),
     )
     return Scene(width, height, root)
 
 
-def test_wgpu_renderer_submits_scene_rectangles() -> None:
+def test_wgpu_renderer_submits_scene_rectangles_and_text() -> None:
     native = FakeNativeGpu()
     renderer = WgpuRenderer(native_module=native)
     app = App(platform_backend=NullPlatformBackend(), renderer=renderer)
     window = Window(title="GPU scene", width=800, height=500)
-    window.set_scene(_rectangle_scene())
+    window.set_scene(_mixed_scene())
     app.add_window(window)
 
     app.start()
 
     assert renderer.frames_rendered == 1
     assert renderer.last_rectangle_count == 1
+    assert renderer.last_text_count == 1
     assert renderer.adapter_name == "Fake GPU"
     assert renderer.graphics_backend == "test-backend"
-    assert len(native.rectangle_calls) == 1
+    assert len(native.scene_calls) == 1
+    assert native.rectangle_calls == []
     assert native.clear_calls == []
 
-    submitted = native.rectangle_calls[0][3]
-    assert isinstance(submitted, list)
-    assert submitted[0][:4] == (40, 50, 240, 120)
-    assert submitted[0][7] == 0.75
-    assert submitted[0][8:] == (12, 18, 24, 30)
+    submitted_rectangles = native.scene_calls[0][3]
+    submitted_texts = native.scene_calls[0][4]
+    assert isinstance(submitted_rectangles, list)
+    assert isinstance(submitted_texts, list)
+    assert submitted_rectangles[0][:4] == (40, 50, 240, 120)
+    assert submitted_rectangles[0][7] == 0.75
+    assert submitted_rectangles[0][8:] == (12, 18, 24, 30)
+    assert submitted_texts[0][:6] == ("SwirUI", 50, 70, 160, 36, 24)
+    assert submitted_texts[0][9] == 0.8
+    assert submitted_texts[0][10] == "Segoe UI"
 
     app.stop()
 
 
-def test_wgpu_renderer_clears_when_scene_has_no_rectangles() -> None:
+def test_wgpu_renderer_uses_white_for_unfilled_text() -> None:
+    native = FakeNativeGpu()
+    renderer = WgpuRenderer(native_module=native)
+    app = App(platform_backend=NullPlatformBackend(), renderer=renderer)
+    window = Window(width=640, height=360)
+    root = SceneNode(
+        key="root",
+        kind=SceneNodeKind.GROUP,
+        bounds=Rect(0, 0, 640, 360),
+    )
+    root.add(
+        SceneNode(
+            key="text",
+            kind=SceneNodeKind.TEXT,
+            bounds=Rect(20, 30, 260, 52),
+            text="GPU shaped text",
+            opacity=0.5,
+            font_size=28,
+        )
+    )
+    window.set_scene(Scene(640, 360, root))
+    app.add_window(window)
+
+    app.start()
+
+    submitted_texts = native.scene_calls[0][4]
+    assert isinstance(submitted_texts, list)
+    assert submitted_texts[0][6:10] == (1.0, 1.0, 1.0, 0.5)
+    assert renderer.last_rectangle_count == 0
+    assert renderer.last_text_count == 1
+
+    app.stop()
+
+
+def test_wgpu_renderer_clears_when_scene_has_no_drawables() -> None:
     native = FakeNativeGpu()
     renderer = WgpuRenderer(native_module=native)
     app = App(platform_backend=NullPlatformBackend(), renderer=renderer)
@@ -138,7 +203,9 @@ def test_wgpu_renderer_clears_when_scene_has_no_rectangles() -> None:
 
     assert renderer.frames_rendered == 1
     assert renderer.last_rectangle_count == 0
+    assert renderer.last_text_count == 0
     assert len(native.clear_calls) == 1
+    assert native.scene_calls == []
     assert native.rectangle_calls == []
 
     app.stop()
@@ -149,7 +216,7 @@ def test_wgpu_renderer_reuses_persistent_context_and_resizes_it() -> None:
     renderer = WgpuRenderer(native_module=native)
     app = App(platform_backend=NullPlatformBackend(), renderer=renderer)
     window = Window(title="Persistent GPU", width=800, height=500)
-    window.set_scene(_rectangle_scene())
+    window.set_scene(_mixed_scene())
     app.add_window(window)
 
     app.start()
@@ -157,12 +224,14 @@ def test_wgpu_renderer_reuses_persistent_context_and_resizes_it() -> None:
     assert len(native.contexts) == 1
     assert renderer.persistent_context_count == 1
     context = native.contexts[0]
-    assert len(context.draw_calls) == 1
+    assert len(context.scene_calls) == 1
+    assert renderer.last_rectangle_count == 1
+    assert renderer.last_text_count == 1
     assert renderer.adapter_name == "Persistent Fake GPU"
     assert renderer.graphics_backend == "persistent-test-backend"
 
     renderer.render(window, None)
-    assert len(context.draw_calls) == 2
+    assert len(context.scene_calls) == 2
     assert len(native.contexts) == 1
 
     renderer.resize_surface(window, 900, 600)
