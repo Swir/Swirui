@@ -4,8 +4,7 @@ This example exercises the public lifecycle and reactive primitives. A real
 native window will replace the headless foundation runtime in a later milestone.
 """
 
-from swirui import App, Window
-from swirui.core import Component, State
+from swirui import App, Component, State, Window
 
 
 counter = State(0)
