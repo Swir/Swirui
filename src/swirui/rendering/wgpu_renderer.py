@@ -19,9 +19,10 @@ RectangleInstance = tuple[float, float, float, float, float, float, float, float
 class WgpuRenderer:
     """Submit prepared SwirUI scenes to the native Rust/wgpu renderer.
 
-    The first implementation intentionally supports filled rectangles only. Text,
-    images, clipping and rounded corners are added progressively without changing
-    the framework-level renderer contract.
+    Native builds retain one persistent GPU context per window so the expensive
+    instance/device/pipeline setup is not repeated for every frame. The stateless
+    function path remains as a compatibility fallback for test doubles and older
+    development native modules.
     """
 
     name = "wgpu"
@@ -39,7 +40,12 @@ class WgpuRenderer:
         self.adapter_name: str | None = None
         self.graphics_backend: str | None = None
         self.surfaces: dict[int, RenderSurface] = {}
+        self._contexts: dict[int, Any] = {}
         self._native: Any | None = native_module
+
+    @property
+    def persistent_context_count(self) -> int:
+        return len(self._contexts)
 
     def initialize(self) -> None:
         if self.initialized:
@@ -59,17 +65,33 @@ class WgpuRenderer:
         self._require_initialized()
         if window.native_handle is None:
             raise RuntimeError("A native window handle is required before creating a GPU surface.")
+
+        handle = window.native_handle.value
         surface = RenderSurface(window.native_handle, window.width, window.height)
-        self.surfaces[window.native_handle.value] = surface
+        self.surfaces[handle] = surface
+
+        native = self._native
+        context_factory = getattr(native, "Win32GpuRenderer", None) if native is not None else None
+        if context_factory is not None:
+            context = context_factory(handle, window.width, window.height)
+            self._contexts[handle] = context
+            self._capture_adapter_info(context)
         return surface
 
     def resize_surface(self, window: Window, width: int, height: int) -> None:
         self._surface_for(window).resize(width, height)
+        if window.native_handle is None:
+            return
+        context = self._contexts.get(window.native_handle.value)
+        if context is not None:
+            context.resize(width, height)
 
     def destroy_surface(self, window: Window) -> None:
         if window.native_handle is None:
             return
-        surface = self.surfaces.pop(window.native_handle.value, None)
+        handle = window.native_handle.value
+        self._contexts.pop(handle, None)
+        surface = self.surfaces.pop(handle, None)
         if surface is not None:
             surface.destroy()
 
@@ -84,6 +106,43 @@ class WgpuRenderer:
             raise RuntimeError("Native GPU core is unavailable.")
 
         rectangles = self._rectangle_instances(window)
+        background = self.background
+        context = self._contexts.get(window.native_handle.value)
+        if context is not None:
+            if rectangles:
+                self.last_rectangle_count = int(
+                    context.draw_rectangles(
+                        rectangles,
+                        background.r,
+                        background.g,
+                        background.b,
+                        background.a,
+                    )
+                )
+            else:
+                context.clear(background.r, background.g, background.b, background.a)
+                self.last_rectangle_count = 0
+            self._capture_adapter_info(context)
+        else:
+            self._render_stateless(window, rectangles)
+
+        self.frames_rendered += 1
+
+    def shutdown(self) -> None:
+        self._contexts.clear()
+        for surface in self.surfaces.values():
+            surface.destroy()
+        self.surfaces.clear()
+        self.initialized = False
+
+    def _render_stateless(
+        self,
+        window: Window,
+        rectangles: list[RectangleInstance],
+    ) -> None:
+        native = self._native
+        if native is None or window.native_handle is None:
+            raise RuntimeError("Native GPU core is unavailable.")
         background = self.background
         if rectangles:
             adapter_name, graphics_backend, rectangle_count = (
@@ -113,13 +172,10 @@ class WgpuRenderer:
 
         self.adapter_name = str(adapter_name)
         self.graphics_backend = str(graphics_backend)
-        self.frames_rendered += 1
 
-    def shutdown(self) -> None:
-        for surface in self.surfaces.values():
-            surface.destroy()
-        self.surfaces.clear()
-        self.initialized = False
+    def _capture_adapter_info(self, context: Any) -> None:
+        self.adapter_name = str(context.adapter_name)
+        self.graphics_backend = str(context.graphics_backend)
 
     def _rectangle_instances(self, window: Window) -> list[RectangleInstance]:
         scene = window.scene
