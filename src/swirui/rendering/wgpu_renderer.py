@@ -9,11 +9,16 @@ from typing import Any
 from swirui.core import Component
 from swirui.window import Window
 
-from .geometry import Color
+from .geometry import Color, Rect
 from .scene import SceneNodeKind
 from .surface import RenderSurface
 
+ClipRect = tuple[float, float, float, float]
 RectangleInstance = tuple[
+    float,
+    float,
+    float,
+    float,
     float,
     float,
     float,
@@ -39,8 +44,9 @@ TextInstance = tuple[
     float,
     float,
     str,
+    ClipRect,
 ]
-ImageInstance = tuple[str, float, float, float, float, float]
+ImageInstance = tuple[str, float, float, float, float, float, ClipRect]
 ImageResource = tuple[int, int, bytes]
 
 _DEFAULT_TEXT_COLOR = Color(1.0, 1.0, 1.0, 1.0)
@@ -325,22 +331,35 @@ class WgpuRenderer:
         self.adapter_name = str(context.adapter_name)
         self.graphics_backend = str(context.graphics_backend)
 
+    @staticmethod
+    def _visible_clip(scene_width: float, scene_height: float, clip: Rect | None) -> Rect | None:
+        viewport = Rect(0.0, 0.0, scene_width, scene_height)
+        return viewport if clip is None else viewport.intersection(clip)
+
+    @staticmethod
+    def _clip_tuple(clip: Rect) -> ClipRect:
+        return (clip.x, clip.y, clip.right, clip.bottom)
+
     def _rectangle_instances(self, window: Window) -> list[RectangleInstance]:
         scene = window.scene
         if scene is None:
             return []
 
         rectangles: list[RectangleInstance] = []
-        for node, effective_opacity in scene.walk_with_opacity():
+        for node, effective_opacity, inherited_clip in scene.walk_composited():
             if node.kind not in (SceneNodeKind.GROUP, SceneNodeKind.RECTANGLE):
                 continue
             if node.fill is None:
                 continue
             if node.bounds.width <= 0.0 or node.bounds.height <= 0.0:
                 continue
+            clip = self._visible_clip(scene.width, scene.height, inherited_clip)
+            if clip is None or node.bounds.intersection(clip) is None:
+                continue
 
             fill = node.fill
             radius = node.corner_radius
+            clip_left, clip_top, clip_right, clip_bottom = self._clip_tuple(clip)
             rectangles.append(
                 (
                     node.bounds.x,
@@ -355,6 +374,10 @@ class WgpuRenderer:
                     radius.top_right,
                     radius.bottom_right,
                     radius.bottom_left,
+                    clip_left,
+                    clip_top,
+                    clip_right,
+                    clip_bottom,
                 )
             )
         return rectangles
@@ -365,12 +388,15 @@ class WgpuRenderer:
             return []
 
         texts: list[TextInstance] = []
-        for node, effective_opacity in scene.walk_with_opacity():
+        for node, effective_opacity, inherited_clip in scene.walk_composited():
             if node.kind is not SceneNodeKind.TEXT:
                 continue
             if not node.text:
                 continue
             if node.bounds.width <= 0.0 or node.bounds.height <= 0.0:
+                continue
+            clip = self._visible_clip(scene.width, scene.height, inherited_clip)
+            if clip is None or node.bounds.intersection(clip) is None:
                 continue
 
             fill = node.fill or _DEFAULT_TEXT_COLOR
@@ -387,6 +413,7 @@ class WgpuRenderer:
                     fill.b,
                     fill.a * effective_opacity,
                     node.font_family,
+                    self._clip_tuple(clip),
                 )
             )
         return texts
@@ -397,10 +424,13 @@ class WgpuRenderer:
             return []
 
         images: list[ImageInstance] = []
-        for node, effective_opacity in scene.walk_with_opacity():
+        for node, effective_opacity, inherited_clip in scene.walk_composited():
             if node.kind is not SceneNodeKind.IMAGE:
                 continue
             if node.bounds.width <= 0.0 or node.bounds.height <= 0.0:
+                continue
+            clip = self._visible_clip(scene.width, scene.height, inherited_clip)
+            if clip is None or node.bounds.intersection(clip) is None:
                 continue
             resource_id = node.resource_id
             if resource_id is None or resource_id not in self._image_resources:
@@ -415,6 +445,7 @@ class WgpuRenderer:
                     node.bounds.width,
                     node.bounds.height,
                     effective_opacity,
+                    self._clip_tuple(clip),
                 )
             )
         return images
