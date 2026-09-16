@@ -1,9 +1,11 @@
+import ctypes
 import sys
+from typing import Any
 
 import pytest
 
 from swirui import App, Window
-from swirui.platforms import NativeWindowSpec
+from swirui.platforms import NativeWindowSpec, PlatformEventKind
 from swirui.platforms.windows import Win32PlatformBackend
 from swirui.rendering import (
     Color,
@@ -14,6 +16,15 @@ from swirui.rendering import (
     SceneNodeKind,
     Win32PreviewRenderer,
 )
+
+
+class _SuggestedRect(ctypes.Structure):
+    _fields_ = [
+        ("left", ctypes.c_long),
+        ("top", ctypes.c_long),
+        ("right", ctypes.c_long),
+        ("bottom", ctypes.c_long),
+    ]
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Win32 smoke test requires Windows")
@@ -40,6 +51,42 @@ def test_win32_backend_creates_real_native_window() -> None:
     backend.poll_events()
     backend.destroy_window(handle)
     backend.shutdown()
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Win32 DPI smoke test requires Windows")
+def test_win32_backend_normalizes_real_dpi_change_message() -> None:
+    backend = Win32PlatformBackend()
+    backend.initialize()
+    handle = backend.create_window(NativeWindowSpec("SwirUI DPI Smoke", 640, 420))
+
+    try:
+        win_dll: Any = ctypes.__dict__["WinDLL"]
+        user32: Any = win_dll("user32", use_last_error=True)
+        user32.SendMessageW.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint,
+            ctypes.c_size_t,
+            ctypes.c_ssize_t,
+        ]
+        user32.SendMessageW.restype = ctypes.c_ssize_t
+
+        suggested = _SuggestedRect(120, 80, 840, 540)
+        dpi = 144
+        packed_dpi = dpi | (dpi << 16)
+        user32.SendMessageW(
+            ctypes.c_void_p(handle.value),
+            0x02E0,
+            packed_dpi,
+            ctypes.addressof(suggested),
+        )
+
+        events = backend.poll_events()
+        dpi_events = [event for event in events if event.kind is PlatformEventKind.DPI_CHANGED]
+        assert len(dpi_events) == 1
+        assert dpi_events[0].scale == pytest.approx(1.5)
+    finally:
+        backend.destroy_window(handle)
+        backend.shutdown()
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Win32 renderer smoke test requires Windows")
