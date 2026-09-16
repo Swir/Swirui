@@ -41,6 +41,7 @@ class Window(EventEmitter):
         self.height = height
         self.min_width = min_width
         self.min_height = min_height
+        self.scale = 1.0
         self.root: Component | None = None
         self.scene: Scene | None = None
         self.hovered_scene_node: SceneNode | None = None
@@ -116,7 +117,10 @@ class Window(EventEmitter):
             raise RuntimeError("Window is already bound to a native handle.")
         self._platform_backend = backend
         self.native_handle = handle
-        self.emit("native_bound", handle=handle)
+        initial_scale = backend.window_scale(handle)
+        if initial_scale > 0.0:
+            self.scale = initial_scale
+        self.emit("native_bound", handle=handle, scale=self.scale)
 
     def _unbind_native(self) -> None:
         if self.native_handle is None:
@@ -145,6 +149,11 @@ class Window(EventEmitter):
                 self.emit("resized", old_size=old_size, size=(width, height))
             return
 
+        if event.kind is PlatformEventKind.DPI_CHANGED:
+            if event.scale is not None and event.scale > 0.0:
+                self._set_scale(event.scale)
+            return
+
         if event.kind is PlatformEventKind.FOCUS:
             focused = bool(event.focused)
             if focused != self.focused:
@@ -157,6 +166,13 @@ class Window(EventEmitter):
             return
 
         self.emit(event.kind.value, event=event)
+
+    def _set_scale(self, scale: float) -> None:
+        if scale <= 0.0 or scale == self.scale:
+            return
+        old_scale = self.scale
+        self.scale = scale
+        self.emit("scale_changed", old_scale=old_scale, scale=scale)
 
     def _apply_pointer_event(self, event: PlatformEvent) -> None:
         scene_path: tuple[SceneNode, ...] = ()
@@ -331,5 +347,5 @@ class Window(EventEmitter):
     def __repr__(self) -> str:
         return (
             f"Window(title={self.title!r}, width={self.width}, height={self.height}, "
-            f"visible={self.visible}, closed={self.closed})"
+            f"scale={self.scale}, visible={self.visible}, closed={self.closed})"
         )
