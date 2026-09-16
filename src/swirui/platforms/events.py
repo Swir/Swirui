@@ -11,6 +11,7 @@ class PlatformEventKind(StrEnum):
 
     CLOSE = "close"
     RESIZE = "resize"
+    DPI_CHANGED = "dpi_changed"
     FOCUS = "focus"
     POINTER_MOVE = "pointer_move"
     POINTER_DOWN = "pointer_down"
@@ -45,6 +46,7 @@ class PlatformEvent:
     window: NativeWindowHandle
     width: int | None = None
     height: int | None = None
+    scale: float | None = None
     x: float | None = None
     y: float | None = None
     button: PointerButton | None = None
