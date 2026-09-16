@@ -11,11 +11,37 @@ from .events import NativeWindowHandle, PlatformEvent
 
 @dataclass(frozen=True, slots=True)
 class DisplayInfo:
+    """Physical display geometry and effective UI scale exposed by a backend."""
+
     name: str
     width: int
     height: int
     scale: float = 1.0
     primary: bool = False
+    x: int = 0
+    y: int = 0
+    work_x: int = 0
+    work_y: int = 0
+    work_width: int | None = None
+    work_height: int | None = None
+
+    def __post_init__(self) -> None:
+        if self.width <= 0 or self.height <= 0:
+            raise ValueError("Display dimensions must be positive.")
+        if self.scale <= 0.0:
+            raise ValueError("Display scale must be positive.")
+        if self.work_width is not None and self.work_width <= 0:
+            raise ValueError("Display work width must be positive when provided.")
+        if self.work_height is not None and self.work_height <= 0:
+            raise ValueError("Display work height must be positive when provided.")
+
+    @property
+    def effective_work_width(self) -> int:
+        return self.width if self.work_width is None else self.work_width
+
+    @property
+    def effective_work_height(self) -> int:
+        return self.height if self.work_height is None else self.work_height
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,6 +73,8 @@ class PlatformBackend(Protocol):
     def displays(self) -> tuple[DisplayInfo, ...]: ...
 
     def create_window(self, spec: NativeWindowSpec) -> NativeWindowHandle: ...
+
+    def window_scale(self, handle: NativeWindowHandle) -> float: ...
 
     def show_window(self, handle: NativeWindowHandle) -> None: ...
 
@@ -87,6 +115,10 @@ class NullPlatformBackend:
         self._next_handle += 1
         self._windows[handle] = spec
         return handle
+
+    def window_scale(self, handle: NativeWindowHandle) -> float:
+        self._require_window(handle)
+        return 1.0
 
     def show_window(self, handle: NativeWindowHandle) -> None:
         self._require_window(handle)
