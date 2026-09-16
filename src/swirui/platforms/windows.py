@@ -1,7 +1,7 @@
 """Direct Win32 platform backend for SwirUI.
 
-This module intentionally uses only the Python standard library and Win32 via
-``ctypes``. It does not depend on Tk, Qt, SDL or another GUI toolkit.
+The backend talks to user32/kernel32 through :mod:`ctypes` and deliberately has
+no dependency on Tk, Qt, SDL or another GUI toolkit.
 """
 
 from __future__ import annotations
@@ -18,6 +18,7 @@ _CS_HREDRAW = 0x0002
 _CS_VREDRAW = 0x0001
 _WS_OVERLAPPEDWINDOW = 0x00CF0000
 _CW_USEDEFAULT = -2147483648
+_SW_HIDE = 0
 _SW_SHOW = 5
 _PM_REMOVE = 0x0001
 _SWP_NOMOVE = 0x0002
@@ -81,24 +82,29 @@ def _signed_word(value: int) -> int:
 
 
 class Win32PlatformBackend:
-    """Minimal native Windows backend backed directly by user32/kernel32."""
+    """Native Windows backend backed directly by Win32 APIs."""
 
     name = "win32"
+
+    _initialized: bool
+    _class_name: str
+    _instance: int | None
 
     def __init__(self) -> None:
         if sys.platform != "win32":
             raise RuntimeError("Win32PlatformBackend can only run on Windows.")
+
+        self._initialized = False
+        self._class_name = "SwirUI.NativeWindow"
+        self._events: deque[PlatformEvent] = deque()
+        self._windows: set[NativeWindowHandle] = set()
 
         win_dll: Any = ctypes.__dict__["WinDLL"]
         self._user32: Any = win_dll("user32", use_last_error=True)
         self._kernel32: Any = win_dll("kernel32", use_last_error=True)
         self._configure_signatures()
 
-        self._events: deque[PlatformEvent] = deque()
-        self._windows: set[NativeWindowHandle] = set()
-        self._initialized = False
-        self._class_name = "SwirUI.NativeWindow"
-        self._instance: int | None = self._kernel32.GetModuleHandleW(None)
+        self._instance = self._kernel32.GetModuleHandleW(None)
         if not self._instance:
             raise OSError(self._last_error(), "GetModuleHandleW failed for SwirUI.")
 
@@ -179,8 +185,7 @@ class Win32PlatformBackend:
 
         window_class = _WndClass()
         window_class.style = _CS_HREDRAW | _CS_VREDRAW
-        callback_pointer = ctypes.cast(self._wndproc_callback, ctypes.c_void_p).value
-        window_class.lpfnWndProc = callback_pointer
+        window_class.lpfnWndProc = ctypes.cast(self._wndproc_callback, ctypes.c_void_p).value
         window_class.hInstance = self._instance
         window_class.lpszClassName = self._class_name
 
@@ -197,13 +202,19 @@ class Win32PlatformBackend:
         width = int(self._user32.GetSystemMetrics(_SM_CXSCREEN))
         height = int(self._user32.GetSystemMetrics(_SM_CYSCREEN))
         scale = 1.0
-        get_dpi = self._user32.__dict__.get("GetDpiForSystem")
+
+        try:
+            get_dpi: Any = self._user32.GetDpiForSystem
+        except AttributeError:
+            get_dpi = None
+
         if get_dpi is not None:
             get_dpi.argtypes = []
             get_dpi.restype = ctypes.c_uint
             dpi = int(get_dpi())
             if dpi > 0:
                 scale = dpi / 96.0
+
         return (DisplayInfo("Primary display", width, height, scale=scale, primary=True),)
 
     def create_window(self, spec: NativeWindowSpec) -> NativeWindowHandle:
@@ -231,12 +242,13 @@ class Win32PlatformBackend:
 
     def show_window(self, handle: NativeWindowHandle) -> None:
         self._require_window(handle)
-        self._user32.ShowWindow(ctypes.c_void_p(handle.value), _SW_SHOW)
-        self._user32.UpdateWindow(ctypes.c_void_p(handle.value))
+        hwnd = ctypes.c_void_p(handle.value)
+        self._user32.ShowWindow(hwnd, _SW_SHOW)
+        self._user32.UpdateWindow(hwnd)
 
     def hide_window(self, handle: NativeWindowHandle) -> None:
         self._require_window(handle)
-        self._user32.ShowWindow(ctypes.c_void_p(handle.value), 0)
+        self._user32.ShowWindow(ctypes.c_void_p(handle.value), _SW_HIDE)
 
     def destroy_window(self, handle: NativeWindowHandle) -> None:
         self._require_window(handle)
@@ -284,42 +296,36 @@ class Win32PlatformBackend:
                 self._events.append(PlatformEvent(PlatformEventKind.CLOSE, handle))
                 return 0
             if message == _WM_SIZE:
-                width = int(lparam) & 0xFFFF
-                height = (int(lparam) >> 16) & 0xFFFF
                 self._events.append(
-                    PlatformEvent(PlatformEventKind.RESIZE, handle, width=width, height=height)
+                    PlatformEvent(
+                        PlatformEventKind.RESIZE,
+                        handle,
+                        width=int(lparam) & 0xFFFF,
+                        height=(int(lparam) >> 16) & 0xFFFF,
+                    )
                 )
             elif message == _WM_SETFOCUS:
                 self._events.append(PlatformEvent(PlatformEventKind.FOCUS, handle, focused=True))
             elif message == _WM_KILLFOCUS:
                 self._events.append(PlatformEvent(PlatformEventKind.FOCUS, handle, focused=False))
             elif message == _WM_MOUSEMOVE:
-                self._events.append(
-                    PlatformEvent(
-                        PlatformEventKind.POINTER_MOVE,
-                        handle,
-                        x=float(_signed_word(int(lparam))),
-                        y=float(_signed_word(int(lparam) >> 16)),
-                    )
-                )
+                self._events.append(self._pointer_event(PlatformEventKind.POINTER_MOVE, handle, lparam))
             elif message in (_WM_LBUTTONDOWN, _WM_RBUTTONDOWN, _WM_MBUTTONDOWN):
                 self._events.append(
-                    PlatformEvent(
+                    self._pointer_event(
                         PlatformEventKind.POINTER_DOWN,
                         handle,
-                        x=float(_signed_word(int(lparam))),
-                        y=float(_signed_word(int(lparam) >> 16)),
-                        button=self._pointer_button(message),
+                        lparam,
+                        self._pointer_button(message),
                     )
                 )
             elif message in (_WM_LBUTTONUP, _WM_RBUTTONUP, _WM_MBUTTONUP):
                 self._events.append(
-                    PlatformEvent(
+                    self._pointer_event(
                         PlatformEventKind.POINTER_UP,
                         handle,
-                        x=float(_signed_word(int(lparam))),
-                        y=float(_signed_word(int(lparam) >> 16)),
-                        button=self._pointer_button(message),
+                        lparam,
+                        self._pointer_button(message),
                     )
                 )
             elif message == _WM_KEYDOWN:
@@ -333,9 +339,7 @@ class Win32PlatformBackend:
             elif message == _WM_CHAR:
                 text = chr(int(wparam)) if int(wparam) <= 0x10FFFF else ""
                 if text:
-                    self._events.append(
-                        PlatformEvent(PlatformEventKind.TEXT_INPUT, handle, text=text)
-                    )
+                    self._events.append(PlatformEvent(PlatformEventKind.TEXT_INPUT, handle, text=text))
 
         return int(
             self._user32.DefWindowProcW(
@@ -344,6 +348,21 @@ class Win32PlatformBackend:
                 wparam,
                 lparam,
             )
+        )
+
+    @staticmethod
+    def _pointer_event(
+        kind: PlatformEventKind,
+        handle: NativeWindowHandle,
+        lparam: int,
+        button: PointerButton | None = None,
+    ) -> PlatformEvent:
+        return PlatformEvent(
+            kind,
+            handle,
+            x=float(_signed_word(int(lparam))),
+            y=float(_signed_word(int(lparam) >> 16)),
+            button=button,
         )
 
     @staticmethod
