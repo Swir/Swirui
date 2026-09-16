@@ -55,6 +55,17 @@ class Rect:
             or other.y > self.bottom
         )
 
+    def intersection(self, other: Rect) -> Rect | None:
+        """Return the positive-area overlap between two rectangles, if any."""
+
+        left = max(self.x, other.x)
+        top = max(self.y, other.y)
+        right = min(self.right, other.right)
+        bottom = min(self.bottom, other.bottom)
+        if right <= left or bottom <= top:
+            return None
+        return Rect(left, top, right - left, bottom - top)
+
 
 @dataclass(frozen=True, slots=True)
 class CornerRadius:
