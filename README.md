@@ -1,15 +1,18 @@
 <div align="center">
 
+<img src="assets/swirui-icon.svg" width="136" alt="SwirUI icon">
+
 # ⚡ SwirUI
 
-### A next-generation Python UI framework built for beautiful, reactive and GPU-first desktop applications.
+### Next-generation Python UI framework for native, reactive and GPU-first desktop applications.
 
-**Beautiful by default. Powerful when needed. Fast everywhere.**
+**Beautiful by default. Native at the core. Built for the future.**
 
 [![CI](https://github.com/Swir/Swirui/actions/workflows/ci.yml/badge.svg)](https://github.com/Swir/Swirui/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/Python-3.11%20%7C%203.12%20%7C%203.13%20%7C%203.14-3776AB?logo=python&logoColor=white)
+![Windows Native](https://img.shields.io/badge/Windows-Win32%20native-0078D4?logo=windows11&logoColor=white)
 ![Status](https://img.shields.io/badge/status-pre--alpha-7C3AED)
-![Progress](https://img.shields.io/badge/project%20progress-4%25-00BFFF)
+![Progress](https://img.shields.io/badge/project%20progress-5%25-00BFFF)
 
 </div>
 
@@ -17,43 +20,82 @@
 
 ## Project progress
 
-**4% — 0.2 Alpha Native Window + First Renderer in progress**
+**5% — 0.2 Alpha: Native Window + First Renderer in progress**
 
-`[█░░░░░░░░░░░░░░░░░░░] 4%`
+`[█░░░░░░░░░░░░░░░░░░░] 5%`
 
 **Completed:** `0.1 Alpha — Foundation` ✅  
-**Current milestone:** `0.2 Alpha — Native Window + First Renderer`
+**Current milestone:** `0.2 Alpha — Native Window + First Renderer` 🚧
 
-The percentage reflects completed and tested roadmap work. It is not increased for ideas, mockups or unfinished prototypes.
+Progress only increases for implemented and verified roadmap work. Ideas, mockups and unfinished experiments do not count.
 
 ## What is SwirUI?
 
-SwirUI is being designed as a complete application framework for Python rather than a skin over an existing widget toolkit. The long-term architecture combines a simple Python API with a high-performance native/GPU rendering core, reactive state, responsive layouts, advanced animation, desktop integration, visual tooling and AI-assisted development.
+SwirUI is being built as a complete Python application framework rather than a visual skin over Tkinter, Qt or another widget toolkit. The architecture separates the public Python API, reactive runtime, native platform layer, retained rendering model and future GPU/native core so each layer can evolve without forcing application code to change.
 
-The project is currently **pre-alpha**. The public API may change while the renderer, native backends and widget systems are developed.
+The long-term goal is a framework that combines a simple Python developer experience with native windows, GPU rendering, responsive layouts, rich effects, animation, professional widgets, accessibility, visual tooling, packaging and AI-assisted development.
 
-## Core goals
+SwirUI is currently **pre-alpha**. APIs may change while the native renderer and component system are being developed.
 
-- **Future-grade visuals** — glass, blur, glow, gradients, shaders, depth, lighting and fluid animation.
-- **GPU-first rendering** — a renderer designed for modern displays and high refresh rates.
-- **Simple Python API** — powerful UI without excessive boilerplate.
-- **Reactive state** — data changes should update the interface naturally.
-- **Responsive layouts** — one application should scale from compact windows to 4K and ultrawide displays.
-- **Professional widgets** — from buttons and forms to DataGrid, docking, code editor, charts, media and 3D viewports.
-- **Developer tooling** — hot reload, inspector, profiler, testing and packaging.
-- **SwirUI Studio** — a future visual UI designer with live preview and code generation.
-- **AI-ready architecture** — AI-generated layouts remain ordinary editable SwirUI components.
-- **Cross-platform direction** — Windows, Linux and macOS are the primary desktop targets.
+## What already works
+
+- application and window lifecycle
+- component tree with cycle protection and reparenting
+- event system
+- thread-safe reactive `State`
+- runtime configuration and visual-quality profiles
+- renderer and platform abstractions
+- retained `RenderTree`
+- renderer-ready `SceneGraph`
+- geometry and RGBA/HEX color primitives
+- invalidation-driven `FrameScheduler`
+- backend-neutral `RenderSurface` lifecycle
+- render scheduling connected to `AppConfig.target_fps`
+- deterministic headless backend for tests and CI
+- **direct native Win32 backend via Python `ctypes`**
+- real Win32 window creation without Tkinter, Qt or SDL
+- native Windows event pump
+- normalized close, resize, focus, mouse, keyboard and text-input events
+- x64-safe Win32 handle bindings
+- Windows-native smoke test on GitHub Actions
+- Ruff, Mypy, coverage and Python 3.11–3.14 CI
+
+## First real native Windows demo
+
+Install SwirUI in development mode:
+
+```powershell
+git clone https://github.com/Swir/Swirui.git
+cd Swirui
+python -m venv .venv
+.venv\Scripts\activate
+python -m pip install -e ".[dev]"
+```
+
+Then launch the native demo:
+
+```powershell
+python examples/native_window_demo.py
+```
+
+On Windows this creates a real Win32 window through SwirUI's own platform backend. The demo currently exercises native window lifecycle and input/event plumbing; the visual GPU renderer is the next major layer.
 
 ## Foundation API
 
 ```python
-from swirui import App, Component, State, Window
+from swirui import App, AppConfig, Component, State, Window
 
 counter = State(0)
 
-app = App(name="SwirUI Demo")
-window = Window(title="Future starts here", width=1100, height=720)
+app = App(
+    name="SwirUI Demo",
+    config=AppConfig(target_fps=120),
+)
+window = Window(
+    title="Future starts here",
+    width=1100,
+    height=720,
+)
 
 root = Component("dashboard")
 window.set_root(root)
@@ -65,37 +107,53 @@ counter.set(1)
 app.run()
 ```
 
-> The current runtime is intentionally minimal. The completed 0.1 foundation establishes lifecycle, component, event, state, renderer and platform contracts. Native windows and the first real rendering pipeline are the focus of 0.2 Alpha.
-
-## Architecture direction
+## Architecture
 
 ```text
-Python API
-   │
-   ├── Application / Window lifecycle
-   ├── Reactive State
-   ├── Component Tree
-   ├── Events
-   ├── Layout / Widgets
-   │
+Python Application API
+        │
+        ├── App / Window lifecycle
+        ├── Components / Events
+        ├── Reactive State
+        └── Runtime configuration
+        │
 SwirUI Runtime
-   │
-   ├── Render Tree
-   ├── Scene Graph
-   ├── Frame Scheduler
-   ├── Renderer abstraction
-   ├── Platform abstraction
-   └── Native bridge
-   │
-Rust Native Core (planned)
-   │
-   ├── GPU renderer
-   ├── text / images / effects
-   ├── layout acceleration
-   └── platform integration
-   │
+        │
+        ├── Native Platform Backend
+        │     └── Win32 backend ✅
+        ├── Render Tree ✅
+        ├── Scene Graph ✅
+        ├── Render Surface lifecycle ✅
+        ├── Frame Scheduler ✅
+        └── Input normalization ✅
+        │
+Renderer Layer
+        │
+        ├── GPU surface / swapchain ← NEXT
+        ├── Shapes / text / images
+        ├── clipping / compositing
+        └── effects / shaders
+        │
+Native Core
+        │
+        └── Rust acceleration planned for performance-critical systems
+        │
 GPU / Operating System
 ```
+
+## Design goals
+
+- **Future-grade visuals** — glass, blur, glow, mesh gradients, depth, lighting and shaders.
+- **GPU-first rendering** — designed for modern displays and high refresh rates.
+- **Simple Python API** — powerful UI without excessive boilerplate.
+- **Reactive by default** — state changes should update only what needs to change.
+- **Native desktop integration** — real operating-system windows and input pipelines.
+- **Responsive layouts** — compact windows through 4K and ultrawide displays.
+- **Professional widgets** — DataGrid, docking, charts, media, editor, terminal and 3D viewport.
+- **Developer tooling** — hot reload, inspector, profiler, testing and packaging.
+- **SwirUI Studio** — future drag-and-drop visual builder with editable Python output.
+- **Accessibility and i18n** — first-class architecture rather than late add-ons.
+- **Measured performance** — reproducible benchmarks instead of unsupported claims.
 
 ## Planned ecosystem
 
@@ -112,12 +170,45 @@ SwirUI Framework
 └── SwirUI Marketplace
 ```
 
+## Current 0.2 Alpha focus
+
+The native Windows foundation is now verified. The next renderer work is:
+
+1. actual GPU presentation surface / swapchain
+2. scene submission into the renderer
+3. rectangle and rounded-rectangle drawing
+4. text and image rendering
+5. clipping and compositing
+6. component hit-testing and routed input
+7. robust DPI / HiDPI and multi-monitor handling
+8. display-aware high-refresh presentation
+
+See **[ROADMAP.md](ROADMAP.md)** for the full development plan.
+
+## Quality policy
+
+Every significant runtime change is expected to pass:
+
+```text
+Ruff
+Mypy
+pytest + coverage
+Python 3.11
+Python 3.12
+Python 3.13
+Python 3.14
+Windows native smoke test
+```
+
+SwirUI will not claim to outperform another framework without reproducible measurements. Planned benchmarks include startup time, RAM, CPU/GPU usage, frame time, input latency, component creation, large lists and animation performance.
+
 ## Repository layout
 
 ```text
 Swirui/
-├── .github/workflows/      # CI
-├── docs/                   # architecture and design notes
+├── .github/workflows/      # CI and native smoke tests
+├── assets/                 # SwirUI visual assets and icon
+├── docs/                   # architecture and design documentation
 ├── examples/               # runnable examples
 ├── src/swirui/             # framework source
 ├── tests/                  # automated tests
@@ -126,71 +217,6 @@ Swirui/
 ├── ROADMAP.md
 └── pyproject.toml
 ```
-
-## Development setup
-
-```bash
-git clone https://github.com/Swir/Swirui.git
-cd Swirui
-python -m venv .venv
-```
-
-Windows:
-
-```powershell
-.venv\Scripts\activate
-python -m pip install -e ".[dev]"
-pytest
-```
-
-Linux/macOS:
-
-```bash
-source .venv/bin/activate
-python -m pip install -e ".[dev]"
-pytest
-```
-
-## Completed milestone — 0.1 Alpha: Foundation
-
-The foundation now includes:
-
-- application lifecycle
-- window model
-- component tree with cycle protection and reparenting
-- event system
-- thread-safe reactive state
-- logging and runtime configuration
-- renderer abstraction and headless renderer
-- platform abstraction and headless platform backend
-- automated tests
-- strict Ruff and Mypy quality gates
-- CI verified on Python 3.11, 3.12, 3.13 and 3.14
-- architecture documentation
-
-## Current milestone — 0.2 Alpha: Native Window + First Renderer
-
-Already implemented and verified in 0.2:
-
-- backend-neutral geometry and color primitives
-- retained render tree
-- renderer-ready scene graph
-- invalidation-driven frame scheduler
-- deterministic rendering tests
-- strict Ruff + Mypy verification
-- test matrix on Python 3.11–3.14
-
-Next targets are native window/event-loop integration, input dispatch and the first real GPU surface. After that come basic shapes, rounded rectangles, text, images, clipping/compositing, DPI handling and high-refresh-rate presentation.
-
-See **[ROADMAP.md](ROADMAP.md)** for the complete plan.
-
-## Performance philosophy
-
-SwirUI will not claim to be faster than another framework without measurements. Benchmarks will publish hardware, OS, framework versions and reproducible source code. Planned metrics include startup time, memory, CPU/GPU usage, frame time, input latency, large-list performance and animation performance.
-
-## Project status
-
-SwirUI is experimental and not ready for production applications yet. The 0.1 architecture foundation is complete and 0.2 rendering architecture is actively being implemented.
 
 ---
 
