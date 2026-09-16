@@ -1,6 +1,17 @@
+import pytest
+
 from swirui import App, Window
 from swirui.platforms import NullPlatformBackend
-from swirui.rendering import Color, Path2D, Point, Rect, Scene, SceneNode, SceneNodeKind, WgpuRenderer
+from swirui.rendering import (
+    Color,
+    Path2D,
+    Point,
+    Rect,
+    Scene,
+    SceneNode,
+    SceneNodeKind,
+    WgpuRenderer,
+)
 
 
 class FakePathContext:
@@ -104,7 +115,7 @@ def test_wgpu_renderer_tessellates_clipped_concave_path_for_native_gpu() -> None
 
     first = shapes[0]
     assert first[2:5] == (0.0, 0.55, 1.0)
-    assert first[5] == 0.3
+    assert first[5] == pytest.approx(0.3)
     assert first[6:] == (80.0, 60.0, 340.0, 280.0)
     assert all(vertex[6:] == first[6:] for vertex in shapes)
     assert min(vertex[0] for vertex in shapes) == 50.0
