@@ -15,7 +15,7 @@ from .platforms import (
     PlatformEventKind,
     create_platform_backend,
 )
-from .rendering import FrameScheduler, NullRenderer, Renderer
+from .rendering import FrameScheduler, Renderer, create_renderer
 from .window import Window
 
 
@@ -35,7 +35,7 @@ class App(EventEmitter):
         self.config = config or AppConfig()
         self.logger = configure_logging(debug=self.config.debug)
         self.platform_backend = platform_backend or create_platform_backend()
-        self.renderer = renderer or NullRenderer()
+        self.renderer = renderer or create_renderer()
         self.windows: list[Window] = []
         self.running = False
         self.exit_code = 0
