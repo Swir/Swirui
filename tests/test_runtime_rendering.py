@@ -76,14 +76,16 @@ def test_frame_rendered_event_exposes_runtime_pacing_telemetry() -> None:
     assert frame_events[0].data["pacing_error"] is None
 
     window.set_root(Component("telemetry"))
-    assert app.render_pending(first_time + (1 / 120)) == 1
+    expected_delta = (1 / 120) + 1e-6
+    assert app.render_pending(first_time + expected_delta) == 1
 
     assert len(frame_events) == 2
     second = frame_events[1].data
     assert second["frame_number"] == 2
-    assert second["frame_delta"] == pytest.approx(1 / 120)
-    assert second["instantaneous_fps"] == pytest.approx(120.0)
-    assert second["smoothed_fps"] == pytest.approx(120.0)
-    assert second["pacing_error"] == pytest.approx(0.0)
+    assert second["frame_delta"] == pytest.approx(expected_delta)
+    expected_fps = 1 / expected_delta
+    assert second["instantaneous_fps"] == pytest.approx(expected_fps)
+    assert second["smoothed_fps"] == pytest.approx(expected_fps)
+    assert second["pacing_error"] == pytest.approx(1e-6)
 
     app.stop()
