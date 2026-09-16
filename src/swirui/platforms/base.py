@@ -17,7 +17,6 @@ class DisplayInfo:
     width: int
     height: int
     scale: float = 1.0
-    refresh_rate_hz: float = 60.0
     primary: bool = False
     x: int = 0
     y: int = 0
@@ -25,6 +24,7 @@ class DisplayInfo:
     work_y: int = 0
     work_width: int | None = None
     work_height: int | None = None
+    refresh_rate_hz: float = 60.0
 
     def __post_init__(self) -> None:
         if self.width <= 0 or self.height <= 0:
