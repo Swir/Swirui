@@ -309,7 +309,9 @@ class Win32PlatformBackend:
             elif message == _WM_KILLFOCUS:
                 self._events.append(PlatformEvent(PlatformEventKind.FOCUS, handle, focused=False))
             elif message == _WM_MOUSEMOVE:
-                self._events.append(self._pointer_event(PlatformEventKind.POINTER_MOVE, handle, lparam))
+                self._events.append(
+                    self._pointer_event(PlatformEventKind.POINTER_MOVE, handle, lparam)
+                )
             elif message in (_WM_LBUTTONDOWN, _WM_RBUTTONDOWN, _WM_MBUTTONDOWN):
                 self._events.append(
                     self._pointer_event(
@@ -339,7 +341,9 @@ class Win32PlatformBackend:
             elif message == _WM_CHAR:
                 text = chr(int(wparam)) if int(wparam) <= 0x10FFFF else ""
                 if text:
-                    self._events.append(PlatformEvent(PlatformEventKind.TEXT_INPUT, handle, text=text))
+                    self._events.append(
+                        PlatformEvent(PlatformEventKind.TEXT_INPUT, handle, text=text)
+                    )
 
         return int(
             self._user32.DefWindowProcW(
