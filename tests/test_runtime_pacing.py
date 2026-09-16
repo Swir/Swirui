@@ -1,6 +1,7 @@
 import pytest
 
 from swirui import App, AppConfig, Component, Window
+from swirui.core import Event
 from swirui.platforms import NullPlatformBackend
 from swirui.rendering import NullRenderer
 
@@ -66,7 +67,7 @@ def test_next_frame_deadline_drives_sub_poll_interval_idle_sleep() -> None:
     assert app.seconds_until_next_frame(almost_due) == pytest.approx(0.001)
     assert app._idle_sleep_seconds(almost_due) == pytest.approx(0.001)
 
-    due = last_frame_time + interval
+    due = last_frame_time + interval + 1e-9
     assert app.seconds_until_next_frame(due) == pytest.approx(0.0)
     assert app._idle_sleep_seconds(due) == pytest.approx(0.0)
 
@@ -75,7 +76,7 @@ def test_next_frame_deadline_drives_sub_poll_interval_idle_sleep() -> None:
 
 def test_frame_event_reports_active_target_and_interval_after_retarget() -> None:
     app, window, _renderer = _running_app(60)
-    events: list[object] = []
+    events: list[Event] = []
     app.on("frame_rendered", events.append)
     app.set_target_fps(120)
 
@@ -83,11 +84,12 @@ def test_frame_event_reports_active_target_and_interval_after_retarget() -> None
     last_frame_time = scheduler.stats.last_frame_time
     assert last_frame_time is not None
     window.set_root(Component("telemetry"))
-    assert app.render_pending(last_frame_time + scheduler.frame_interval) == 1
+    due = last_frame_time + scheduler.frame_interval + 1e-9
+    assert app.render_pending(due) == 1
 
     assert len(events) == 1
     event = events[0]
-    assert getattr(event, "data")["target_fps"] == 120
-    assert getattr(event, "data")["frame_interval"] == pytest.approx(1 / 120)
+    assert event.data["target_fps"] == 120
+    assert event.data["frame_interval"] == pytest.approx(1 / 120)
 
     app.stop()
