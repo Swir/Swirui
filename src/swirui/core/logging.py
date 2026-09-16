@@ -18,12 +18,11 @@ def configure_logging(*, debug: bool = False) -> logging.Logger:
     logger = logging.getLogger(LOGGER_NAME)
     logger.setLevel(logging.DEBUG if debug else logging.INFO)
 
-    if not any(getattr(handler, "_swirui_handler", False) for handler in logger.handlers):
+    if not logger.handlers:
         handler = logging.StreamHandler()
         handler.setFormatter(
             logging.Formatter("%(asctime)s | %(levelname)s | %(name)s | %(message)s")
         )
-        setattr(handler, "_swirui_handler", True)
         logger.addHandler(handler)
 
     logger.propagate = False
