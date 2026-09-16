@@ -6,7 +6,6 @@ native window will replace the headless foundation runtime in a later milestone.
 
 from swirui import App, Component, State, Window
 
-
 counter = State(0)
 
 app = App(name="SwirUI Foundation Demo")
