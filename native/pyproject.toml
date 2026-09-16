@@ -1,0 +1,17 @@
+[build-system]
+requires = ["maturin>=1.15,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "swirui-native"
+version = "0.1.0a1"
+description = "Native GPU core for the SwirUI Python framework"
+requires-python = ">=3.11"
+authors = [
+  { name = "Swir" }
+]
+
+[tool.maturin]
+bindings = "pyo3"
+module-name = "_swirui_native"
+features = ["extension-module"]
