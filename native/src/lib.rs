@@ -6,6 +6,7 @@
 
 mod image;
 mod renderer;
+mod shape;
 mod text;
 
 use pyo3::exceptions::PyRuntimeError;
