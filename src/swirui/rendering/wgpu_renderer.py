@@ -64,6 +64,8 @@ class WgpuRenderer:
     instance/device/pipeline setup is not repeated for every frame. Images are
     registered once as RGBA resources and uploaded into every active native GPU
     context, while scene nodes only submit lightweight resource references.
+    Re-registering byte-identical image content is a cache hit and does not
+    recreate textures in active GPU contexts.
     """
 
     name = "wgpu"
@@ -91,6 +93,8 @@ class WgpuRenderer:
         self.surfaces: dict[int, RenderSurface] = {}
         self._contexts: dict[int, Any] = {}
         self._image_resources: dict[str, ImageResource] = {}
+        self._image_cache_hits = 0
+        self._image_native_uploads = 0
         self._native: Any | None = native_module
 
     @property
@@ -100,6 +104,24 @@ class WgpuRenderer:
     @property
     def image_resource_count(self) -> int:
         return len(self._image_resources)
+
+    @property
+    def image_resource_bytes(self) -> int:
+        """Return CPU-side RGBA bytes retained by the persistent image cache."""
+
+        return sum(len(resource[2]) for resource in self._image_resources.values())
+
+    @property
+    def image_cache_hits(self) -> int:
+        """Return byte-identical image registrations skipped by the cache."""
+
+        return self._image_cache_hits
+
+    @property
+    def image_native_uploads(self) -> int:
+        """Return actual image uploads issued to persistent native GPU contexts."""
+
+        return self._image_native_uploads
 
     def initialize(self) -> None:
         if self.initialized:
@@ -122,7 +144,13 @@ class WgpuRenderer:
         height: int,
         rgba: bytes | bytearray | memoryview,
     ) -> None:
-        """Register or replace an RGBA8 image resource used by IMAGE scene nodes."""
+        """Register or replace a cached RGBA8 image used by IMAGE scene nodes.
+
+        Byte-identical re-registration is intentionally a no-op. Changed image
+        dimensions or pixels replace the cached resource and are uploaded once
+        to each active persistent native context. Future contexts receive only
+        the latest cached resource when their surface is created.
+        """
 
         if not resource_id.strip():
             raise ValueError("resource_id cannot be empty.")
@@ -136,24 +164,36 @@ class WgpuRenderer:
                 f"{width}x{height}; received {len(data)}."
             )
 
-        self._image_resources[resource_id] = (width, height, data)
+        resource = (width, height, data)
+        if self._image_resources.get(resource_id) == resource:
+            self._image_cache_hits += 1
+            return
+
+        registrations: list[tuple[Any, Any]] = []
         for context in self._contexts.values():
             register = getattr(context, "register_image_rgba", None)
             if register is None:
                 raise RuntimeError(
                     "Installed SwirUI native GPU core does not support image resources."
                 )
+            registrations.append((context, register))
+
+        self._image_resources[resource_id] = resource
+        for _context, register in registrations:
             register(resource_id, width, height, data)
+            self._image_native_uploads += 1
 
     def unregister_image(self, resource_id: str) -> bool:
         """Remove an image resource from Python and every active GPU context."""
 
         removed = self._image_resources.pop(resource_id, None) is not None
+        if not removed:
+            return False
         for context in self._contexts.values():
             unregister = getattr(context, "unregister_image", None)
             if unregister is not None:
                 unregister(resource_id)
-        return removed
+        return True
 
     def create_surface(self, window: Window) -> RenderSurface:
         self._require_initialized()
@@ -351,6 +391,7 @@ class WgpuRenderer:
             )
         for resource_id, (width, height, data) in self._image_resources.items():
             register(resource_id, width, height, data)
+            self._image_native_uploads += 1
 
     def _capture_adapter_info(self, context: Any) -> None:
         self.adapter_name = str(context.adapter_name)
