@@ -6,7 +6,7 @@ from collections.abc import Iterator
 from dataclasses import dataclass, field
 from enum import StrEnum
 
-from .geometry import Color, CornerRadius, Rect
+from .geometry import Color, CornerRadius, Point, Rect
 
 
 class SceneNodeKind(StrEnum):
@@ -62,6 +62,40 @@ class SceneNode:
     def contains(self, target: SceneNode) -> bool:
         return any(node is target for node in self.walk())
 
+    def hit_test(self, point: Point) -> SceneNode | None:
+        """Return the visually topmost node under ``point``.
+
+        Children with larger ``z_index`` values win. Equal z-index values use
+        later insertion as the topmost visual, matching painter-style ordering.
+        Transparent groups participate in the ancestry path but are not direct
+        visual hit targets unless they have a fill.
+        """
+
+        path = self.hit_path(point)
+        return path[-1] if path else None
+
+    def hit_path(self, point: Point) -> tuple[SceneNode, ...]:
+        """Return the ancestry path from this node to the topmost visual hit."""
+
+        if self.opacity <= 0.0:
+            return ()
+
+        ordered_children = sorted(
+            enumerate(self.children),
+            key=lambda item: (item[1].z_index, item[0]),
+            reverse=True,
+        )
+        for _, child in ordered_children:
+            child_path = child.hit_path(point)
+            if child_path:
+                return (self, *child_path)
+
+        if self.bounds.contains(point) and (
+            self.kind is not SceneNodeKind.GROUP or self.fill is not None
+        ):
+            return (self,)
+        return ()
+
 
 @dataclass(slots=True)
 class Scene:
@@ -81,3 +115,9 @@ class Scene:
 
     def walk(self) -> Iterator[SceneNode]:
         yield from self.root.walk()
+
+    def hit_test(self, point: Point) -> SceneNode | None:
+        return self.root.hit_test(point)
+
+    def hit_path(self, point: Point) -> tuple[SceneNode, ...]:
+        return self.root.hit_path(point)
