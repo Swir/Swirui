@@ -11,8 +11,9 @@
 [![CI](https://github.com/Swir/Swirui/actions/workflows/ci.yml/badge.svg)](https://github.com/Swir/Swirui/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/Python-3.11%20%7C%203.12%20%7C%203.13%20%7C%203.14-3776AB?logo=python&logoColor=white)
 ![Windows Native](https://img.shields.io/badge/Windows-Win32%20native-0078D4?logo=windows11&logoColor=white)
+![GPU](https://img.shields.io/badge/GPU-wgpu%2030-6E56CF)
 ![Status](https://img.shields.io/badge/status-pre--alpha-7C3AED)
-![Progress](https://img.shields.io/badge/project%20progress-5%25-00BFFF)
+![Progress](https://img.shields.io/badge/project%20progress-6%25-00BFFF)
 
 </div>
 
@@ -20,9 +21,9 @@
 
 ## Project progress
 
-**5% — 0.2 Alpha: Native Window + First Renderer in progress**
+**6% — 0.2 Alpha: Native Window + First Renderer in progress**
 
-`[█░░░░░░░░░░░░░░░░░░░] 5%`
+`[█░░░░░░░░░░░░░░░░░░░] 6%`
 
 **Completed:** `0.1 Alpha — Foundation` ✅  
 **Current milestone:** `0.2 Alpha — Native Window + First Renderer` 🚧
@@ -31,7 +32,7 @@ Progress only increases for implemented and verified roadmap work. Ideas, mockup
 
 ## What is SwirUI?
 
-SwirUI is being built as a complete Python application framework rather than a visual skin over Tkinter, Qt or another widget toolkit. The architecture separates the public Python API, reactive runtime, native platform layer, retained rendering model and future GPU/native core so each layer can evolve without forcing application code to change.
+SwirUI is being built as a complete Python application framework rather than a visual skin over Tkinter, Qt or another widget toolkit. The architecture separates the public Python API, reactive runtime, native platform layer, retained rendering model and native GPU core so each layer can evolve without forcing application code to change.
 
 The long-term goal is a framework that combines a simple Python developer experience with native windows, GPU rendering, responsive layouts, rich effects, animation, professional widgets, accessibility, visual tooling, packaging and AI-assisted development.
 
@@ -57,7 +58,13 @@ SwirUI is currently **pre-alpha**. APIs may change while the native renderer and
 - native Windows event pump
 - normalized close, resize, focus, mouse, keyboard and text-input events
 - x64-safe Win32 handle bindings
-- Windows-native smoke test on GitHub Actions
+- visible SceneGraph bring-up renderer for Windows
+- **Rust 2024 native core with wgpu 30 + PyO3**
+- **real wgpu surface creation from SwirUI's Win32 HWND**
+- **GPU adapter/device/queue creation and swapchain configuration**
+- **verified GPU clear → submit → present on Windows CI**
+- ABI3 native wheel build for Python 3.11+
+- Windows native + GPU smoke tests on Python 3.14
 - Ruff, Mypy, coverage and Python 3.11–3.14 CI
 
 ## First real native Windows demo
@@ -78,7 +85,7 @@ Then launch the native demo:
 python examples/native_window_demo.py
 ```
 
-On Windows this creates a real Win32 window through SwirUI's own platform backend. The demo currently exercises native window lifecycle and input/event plumbing; the visual GPU renderer is the next major layer.
+On Windows this creates a real Win32 window through SwirUI's own platform backend. The retained scene model can already be painted by the temporary bring-up renderer, while the native Rust/wgpu core has now been verified to create and present a real GPU frame to the same HWND. The next step is moving SceneGraph primitives onto that GPU path.
 
 ## Foundation API
 
@@ -129,14 +136,15 @@ SwirUI Runtime
         │
 Renderer Layer
         │
-        ├── GPU surface / swapchain ← NEXT
+        ├── GPU surface / swapchain ✅
+        ├── SceneGraph primitive submission ← NEXT
         ├── Shapes / text / images
         ├── clipping / compositing
         └── effects / shaders
         │
 Native Core
         │
-        └── Rust acceleration planned for performance-critical systems
+        └── Rust + wgpu + PyO3 ✅ foundation online
         │
 GPU / Operating System
 ```
@@ -172,16 +180,16 @@ SwirUI Framework
 
 ## Current 0.2 Alpha focus
 
-The native Windows foundation is now verified. The next renderer work is:
+The native Windows foundation and first wgpu presentation frame are now verified. The next renderer work is:
 
-1. actual GPU presentation surface / swapchain
-2. scene submission into the renderer
-3. rectangle and rounded-rectangle drawing
-4. text and image rendering
-5. clipping and compositing
-6. component hit-testing and routed input
-7. robust DPI / HiDPI and multi-monitor handling
-8. display-aware high-refresh presentation
+1. SceneGraph rectangle submission into the Rust/wgpu renderer
+2. rounded-rectangle shader path
+3. text and image rendering
+4. clipping and compositing
+5. component hit-testing and routed input
+6. robust DPI / HiDPI and multi-monitor handling
+7. display-aware high-refresh presentation
+8. present-mode selection and frame pacing
 
 See **[ROADMAP.md](ROADMAP.md)** for the full development plan.
 
@@ -197,7 +205,10 @@ Python 3.11
 Python 3.12
 Python 3.13
 Python 3.14
+cargo check
+cargo test
 Windows native smoke test
+Windows wgpu surface/present smoke test
 ```
 
 SwirUI will not claim to outperform another framework without reproducible measurements. Planned benchmarks include startup time, RAM, CPU/GPU usage, frame time, input latency, component creation, large lists and animation performance.
@@ -206,10 +217,11 @@ SwirUI will not claim to outperform another framework without reproducible measu
 
 ```text
 Swirui/
-├── .github/workflows/      # CI and native smoke tests
+├── .github/workflows/      # Python, Rust and native GPU CI
 ├── assets/                 # SwirUI visual assets and icon
 ├── docs/                   # architecture and design documentation
 ├── examples/               # runnable examples
+├── native/                 # Rust + wgpu + PyO3 GPU core
 ├── src/swirui/             # framework source
 ├── tests/                  # automated tests
 ├── CHANGELOG.md
