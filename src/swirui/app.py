@@ -95,9 +95,12 @@ class App(EventEmitter):
             self._dispatch_platform_event(event)
 
         self.render_pending()
-        if self.platform_backend.name != NullPlatformBackend.name:
-            if self.windows and all(window.closed for window in self.windows):
-                self.stop(self.exit_code)
+        if (
+            self.platform_backend.name != NullPlatformBackend.name
+            and self.windows
+            and all(window.closed for window in self.windows)
+        ):
+            self.stop(self.exit_code)
         return len(events)
 
     def invalidate(self, window: Window | None = None) -> None:
