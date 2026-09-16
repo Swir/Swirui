@@ -56,6 +56,8 @@ def test_identical_image_registration_is_a_gpu_cache_hit() -> None:
 
     context = native.contexts[0]
     assert renderer.image_resource_count == 1
+    assert renderer.image_gpu_resource_count == 1
+    assert renderer.image_alias_count == 0
     assert renderer.image_resource_bytes == 4
     assert renderer.image_native_uploads == 1
     assert renderer.image_cache_hits == 0
@@ -74,25 +76,93 @@ def test_identical_image_registration_is_a_gpu_cache_hit() -> None:
     assert renderer.image_cache_hits == 2
     assert renderer.image_native_uploads == 2
     assert renderer.image_resource_bytes == 4
-    assert context.register_calls[-1] == ("logo", 1, 1, replacement)
-    assert context.resources["logo"] == (1, 1, replacement)
+    assert context.register_calls[-1][1:] == (1, 1, replacement)
+    assert len(context.resources) == 1
 
     assert renderer.unregister_image("missing") is False
-    assert context.unregister_calls == []
     assert renderer.unregister_image("logo") is True
-    assert context.unregister_calls == ["logo"]
+    assert len(context.unregister_calls) == 2
     assert renderer.image_resource_count == 0
+    assert renderer.image_gpu_resource_count == 0
     assert renderer.image_resource_bytes == 0
     app.stop()
 
 
-def test_new_context_receives_latest_cached_resource_once() -> None:
+def test_cross_id_identical_images_share_one_native_gpu_resource() -> None:
     native = CacheNative()
     renderer = WgpuRenderer(native_module=native)
-    first = bytes((1, 2, 3, 255))
-    latest = bytes((4, 5, 6, 255))
-    renderer.register_image_rgba("shared", 1, 1, first)
-    renderer.register_image_rgba("shared", 1, 1, latest)
+    pixels = bytes((1, 40, 200, 255))
+
+    renderer.register_image_rgba("logo", 1, 1, pixels)
+    renderer.register_image_rgba("logo-copy", 1, 1, memoryview(pixels))
+
+    assert renderer.image_resource_count == 2
+    assert renderer.image_gpu_resource_count == 1
+    assert renderer.image_alias_count == 1
+    assert renderer.image_resource_bytes == 4
+    assert renderer.image_cache_hits == 1
+
+    app = App(platform_backend=NullPlatformBackend(), renderer=renderer)
+    app.add_window(Window(width=320, height=240))
+    app.start()
+
+    context = native.contexts[0]
+    assert renderer.image_native_uploads == 1
+    assert context.register_calls == [("logo", 1, 1, pixels)]
+    assert len(context.resources) == 1
+
+    assert renderer.unregister_image("logo") is True
+    assert context.unregister_calls == []
+    assert renderer.image_resource_count == 1
+    assert renderer.image_gpu_resource_count == 1
+
+    assert renderer.unregister_image("logo-copy") is True
+    assert context.unregister_calls == ["logo"]
+    assert renderer.image_resource_count == 0
+    assert renderer.image_gpu_resource_count == 0
+    app.stop()
+
+
+def test_rebinding_one_alias_preserves_shared_texture_for_other_aliases() -> None:
+    native = CacheNative()
+    renderer = WgpuRenderer(native_module=native)
+    shared = bytes((1, 2, 3, 255))
+    changed = bytes((9, 8, 7, 255))
+    renderer.register_image_rgba("primary", 1, 1, shared)
+    renderer.register_image_rgba("secondary", 1, 1, shared)
+
+    app = App(platform_backend=NullPlatformBackend(), renderer=renderer)
+    app.add_window(Window(width=320, height=240))
+    app.start()
+
+    context = native.contexts[0]
+    renderer.register_image_rgba("secondary", 1, 1, changed)
+
+    assert renderer.image_resource_count == 2
+    assert renderer.image_gpu_resource_count == 2
+    assert renderer.image_alias_count == 0
+    assert renderer.image_resource_bytes == 8
+    assert renderer.image_native_uploads == 2
+    assert len(context.resources) == 2
+    assert context.resources["primary"] == (1, 1, shared)
+    assert context.resources["secondary"] == (1, 1, changed)
+
+    assert renderer.unregister_image("primary") is True
+    assert context.unregister_calls == ["primary"]
+    assert renderer.image_resource_count == 1
+    assert renderer.image_gpu_resource_count == 1
+    assert context.resources["secondary"] == (1, 1, changed)
+    app.stop()
+
+
+def test_new_context_receives_each_unique_cached_resource_once() -> None:
+    native = CacheNative()
+    renderer = WgpuRenderer(native_module=native)
+    shared = bytes((4, 5, 6, 255))
+    unique = bytes((9, 8, 7, 255))
+    renderer.register_image_rgba("shared-a", 1, 1, shared)
+    renderer.register_image_rgba("shared-b", 1, 1, shared)
+    renderer.register_image_rgba("unique", 1, 1, unique)
 
     app = App(platform_backend=NullPlatformBackend(), renderer=renderer)
     first_window = Window(width=320, height=240)
@@ -102,20 +172,18 @@ def test_new_context_receives_latest_cached_resource_once() -> None:
     app.start()
 
     assert len(native.contexts) == 2
-    assert renderer.image_native_uploads == 2
-    for context in native.contexts:
-        assert context.register_calls == [("shared", 1, 1, latest)]
-
-    renderer.register_image_rgba("shared", 1, 1, latest)
-    assert renderer.image_cache_hits == 1
-    assert renderer.image_native_uploads == 2
-    for context in native.contexts:
-        assert len(context.register_calls) == 1
-
-    changed = bytes((9, 8, 7, 255))
-    renderer.register_image_rgba("shared", 1, 1, changed)
+    assert renderer.image_resource_count == 3
+    assert renderer.image_gpu_resource_count == 2
+    assert renderer.image_alias_count == 1
     assert renderer.image_native_uploads == 4
     for context in native.contexts:
-        assert context.register_calls[-1] == ("shared", 1, 1, changed)
+        assert len(context.register_calls) == 2
+        assert len(context.resources) == 2
+
+    renderer.register_image_rgba("shared-b", 1, 1, shared)
+    assert renderer.image_cache_hits == 2
+    assert renderer.image_native_uploads == 4
+    for context in native.contexts:
+        assert len(context.register_calls) == 2
 
     app.stop()
