@@ -3,7 +3,7 @@
 from .base import NullRenderer, Renderer
 from .factory import create_renderer
 from .geometry import Color, CornerRadius, Point, Rect, Size
-from .scene import Scene, SceneNode, SceneNodeKind
+from .scene import ImageResource, Scene, SceneNode, SceneNodeKind
 from .scheduler import FrameScheduler, FrameStats
 from .surface import RenderSurface
 from .tree import RenderNode, RenderTree
@@ -15,6 +15,7 @@ __all__ = [
     "CornerRadius",
     "FrameScheduler",
     "FrameStats",
+    "ImageResource",
     "NullRenderer",
     "Point",
     "Rect",
