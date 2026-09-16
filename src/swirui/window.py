@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from .core import Component, EventEmitter
+from .core import Component, Event, EventEmitter, EventPhase
 from .platforms import NativeWindowHandle, PlatformBackend, PlatformEvent, PlatformEventKind
 
 if TYPE_CHECKING:
@@ -159,20 +159,161 @@ class Window(EventEmitter):
         self.emit(event.kind.value, event=event)
 
     def _apply_pointer_event(self, event: PlatformEvent) -> None:
-        path: tuple[SceneNode, ...] = ()
+        scene_path: tuple[SceneNode, ...] = ()
         if self.scene is not None and event.x is not None and event.y is not None:
-            path = self.scene.hit_path_xy(event.x, event.y)
-        target = path[-1] if path else None
+            scene_path = self.scene.hit_path_xy(event.x, event.y)
+        scene_target = scene_path[-1] if scene_path else None
+        component_path = self._component_path_for_scene_target(scene_target)
+        component_target = component_path[-1] if component_path else None
 
-        if event.kind is PlatformEventKind.POINTER_MOVE and target is not self.hovered_scene_node:
-            previous = self.hovered_scene_node
-            self.hovered_scene_node = target
-            if previous is not None:
-                self.emit("pointer_leave", event=event, target=previous)
-            if target is not None:
-                self.emit("pointer_enter", event=event, target=target, path=path)
+        if event.kind is PlatformEventKind.POINTER_MOVE and scene_target is not self.hovered_scene_node:
+            previous_scene_target = self.hovered_scene_node
+            previous_component_path = self._component_path_for_scene_target(previous_scene_target)
+            previous_component_target = (
+                previous_component_path[-1] if previous_component_path else None
+            )
+            self.hovered_scene_node = scene_target
 
-        self.emit(event.kind.value, event=event, target=target, path=path)
+            if previous_scene_target is not None:
+                routed_leave = self._dispatch_direct_component_pointer_event(
+                    "pointer_leave",
+                    event,
+                    previous_scene_target,
+                    previous_component_path,
+                )
+                self.emit(
+                    "pointer_leave",
+                    event=event,
+                    target=previous_scene_target,
+                    component_target=previous_component_target,
+                    component_path=previous_component_path,
+                    routed_event=routed_leave,
+                )
+
+            if scene_target is not None:
+                routed_enter = self._dispatch_direct_component_pointer_event(
+                    "pointer_enter",
+                    event,
+                    scene_target,
+                    component_path,
+                )
+                self.emit(
+                    "pointer_enter",
+                    event=event,
+                    target=scene_target,
+                    path=scene_path,
+                    component_target=component_target,
+                    component_path=component_path,
+                    routed_event=routed_enter,
+                )
+
+        routed_event = self._route_component_pointer_event(
+            event.kind.value,
+            event,
+            scene_target,
+            scene_path,
+            component_path,
+        )
+        self.emit(
+            event.kind.value,
+            event=event,
+            target=scene_target,
+            path=scene_path,
+            component_target=component_target,
+            component_path=component_path,
+            routed_event=routed_event,
+        )
+
+    def _component_path_for_scene_target(
+        self,
+        scene_target: SceneNode | None,
+    ) -> tuple[Component, ...]:
+        """Map a prepared SceneNode back to its component by stable key."""
+
+        if self.root is None or scene_target is None:
+            return ()
+        target = self.root.find(scene_target.key)
+        if target is None:
+            return ()
+
+        path: list[Component] = []
+        current: Component | None = target
+        while current is not None:
+            path.append(current)
+            current = current.parent
+        path.reverse()
+        if not path or path[0] is not self.root:
+            return ()
+        return tuple(path)
+
+    def _route_component_pointer_event(
+        self,
+        event_type: str,
+        platform_event: PlatformEvent,
+        scene_target: SceneNode | None,
+        scene_path: tuple[SceneNode, ...],
+        component_path: tuple[Component, ...],
+    ) -> Event | None:
+        if not component_path:
+            return None
+
+        target = component_path[-1]
+        routed = Event(
+            type=event_type,
+            source=target,
+            data={
+                "event": platform_event,
+                "scene_target": scene_target,
+                "scene_path": scene_path,
+                "component_target": target,
+                "component_path": component_path,
+            },
+        )
+
+        for component in component_path[:-1]:
+            routed.phase = EventPhase.CAPTURE
+            component.dispatch(routed, capture=True)
+            if routed.propagation_stopped:
+                return routed
+
+        routed.phase = EventPhase.TARGET
+        target.dispatch(routed, capture=True)
+        if routed.propagation_stopped:
+            return routed
+        target.dispatch(routed)
+        if routed.propagation_stopped:
+            return routed
+
+        for component in reversed(component_path[:-1]):
+            routed.phase = EventPhase.BUBBLE
+            component.dispatch(routed)
+            if routed.propagation_stopped:
+                break
+        return routed
+
+    def _dispatch_direct_component_pointer_event(
+        self,
+        event_type: str,
+        platform_event: PlatformEvent,
+        scene_target: SceneNode,
+        component_path: tuple[Component, ...],
+    ) -> Event | None:
+        if not component_path:
+            return None
+        target = component_path[-1]
+        routed = Event(
+            type=event_type,
+            source=target,
+            data={
+                "event": platform_event,
+                "scene_target": scene_target,
+                "component_target": target,
+                "component_path": component_path,
+            },
+            phase=EventPhase.DIRECT,
+        )
+        target.dispatch(routed)
+        return routed
 
     def _mark_closed(self) -> None:
         if self.closed:
