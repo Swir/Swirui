@@ -1,14 +1,14 @@
 # SwirUI Roadmap
 
-> Next-generation Python UI framework: GPU-first, reactive, beautiful and extensible.
+> Next-generation Python UI framework: native, GPU-first, reactive, beautiful and extensible.
 
 ## Project progress
 
-**Overall completion: 4%**
+**Overall completion: 5%**
 
-`[█░░░░░░░░░░░░░░░░░░░] 4%`
+`[█░░░░░░░░░░░░░░░░░░░] 5%`
 
-Progress is based on completed and tested roadmap work. Ideas, mockups and unfinished prototypes do not increase the percentage.
+Progress is based on implemented and verified roadmap work. Ideas, mockups and unfinished prototypes do not increase the percentage.
 
 ---
 
@@ -22,49 +22,78 @@ Progress is based on completed and tested roadmap work. Ideas, mockups and unfin
 - [x] Window lifecycle/model
 - [x] Component tree
 - [x] Event system
-- [x] Reactive State
+- [x] Reactive `State`
 - [x] Configuration system
 - [x] Logging system
 - [x] Renderer abstraction
 - [x] Platform abstraction
 - [x] Automated tests
-- [x] CI verified on Python 3.11–3.14
+- [x] CI on Python 3.11–3.14
 - [x] Architecture documentation
 
 ## 0.2 Alpha — Native Window + First Renderer
 
-**Status:** In progress
+**Status:** In progress 🚧
 
-- [ ] Native desktop window backend
-- [ ] Event loop integration
-- [ ] Input dispatch
+### Native runtime
+
+- [x] Direct Windows native backend using Win32 + `ctypes`
+- [x] Native Win32 HWND creation without Tkinter / Qt / SDL
+- [x] x64-safe Win32 handle bindings
+- [x] Native event-loop integration
+- [x] Window-level input normalization
+- [x] Close / resize / focus events
+- [x] Mouse move / button events
+- [x] Keyboard down / up events
+- [x] Text-input events
+- [x] Automatic platform backend selection
+- [x] Windows-native smoke test on GitHub Actions
+- [ ] Linux native backend
+- [ ] macOS native backend
+- [ ] Component hit testing
+- [ ] Routed / bubbling component input
+
+### Rendering runtime
+
 - [x] Render tree
 - [x] Scene graph
+- [x] Geometry and color primitives
 - [x] Frame scheduler
-- [ ] GPU surface
+- [x] Invalidation-driven rendering
+- [x] Backend-neutral `RenderSurface` lifecycle
+- [x] Runtime surface recreation on resize
+- [x] `AppConfig.target_fps` connected to frame scheduling
+- [ ] Real GPU surface / swapchain
+- [ ] Scene submission to GPU renderer
 - [ ] Shapes and rounded rectangles
 - [ ] Text rendering
 - [ ] Image rendering
 - [ ] Clipping and compositing
-- [ ] DPI/HiDPI handling
+- [ ] Robust DPI / HiDPI handling
 - [ ] Multi-monitor support
-- [ ] 60/120/144 Hz frame scheduling
+- [ ] Display-aware 60 / 120 / 144+ Hz presentation
+- [ ] VSync / present-mode selection
+
+### 0.2 gate
+
+0.2 is complete only when SwirUI can open a native window and render a visible GPU-backed scene containing shapes and text while handling resize and input correctly.
 
 ## 0.3 Alpha — Visual Engine
 
 - [ ] Glass / frosted glass
 - [ ] Acrylic-like materials
-- [ ] Blur and background blur
+- [ ] Background blur
 - [ ] Glow and bloom
 - [ ] Dynamic shadows
-- [ ] Gradients and mesh gradients
+- [ ] Linear / radial / mesh gradients
 - [ ] Reflections
 - [ ] Depth and perspective
 - [ ] Adaptive lighting
 - [ ] Parallax
 - [ ] Color filters
 - [ ] Noise / grain
-- [ ] Shader effects
+- [ ] Custom shader effects
+- [ ] Effect caching
 - [ ] Adaptive quality profiles: Performance / Balanced / Quality / Ultra / Cinematic
 
 ## 0.4 Alpha — Core Widgets
@@ -80,7 +109,10 @@ Progress is based on completed and tested roadmap work. Ideas, mockups and unfin
 - [ ] Card / GlassCard
 - [ ] Panel / Frame
 - [ ] ScrollView
-- [ ] Expander / Accordion / SplitView
+- [ ] Expander / Accordion
+- [ ] SplitView
+- [ ] Modal / Dialog
+- [ ] Toast / Notification surface
 
 ## 0.5 Alpha — Layout Engine
 
@@ -88,15 +120,18 @@ Progress is based on completed and tested roadmap work. Ideas, mockups and unfin
 - [ ] Stack / Grid / Wrap
 - [ ] Dock / Flow / Overlay
 - [ ] Constraint layout
+- [ ] Intrinsic sizing
+- [ ] Min / max constraints
 - [ ] Responsive breakpoints
 - [ ] Adaptive navigation
 - [ ] Dynamic typography
 - [ ] Compact / desktop / ultrawide variants
 - [ ] DPI-aware spacing
+- [ ] Layout invalidation optimization
 
 ## 0.6 Alpha — Reactive Runtime
 
-- [ ] State
+- [x] Basic thread-safe `State`
 - [ ] Computed state
 - [ ] Reactive properties
 - [ ] Data binding
@@ -105,8 +140,9 @@ Progress is based on completed and tested roadmap work. Ideas, mockups and unfin
 - [ ] Dependency tracking
 - [ ] Async state
 - [ ] Persistent state
-- [ ] Component lifecycle
+- [ ] Component lifecycle hooks
 - [ ] Minimal-update scheduling
+- [ ] Batched state transactions
 
 ## 0.7 Alpha — Animation Engine
 
@@ -121,11 +157,13 @@ Progress is based on completed and tested roadmap work. Ideas, mockups and unfin
 - [ ] Magnetic interactions
 - [ ] Particle effects
 - [ ] Frame-rate-independent timing
+- [ ] Animation cancellation / chaining
 
 ## 0.8 Beta — Professional Widgets
 
 - [ ] DataGrid / Table
-- [ ] TreeView / ListView / virtualized lists
+- [ ] TreeView / ListView
+- [ ] Virtualized collections
 - [ ] Tabs
 - [ ] Docking system
 - [ ] Sidebar / NavigationRail
@@ -152,7 +190,8 @@ Progress is based on completed and tested roadmap work. Ideas, mockups and unfin
 
 - [ ] Image / SVG / GIF
 - [ ] Lottie
-- [ ] VideoPlayer / AudioPlayer
+- [ ] VideoPlayer
+- [ ] AudioPlayer
 - [ ] CameraView
 - [ ] Microphone input
 - [ ] Waveform
@@ -176,7 +215,7 @@ Progress is based on completed and tested roadmap work. Ideas, mockups and unfin
 
 - [ ] Canvas2D
 - [ ] Infinite canvas
-- [ ] GPU drawing
+- [ ] GPU drawing API
 - [ ] 3D viewport
 - [ ] Cameras / scenes / meshes
 - [ ] Materials / lighting
@@ -195,6 +234,7 @@ Progress is based on completed and tested roadmap work. Ideas, mockups and unfin
 - [ ] Theme inheritance
 - [ ] Custom theme packages
 - [ ] Animated theme transitions
+- [ ] Design tokens
 
 ## Desktop Integration
 
@@ -211,7 +251,7 @@ Progress is based on completed and tested roadmap work. Ideas, mockups and unfin
 
 ## Input & Accessibility
 
-- [ ] Keyboard / mouse
+- [x] Window-level keyboard / mouse normalization on Windows
 - [ ] Touch / gestures
 - [ ] Pen / pressure
 - [ ] Gamepad navigation
@@ -230,20 +270,21 @@ Progress is based on completed and tested roadmap work. Ideas, mockups and unfin
 - [ ] English fallback
 - [ ] Runtime language switching
 - [ ] RTL layouts
-- [ ] Locale-aware dates/numbers/currencies
+- [ ] Locale-aware dates / numbers / currencies
 - [ ] Translation packages
 - [ ] IME support
 
 ## Async & Performance
 
-- [ ] asyncio integration
+- [ ] `asyncio` integration
 - [ ] Background tasks
 - [ ] Worker threads
-- [ ] Thread-safe state updates
+- [x] Thread-safe state updates
 - [ ] Multiprocessing helpers
 - [ ] Cancellation
 - [ ] Progress reporting
 - [ ] Performance budgets
+- [ ] Frame-time telemetry
 
 ## Plugin System & Marketplace
 
@@ -300,12 +341,17 @@ AI output must remain ordinary, editable SwirUI code.
 
 ## Testing
 
-- [ ] Unit test helpers
+- [x] Unit-test foundation
+- [x] Headless native-window test backend
+- [x] Windows real-native-window smoke test
+- [x] Python 3.11–3.14 test matrix
+- [x] Ruff quality gate
+- [x] Mypy quality gate
 - [ ] Widget interaction tests
 - [ ] Screenshot tests
 - [ ] Visual regression tests
 - [ ] Accessibility tests
-- [ ] Performance tests
+- [ ] Performance regression tests
 - [ ] Automated UI testing
 
 ## SwirUI CLI
@@ -332,16 +378,16 @@ swirui package
 - [ ] macOS APP / DMG
 - [ ] Android feasibility
 - [ ] iOS feasibility
-- [ ] Web/WASM feasibility
+- [ ] Web / WASM feasibility
 
 ## Native Core
 
 Performance-critical systems are planned to migrate progressively to Rust while preserving Python as the public developer API.
 
-Candidates:
+Primary candidates:
 
-- rendering
-- scene graph
+- GPU rendering
+- scene preparation
 - text and image processing
 - layout acceleration
 - animation scheduler
@@ -350,24 +396,24 @@ Candidates:
 
 ## Benchmarks
 
-SwirUI will publish reproducible benchmark suites rather than unsupported performance claims.
+SwirUI will publish reproducible benchmark suites instead of unsupported performance claims.
 
-Metrics:
+Metrics include:
 
 - startup time
 - RAM
-- CPU/GPU usage
+- CPU / GPU usage
 - frame time
 - input latency
 - component creation
-- large lists / DataGrid
+- large-list / DataGrid performance
 - animation performance
 
 Where technically comparable, benchmark targets may include Qt/PyQt/PySide, Tkinter/CustomTkinter, Flet, Kivy, Flutter desktop and Electron-based desktop applications.
 
 ## SwirUI Showcase
 
-The official demo will be a real application rather than a Hello World screen.
+The official showcase will be a real application rather than a Hello World screen.
 
 - [ ] animated dashboard
 - [ ] glass sidebar
@@ -389,8 +435,8 @@ The official demo will be a real application rather than a Hello World screen.
 
 | Release | Goal |
 | --- | --- |
-| 0.1 Alpha | Foundation |
-| 0.2 Alpha | Native window + first renderer |
+| 0.1 Alpha | Foundation ✅ |
+| 0.2 Alpha | Native window + first visible renderer |
 | 0.3 Alpha | Visual Engine |
 | 0.4 Alpha | Core widgets |
 | 0.5 Alpha | Layout Engine |
@@ -402,7 +448,7 @@ The official demo will be a real application rather than a Hello World screen.
 
 ### 1.0 gate
 
-SwirUI 1.0 requires a stable API, tested GPU renderer, complete core widgets, responsive layout, reactive state, animation, accessibility baseline, internationalization, packaging, documentation, automated tests, benchmark suite and real-world applications.
+SwirUI 1.0 requires a stable public API, tested GPU renderer, complete core widgets, responsive layout, reactive state, animation, accessibility baseline, internationalization, packaging, documentation, automated tests, benchmark suite and real-world applications.
 
 ---
 
