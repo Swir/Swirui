@@ -91,13 +91,13 @@ class Win32PreviewRenderer:
         hwnd = ctypes.c_void_p(window.native_handle.value)
         hdc = self._user32.GetDC(hwnd)
         if not hdc:
-            raise OSError(ctypes.get_last_error(), "GetDC failed for SwirUI preview renderer.")
+            raise OSError(self._last_error(), "GetDC failed for SwirUI preview renderer.")
 
         try:
             client = _WinRect()
             if not self._user32.GetClientRect(hwnd, ctypes.byref(client)):
                 raise OSError(
-                    ctypes.get_last_error(),
+                    self._last_error(),
                     "GetClientRect failed for SwirUI preview renderer.",
                 )
             self._fill_native_rect(hdc, client, self.clear_color)
@@ -144,7 +144,7 @@ class Win32PreviewRenderer:
         )
         brush = self._gdi32.CreateSolidBrush(self._colorref(color))
         if not brush:
-            raise OSError(ctypes.get_last_error(), "CreateSolidBrush failed.")
+            raise OSError(self._last_error(), "CreateSolidBrush failed.")
         try:
             if maximum_radius <= 0.0:
                 self._user32.FillRect(hdc, ctypes.byref(native), brush)
@@ -159,7 +159,7 @@ class Win32PreviewRenderer:
                 diameter,
             )
             if not region:
-                raise OSError(ctypes.get_last_error(), "CreateRoundRectRgn failed.")
+                raise OSError(self._last_error(), "CreateRoundRectRgn failed.")
             try:
                 self._gdi32.FillRgn(hdc, region, brush)
             finally:
@@ -170,13 +170,17 @@ class Win32PreviewRenderer:
     def _fill_native_rect(self, hdc: Any, rect: _WinRect, color: Color) -> None:
         brush = self._gdi32.CreateSolidBrush(self._colorref(color))
         if not brush:
-            raise OSError(ctypes.get_last_error(), "CreateSolidBrush failed.")
+            raise OSError(self._last_error(), "CreateSolidBrush failed.")
         try:
             self._user32.FillRect(hdc, ctypes.byref(rect), brush)
         finally:
             self._gdi32.DeleteObject(brush)
 
     def _draw_text(self, hdc: Any, node: SceneNode) -> None:
+        text = node.text
+        if text is None:
+            return
+
         color = node.fill or Color(1.0, 1.0, 1.0, 1.0)
         height = -max(1, int(round(node.font_size)))
         font = self._gdi32.CreateFontW(
@@ -196,7 +200,7 @@ class Win32PreviewRenderer:
             node.font_family,
         )
         if not font:
-            raise OSError(ctypes.get_last_error(), "CreateFontW failed.")
+            raise OSError(self._last_error(), "CreateFontW failed.")
 
         previous_font = self._gdi32.SelectObject(hdc, font)
         try:
@@ -204,7 +208,7 @@ class Win32PreviewRenderer:
             self._gdi32.SetTextColor(hdc, self._colorref(color))
             x = int(round(node.bounds.x))
             y = int(round(node.bounds.y))
-            self._gdi32.TextOutW(hdc, x, y, node.text, len(node.text))
+            self._gdi32.TextOutW(hdc, x, y, text, len(text))
         finally:
             if previous_font:
                 self._gdi32.SelectObject(hdc, previous_font)
@@ -295,6 +299,13 @@ class Win32PreviewRenderer:
         green = int(round(color.g * 255.0))
         blue = int(round(color.b * 255.0))
         return red | (green << 8) | (blue << 16)
+
+    @staticmethod
+    def _last_error() -> int:
+        get_last_error: Any = ctypes.__dict__.get("get_last_error")
+        if get_last_error is None:
+            return 0
+        return int(get_last_error())
 
     def _require_initialized(self) -> None:
         if not self.initialized:
