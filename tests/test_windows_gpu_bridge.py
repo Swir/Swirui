@@ -112,6 +112,10 @@ def test_persistent_wgpu_renderer_draws_text_images_clips_and_survives_resize() 
         assert renderer.graphics_backend
         assert renderer.width == 640
         assert renderer.height == 420
+        initial_rectangle_capacity = renderer.rectangle_capacity
+        initial_image_capacity = renderer.image_vertex_capacity
+        assert initial_rectangle_capacity >= 2
+        assert initial_image_capacity >= 1
 
         renderer.register_image_rgba("checker", 2, 2, _checker_rgba())
         assert renderer.image_resource_count == 1
@@ -199,6 +203,34 @@ def test_persistent_wgpu_renderer_draws_text_images_clips_and_survives_resize() 
 
         assert renderer.draw_scene(rectangles, texts, images) == (2, 2, 1)
         assert renderer.draw_scene(rectangles, texts, images) == (2, 2, 1)
+        assert renderer.rectangle_capacity == initial_rectangle_capacity
+        assert renderer.image_vertex_capacity == initial_image_capacity
+
+        many_rectangles = rectangles * (initial_rectangle_capacity // len(rectangles) + 2)
+        assert len(many_rectangles) > initial_rectangle_capacity
+        assert renderer.draw_scene(many_rectangles, texts, images) == (
+            len(many_rectangles),
+            2,
+            1,
+        )
+        grown_rectangle_capacity = renderer.rectangle_capacity
+        assert grown_rectangle_capacity >= len(many_rectangles)
+        assert grown_rectangle_capacity > initial_rectangle_capacity
+
+        many_images = images * (initial_image_capacity + 1)
+        assert len(many_images) > initial_image_capacity
+        assert renderer.draw_scene(rectangles, texts, many_images) == (
+            2,
+            2,
+            len(many_images),
+        )
+        grown_image_capacity = renderer.image_vertex_capacity
+        assert grown_image_capacity >= len(many_images)
+        assert grown_image_capacity > initial_image_capacity
+
+        assert renderer.draw_scene(rectangles, texts, images) == (2, 2, 1)
+        assert renderer.rectangle_capacity == grown_rectangle_capacity
+        assert renderer.image_vertex_capacity == grown_image_capacity
 
         backend.resize_window(handle, 720, 460)
         backend.poll_events()
@@ -206,6 +238,8 @@ def test_persistent_wgpu_renderer_draws_text_images_clips_and_survives_resize() 
         assert renderer.width == 720
         assert renderer.height == 460
         assert renderer.draw_scene(rectangles, texts, images) == (2, 2, 1)
+        assert renderer.rectangle_capacity == grown_rectangle_capacity
+        assert renderer.image_vertex_capacity == grown_image_capacity
 
         assert renderer.unregister_image("checker") is True
         assert renderer.image_resource_count == 0
