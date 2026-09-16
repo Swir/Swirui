@@ -1,9 +1,6 @@
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
-#[cfg(target_os = "windows")]
-use wgpu::util::DeviceExt;
-
 pub(crate) type PathTriangleInstance = Vec<f32>;
 
 const PATH_TRIANGLE_INSTANCE_FLOATS: usize = 14;
@@ -61,6 +58,9 @@ pub(crate) struct PathSystem {
     vertex_buffer: wgpu::Buffer,
     triangle_capacity: usize,
 }
+
+#[cfg(not(target_os = "windows"))]
+pub(crate) struct PathSystem;
 
 #[cfg(target_os = "windows")]
 impl PathSystem {
