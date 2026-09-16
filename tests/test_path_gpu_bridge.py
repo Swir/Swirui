@@ -2,7 +2,16 @@ import pytest
 
 from swirui import App, Window
 from swirui.platforms import NullPlatformBackend
-from swirui.rendering import Color, PathGeometry, Point, Rect, Scene, SceneNode, SceneNodeKind, WgpuRenderer
+from swirui.rendering import (
+    Color,
+    PathGeometry,
+    Point,
+    Rect,
+    Scene,
+    SceneNode,
+    SceneNodeKind,
+    WgpuRenderer,
+)
 
 
 class PathAwareContext:
@@ -168,8 +177,8 @@ def test_wgpu_renderer_scales_path_geometry_and_clip_to_physical_pixels() -> Non
     app = App(platform_backend=NullPlatformBackend(), renderer=renderer)
     window = Window(width=200, height=120)
     window.set_scene(Scene(200, 120, root))
+    window.scale = 1.5
     app.add_window(window)
-    window._scale = 1.5
 
     app.start()
     try:
