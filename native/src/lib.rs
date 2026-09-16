@@ -24,7 +24,7 @@ fn enabled_backends() -> Vec<&'static str> {
 
 #[pyfunction]
 fn probe_adapter() -> PyResult<(String, String)> {
-    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::default());
+    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle());
     let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
         power_preference: wgpu::PowerPreference::HighPerformance,
         force_fallback_adapter: false,
@@ -51,7 +51,7 @@ fn clear_win32_surface(
     validate_dimensions(width, height)?;
     validate_color(red, green, blue, alpha)?;
 
-    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::default());
+    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle());
     let surface = create_win32_surface(&instance, hwnd)?;
     let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
         power_preference: wgpu::PowerPreference::HighPerformance,
