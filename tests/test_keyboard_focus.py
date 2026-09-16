@@ -1,6 +1,7 @@
 from swirui import App, Component, Window
 from swirui.core import Event, EventPhase
 from swirui.platforms import NullPlatformBackend, PlatformEvent, PlatformEventKind
+from swirui.rendering import Color, Rect, Scene, SceneNode, SceneNodeKind
 
 
 def _focused_app() -> tuple[App, NullPlatformBackend, Window, Component, Component, Component]:
@@ -102,6 +103,43 @@ def test_keyboard_capture_can_stop_propagation_before_target() -> None:
     app.process_events()
 
     assert calls == ["root"]
+    app.stop()
+
+
+def test_pointer_down_focuses_focusable_scene_target() -> None:
+    backend = NullPlatformBackend()
+    app = App(platform_backend=backend)
+    window = Window(width=320, height=240)
+    root = Component("root", key="root")
+    field = Component("field", key="field", focusable=True)
+    root.add(field)
+    window.set_root(root)
+
+    scene_root = SceneNode("root", SceneNodeKind.GROUP, Rect(0, 0, 320, 240))
+    scene_root.add(
+        SceneNode(
+            "field",
+            SceneNodeKind.RECTANGLE,
+            Rect(20, 30, 180, 50),
+            fill=Color.from_hex("#225588"),
+        )
+    )
+    window.set_scene(Scene(320, 240, scene_root))
+    app.add_window(window)
+    app.start()
+    assert window.native_handle is not None
+
+    backend.post_event(
+        PlatformEvent(
+            PlatformEventKind.POINTER_DOWN,
+            window.native_handle,
+            x=40.0,
+            y=50.0,
+        )
+    )
+    app.process_events()
+
+    assert window.focused_component is field
     app.stop()
 
 
