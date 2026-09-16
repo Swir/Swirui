@@ -27,9 +27,23 @@ class _SuggestedRect(ctypes.Structure):
     ]
 
 
+def _isolated_backend(label: str) -> Win32PlatformBackend:
+    """Create a backend with a process-unique Win32 class for smoke isolation.
+
+    Win32 window classes remain registered for the lifetime of the process. The
+    production runtime normally owns one platform backend, while this test module
+    deliberately creates several independent backends in one pytest process.
+    Giving each smoke backend its own class keeps its WNDPROC callback isolated.
+    """
+
+    backend = Win32PlatformBackend()
+    backend._class_name = f"SwirUI.NativeWindow.Tests.{label}.{id(backend):x}"
+    return backend
+
+
 @pytest.mark.skipif(sys.platform != "win32", reason="Win32 smoke test requires Windows")
 def test_win32_backend_creates_real_native_window() -> None:
-    backend = Win32PlatformBackend()
+    backend = _isolated_backend("native")
     backend.initialize()
 
     displays = backend.displays()
@@ -55,7 +69,7 @@ def test_win32_backend_creates_real_native_window() -> None:
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Win32 DPI smoke test requires Windows")
 def test_win32_backend_normalizes_real_dpi_change_message() -> None:
-    backend = Win32PlatformBackend()
+    backend = _isolated_backend("dpi")
     backend.initialize()
     handle = backend.create_window(NativeWindowSpec("SwirUI DPI Smoke", 640, 420))
 
@@ -118,7 +132,7 @@ def test_win32_preview_renderer_paints_scene_into_real_window() -> None:
     renderer = Win32PreviewRenderer()
     app = App(
         "SwirUI Renderer Smoke",
-        platform_backend=Win32PlatformBackend(),
+        platform_backend=_isolated_backend("preview"),
         renderer=renderer,
     )
     window = Window(title="SwirUI Renderer Smoke", width=640, height=420)
