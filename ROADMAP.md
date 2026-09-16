@@ -4,9 +4,9 @@
 
 ## Project progress
 
-**Overall completion: 8%**
+**Overall completion: 9%**
 
-`[██░░░░░░░░░░░░░░░░░░] 8%`
+`[██░░░░░░░░░░░░░░░░░░] 9%`
 
 Progress is based on implemented and verified roadmap work. Ideas, mockups and unfinished prototypes do not increase the percentage.
 
@@ -52,10 +52,11 @@ Progress is based on implemented and verified roadmap work. Ideas, mockups and u
 - [x] Scene-level z-aware hit testing
 - [x] Pointer events enriched with SceneGraph target + ancestry path
 - [x] Pointer enter / leave transitions
+- [x] SceneNode-to-Component mapping by stable key
+- [x] Routed capture / target / bubbling component pointer input
+- [x] Event propagation cancellation
 - [ ] Linux native backend
 - [ ] macOS native backend
-- [ ] Component hit testing / SceneNode-to-Component mapping
-- [ ] Routed capture / bubbling component input
 
 ### Rendering runtime
 
@@ -77,7 +78,9 @@ Progress is based on implemented and verified roadmap work. Ideas, mockups and u
 - [x] Persistent wgpu renderer context per window
 - [x] Surface/device/queue/pipeline reused across frames
 - [x] Persistent GPU context survives resize/reconfiguration
-- [ ] Anti-aliased GPU rounded rectangles using `CornerRadius`
+- [x] Anti-aliased GPU rounded rectangles using `CornerRadius`
+- [x] Per-corner radii carried through Python → Rust → WGSL
+- [x] SDF/fwidth rounded-edge antialiasing
 - [ ] General shape / path rendering
 - [ ] Text rendering
 - [ ] Image rendering
@@ -266,6 +269,9 @@ Progress is based on implemented and verified roadmap work. Ideas, mockups and u
 
 - [x] Window-level keyboard / mouse normalization on Windows
 - [x] Scene-level pointer hit testing and hover transitions
+- [x] Capture / target / bubble pointer routing
+- [x] Event propagation cancellation
+- [ ] Keyboard focus routing
 - [ ] Touch / gestures
 - [ ] Pen / pressure
 - [ ] Gamepad navigation
@@ -361,12 +367,14 @@ AI output must remain ordinary, editable SwirUI code.
 - [x] Windows real-wgpu surface/present smoke test
 - [x] Windows real-wgpu instanced rectangle draw smoke test
 - [x] Windows persistent GPU context multi-frame + resize smoke test
+- [x] Windows per-corner rounded-rectangle shader smoke test
 - [x] Rust native-core check and unit tests
 - [x] ABI3 native extension build on Windows
 - [x] Python 3.11–3.14 test matrix
 - [x] Ruff quality gate
 - [x] Mypy quality gate
 - [x] SceneGraph hit-test and pointer-targeting tests
+- [x] Routed component input propagation tests
 - [ ] Widget interaction tests
 - [ ] Screenshot tests
 - [ ] Visual regression tests
@@ -417,9 +425,11 @@ Current native foundation:
 - [x] instanced GPU rectangle pipeline
 - [x] persistent renderer context per window
 - [x] context reuse across multiple frames and resize
+- [x] native per-corner rounded-rectangle pipeline
+- [x] native renderer split into dedicated Rust module
 - [ ] GPU resource cache
-- [ ] native rounded-rectangle pipeline
-- [ ] native text/image pipeline
+- [ ] native text pipeline
+- [ ] native image pipeline
 
 Primary future candidates:
 
