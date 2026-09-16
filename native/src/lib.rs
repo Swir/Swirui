@@ -8,7 +8,7 @@ use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 
 #[cfg(target_os = "windows")]
-use raw_window_handle::{RawWindowHandle, Win32WindowHandle};
+use raw_window_handle::{RawWindowHandle, Win32WindowHandle, WindowsDisplayHandle};
 #[cfg(target_os = "windows")]
 use std::num::NonZeroIsize;
 
@@ -201,7 +201,7 @@ fn create_win32_surface(
         .ok_or_else(|| PyValueError::new_err("A non-zero Win32 HWND is required."))?;
     let handle = Win32WindowHandle::new(hwnd);
     let target = wgpu::SurfaceTargetUnsafe::RawHandle {
-        raw_display_handle: None,
+        raw_display_handle: Some(WindowsDisplayHandle::new().into()),
         raw_window_handle: RawWindowHandle::Win32(handle),
     };
 
