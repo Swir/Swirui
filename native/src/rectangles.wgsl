@@ -7,6 +7,7 @@ struct RectInstance {
     rect: vec4<f32>,
     color: vec4<f32>,
     radii: vec4<f32>,
+    clip: vec4<f32>,
 };
 
 @group(0) @binding(0)
@@ -21,6 +22,8 @@ struct VertexOutput {
     @location(1) local: vec2<f32>,
     @location(2) size: vec2<f32>,
     @location(3) radii: vec4<f32>,
+    @location(4) pixel: vec2<f32>,
+    @location(5) clip: vec4<f32>,
 };
 
 @vertex
@@ -51,6 +54,8 @@ fn vs_main(
     output.local = local;
     output.size = item.rect.zw;
     output.radii = item.radii;
+    output.pixel = pixel;
+    output.clip = item.clip;
     return output;
 }
 
@@ -78,6 +83,11 @@ fn rounded_rect_distance(local: vec2<f32>, size: vec2<f32>, radii: vec4<f32>) ->
 
 @fragment
 fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
+    if input.pixel.x < input.clip.x || input.pixel.y < input.clip.y ||
+       input.pixel.x >= input.clip.z || input.pixel.y >= input.clip.w {
+        discard;
+    }
+
     let distance = rounded_rect_distance(input.local, input.size, input.radii);
     let antialias = max(fwidth(distance), 0.75);
     let coverage = 1.0 - smoothstep(-antialias, antialias, distance);
