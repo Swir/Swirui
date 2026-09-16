@@ -53,13 +53,7 @@ fn clear_win32_surface(
 
     let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle());
     let surface = create_win32_surface(&instance, hwnd)?;
-    let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-        power_preference: wgpu::PowerPreference::HighPerformance,
-        force_fallback_adapter: false,
-        compatible_surface: Some(&surface),
-        apply_limit_buckets: false,
-    }))
-    .map_err(|error| PyRuntimeError::new_err(format!("No GPU can present to this HWND: {error}")))?;
+    let adapter = request_present_adapter(&instance, &surface)?;
 
     let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
         label: Some("SwirUI native GPU device"),
@@ -146,6 +140,7 @@ fn backend_names(backends: wgpu::Backends) -> Vec<&'static str> {
         .collect()
 }
 
+#[cfg_attr(not(any(test, target_os = "windows")), allow(dead_code))]
 fn validate_dimensions(width: u32, height: u32) -> PyResult<()> {
     if width == 0 || height == 0 {
         return Err(PyValueError::new_err(
@@ -155,6 +150,7 @@ fn validate_dimensions(width: u32, height: u32) -> PyResult<()> {
     Ok(())
 }
 
+#[cfg_attr(not(any(test, target_os = "windows")), allow(dead_code))]
 fn validate_color(red: f64, green: f64, blue: f64, alpha: f64) -> PyResult<()> {
     if [red, green, blue, alpha]
         .into_iter()
@@ -165,6 +161,34 @@ fn validate_color(red: f64, green: f64, blue: f64, alpha: f64) -> PyResult<()> {
         ));
     }
     Ok(())
+}
+
+#[cfg(target_os = "windows")]
+fn request_present_adapter(
+    instance: &wgpu::Instance,
+    surface: &wgpu::Surface<'_>,
+) -> PyResult<wgpu::Adapter> {
+    let primary = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+        power_preference: wgpu::PowerPreference::HighPerformance,
+        force_fallback_adapter: false,
+        compatible_surface: Some(surface),
+        apply_limit_buckets: false,
+    }));
+    if let Ok(adapter) = primary {
+        return Ok(adapter);
+    }
+
+    pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+        power_preference: wgpu::PowerPreference::LowPower,
+        force_fallback_adapter: true,
+        compatible_surface: Some(surface),
+        apply_limit_buckets: false,
+    }))
+    .map_err(|error| {
+        PyRuntimeError::new_err(format!(
+            "No hardware or fallback GPU can present to this HWND: {error}"
+        ))
+    })
 }
 
 #[cfg(target_os = "windows")]
