@@ -151,10 +151,12 @@ def test_wgpu_renderer_submits_scene_rectangles_and_text() -> None:
     assert isinstance(submitted_texts, list)
     assert submitted_rectangles[0][:4] == (40, 50, 240, 120)
     assert submitted_rectangles[0][7] == 0.75
-    assert submitted_rectangles[0][8:] == (12, 18, 24, 30)
+    assert submitted_rectangles[0][8:12] == (12, 18, 24, 30)
+    assert submitted_rectangles[0][12:] == (0.0, 0.0, 800, 500)
     assert submitted_texts[0][:6] == ("SwirUI", 50, 70, 160, 36, 24)
     assert submitted_texts[0][9] == 0.8
     assert submitted_texts[0][10] == "Segoe UI"
+    assert submitted_texts[0][11] == (0.0, 0.0, 800, 500)
 
     app.stop()
 
@@ -216,6 +218,65 @@ def test_wgpu_renderer_inherits_group_opacity_across_mixed_primitives() -> None:
     assert rectangles[0][7] == 0.1
     assert texts[0][9] == 0.15
     assert images[0][5] == 0.1
+    assert rectangles[0][12:] == (0.0, 0.0, 640, 360)
+    assert texts[0][11] == (0.0, 0.0, 640, 360)
+    assert images[0][6] == (0.0, 0.0, 640, 360)
+
+    app.stop()
+
+
+def test_wgpu_renderer_submits_nested_clip_for_all_primitive_kinds() -> None:
+    native = FakePersistentNative()
+    renderer = WgpuRenderer(native_module=native)
+    renderer.register_image_rgba("pixel", 1, 1, bytes((255, 255, 255, 255)))
+
+    root = SceneNode(
+        key="root",
+        kind=SceneNodeKind.GROUP,
+        bounds=Rect(0, 0, 640, 360),
+    )
+    clipped = SceneNode(
+        key="clip",
+        kind=SceneNodeKind.GROUP,
+        bounds=Rect(100, 80, 220, 160),
+        clip_to_bounds=True,
+    )
+    clipped.add(
+        SceneNode(
+            key="rect",
+            kind=SceneNodeKind.RECTANGLE,
+            bounds=Rect(50, 50, 360, 240),
+            fill=Color.from_hex("#008CFF"),
+        ),
+        SceneNode(
+            key="text",
+            kind=SceneNodeKind.TEXT,
+            bounds=Rect(70, 100, 360, 80),
+            text="Clipped GPU text",
+        ),
+        SceneNode(
+            key="image",
+            kind=SceneNodeKind.IMAGE,
+            bounds=Rect(240, 40, 180, 240),
+            resource_id="pixel",
+        ),
+    )
+    root.add(clipped)
+
+    app = App(platform_backend=NullPlatformBackend(), renderer=renderer)
+    window = Window(width=640, height=360)
+    window.set_scene(Scene(640, 360, root))
+    app.add_window(window)
+    app.start()
+
+    rectangles, texts, images = native.contexts[0].scene_calls[0][:3]
+    assert isinstance(rectangles, list)
+    assert isinstance(texts, list)
+    assert isinstance(images, list)
+    expected_clip = (100, 80, 320, 240)
+    assert rectangles[0][12:] == expected_clip
+    assert texts[0][11] == expected_clip
+    assert images[0][6] == expected_clip
 
     app.stop()
 
@@ -308,7 +369,9 @@ def test_wgpu_renderer_uploads_and_submits_registered_image() -> None:
     assert renderer.last_image_count == 1
     submitted_images = context.scene_calls[0][2]
     assert isinstance(submitted_images, list)
-    assert submitted_images == [("checker", 40, 50, 240, 160, 0.65)]
+    assert submitted_images == [
+        ("checker", 40, 50, 240, 160, 0.65, (0.0, 0.0, 640, 360))
+    ]
 
     assert renderer.unregister_image("checker") is True
     assert renderer.image_resource_count == 0
@@ -354,6 +417,7 @@ def test_wgpu_renderer_uses_white_for_unfilled_text() -> None:
     submitted_texts = native.scene_calls[0][4]
     assert isinstance(submitted_texts, list)
     assert submitted_texts[0][6:10] == (1.0, 1.0, 1.0, 0.5)
+    assert submitted_texts[0][11] == (0.0, 0.0, 640, 360)
     assert renderer.last_rectangle_count == 0
     assert renderer.last_text_count == 1
 
