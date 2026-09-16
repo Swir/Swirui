@@ -5,6 +5,7 @@
 //! into a monolithic backend.
 
 mod renderer;
+mod text;
 
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
