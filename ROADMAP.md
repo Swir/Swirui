@@ -4,9 +4,9 @@
 
 ## Project progress
 
-**Overall completion: 3%**
+**Overall completion: 4%**
 
-`[█░░░░░░░░░░░░░░░░░░░] 3%`
+`[█░░░░░░░░░░░░░░░░░░░] 4%`
 
 Progress is based on completed and tested roadmap work. Ideas, mockups and unfinished prototypes do not increase the percentage.
 
@@ -33,14 +33,14 @@ Progress is based on completed and tested roadmap work. Ideas, mockups and unfin
 
 ## 0.2 Alpha — Native Window + First Renderer
 
-**Status:** Next milestone
+**Status:** In progress
 
 - [ ] Native desktop window backend
 - [ ] Event loop integration
 - [ ] Input dispatch
-- [ ] Render tree
-- [ ] Scene graph
-- [ ] Frame scheduler
+- [x] Render tree
+- [x] Scene graph
+- [x] Frame scheduler
 - [ ] GPU surface
 - [ ] Shapes and rounded rectangles
 - [ ] Text rendering
