@@ -15,6 +15,10 @@ The project uses semantic versioning where practical during pre-alpha developmen
 - Backend-neutral `PathGeometry` and `Triangle` primitives for vector-path authoring in logical DIPs.
 - Deterministic ear-clipping tessellation for validated simple convex and concave polygons with winding normalization and area-preserving tests.
 - Exact point-in-polygon hit testing for filled SceneGraph path nodes, including concave geometry and boundary hits.
+- SceneGraph `PATH` submission through Python tessellation into a persistent Rust/wgpu filled-triangle pipeline with DPI scaling, inherited opacity and clip-aware fragment rejection.
+- Reusable native GPU path vertex buffers with geometric capacity growth instead of per-frame buffer allocation.
+- Real Win32/wgpu vector-path smoke coverage across repeated frames, capacity growth, resize and SceneGraph integration.
+- `examples/gpu_path_demo.py` showing convex/concave filled paths, hierarchical clipping, opacity and Unicode text in one persistent GPU scene.
 - Persistent native shaped-text subsystem using glyphon/cosmic-text inside the Rust/wgpu renderer.
 - SceneGraph text submission through the Python `WgpuRenderer` bridge into the persistent native GPU context.
 - Windows GPU text smoke coverage including Unicode shaping, repeated frames and resize.
@@ -54,10 +58,10 @@ The project uses semantic versioning where practical during pre-alpha developmen
 
 ### Changed
 - SceneGraph path nodes now validate closed filled geometry before renderer submission and use polygon-accurate pointer targeting instead of rectangular-bounds-only hits.
-- The wgpu renderer now reports submitted rectangle, text and image counts independently.
+- The wgpu renderer now reports submitted rectangle, text, image and tessellated path-triangle counts independently.
 - Registered image resources are uploaded automatically into newly created native window contexts and can be replaced or removed at runtime.
 - Text scene nodes use white as the renderer default when no explicit fill color is supplied, matching the temporary GDI preview behavior.
-- Installed native cores that lack shaped-text or image-resource support now fail explicitly instead of silently dropping scene nodes.
+- Installed native cores that lack shaped-text, image-resource or path-rendering support now fail explicitly instead of silently dropping scene nodes.
 - Rounded-rectangle instances now carry clip bounds through Python → Rust → WGSL while the legacy 12-float direct native rectangle interface remains accepted for compatibility.
 - Image vertices are cropped before draw submission so clipping preserves the correct source UV region instead of stretching the visible portion.
 - Win32 smoke tests use process-unique native window classes to avoid stale process-wide WNDPROC callbacks when multiple backend instances are exercised in one pytest process.
