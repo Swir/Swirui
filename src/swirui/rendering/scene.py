@@ -59,6 +59,26 @@ class SceneNode:
         for child in sorted(self.children, key=lambda item: item.z_index):
             yield from child.walk()
 
+    def walk_with_opacity(
+        self,
+        inherited_opacity: float = 1.0,
+    ) -> Iterator[tuple[SceneNode, float]]:
+        """Yield painter-ordered nodes with opacity inherited from all ancestors.
+
+        The returned opacity is the product of this node's opacity and each
+        ancestor opacity. Fully transparent subtrees are skipped entirely so
+        render backends do not prepare resources or GPU work that cannot be
+        visible. This is the shared retained-scene basis for compositing.
+        """
+
+        effective_opacity = inherited_opacity * self.opacity
+        if effective_opacity <= 0.0:
+            return
+
+        yield self, effective_opacity
+        for child in sorted(self.children, key=lambda item: item.z_index):
+            yield from child.walk_with_opacity(effective_opacity)
+
     def contains(self, target: SceneNode) -> bool:
         return any(node is target for node in self.walk())
 
@@ -115,6 +135,11 @@ class Scene:
 
     def walk(self) -> Iterator[SceneNode]:
         yield from self.root.walk()
+
+    def walk_with_opacity(self) -> Iterator[tuple[SceneNode, float]]:
+        """Yield painter-ordered nodes with cumulative scene opacity."""
+
+        yield from self.root.walk_with_opacity()
 
     def hit_test(self, point: Point) -> SceneNode | None:
         return self.root.hit_test(point)
