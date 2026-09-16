@@ -70,7 +70,7 @@ impl ImageSystem {
                 module: &shader,
                 entry_point: Some("vs_main"),
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
-                buffers: &[wgpu::VertexBufferLayout {
+                buffers: &[Some(wgpu::VertexBufferLayout {
                     array_stride: 5 * 4,
                     step_mode: wgpu::VertexStepMode::Vertex,
                     attributes: &[
@@ -90,7 +90,7 @@ impl ImageSystem {
                             shader_location: 2,
                         },
                     ],
-                }],
+                })],
             },
             primitive: wgpu::PrimitiveState::default(),
             depth_stencil: None,
