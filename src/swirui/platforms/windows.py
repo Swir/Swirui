@@ -25,10 +25,12 @@ _SWP_NOMOVE = 0x0002
 _SWP_NOZORDER = 0x0004
 _SWP_NOACTIVATE = 0x0010
 
+_WM_MOVE = 0x0003
 _WM_SIZE = 0x0005
 _WM_SETFOCUS = 0x0007
 _WM_KILLFOCUS = 0x0008
 _WM_CLOSE = 0x0010
+_WM_DISPLAYCHANGE = 0x007E
 _WM_KEYDOWN = 0x0100
 _WM_KEYUP = 0x0101
 _WM_CHAR = 0x0102
@@ -43,6 +45,7 @@ _WM_DPICHANGED = 0x02E0
 
 _SM_CXSCREEN = 0
 _SM_CYSCREEN = 1
+_VREFRESH = 116
 _ERROR_CLASS_ALREADY_EXISTS = 1410
 _MONITORINFOF_PRIMARY = 0x00000001
 _MONITOR_DEFAULTTONEAREST = 0x00000002
@@ -127,6 +130,7 @@ class Win32PlatformBackend:
         win_dll: Any = ctypes.__dict__["WinDLL"]
         self._user32: Any = win_dll("user32", use_last_error=True)
         self._kernel32: Any = win_dll("kernel32", use_last_error=True)
+        self._gdi32: Any = win_dll("gdi32", use_last_error=True)
         try:
             self._shcore: Any | None = win_dll("shcore", use_last_error=True)
         except OSError:
@@ -226,6 +230,18 @@ class Win32PlatformBackend:
         self._user32.MonitorFromWindow.argtypes = [ctypes.c_void_p, ctypes.c_ulong]
         self._user32.MonitorFromWindow.restype = ctypes.c_void_p
 
+        self._gdi32.CreateDCW.argtypes = [
+            ctypes.c_wchar_p,
+            ctypes.c_wchar_p,
+            ctypes.c_wchar_p,
+            ctypes.c_void_p,
+        ]
+        self._gdi32.CreateDCW.restype = ctypes.c_void_p
+        self._gdi32.GetDeviceCaps.argtypes = [ctypes.c_void_p, ctypes.c_int]
+        self._gdi32.GetDeviceCaps.restype = ctypes.c_int
+        self._gdi32.DeleteDC.argtypes = [ctypes.c_void_p]
+        self._gdi32.DeleteDC.restype = ctypes.c_bool
+
         try:
             set_dpi_context: Any = self._user32.SetProcessDpiAwarenessContext
         except AttributeError:
@@ -292,7 +308,7 @@ class Win32PlatformBackend:
         self._initialized = True
 
     def displays(self) -> tuple[DisplayInfo, ...]:
-        """Enumerate every Win32 monitor with virtual-desktop geometry and scale."""
+        """Enumerate every Win32 monitor with geometry, scale and refresh rate."""
 
         self._require_initialized()
         displays: list[DisplayInfo] = []
@@ -305,35 +321,9 @@ class Win32PlatformBackend:
         ) -> bool:
             if not monitor:
                 return True
-            info = _MonitorInfoExW()
-            info.cbSize = ctypes.sizeof(_MonitorInfoExW)
-            if not self._user32.GetMonitorInfoW(ctypes.c_void_p(monitor), ctypes.byref(info)):
-                return True
-
-            monitor_rect = info.rcMonitor
-            work_rect = info.rcWork
-            width = int(monitor_rect.right - monitor_rect.left)
-            height = int(monitor_rect.bottom - monitor_rect.top)
-            work_width = int(work_rect.right - work_rect.left)
-            work_height = int(work_rect.bottom - work_rect.top)
-            if width <= 0 or height <= 0 or work_width <= 0 or work_height <= 0:
-                return True
-
-            displays.append(
-                DisplayInfo(
-                    name=str(info.szDevice) or f"Display {len(displays) + 1}",
-                    width=width,
-                    height=height,
-                    scale=self._monitor_scale(int(monitor)),
-                    primary=bool(info.dwFlags & _MONITORINFOF_PRIMARY),
-                    x=int(monitor_rect.left),
-                    y=int(monitor_rect.top),
-                    work_x=int(work_rect.left),
-                    work_y=int(work_rect.top),
-                    work_width=work_width,
-                    work_height=work_height,
-                )
-            )
+            display = self._display_info(int(monitor), f"Display {len(displays) + 1}")
+            if display is not None:
+                displays.append(display)
             return True
 
         callback = self._monitor_enum_type(collect_monitor)
@@ -385,6 +375,17 @@ class Win32PlatformBackend:
         if monitor:
             return self._monitor_scale(int(monitor))
         return self._system_scale()
+
+    def window_display(self, handle: NativeWindowHandle) -> DisplayInfo | None:
+        """Return the display currently owning the largest area of a Win32 window."""
+
+        self._require_window(handle)
+        monitor = self._user32.MonitorFromWindow(
+            ctypes.c_void_p(handle.value), _MONITOR_DEFAULTTONEAREST
+        )
+        if not monitor:
+            return None
+        return self._display_info(int(monitor), "Window display")
 
     def show_window(self, handle: NativeWindowHandle) -> None:
         self._require_window(handle)
@@ -453,6 +454,47 @@ class Win32PlatformBackend:
             if set_awareness is not None:
                 set_awareness(_PROCESS_PER_MONITOR_DPI_AWARE)
 
+    def _display_info(self, monitor: int, fallback_name: str) -> DisplayInfo | None:
+        info = _MonitorInfoExW()
+        info.cbSize = ctypes.sizeof(_MonitorInfoExW)
+        if not self._user32.GetMonitorInfoW(ctypes.c_void_p(monitor), ctypes.byref(info)):
+            return None
+
+        monitor_rect = info.rcMonitor
+        work_rect = info.rcWork
+        width = int(monitor_rect.right - monitor_rect.left)
+        height = int(monitor_rect.bottom - monitor_rect.top)
+        work_width = int(work_rect.right - work_rect.left)
+        work_height = int(work_rect.bottom - work_rect.top)
+        if width <= 0 or height <= 0 or work_width <= 0 or work_height <= 0:
+            return None
+
+        device_name = str(info.szDevice) or fallback_name
+        return DisplayInfo(
+            name=device_name,
+            width=width,
+            height=height,
+            scale=self._monitor_scale(monitor),
+            refresh_rate_hz=self._display_refresh_rate(device_name),
+            primary=bool(info.dwFlags & _MONITORINFOF_PRIMARY),
+            x=int(monitor_rect.left),
+            y=int(monitor_rect.top),
+            work_x=int(work_rect.left),
+            work_y=int(work_rect.top),
+            work_width=work_width,
+            work_height=work_height,
+        )
+
+    def _display_refresh_rate(self, device_name: str) -> float:
+        hdc = self._gdi32.CreateDCW("DISPLAY", device_name, None, None)
+        if not hdc:
+            return 60.0
+        try:
+            refresh_rate = int(self._gdi32.GetDeviceCaps(hdc, _VREFRESH))
+        finally:
+            self._gdi32.DeleteDC(hdc)
+        return float(refresh_rate) if refresh_rate > 1 else 60.0
+
     def _monitor_scale(self, monitor: int) -> float:
         if self._shcore is not None:
             try:
@@ -493,6 +535,7 @@ class Win32PlatformBackend:
             max(width, 1),
             max(height, 1),
             scale=self._system_scale(),
+            refresh_rate_hz=60.0,
             primary=True,
             work_width=max(width, 1),
             work_height=max(height, 1),
@@ -504,6 +547,8 @@ class Win32PlatformBackend:
             if message == _WM_CLOSE:
                 self._events.append(PlatformEvent(PlatformEventKind.CLOSE, handle))
                 return 0
+            if message in (_WM_MOVE, _WM_DISPLAYCHANGE):
+                self._events.append(PlatformEvent(PlatformEventKind.DISPLAY_CHANGED, handle))
             if message == _WM_SIZE:
                 self._events.append(
                     PlatformEvent(
@@ -535,6 +580,7 @@ class Win32PlatformBackend:
                 self._events.append(
                     PlatformEvent(PlatformEventKind.DPI_CHANGED, handle, scale=scale)
                 )
+                self._events.append(PlatformEvent(PlatformEventKind.DISPLAY_CHANGED, handle))
                 return 0
             elif message == _WM_SETFOCUS:
                 self._events.append(PlatformEvent(PlatformEventKind.FOCUS, handle, focused=True))
