@@ -127,11 +127,16 @@ class App(EventEmitter):
             if scheduler.consume(frame_time):
                 self.renderer.render(window, window.root)
                 frames += 1
+                stats = scheduler.stats
                 self.emit(
                     "frame_rendered",
                     window=window,
-                    frame_number=scheduler.stats.frame_number,
+                    frame_number=stats.frame_number,
                     frame_time=frame_time,
+                    frame_delta=stats.last_frame_delta,
+                    instantaneous_fps=stats.instantaneous_fps,
+                    smoothed_fps=stats.smoothed_fps,
+                    pacing_error=stats.pacing_error,
                 )
         return frames
 
