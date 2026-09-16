@@ -121,6 +121,9 @@ jobs:
       - name: Draw native GPU scene
         run: pytest tests/test_windows_gpu_bridge.py -q
 
+      - name: Verify GPU resource cache
+        run: pytest tests/test_windows_resource_cache.py -q
+
       - name: Verify mixed-DPI GPU path
         run: pytest tests/test_windows_hidpi_gpu.py -q
 
