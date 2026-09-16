@@ -12,6 +12,7 @@ class PlatformEventKind(StrEnum):
     CLOSE = "close"
     RESIZE = "resize"
     DPI_CHANGED = "dpi_changed"
+    DISPLAY_CHANGED = "display_changed"
     FOCUS = "focus"
     POINTER_MOVE = "pointer_move"
     POINTER_DOWN = "pointer_down"
