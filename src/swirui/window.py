@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import TYPE_CHECKING
 
 from .core import Component, Event, EventEmitter, EventPhase
@@ -30,7 +31,13 @@ _KEYBOARD_EVENTS = {
 
 
 class Window(EventEmitter):
-    """Framework-level window model independent of a specific native backend."""
+    """Framework-level window model independent of a specific native backend.
+
+    Public geometry is expressed in logical device-independent pixels (DIPs).
+    Native backends may receive physical pixel coordinates; SwirUI converts them
+    at the window boundary so prepared scenes and routed input use one stable
+    coordinate space across mixed-DPI monitors.
+    """
 
     def __init__(
         self,
@@ -63,6 +70,34 @@ class Window(EventEmitter):
         self.focused = False
         self.native_handle: NativeWindowHandle | None = None
         self._platform_backend: PlatformBackend | None = None
+
+    @property
+    def pixel_width(self) -> int:
+        """Current client width in physical pixels for renderer surfaces."""
+
+        return max(1, round(self.width * self.scale))
+
+    @property
+    def pixel_height(self) -> int:
+        """Current client height in physical pixels for renderer surfaces."""
+
+        return max(1, round(self.height * self.scale))
+
+    @property
+    def pixel_size(self) -> tuple[int, int]:
+        """Current physical-pixel size corresponding to the logical window size."""
+
+        return (self.pixel_width, self.pixel_height)
+
+    def logical_to_physical(self, value: float) -> float:
+        """Convert one logical DIP coordinate or extent to physical pixels."""
+
+        return value * self.scale
+
+    def physical_to_logical(self, value: float) -> float:
+        """Convert one physical-pixel coordinate or extent to logical DIPs."""
+
+        return value / self.scale
 
     def set_root(self, component: Component | None) -> Window:
         old_root = self.root
@@ -148,6 +183,8 @@ class Window(EventEmitter):
         self.emit("title_changed", old_title=old_title, title=title)
 
     def resize(self, width: int, height: int) -> None:
+        """Resize using logical DIPs while the backend receives physical pixels."""
+
         width = max(width, self.min_width)
         height = max(height, self.min_height)
         if (width, height) == (self.width, self.height):
@@ -156,7 +193,11 @@ class Window(EventEmitter):
         self.width = width
         self.height = height
         if self._platform_backend is not None and self.native_handle is not None:
-            self._platform_backend.resize_window(self.native_handle, width, height)
+            self._platform_backend.resize_window(
+                self.native_handle,
+                self.pixel_width,
+                self.pixel_height,
+            )
         self.emit("resized", old_size=old_size, size=(width, height))
 
     def show(self) -> None:
@@ -215,8 +256,8 @@ class Window(EventEmitter):
         if event.kind is PlatformEventKind.RESIZE:
             if event.width is None or event.height is None:
                 return
-            width = max(event.width, self.min_width)
-            height = max(event.height, self.min_height)
+            width = max(round(self.physical_to_logical(event.width)), self.min_width)
+            height = max(round(self.physical_to_logical(event.height)), self.min_height)
             if (width, height) != (self.width, self.height):
                 old_size = (self.width, self.height)
                 self.width = width
@@ -242,7 +283,7 @@ class Window(EventEmitter):
             return
 
         if event.kind in _POINTER_EVENTS:
-            self._apply_pointer_event(event)
+            self._apply_pointer_event(self._logical_pointer_event(event))
             return
 
         if event.kind in _KEYBOARD_EVENTS:
@@ -256,7 +297,12 @@ class Window(EventEmitter):
             return
         old_scale = self.scale
         self.scale = scale
-        self.emit("scale_changed", old_scale=old_scale, scale=scale)
+        self.emit(
+            "scale_changed",
+            old_scale=old_scale,
+            scale=scale,
+            pixel_size=self.pixel_size,
+        )
 
     def _refresh_display(self) -> None:
         backend = self._platform_backend
@@ -275,6 +321,17 @@ class Window(EventEmitter):
         if display is not None:
             self._set_scale(display.scale)
         self.emit("display_changed", old_display=old_display, display=display)
+
+    def _logical_pointer_event(self, event: PlatformEvent) -> PlatformEvent:
+        """Translate native physical pointer coordinates into logical DIPs."""
+
+        if event.x is None and event.y is None:
+            return event
+        return replace(
+            event,
+            x=self.physical_to_logical(event.x) if event.x is not None else None,
+            y=self.physical_to_logical(event.y) if event.y is not None else None,
+        )
 
     def _apply_pointer_event(self, event: PlatformEvent) -> None:
         scene_path: tuple[SceneNode, ...] = ()
@@ -529,6 +586,6 @@ class Window(EventEmitter):
         display_name = self.display.name if self.display is not None else None
         return (
             f"Window(title={self.title!r}, width={self.width}, height={self.height}, "
-            f"scale={self.scale}, display={display_name!r}, visible={self.visible}, "
-            f"closed={self.closed})"
+            f"scale={self.scale}, pixel_size={self.pixel_size}, display={display_name!r}, "
+            f"visible={self.visible}, closed={self.closed})"
         )
