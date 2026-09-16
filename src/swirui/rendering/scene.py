@@ -121,3 +121,13 @@ class Scene:
 
     def hit_path(self, point: Point) -> tuple[SceneNode, ...]:
         return self.root.hit_path(point)
+
+    def hit_test_xy(self, x: float, y: float) -> SceneNode | None:
+        """Coordinate helper used by native pointer-event routing."""
+
+        return self.hit_test(Point(x, y))
+
+    def hit_path_xy(self, x: float, y: float) -> tuple[SceneNode, ...]:
+        """Coordinate helper that avoids renderer imports in platform/window code."""
+
+        return self.hit_path(Point(x, y))
