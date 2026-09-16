@@ -4,6 +4,7 @@ from swirui.rendering import (
     Color,
     CornerRadius,
     FrameScheduler,
+    ImageResource,
     Point,
     Rect,
     RenderNode,
@@ -64,13 +65,59 @@ def test_scene_validates_specialized_nodes() -> None:
         corner_radius=CornerRadius.uniform(20),
     )
     text = SceneNode("title", SceneNodeKind.TEXT, Rect(40, 40, 200, 40), text="SwirUI")
-    root.add(card, text)
+    image = SceneNode(
+        "logo",
+        SceneNodeKind.IMAGE,
+        Rect(40, 100, 64, 64),
+        resource_id="logo",
+    )
+    root.add(card, text, image)
     scene = Scene(800, 600, root)
 
-    assert [node.key for node in scene.walk()] == ["root", "card", "title"]
+    assert [node.key for node in scene.walk()] == ["root", "card", "title", "logo"]
 
     with pytest.raises(ValueError, match="text content"):
         SceneNode("invalid", SceneNodeKind.TEXT, Rect(0, 0, 10, 10))
+
+    with pytest.raises(ValueError, match="resource_id"):
+        SceneNode("invalid-image", SceneNodeKind.IMAGE, Rect(0, 0, 10, 10))
+
+
+def test_scene_registers_versioned_rgba8_image_resources() -> None:
+    scene = Scene(
+        320,
+        240,
+        SceneNode("root", SceneNodeKind.GROUP, Rect(0, 0, 320, 240)),
+    )
+    first_pixels = bytes([255, 0, 0, 255] * 4)
+    second_pixels = bytes([0, 0, 255, 255] * 4)
+
+    first = scene.register_image_rgba8("icon", 2, 2, first_pixels)
+    second = scene.register_image_rgba8("icon", 2, 2, second_pixels)
+
+    assert isinstance(first, ImageResource)
+    assert first.revision == 1
+    assert second.revision == 2
+    assert scene.image_resource("icon") is second
+    assert scene.generation == 2
+
+    removed = scene.remove_image_resource("icon")
+    assert removed is second
+    assert scene.image_resource("icon") is None
+    assert scene.generation == 3
+    assert scene.remove_image_resource("missing") is None
+    assert scene.generation == 3
+
+
+def test_image_resource_rejects_invalid_rgba_payloads() -> None:
+    with pytest.raises(ValueError, match="dimensions"):
+        ImageResource("bad", 0, 1, b"")
+
+    with pytest.raises(ValueError, match="exactly 16 bytes"):
+        ImageResource("bad", 2, 2, b"\x00" * 15)
+
+    with pytest.raises(ValueError, match="resource_id"):
+        ImageResource("", 1, 1, b"\x00" * 4)
 
 
 def test_scene_hit_testing_returns_topmost_visual_and_path() -> None:
