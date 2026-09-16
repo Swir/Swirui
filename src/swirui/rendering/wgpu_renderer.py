@@ -6,7 +6,7 @@ import importlib
 import sys
 from typing import Any
 
-from swirui.core import Component
+from swirui.core import Component, PresentationMode
 from swirui.window import Window
 
 from .geometry import Color, Rect
@@ -68,8 +68,14 @@ class WgpuRenderer:
         *,
         background: Color | None = None,
         native_module: Any | None = None,
+        presentation_mode: PresentationMode = PresentationMode.AUTO_VSYNC,
+        maximum_frame_latency: int = 1,
     ) -> None:
+        if maximum_frame_latency <= 0:
+            raise ValueError("maximum_frame_latency must be positive.")
         self.background = background or Color.from_hex("#070B14")
+        self.presentation_mode = presentation_mode
+        self.maximum_frame_latency = maximum_frame_latency
         self.initialized = False
         self.frames_rendered = 0
         self.last_rectangle_count = 0
@@ -156,7 +162,13 @@ class WgpuRenderer:
         native = self._native
         context_factory = getattr(native, "Win32GpuRenderer", None) if native is not None else None
         if context_factory is not None:
-            context = context_factory(handle, window.width, window.height)
+            context = context_factory(
+                handle,
+                window.width,
+                window.height,
+                self.presentation_mode.value,
+                self.maximum_frame_latency,
+            )
             self._contexts[handle] = context
             self._upload_registered_images(context)
             self._capture_adapter_info(context)
