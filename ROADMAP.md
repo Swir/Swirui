@@ -4,9 +4,9 @@
 
 ## Project progress
 
-**Overall completion: 6%**
+**Overall completion: 7%**
 
-`[█░░░░░░░░░░░░░░░░░░░] 6%`
+`[█░░░░░░░░░░░░░░░░░░░] 7%`
 
 Progress is based on implemented and verified roadmap work. Ideas, mockups and unfinished prototypes do not increase the percentage.
 
@@ -47,11 +47,15 @@ Progress is based on implemented and verified roadmap work. Ideas, mockups and u
 - [x] Keyboard down / up events
 - [x] Text-input events
 - [x] Automatic platform backend selection
+- [x] Automatic renderer selection on Windows: wgpu first, preview fallback
 - [x] Windows-native smoke test on GitHub Actions
+- [x] Scene-level z-aware hit testing
+- [x] Pointer events enriched with SceneGraph target + ancestry path
+- [x] Pointer enter / leave transitions
 - [ ] Linux native backend
 - [ ] macOS native backend
-- [ ] Component hit testing
-- [ ] Routed / bubbling component input
+- [ ] Component hit testing / SceneNode-to-Component mapping
+- [ ] Routed capture / bubbling component input
 
 ### Rendering runtime
 
@@ -67,8 +71,12 @@ Progress is based on implemented and verified roadmap work. Ideas, mockups and u
 - [x] GPU adapter/device/queue creation
 - [x] Verified clear → submit → present to a real SwirUI HWND
 - [x] ABI3 PyO3 native wheel build for Python 3.11+
-- [ ] Scene submission to GPU renderer
-- [ ] Shapes and rounded rectangles
+- [x] SceneGraph rectangle submission to the GPU renderer
+- [x] Instanced filled-rectangle GPU pipeline
+- [x] Single draw call for a batch of rectangle instances
+- [ ] Persistent wgpu renderer context per window
+- [ ] Anti-aliased GPU rounded rectangles using `CornerRadius`
+- [ ] General shape / path rendering
 - [ ] Text rendering
 - [ ] Image rendering
 - [ ] Clipping and compositing
@@ -255,6 +263,7 @@ Progress is based on implemented and verified roadmap work. Ideas, mockups and u
 ## Input & Accessibility
 
 - [x] Window-level keyboard / mouse normalization on Windows
+- [x] Scene-level pointer hit testing and hover transitions
 - [ ] Touch / gestures
 - [ ] Pen / pressure
 - [ ] Gamepad navigation
@@ -348,11 +357,13 @@ AI output must remain ordinary, editable SwirUI code.
 - [x] Headless native-window test backend
 - [x] Windows real-native-window smoke test
 - [x] Windows real-wgpu surface/present smoke test
+- [x] Windows real-wgpu instanced rectangle draw smoke test
 - [x] Rust native-core check and unit tests
 - [x] ABI3 native extension build on Windows
 - [x] Python 3.11–3.14 test matrix
 - [x] Ruff quality gate
 - [x] Mypy quality gate
+- [x] SceneGraph hit-test and pointer-targeting tests
 - [ ] Widget interaction tests
 - [ ] Screenshot tests
 - [ ] Visual regression tests
@@ -399,9 +410,11 @@ Current native foundation:
 - [x] Windows HWND + DisplayHandle surface bridge
 - [x] hardware adapter with software fallback selection
 - [x] ABI3 Python 3.11+ native wheel
+- [x] Python SceneGraph → native wgpu rectangle bridge
+- [x] instanced GPU rectangle pipeline
 - [ ] persistent renderer context per window
-- [ ] GPU scene command stream
 - [ ] GPU resource cache
+- [ ] native rounded-rectangle pipeline
 - [ ] native text/image pipeline
 
 Primary future candidates:

@@ -13,7 +13,7 @@
 ![Windows Native](https://img.shields.io/badge/Windows-Win32%20native-0078D4?logo=windows11&logoColor=white)
 ![GPU](https://img.shields.io/badge/GPU-wgpu%2030-6E56CF)
 ![Status](https://img.shields.io/badge/status-pre--alpha-7C3AED)
-![Progress](https://img.shields.io/badge/project%20progress-6%25-00BFFF)
+![Progress](https://img.shields.io/badge/project%20progress-7%25-00BFFF)
 
 </div>
 
@@ -21,9 +21,9 @@
 
 ## Project progress
 
-**6% — 0.2 Alpha: Native Window + First Renderer in progress**
+**7% — 0.2 Alpha: Native Window + First Renderer in progress**
 
-`[█░░░░░░░░░░░░░░░░░░░] 6%`
+`[█░░░░░░░░░░░░░░░░░░░] 7%`
 
 **Completed:** `0.1 Alpha — Foundation` ✅  
 **Current milestone:** `0.2 Alpha — Native Window + First Renderer` 🚧
@@ -63,11 +63,16 @@ SwirUI is currently **pre-alpha**. APIs may change while the native renderer and
 - **real wgpu surface creation from SwirUI's Win32 HWND**
 - **GPU adapter/device/queue creation and swapchain configuration**
 - **verified GPU clear → submit → present on Windows CI**
+- **instanced filled-rectangle GPU pipeline with a single draw call for the batch**
+- **SceneGraph → Python WgpuRenderer → Rust/wgpu rectangle submission**
+- automatic renderer selection: wgpu first on Windows, temporary GDI preview fallback when the native core is unavailable
+- z-aware SceneGraph hit testing with painter-order handling
+- pointer target/path enrichment plus `pointer_enter` / `pointer_leave` transitions
 - ABI3 native wheel build for Python 3.11+
-- Windows native + GPU smoke tests on Python 3.14
+- Windows native + GPU rectangle smoke tests on Python 3.14
 - Ruff, Mypy, coverage and Python 3.11–3.14 CI
 
-## First real native Windows demo
+## Native and GPU demos
 
 Install SwirUI in development mode:
 
@@ -79,13 +84,23 @@ python -m venv .venv
 python -m pip install -e ".[dev]"
 ```
 
-Then launch the native demo:
+The native Win32 lifecycle/input demo is:
 
 ```powershell
 python examples/native_window_demo.py
 ```
 
-On Windows this creates a real Win32 window through SwirUI's own platform backend. The retained scene model can already be painted by the temporary bring-up renderer, while the native Rust/wgpu core has now been verified to create and present a real GPU frame to the same HWND. The next step is moving SceneGraph primitives onto that GPU path.
+To run the current Rust/wgpu rectangle demo, install Maturin and the native core inside the same virtual environment:
+
+```powershell
+python -m pip install maturin==1.15.0
+cd native
+maturin develop --release
+cd ..
+python examples/gpu_rectangles_demo.py
+```
+
+The GPU demo submits a prepared SwirUI `SceneGraph` into the Rust/wgpu backend and renders its filled rectangles through an instanced GPU pipeline. Rounded corners, native text and images are intentionally still open renderer milestones.
 
 ## Foundation API
 
@@ -114,6 +129,8 @@ counter.set(1)
 app.run()
 ```
 
+When the native GPU extension is installed on Windows, `App()` now selects the wgpu renderer automatically. Explicit renderer injection remains available for tests and custom backends.
+
 ## Architecture
 
 ```text
@@ -130,15 +147,18 @@ SwirUI Runtime
         │     └── Win32 backend ✅
         ├── Render Tree ✅
         ├── Scene Graph ✅
+        ├── z-aware Scene hit testing ✅
         ├── Render Surface lifecycle ✅
         ├── Frame Scheduler ✅
-        └── Input normalization ✅
+        └── Input normalization + pointer targeting ✅
         │
 Renderer Layer
         │
         ├── GPU surface / swapchain ✅
-        ├── SceneGraph primitive submission ← NEXT
-        ├── Shapes / text / images
+        ├── SceneGraph rectangle submission ✅
+        ├── instanced filled rectangles ✅
+        ├── rounded rectangles ← NEXT
+        ├── text / images
         ├── clipping / compositing
         └── effects / shaders
         │
@@ -180,13 +200,13 @@ SwirUI Framework
 
 ## Current 0.2 Alpha focus
 
-The native Windows foundation and first wgpu presentation frame are now verified. The next renderer work is:
+The native Windows foundation, real wgpu presentation and first SceneGraph GPU primitive path are now verified. The next renderer/runtime work is:
 
-1. SceneGraph rectangle submission into the Rust/wgpu renderer
-2. rounded-rectangle shader path
-3. text and image rendering
+1. persistent wgpu renderer context per window instead of recreating GPU state per frame
+2. anti-aliased GPU rounded rectangles using `CornerRadius`
+3. native text and image rendering
 4. clipping and compositing
-5. component hit-testing and routed input
+5. component-level mapping and routed/capture/bubbling input
 6. robust DPI / HiDPI and multi-monitor handling
 7. display-aware high-refresh presentation
 8. present-mode selection and frame pacing
@@ -208,7 +228,8 @@ Python 3.14
 cargo check
 cargo test
 Windows native smoke test
-Windows wgpu surface/present smoke test
+Windows wgpu clear/present smoke test
+Windows real instanced-rectangle GPU draw smoke test
 ```
 
 SwirUI will not claim to outperform another framework without reproducible measurements. Planned benchmarks include startup time, RAM, CPU/GPU usage, frame time, input latency, component creation, large lists and animation performance.
@@ -220,7 +241,7 @@ Swirui/
 ├── .github/workflows/      # Python, Rust and native GPU CI
 ├── assets/                 # SwirUI visual assets and icon
 ├── docs/                   # architecture and design documentation
-├── examples/               # runnable examples
+├── examples/               # native and GPU examples
 ├── native/                 # Rust + wgpu + PyO3 GPU core
 ├── src/swirui/             # framework source
 ├── tests/                  # automated tests
