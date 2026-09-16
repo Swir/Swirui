@@ -4,19 +4,27 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+_SMOOTHING_ALPHA = 0.2
+
 
 @dataclass(slots=True)
 class FrameStats:
     frame_number: int = 0
     last_frame_time: float | None = None
     dropped_requests: int = 0
+    last_frame_delta: float | None = None
+    instantaneous_fps: float | None = None
+    smoothed_fps: float | None = None
+    pacing_error: float | None = None
 
 
 class FrameScheduler:
     """Invalidation-driven frame scheduler with a configurable FPS ceiling.
 
     The scheduler is clock-agnostic: platform backends provide monotonic time,
-    which keeps the core deterministic and easy to test.
+    which keeps the core deterministic and easy to test. Successful frame
+    consumption also records lightweight pacing telemetry without consulting a
+    wall clock or allocating per frame.
     """
 
     def __init__(self, target_fps: int = 60) -> None:
@@ -63,6 +71,22 @@ class FrameScheduler:
             if self._dirty:
                 self.stats.dropped_requests += 1
             return False
+
+        last = self.stats.last_frame_time
+        if last is not None:
+            delta = now - last
+            self.stats.last_frame_delta = delta
+            self.stats.pacing_error = delta - self._frame_interval
+            instantaneous_fps = 1.0 / delta
+            self.stats.instantaneous_fps = instantaneous_fps
+            smoothed = self.stats.smoothed_fps
+            self.stats.smoothed_fps = (
+                instantaneous_fps
+                if smoothed is None
+                else smoothed * (1.0 - _SMOOTHING_ALPHA)
+                + instantaneous_fps * _SMOOTHING_ALPHA
+            )
+
         self._dirty = False
         self.stats.frame_number += 1
         self.stats.last_frame_time = now
