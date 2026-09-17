@@ -184,6 +184,135 @@ def test_focus_next_wraps_and_skips_ineligible_components() -> None:
     assert window.focus_next(reverse=True) is second
 
 
+def test_focus_traversal_skips_descendants_of_ineligible_ancestors() -> None:
+    window = Window()
+    root = Component("root")
+    first = Component("first", focusable=True)
+    disabled_group = Component("disabled-group")
+    disabled_group.enabled = False
+    nested_disabled = Component("nested-disabled", focusable=True)
+    disabled_group.add(nested_disabled)
+    hidden_group = Component("hidden-group")
+    hidden_group.visible = False
+    nested_hidden = Component("nested-hidden", focusable=True)
+    hidden_group.add(nested_hidden)
+    second = Component("second", focusable=True)
+    root.add(first, disabled_group, hidden_group, second)
+    window.set_root(root)
+
+    assert window.focus_next() is first
+    assert window.focus_next() is second
+    assert window.focus_next() is first
+
+
+def test_tab_default_action_traverses_and_shift_tab_reverses() -> None:
+    backend = NullPlatformBackend()
+    app = App(platform_backend=backend)
+    window = Window()
+    root = Component("root")
+    first = Component("first", focusable=True)
+    second = Component("second", focusable=True)
+    third = Component("third", focusable=True)
+    root.add(first, second, third)
+    window.set_root(root)
+    app.add_window(window)
+    app.start()
+    assert window.native_handle is not None
+
+    traversed: list[tuple[str | None, bool]] = []
+    window.on(
+        "keyboard_focus_traversed",
+        lambda event: traversed.append(
+            (
+                event.data["component"].name
+                if event.data["component"] is not None
+                else None,
+                event.data["reverse"],
+            )
+        ),
+    )
+
+    backend.post_event(
+        PlatformEvent(PlatformEventKind.KEY_DOWN, window.native_handle, key_code=9)
+    )
+    backend.post_event(
+        PlatformEvent(PlatformEventKind.KEY_DOWN, window.native_handle, key_code=9)
+    )
+    backend.post_event(
+        PlatformEvent(
+            PlatformEventKind.KEY_DOWN,
+            window.native_handle,
+            key_code=9,
+            shift=True,
+        )
+    )
+    app.process_events()
+
+    assert window.focused_component is first
+    assert traversed == [("first", False), ("second", False), ("first", True)]
+    app.stop()
+
+
+def test_tab_default_action_can_be_prevented_without_stopping_propagation() -> None:
+    app, backend, window, root, panel, field = _focused_app()
+    assert window.native_handle is not None
+    second = Component("second", focusable=True)
+    root.add(second)
+    calls: list[str] = []
+
+    def prevent_tab(event: Event) -> None:
+        calls.append("field")
+        event.prevent_default()
+
+    field.on("key_down", prevent_tab)
+    panel.on("key_down", lambda _event: calls.append("panel"))
+    root.on("key_down", lambda _event: calls.append("root"))
+
+    backend.post_event(
+        PlatformEvent(PlatformEventKind.KEY_DOWN, window.native_handle, key_code=9)
+    )
+    app.process_events()
+
+    assert calls == ["field", "panel", "root"]
+    assert window.focused_component is field
+    app.stop()
+
+
+def test_modified_tab_is_left_to_application_shortcuts() -> None:
+    app, backend, window, _root, _panel, field = _focused_app()
+    assert window.native_handle is not None
+
+    backend.post_event(
+        PlatformEvent(
+            PlatformEventKind.KEY_DOWN,
+            window.native_handle,
+            key_code=9,
+            ctrl=True,
+        )
+    )
+    app.process_events()
+
+    assert window.focused_component is field
+    app.stop()
+
+
+def test_keyboard_event_heals_focus_after_component_becomes_ineligible() -> None:
+    app, backend, window, _root, panel, field = _focused_app()
+    assert window.native_handle is not None
+    lost: list[str] = []
+    field.on("focus_lost", lambda _event: lost.append("lost"))
+    panel.visible = False
+
+    backend.post_event(
+        PlatformEvent(PlatformEventKind.KEY_DOWN, window.native_handle, key_code=65)
+    )
+    app.process_events()
+
+    assert window.focused_component is None
+    assert lost == ["lost"]
+    app.stop()
+
+
 def test_focus_rejects_component_outside_root_nonfocusable_or_disabled() -> None:
     window = Window()
     root = Component("root")

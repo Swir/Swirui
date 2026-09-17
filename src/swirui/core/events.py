@@ -20,7 +20,7 @@ class EventPhase(StrEnum):
 
 @dataclass(slots=True)
 class Event:
-    """A lightweight event object with routing and propagation control."""
+    """A lightweight event object with routing and default-action control."""
 
     type: str
     source: object
@@ -28,9 +28,17 @@ class Event:
     current_target: object | None = None
     phase: EventPhase = EventPhase.DIRECT
     propagation_stopped: bool = False
+    default_prevented: bool = False
 
     def stop_propagation(self) -> None:
+        """Stop routing the event to later components in the current path."""
+
         self.propagation_stopped = True
+
+    def prevent_default(self) -> None:
+        """Cancel the framework default action without stopping event routing."""
+
+        self.default_prevented = True
 
 
 EventHandler = Callable[[Event], None]

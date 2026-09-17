@@ -142,6 +142,44 @@ def test_win32_backend_normalizes_display_configuration_change() -> None:
         backend.shutdown()
 
 
+@pytest.mark.skipif(sys.platform != "win32", reason="Win32 keyboard smoke test requires Windows")
+def test_win32_backend_normalizes_real_keyboard_and_system_key_messages() -> None:
+    backend = _isolated_backend("keyboard")
+    backend.initialize()
+    handle = backend.create_window(NativeWindowSpec("SwirUI Keyboard Smoke", 640, 420))
+
+    try:
+        win_dll: Any = ctypes.__dict__["WinDLL"]
+        user32: Any = win_dll("user32", use_last_error=True)
+        user32.SendMessageW.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint,
+            ctypes.c_size_t,
+            ctypes.c_ssize_t,
+        ]
+        user32.SendMessageW.restype = ctypes.c_ssize_t
+        backend.poll_events()
+
+        user32.SendMessageW(ctypes.c_void_p(handle.value), 0x0100, 0x09, 0)
+        user32.SendMessageW(ctypes.c_void_p(handle.value), 0x0104, 0x79, 0)
+        events = backend.poll_events()
+        key_events = [event for event in events if event.kind is PlatformEventKind.KEY_DOWN]
+
+        assert len(key_events) == 2
+        tab_event, system_event = key_events
+        assert tab_event.window == handle
+        assert tab_event.key_code == 0x09
+        assert tab_event.shift is False
+        assert tab_event.ctrl is False
+        assert tab_event.alt is False
+        assert tab_event.meta is False
+        assert system_event.window == handle
+        assert system_event.key_code == 0x79
+    finally:
+        backend.destroy_window(handle)
+        backend.shutdown()
+
+
 @pytest.mark.skipif(sys.platform != "win32", reason="Win32 renderer smoke test requires Windows")
 def test_win32_preview_renderer_paints_scene_into_real_window() -> None:
     root = SceneNode(

@@ -41,7 +41,12 @@ class NativeWindowHandle:
 
 @dataclass(frozen=True, slots=True)
 class PlatformEvent:
-    """Normalized native event consumed by :class:`swirui.App`."""
+    """Normalized native event consumed by :class:`swirui.App`.
+
+    Keyboard modifier flags are captured at native dispatch time so framework
+    default actions such as Shift+Tab traversal remain backend-neutral and do
+    not need to query operating-system state later in the event pipeline.
+    """
 
     kind: PlatformEventKind
     window: NativeWindowHandle
@@ -54,3 +59,7 @@ class PlatformEvent:
     key_code: int | None = None
     text: str | None = None
     focused: bool | None = None
+    shift: bool = False
+    ctrl: bool = False
+    alt: bool = False
+    meta: bool = False

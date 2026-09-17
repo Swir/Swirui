@@ -77,6 +77,33 @@ def test_headless_native_window_contract() -> None:
     assert backend.initialized is False
 
 
+def test_platform_event_preserves_keyboard_modifier_state() -> None:
+    backend = NullPlatformBackend()
+    backend.initialize()
+    handle = backend.create_window(NativeWindowSpec("Modifiers", 320, 240))
+    backend.post_event(
+        PlatformEvent(
+            PlatformEventKind.KEY_DOWN,
+            handle,
+            key_code=9,
+            shift=True,
+            ctrl=True,
+            alt=False,
+            meta=True,
+        )
+    )
+
+    event = backend.poll_events()[0]
+
+    assert event.key_code == 9
+    assert event.shift is True
+    assert event.ctrl is True
+    assert event.alt is False
+    assert event.meta is True
+    backend.destroy_window(handle)
+    backend.shutdown()
+
+
 def test_app_dispatches_platform_events_to_window() -> None:
     backend = NullPlatformBackend()
     app = App("Events", platform_backend=backend)
