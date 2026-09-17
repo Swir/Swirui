@@ -11,6 +11,7 @@ from swirui.rendering import (
     CornerRadius,
     DynamicShadow,
     Glow,
+    Noise,
     Rect,
     Scene,
     SceneNode,
@@ -63,6 +64,12 @@ def _dynamic_effect_scene(light_direction_degrees: float) -> Scene:
             fill=Color.from_hex("#101A35"),
             corner_radius=radius,
         ),
+        Noise(
+            samples=32,
+            size=1.25,
+            color=Color(0.82, 0.92, 1.0, 0.08),
+            seed=2026,
+        ).to_scene_node("card-noise", card_bounds, z_index=1),
         SceneNode(
             key="title",
             kind=SceneNodeKind.TEXT,
@@ -77,7 +84,7 @@ def _dynamic_effect_scene(light_direction_degrees: float) -> Scene:
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Native GPU effect smoke requires Windows")
-def test_dynamic_shadow_glow_and_bloom_reach_real_persistent_wgpu_batch() -> None:
+def test_dynamic_shadow_glow_bloom_and_noise_reach_real_persistent_wgpu_batch() -> None:
     renderer = WgpuRenderer()
     app = App(
         "SwirUI Dynamic Effects Integration",
@@ -91,7 +98,7 @@ def test_dynamic_shadow_glow_and_bloom_reach_real_persistent_wgpu_batch() -> Non
     try:
         app.start()
         assert renderer.frames_rendered == 1
-        assert renderer.last_rectangle_count == 25
+        assert renderer.last_rectangle_count == 57
         assert renderer.last_text_count == 1
         assert renderer.last_image_count == 0
         assert renderer.last_path_count == 0
@@ -109,7 +116,7 @@ def test_dynamic_shadow_glow_and_bloom_reach_real_persistent_wgpu_batch() -> Non
         assert app.render_pending(time.monotonic() + 1.0) == 1
 
         assert renderer.frames_rendered == 2
-        assert renderer.last_rectangle_count == 25
+        assert renderer.last_rectangle_count == 57
         assert renderer.persistent_context_count == 1
         assert renderer._contexts[handle] is first_context
     finally:
