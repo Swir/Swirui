@@ -6,7 +6,15 @@ import math
 import time
 
 from swirui import App, Window
-from swirui.rendering import Color, ColorFilter, Rect, Scene, SceneNode, SceneNodeKind, WgpuRenderer
+from swirui.rendering import (
+    Color,
+    ColorFilter,
+    Rect,
+    Scene,
+    SceneNode,
+    SceneNodeKind,
+    WgpuRenderer,
+)
 
 
 def scene() -> Scene:
