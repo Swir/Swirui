@@ -60,7 +60,6 @@ _NSEventModifierFlagOption = 1 << 19
 _NSEventModifierFlagCommand = 1 << 20
 
 _MAC_KEYCODE_TAB = 48
-_FRAME_EPSILON = 0.5
 
 
 @dataclass(slots=True)
@@ -363,7 +362,6 @@ class MacOSCocoaPlatformBackend:
             display_id = int(raw_id)
             bounds = self._core_graphics.CGDisplayBounds(display_id)
             pixel_width = int(self._core_graphics.CGDisplayPixelsWide(display_id))
-            pixel_height = int(self._core_graphics.CGDisplayPixelsHigh(display_id))
             logical_width = max(1, int(round(bounds.size.width)))
             logical_height = max(1, int(round(bounds.size.height)))
             scale = pixel_width / bounds.size.width if bounds.size.width > 0.0 else 1.0
@@ -588,7 +586,11 @@ class MacOSCocoaPlatformBackend:
         argtypes: tuple[Any, ...] = (),
         *args: Any,
     ) -> Any:
-        receiver_value = int(receiver.value) if isinstance(receiver, ctypes.c_void_p) else int(receiver or 0)
+        receiver_value = (
+            int(receiver.value)
+            if isinstance(receiver, ctypes.c_void_p)
+            else int(receiver or 0)
+        )
         if not receiver_value:
             return None if restype is ctypes.c_void_p else 0
         address = ctypes.cast(self._objc.objc_msgSend, ctypes.c_void_p).value
@@ -611,7 +613,7 @@ class MacOSCocoaPlatformBackend:
         receiver_ptr = ctypes.c_void_p(receiver)
         selector_ptr = ctypes.c_void_p(self._selector(selector))
         if platform.machine().lower() in {"x86_64", "amd64"} and ctypes.sizeof(result_type) > 16:
-            stret = getattr(self._objc, "objc_msgSend_stret")
+            stret = self._objc.objc_msgSend_stret
             address = ctypes.cast(stret, ctypes.c_void_p).value
             prototype = ctypes.CFUNCTYPE(
                 None,
