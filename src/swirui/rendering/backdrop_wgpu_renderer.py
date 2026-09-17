@@ -304,8 +304,6 @@ class WgpuRenderer(_BaseWgpuRenderer):
 
     @staticmethod
     def _backdrop_cache_key(window: Window) -> int:
-        if window.native_handle is not None:
-            return window.native_handle.value
         return id(window)
 
     def _append_node(
