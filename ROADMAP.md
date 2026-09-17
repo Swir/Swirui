@@ -4,9 +4,9 @@
 
 ## Project progress
 
-**Overall completion: 24%**
+**Overall completion: 25%**
 
-`[█████░░░░░░░░░░░░░░░] 24%`
+`[█████░░░░░░░░░░░░░░░] 25%`
 
 Progress is based on implemented and verified roadmap work. Ideas, mockups and unfinished prototypes do not increase the percentage.
 
@@ -58,7 +58,7 @@ Progress is based on implemented and verified roadmap work. Ideas, mockups and u
 - [x] SceneNode-to-Component mapping by stable key
 - [x] Routed capture / target / bubbling component pointer input
 - [x] Event propagation cancellation
-- [ ] Linux native backend
+- [x] Linux native backend
 - [ ] macOS native backend
 
 ### Rendering runtime
@@ -99,6 +99,8 @@ Progress is based on implemented and verified roadmap work. Ideas, mockups and u
 0.2 is complete only when SwirUI can open a native window and render a visible GPU-backed scene containing shapes and text while handling resize and input correctly, with the milestone's renderer/runtime hardening complete enough to support the first real widgets.
 
 The current Windows integration gate verifies one real native session containing clipped rounded shapes, Unicode text, an image and a concave path while also checking exact client-area resize, persistent GPU-context reuse and routed native pointer/focus input.
+
+The Linux X11 slice now verifies real native window creation and normalized lifecycle/input events under Xvfb. Linux GPU/wgpu presentation, Wayland and macOS remain separate future work and are not implied by the X11 native-window milestone.
 
 ## 0.3 Alpha — Visual Engine
 
@@ -369,6 +371,7 @@ AI output must remain ordinary, editable SwirUI code.
 
 - [x] Unit-test foundation
 - [x] Headless native-window test backend
+- [x] Linux real-X11 native-window smoke test
 - [x] Windows real-native-window smoke test
 - [x] Windows integrated 0.2 mixed-scene + exact-client + routed-input gate
 - [x] Windows active-display / refresh-rate mapping smoke test
