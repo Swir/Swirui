@@ -15,6 +15,7 @@ from .factory import create_renderer
 from .geometry import Color, CornerRadius, Path2D, Point, Rect, Size
 from .gradients import GradientStop, LinearGradient, MeshGradient, RadialGradient
 from .materials import Acrylic, FrostedGlass
+from .noise import Noise
 from .scene import Scene, SceneNode, SceneNodeKind
 from .scheduler import FrameScheduler, FrameStats
 from .surface import RenderSurface
@@ -37,6 +38,7 @@ __all__ = [
     "GradientStop",
     "LinearGradient",
     "MeshGradient",
+    "Noise",
     "NullRenderer",
     "Path2D",
     "Point",
