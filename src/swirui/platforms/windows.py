@@ -19,6 +19,8 @@ from ._windows_legacy import (
     _SWP_NOMOVE,
     _SWP_NOZORDER,
     _WM_DPICHANGED,
+    _WM_KEYDOWN,
+    _WM_KEYUP,
     _WM_SIZE,
     _WS_OVERLAPPEDWINDOW,
     _Point,
@@ -31,6 +33,11 @@ from .base import NativeWindowSpec
 from .events import NativeWindowHandle, PlatformEvent, PlatformEventKind
 
 _WM_GETMINMAXINFO = 0x0024
+_VK_SHIFT = 0x10
+_VK_CONTROL = 0x11
+_VK_MENU = 0x12
+_VK_LWIN = 0x5B
+_VK_RWIN = 0x5C
 
 
 class _MinMaxInfo(ctypes.Structure):
@@ -71,6 +78,8 @@ class Win32PlatformBackend(_LegacyWin32PlatformBackend):
             ctypes.c_ulong,
         ]
         self._user32.AdjustWindowRectEx.restype = ctypes.c_bool
+        self._user32.GetKeyState.argtypes = [ctypes.c_int]
+        self._user32.GetKeyState.restype = ctypes.c_short
 
         try:
             adjust_for_dpi: Any = self._user32.AdjustWindowRectExForDpi
@@ -267,8 +276,43 @@ class Win32PlatformBackend(_LegacyWin32PlatformBackend):
         info.ptMinTrackSize.x = max(int(info.ptMinTrackSize.x), outer_width)
         info.ptMinTrackSize.y = max(int(info.ptMinTrackSize.y), outer_height)
 
+    def _key_is_down(self, key_code: int) -> bool:
+        return bool(int(self._user32.GetKeyState(key_code)) & 0x8000)
+
+    def _keyboard_event(
+        self,
+        kind: PlatformEventKind,
+        handle: NativeWindowHandle,
+        key_code: int,
+    ) -> PlatformEvent:
+        return PlatformEvent(
+            kind,
+            handle,
+            key_code=key_code,
+            shift=self._key_is_down(_VK_SHIFT),
+            ctrl=self._key_is_down(_VK_CONTROL),
+            alt=self._key_is_down(_VK_MENU),
+            meta=self._key_is_down(_VK_LWIN) or self._key_is_down(_VK_RWIN),
+        )
+
     def _wndproc(self, hwnd: int | None, message: int, wparam: int, lparam: int) -> int:
         handle = NativeWindowHandle(int(hwnd)) if hwnd else None
+
+        if handle is not None and message in (_WM_KEYDOWN, _WM_KEYUP):
+            kind = (
+                PlatformEventKind.KEY_DOWN
+                if message == _WM_KEYDOWN
+                else PlatformEventKind.KEY_UP
+            )
+            self._events.append(self._keyboard_event(kind, handle, int(wparam)))
+            return int(
+                self._user32.DefWindowProcW(
+                    ctypes.c_void_p(hwnd),
+                    message,
+                    wparam,
+                    lparam,
+                )
+            )
 
         if handle is not None and message == _WM_DPICHANGED:
             logical_size = self._logical_client_sizes.get(handle)
