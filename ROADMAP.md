@@ -4,9 +4,9 @@
 
 ## Project progress
 
-**Overall completion: 20%**
+**Overall completion: 22%**
 
-`[████░░░░░░░░░░░░░░░░] 20%`
+`[████░░░░░░░░░░░░░░░░] 22%`
 
 Progress is based on implemented and verified roadmap work. Ideas, mockups and unfinished prototypes do not increase the percentage.
 
@@ -287,7 +287,7 @@ The current Windows integration gate verifies one real native session containing
 - [ ] High contrast
 - [ ] Reduced motion
 - [ ] Font scaling
-- [ ] Semantic roles
+- [x] Semantic roles
 - [ ] Accessibility inspector
 
 ## Internationalization
@@ -309,7 +309,7 @@ The current Windows integration gate verifies one real native session containing
 - [ ] Multiprocessing helpers
 - [ ] Cancellation
 - [ ] Progress reporting
-- [ ] Performance budgets
+- [x] Performance budgets
 - [x] Frame-time telemetry
 
 ## Plugin System & Marketplace
@@ -393,8 +393,8 @@ AI output must remain ordinary, editable SwirUI code.
 - [ ] Widget interaction tests
 - [ ] Screenshot tests
 - [ ] Visual regression tests
-- [ ] Accessibility tests
-- [ ] Performance regression tests
+- [x] Accessibility tests
+- [x] Performance regression tests
 - [ ] Automated UI testing
 
 ## SwirUI CLI
@@ -459,9 +459,9 @@ Primary future candidates:
 
 ## Benchmarks
 
-SwirUI will publish reproducible benchmark suites instead of unsupported performance claims.
+SwirUI publishes reproducible benchmark guardrails instead of unsupported performance claims. The current CI suite measures retained 1024-node SceneGraph traversal and pointer hit testing with median, p95 and worst-case latency budgets and stores a machine-readable JSON report artifact for each run.
 
-Metrics include:
+Metrics planned for continued expansion include:
 
 - startup time
 - RAM

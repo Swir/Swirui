@@ -46,6 +46,9 @@ The project uses semantic versioning where practical during pre-alpha developmen
 - Pointer-down focus handoff from a hit-tested SceneNode to the matching focusable Component.
 - Focus lifecycle events (`focus_gained`, `focus_lost`, `component_focus_changed`) and automatic focus clearing when the root is replaced or the window closes.
 - Automated focus-routing coverage for Unicode text input, propagation cancellation, traversal, pointer focus handoff and invalid focus targets.
+- Backend-neutral `AccessibilityRole` semantics covering common controls and content roles.
+- Immutable accessibility-tree snapshots with accessible names/descriptions plus enabled, focusable and focused state.
+- Hidden-subtree pruning and semantic-tree lookup tests as the contract for future native accessibility adapters.
 - Runtime `App.set_target_fps()` retargeting for all current and future window frame schedulers.
 - Cross-window `App.seconds_until_next_frame()` deadline reporting and frame events that expose the active target FPS and frame interval.
 - Automated high-refresh pacing coverage for runtime 60 → 120/144 Hz retargeting and sub-poll-interval frame deadlines.
@@ -53,6 +56,9 @@ The project uses semantic versioning where practical during pre-alpha developmen
 - Per-monitor DPI scaling for GPU rectangles, paths, per-corner radii, shaped text, images and clip rectangles before Python → Rust/wgpu submission.
 - Native physical pointer and resize input normalization back into logical DIPs before SceneGraph hit testing and routed component input.
 - Deterministic 150% → 200% scale-transition coverage plus a real Win32/wgpu mixed-DPI smoke test that verifies rectangles, Unicode text, images, input coordinates and persistent surface reconfiguration.
+- Dependency-free retained-runtime benchmark helpers with median, p95, worst-case, throughput and explicit latency-budget evaluation.
+- CI performance guardrails for 1024-node retained SceneGraph traversal and pointer hit-testing workloads.
+- Machine-readable JSON performance reports uploaded from CI for regression inspection.
 
 ### Changed
 - The wgpu renderer now reports submitted rectangle, path, text and image counts independently.
@@ -69,6 +75,7 @@ The project uses semantic versioning where practical during pre-alpha developmen
 - Public `Window` and SceneGraph geometry now stays in logical DIPs while Win32 and renderer backends operate on physical client pixels.
 - Adjacent Win32 resize/DPI transitions are normalized so resize pixels are interpreted with the incoming monitor scale rather than the previous scale.
 - The temporary GDI preview renderer now follows the same logical-DIP → physical-pixel scaling contract as the native wgpu renderer.
+- CI now has a dedicated retained-runtime performance job in addition to the Python quality/test matrix, Rust checks and Windows native smoke gate.
 
 ## [0.1.0a1] - 2026-09-16
 

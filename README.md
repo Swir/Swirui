@@ -13,7 +13,7 @@
 ![Windows Native](https://img.shields.io/badge/Windows-Win32%20native-0078D4?logo=windows11&logoColor=white)
 ![GPU](https://img.shields.io/badge/GPU-wgpu%2030-6E56CF)
 ![Status](https://img.shields.io/badge/status-pre--alpha-7C3AED)
-![Progress](https://img.shields.io/badge/project%20progress-20%25-00BFFF)
+![Progress](https://img.shields.io/badge/project%20progress-22%25-00BFFF)
 
 </div>
 
@@ -21,9 +21,9 @@
 
 ## Project progress
 
-**20% — 0.2 Alpha: Native Window + First Renderer in progress**
+**22% — 0.2 Alpha: Native Window + First Renderer in progress**
 
-`[████░░░░░░░░░░░░░░░░] 20%`
+`[████░░░░░░░░░░░░░░░░] 22%`
 
 **Completed:** `0.1 Alpha — Foundation` ✅  
 **Current milestone:** `0.2 Alpha — Native Window + First Renderer` 🚧
@@ -107,7 +107,11 @@ SwirUI is currently **pre-alpha**. APIs may change while the native renderer and
 - pointer target/path enrichment plus `pointer_enter` / `pointer_leave` transitions
 - **focusable component contract with pointer-down focus handoff and deterministic focus traversal**
 - **routed keyboard and text-input events through the focused component path**
+- **backend-neutral accessibility roles and immutable semantic-tree snapshots**
+- accessible names/descriptions plus enabled, focusable and focused semantic state with hidden-subtree pruning
 - propagation cancellation with `Event.stop_propagation()`
+- **retained-runtime performance budgets for 1024-node traversal and hit-testing workloads**
+- median / p95 / worst-case / throughput benchmark reporting with machine-readable CI artifacts
 - **integrated real-Windows 0.2 gate covering mixed GPU shapes/text/images/paths, exact client resize, persistent context reuse and routed native pointer/focus input**
 - ABI3 native wheel build for Python 3.11+
 - Windows native + rounded-GPU + path + shaped-text + image + clipping + mixed-DPI + presentation/display smoke tests on Python 3.14
@@ -183,6 +187,7 @@ Python Application API
         │
         ├── App / Window lifecycle
         ├── Components / Routed Events ✅
+        ├── Accessibility semantics ✅
         ├── Reactive State
         └── Runtime configuration
         │
@@ -254,10 +259,10 @@ SwirUI Framework
 
 ## Current 0.2 Alpha focus
 
-The native Windows foundation, exact DPI-aware client geometry, persistent wgpu renderer, rounded and general filled GPU shapes, shaped GPU text, persistent content-addressed GPU images, hierarchical clipping/compositing, routed pointer/keyboard input, explicit present-mode policy, robust logical-DIP/physical-pixel HiDPI handling, multi-monitor discovery and display-aware high-refresh pacing are verified. A real Windows integration gate now exercises the mixed GPU scene, exact resize behavior, persistent context reuse and native routed input together. The largest remaining 0.2 hardening work is:
+The native Windows foundation, exact DPI-aware client geometry, persistent wgpu renderer, rounded and general filled GPU shapes, shaped GPU text, persistent content-addressed GPU images, hierarchical clipping/compositing, routed pointer/keyboard input, explicit present-mode policy, robust logical-DIP/physical-pixel HiDPI handling, multi-monitor discovery and display-aware high-refresh pacing are verified. A real Windows integration gate now exercises the mixed GPU scene, exact resize behavior, persistent context reuse and native routed input together. Retained-runtime performance budgets and the first backend-neutral accessibility semantic contract are also verified. The largest remaining 0.2 hardening work is:
 
-1. deeper focus management and accessibility semantics
-2. performance budgets and regression benchmarks for retained rendering
+1. deeper focus management, keyboard-only navigation and native accessibility adapters
+2. continued measured retained-runtime/input optimization under CI budgets
 3. cross-platform native backend expansion after the Windows gate is hardened
 
 See **[ROADMAP.md](ROADMAP.md)** for the full development plan.
@@ -274,6 +279,8 @@ Python 3.11
 Python 3.12
 Python 3.13
 Python 3.14
+retained-runtime performance budgets + JSON report artifact
+accessibility semantic-tree tests
 cargo check
 cargo test
 Windows native smoke test
@@ -292,7 +299,7 @@ Display-aware high-refresh runtime pacing tests
 Routed keyboard focus / text-input tests
 ```
 
-SwirUI will not claim to outperform another framework without reproducible measurements. Planned benchmarks include startup time, RAM, CPU/GPU usage, frame time, input latency, component creation, large lists and animation performance.
+SwirUI will not claim to outperform another framework without reproducible measurements. The first CI guardrails cover retained SceneGraph traversal and pointer hit testing over a 1024-node scene. Planned expansion includes startup time, RAM, CPU/GPU usage, frame time, input latency, component creation, large lists and animation performance.
 
 ## Repository layout
 
@@ -300,6 +307,7 @@ SwirUI will not claim to outperform another framework without reproducible measu
 Swirui/
 ├── .github/workflows/      # Python, Rust and native GPU CI
 ├── assets/                 # SwirUI visual assets and icon
+├── benchmarks/             # reproducible performance budgets and scenarios
 ├── docs/                   # architecture and design documentation
 ├── examples/               # native and GPU examples
 ├── native/                 # Rust + wgpu + PyO3 GPU core
