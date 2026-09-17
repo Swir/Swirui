@@ -65,6 +65,11 @@ The project uses semantic versioning where practical during pre-alpha developmen
 - Machine-readable JSON performance reports uploaded from CI for regression inspection.
 - Direct Linux/X11 native-window backend using Python `ctypes` and the system libX11 client library, with normalized resize, focus, pointer, keyboard, text-input and window-close events.
 - Real X11 native-window smoke coverage on Python 3.14 under Xvfb, including create, map, title, resize, event polling, hide and destroy lifecycle checks.
+- Direct macOS Cocoa/AppKit native-window backend using Python `ctypes` and the Objective-C runtime, without requiring PyObjC.
+- CoreGraphics display discovery plus per-window Cocoa screen mapping, backing scale and refresh-rate reporting.
+- Normalized Cocoa pointer, keyboard, text-input, focus, resize and close events with framework-compatible Tab and modifier-key metadata.
+- Retina-safe physical-pixel ↔ Cocoa-point conversion at the native boundary, including live backing-scale and display-transition events.
+- Real macOS Cocoa native-window smoke coverage on Python 3.14, including App-level verification that logical SwirUI geometry remains stable on scaled displays.
 
 ### Changed
 - The wgpu renderer now reports submitted rectangle, path, text and image counts independently.
@@ -84,6 +89,7 @@ The project uses semantic versioning where practical during pre-alpha developmen
 - The temporary GDI preview renderer now follows the same logical-DIP → physical-pixel scaling contract as the native wgpu renderer.
 - CI now has a dedicated retained-runtime performance job in addition to the Python quality/test matrix, Rust checks and Windows native smoke gate.
 - Linux platform selection now chooses the direct X11 backend when `DISPLAY` is available while retaining the deterministic headless backend for Linux servers and CI sessions without a display.
+- macOS platform selection now chooses the direct Cocoa backend, and CI has a dedicated real-Cocoa Python 3.14 native-window gate alongside Linux X11 and Windows/wgpu gates.
 
 ## [0.1.0a1] - 2026-09-16
 
