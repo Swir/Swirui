@@ -191,10 +191,12 @@ def test_02_gate_renders_mixed_gpu_scene_resizes_exactly_and_routes_native_input
         assert renderer.adapter_name
         assert renderer.graphics_backend
 
-        # Drain creation/show messages before injecting the input assertion.
+        # Drain creation/show messages before injecting the input assertion. Use
+        # an uncovered portion of the action rectangle so the later title node
+        # cannot legitimately win painter-order hit testing.
         app.process_events()
-        x = max(1, round(100 * window.scale))
-        y = max(1, round(100 * window.scale))
+        x = max(1, round(70 * window.scale))
+        y = max(1, round(75 * window.scale))
         lparam = (y << 16) | x
         _user32().SendMessageW(
             ctypes.c_void_p(window.native_handle.value),
