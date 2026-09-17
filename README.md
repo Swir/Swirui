@@ -25,6 +25,8 @@
 
 ## Project Status
 
+<img width="100%" src="assets/readme/progress-card.svg" alt="SwirUI project progress: 51.0% — 0.4 Alpha Core Widgets in progress; 10 of 15 widget groups verified">
+
 **51% — 0.4 Alpha Core Widgets underway; retained status, tooltip and surface controls are implemented and verified.**
 
 `[██████████░░░░░░░░░░] 51%`
@@ -246,6 +248,7 @@ Every significant runtime change is expected to preserve the existing quality ga
 
 - Ruff and strict Mypy
 - pytest on Python 3.11–3.14
+- deterministic weighted progress-SVG verification against `ROADMAP.md`
 - retained-runtime performance budgets with JSON reports
 - `cargo check` and `cargo test`
 - Maturin / PyO3 native build
@@ -259,6 +262,8 @@ Every significant runtime change is expected to preserve the existing quality ga
 SwirUI does not claim performance superiority over other frameworks without reproducible measurements.
 
 ## Roadmap
+
+<img width="100%" src="assets/readme/progress-mini.svg" alt="SwirUI roadmap progress: 51.0% — 10 of 15 Core Widgets groups verified">
 
 The authoritative plan is **[ROADMAP.md](ROADMAP.md)**.
 
@@ -277,13 +282,14 @@ There is currently **no public GitHub Release** for SwirUI. Development remains 
 ```text
 Swirui/
 ├── .github/workflows/      # Python, Rust and native-platform CI
-├── assets/                 # SwirUI icon and README artwork
+├── assets/                 # SwirUI icon, README artwork and generated progress SVGs
 ├── benchmarks/             # reproducible performance budgets
 ├── docs/                   # architecture documentation
 ├── examples/               # native/runtime/GPU examples
 ├── native/                 # Rust + wgpu + PyO3 core
 ├── src/swirui/             # public Python framework and renderer bridge
 ├── tests/                  # automated unit/integration/native smoke tests
+├── tools/                  # deterministic repository maintenance generators/checks
 ├── CHANGELOG.md
 ├── CONTRIBUTING.md
 ├── ROADMAP.md
