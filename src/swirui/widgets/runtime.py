@@ -18,6 +18,16 @@ class SceneRenderable(Protocol):
     def build_scene_node(self) -> SceneNode: ...
 
 
+@runtime_checkable
+class SceneChildPreparer(Protocol):
+    """Optional hook for containers that transform compiled child scene nodes."""
+
+    def prepare_scene_children(
+        self,
+        children: tuple[SceneNode, ...],
+    ) -> tuple[SceneNode, ...]: ...
+
+
 def compile_component_scene(
     root: Component | None,
     *,
@@ -53,7 +63,7 @@ def _compile_component(
         return None
 
     effective_enabled = ancestors_enabled and component.enabled
-    child_nodes = [
+    child_nodes = tuple(
         node
         for child in component.children
         if (
@@ -64,12 +74,14 @@ def _compile_component(
             )
         )
         is not None
-    ]
+    )
 
     if isinstance(component, SceneRenderable):
         node = component.build_scene_node()
         if not effective_enabled:
             node.hit_testable = False
+        if isinstance(component, SceneChildPreparer):
+            child_nodes = component.prepare_scene_children(child_nodes)
         node.add(*child_nodes)
         return node
 
