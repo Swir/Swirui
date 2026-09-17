@@ -26,6 +26,7 @@ _EPSILON = 1.0e-9
 _DEFAULT_STEPS = 96
 _DEFAULT_RADIAL_STEPS = 64
 _DEFAULT_RADIAL_SEGMENTS = 48
+_DEFAULT_RADIAL_RADIUS = 0.7071067811865476
 _MAX_STEPS = 512
 _MAX_RADIAL_SEGMENTS = 256
 _UNIT_RECTANGLE = (
@@ -199,7 +200,7 @@ class RadialGradient:
         edge_color: Color,
         *,
         center: Point | None = None,
-        radius: float = math.sqrt(0.5),
+        radius: float = _DEFAULT_RADIAL_RADIUS,
     ) -> RadialGradient:
         """Create a two-color radial gradient that reaches default box corners."""
 
