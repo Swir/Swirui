@@ -73,6 +73,8 @@ The project uses semantic versioning where practical during pre-alpha developmen
 - Immutable multi-stop `LinearGradient` and `RadialGradient` primitives that compile into clipped retained `Path2D` geometry and reuse the verified native Rust/wgpu shape pipeline.
 - Immutable rectangular `MeshGradient` color lattices with clamped bilinear sampling and deterministic retained quad tessellation.
 - GPU gradient demos for linear, radial and mesh gradients, plus real Win32/wgpu smoke coverage for each gradient family.
+- Retained `DropShadow` effects using normalized Gaussian-like rounded-rectangle layers that reuse the existing persistent native wgpu rectangle batch, HiDPI scaling and alpha compositing.
+- `examples/gpu_shadows_demo.py` plus a dedicated real Win32/wgpu shadow smoke gate.
 
 ### Changed
 - The wgpu renderer now reports submitted rectangle, path, text and image counts independently.
@@ -94,6 +96,7 @@ The project uses semantic versioning where practical during pre-alpha developmen
 - Linux platform selection now chooses the direct X11 backend when `DISPLAY` is available while retaining the deterministic headless backend for Linux servers and CI sessions without a display.
 - macOS platform selection now chooses the direct Cocoa backend, and CI has a dedicated real-Cocoa Python 3.14 native-window gate alongside Linux X11 and Windows/wgpu gates.
 - Gradient stop interpolation and visual argument validation are shared across linear/radial gradient implementations, while mesh gradients preserve stable SceneGraph hit keys across generated cells.
+- Decorative SceneGraph nodes can opt out of direct pointer hit testing without disabling independently interactive descendants, so visual overflow such as shadows cannot steal input from nearby controls.
 
 ## [0.1.0a1] - 2026-09-16
 
