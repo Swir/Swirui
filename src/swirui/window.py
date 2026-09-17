@@ -28,6 +28,7 @@ _KEYBOARD_EVENTS = {
     PlatformEventKind.KEY_UP,
     PlatformEventKind.TEXT_INPUT,
 }
+_VK_TAB = 0x09
 
 
 class Window(EventEmitter):
@@ -133,8 +134,13 @@ class Window(EventEmitter):
                 raise ValueError("Focused component must belong to the window root tree.")
             if not component.focusable:
                 raise ValueError("Focused component must be focusable.")
-            if not component.enabled or not component.visible:
-                raise ValueError("Focused component must be enabled and visible.")
+            component_path = self._component_path_for_component(component)
+            if not component_path or any(
+                not item.enabled or not item.visible for item in component_path
+            ):
+                raise ValueError(
+                    "Focused component and its ancestors must be enabled and visible."
+                )
 
         old_component = self.focused_component
         self.focused_component = component
@@ -149,7 +155,7 @@ class Window(EventEmitter):
         )
 
     def focus_next(self, *, reverse: bool = False) -> Component | None:
-        """Move focus through enabled, visible, focusable components in tree order."""
+        """Move focus through eligible components in deterministic tree order."""
 
         if self.root is None:
             self.focus_component(None)
@@ -157,7 +163,7 @@ class Window(EventEmitter):
         candidates = [
             component
             for component in self.root.walk()
-            if component.focusable and component.enabled and component.visible
+            if self._component_is_focus_candidate(component)
         ]
         if not candidates:
             self.focus_component(None)
@@ -344,9 +350,7 @@ class Window(EventEmitter):
         if (
             event.kind is PlatformEventKind.POINTER_DOWN
             and component_target is not None
-            and component_target.focusable
-            and component_target.enabled
-            and component_target.visible
+            and self._component_is_focus_candidate(component_target)
         ):
             self.focus_component(component_target)
 
@@ -413,21 +417,47 @@ class Window(EventEmitter):
         )
 
     def _apply_keyboard_event(self, event: PlatformEvent) -> None:
-        component_path = self._component_path_for_component(self.focused_component)
-        if self.focused_component is not None and not component_path:
+        focused = self.focused_component
+        if focused is not None and not self._component_is_focus_candidate(focused):
             self.focus_component(None)
+
+        component_path = self._component_path_for_component(self.focused_component)
         component_target = component_path[-1] if component_path else None
         routed_event = self._route_component_keyboard_event(
             event.kind.value,
             event,
             component_path,
         )
-        self.emit(
+        window_event = self.emit(
             event.kind.value,
             event=event,
             component_target=component_target,
             component_path=component_path,
             routed_event=routed_event,
+        )
+
+        is_tab_traversal = (
+            event.kind is PlatformEventKind.KEY_DOWN
+            and event.key_code == _VK_TAB
+            and not event.ctrl
+            and not event.alt
+            and not event.meta
+        )
+        if not is_tab_traversal:
+            return
+        if window_event.default_prevented or (
+            routed_event is not None and routed_event.default_prevented
+        ):
+            return
+
+        previous = self.focused_component
+        component = self.focus_next(reverse=event.shift)
+        self.emit(
+            "keyboard_focus_traversed",
+            previous=previous,
+            component=component,
+            reverse=event.shift,
+            event=event,
         )
 
     def _component_path_for_scene_target(
@@ -457,6 +487,14 @@ class Window(EventEmitter):
         if not path or path[0] is not self.root:
             return ()
         return tuple(path)
+
+    def _component_is_focus_candidate(self, component: Component) -> bool:
+        if not component.focusable:
+            return False
+        component_path = self._component_path_for_component(component)
+        return bool(component_path) and all(
+            item.enabled and item.visible for item in component_path
+        )
 
     @staticmethod
     def _component_belongs_to(root: Component | None, target: Component) -> bool:
