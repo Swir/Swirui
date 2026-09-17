@@ -33,6 +33,8 @@ from .base import NativeWindowSpec
 from .events import NativeWindowHandle, PlatformEvent, PlatformEventKind
 
 _WM_GETMINMAXINFO = 0x0024
+_WM_SYSKEYDOWN = 0x0104
+_WM_SYSKEYUP = 0x0105
 _VK_SHIFT = 0x10
 _VK_CONTROL = 0x11
 _VK_MENU = 0x12
@@ -298,10 +300,12 @@ class Win32PlatformBackend(_LegacyWin32PlatformBackend):
     def _wndproc(self, hwnd: int | None, message: int, wparam: int, lparam: int) -> int:
         handle = NativeWindowHandle(int(hwnd)) if hwnd else None
 
-        if handle is not None and message in (_WM_KEYDOWN, _WM_KEYUP):
+        key_down_messages = (_WM_KEYDOWN, _WM_SYSKEYDOWN)
+        key_up_messages = (_WM_KEYUP, _WM_SYSKEYUP)
+        if handle is not None and message in (*key_down_messages, *key_up_messages):
             kind = (
                 PlatformEventKind.KEY_DOWN
-                if message == _WM_KEYDOWN
+                if message in key_down_messages
                 else PlatformEventKind.KEY_UP
             )
             self._events.append(self._keyboard_event(kind, handle, int(wparam)))
