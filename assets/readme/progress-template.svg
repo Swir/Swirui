@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="180" viewBox="0 0 1200 180" role="img" aria-labelledby="title desc">
+  <title id="title">SWIR progress card template — not project data</title>
+  <desc id="desc">Reusable SWIR progress SVG template. This file contains no live project percentage.</desc>
+  <defs>
+    <linearGradient id="surface" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#02050A"/>
+      <stop offset="1" stop-color="#07111C"/>
+    </linearGradient>
+    <style>
+      .project { fill:#F4FAFF; font:700 24px 'Segoe UI',Arial,sans-serif; }
+      .scope { fill:#8DA8B8; font:500 17px 'Segoe UI',Arial,sans-serif; }
+      .percent { fill:#62E5FF; font:800 34px 'Segoe UI',Arial,sans-serif; }
+      .meta { fill:#8DA8B8; font:600 14px 'Segoe UI',Arial,sans-serif; }
+    </style>
+  </defs>
+  <rect x="1" y="1" width="1198" height="178" rx="22" fill="url(#surface)" stroke="#164D6B" stroke-width="2"/>
+  <text x="50" y="48" class="project">PROJECT NAME</text>
+  <text x="50" y="78" class="scope">MEASURED SCOPE</text>
+  <text x="1150" y="50" text-anchor="end" class="percent">N/A</text>
+  <text x="1150" y="78" text-anchor="end" class="meta">TEMPLATE / NOT PROJECT DATA</text>
+  <rect x="50" y="116" width="1100" height="18" rx="9" fill="#07111C" stroke="#164D6B" stroke-width="1"/>
+  <text x="50" y="155" class="meta">COUNTER: N/A • GENERATE WITH tools/progress_svg.py</text>
+</svg>
