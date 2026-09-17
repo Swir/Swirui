@@ -27,12 +27,48 @@ class Component(EventEmitter):
         self.key = key or uuid4().hex
         self.parent: Component | None = None
         self.children: list[Component] = []
-        self.enabled = True
-        self.visible = True
-        self.focusable = focusable
+        self._enabled = True
+        self._visible = True
+        self._focusable = bool(focusable)
         self.accessibility_role = accessibility_role
         self.accessible_name = accessible_name
         self.accessible_description = accessible_description
+
+    @property
+    def enabled(self) -> bool:
+        return self._enabled
+
+    @enabled.setter
+    def enabled(self, value: bool) -> None:
+        normalized = bool(value)
+        if normalized == self._enabled:
+            return
+        self._enabled = normalized
+        self.invalidate(reason="enabled")
+
+    @property
+    def visible(self) -> bool:
+        return self._visible
+
+    @visible.setter
+    def visible(self, value: bool) -> None:
+        normalized = bool(value)
+        if normalized == self._visible:
+            return
+        self._visible = normalized
+        self.invalidate(reason="visible")
+
+    @property
+    def focusable(self) -> bool:
+        return self._focusable
+
+    @focusable.setter
+    def focusable(self, value: bool) -> None:
+        normalized = bool(value)
+        if normalized == self._focusable:
+            return
+        self._focusable = normalized
+        self.invalidate(reason="focusable")
 
     def add(self, *children: Component) -> Component:
         for child in children:
@@ -47,6 +83,7 @@ class Component(EventEmitter):
             child.parent = self
             self.children.append(child)
             self.emit("child_added", child=child)
+            self.invalidate(reason="child_added", source=child)
         return self
 
     def remove(self, child: Component) -> Component:
@@ -56,11 +93,39 @@ class Component(EventEmitter):
             raise ValueError("Component is not a child of this parent.") from exc
         child.parent = None
         self.emit("child_removed", child=child)
+        self.invalidate(reason="child_removed", source=child)
         return child
 
     def clear(self) -> None:
         for child in tuple(self.children):
             self.remove(child)
+
+    def invalidate(self, *, reason: str = "changed", source: Component | None = None) -> None:
+        """Mark this retained component subtree as changed.
+
+        Invalidation bubbles through component parents while preserving the
+        component that originally changed. Rendering runtimes can therefore
+        subscribe once at the mounted root instead of attaching listeners to
+        every widget. The event is synchronous and deliberately carries no
+        renderer dependency, keeping the core tree backend-neutral.
+        """
+
+        origin = self if source is None else source
+        self.emit("invalidated", component=origin, reason=reason)
+        if self.parent is not None:
+            self.parent.invalidate(reason=reason, source=origin)
+
+    def set_enabled(self, enabled: bool) -> Component:
+        self.enabled = enabled
+        return self
+
+    def set_visible(self, visible: bool) -> Component:
+        self.visible = visible
+        return self
+
+    def set_focusable(self, focusable: bool) -> Component:
+        self.focusable = focusable
+        return self
 
     def walk(self, *, include_self: bool = True) -> Iterator[Component]:
         if include_self:
