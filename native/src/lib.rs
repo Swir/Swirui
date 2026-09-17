@@ -5,6 +5,8 @@
 //! into a monolithic backend.
 
 mod image;
+#[cfg(target_os = "windows")]
+mod postprocess;
 mod renderer;
 mod shape;
 mod text;
