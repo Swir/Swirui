@@ -70,6 +70,9 @@ The project uses semantic versioning where practical during pre-alpha developmen
 - Normalized Cocoa pointer, keyboard, text-input, focus, resize and close events with framework-compatible Tab and modifier-key metadata.
 - Retina-safe physical-pixel ↔ Cocoa-point conversion at the native boundary, including live backing-scale and display-transition events.
 - Real macOS Cocoa native-window smoke coverage on Python 3.14, including App-level verification that logical SwirUI geometry remains stable on scaled displays.
+- Immutable multi-stop `LinearGradient` and `RadialGradient` primitives that compile into clipped retained `Path2D` geometry and reuse the verified native Rust/wgpu shape pipeline.
+- Immutable rectangular `MeshGradient` color lattices with clamped bilinear sampling and deterministic retained quad tessellation.
+- GPU gradient demos for linear, radial and mesh gradients, plus real Win32/wgpu smoke coverage for each gradient family.
 
 ### Changed
 - The wgpu renderer now reports submitted rectangle, path, text and image counts independently.
@@ -90,6 +93,7 @@ The project uses semantic versioning where practical during pre-alpha developmen
 - CI now has a dedicated retained-runtime performance job in addition to the Python quality/test matrix, Rust checks and Windows native smoke gate.
 - Linux platform selection now chooses the direct X11 backend when `DISPLAY` is available while retaining the deterministic headless backend for Linux servers and CI sessions without a display.
 - macOS platform selection now chooses the direct Cocoa backend, and CI has a dedicated real-Cocoa Python 3.14 native-window gate alongside Linux X11 and Windows/wgpu gates.
+- Gradient stop interpolation and visual argument validation are shared across linear/radial gradient implementations, while mesh gradients preserve stable SceneGraph hit keys across generated cells.
 
 ## [0.1.0a1] - 2026-09-16
 
