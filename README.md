@@ -11,9 +11,10 @@
 [![CI](https://github.com/Swir/Swirui/actions/workflows/ci.yml/badge.svg)](https://github.com/Swir/Swirui/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/Python-3.11%20%7C%203.12%20%7C%203.13%20%7C%203.14-3776AB?logo=python&logoColor=white)
 ![Windows Native](https://img.shields.io/badge/Windows-Win32%20native-0078D4?logo=windows11&logoColor=white)
+![Linux Native](https://img.shields.io/badge/Linux-X11%20native-FCC624?logo=linux&logoColor=black)
 ![GPU](https://img.shields.io/badge/GPU-wgpu%2030-6E56CF)
 ![Status](https://img.shields.io/badge/status-pre--alpha-7C3AED)
-![Progress](https://img.shields.io/badge/project%20progress-24%25-00BFFF)
+![Progress](https://img.shields.io/badge/project%20progress-25%25-00BFFF)
 
 </div>
 
@@ -21,9 +22,9 @@
 
 ## Project progress
 
-**24% — 0.2 Alpha: Native Window + First Renderer in progress**
+**25% — 0.2 Alpha: Native Window + First Renderer in progress**
 
-`[█████░░░░░░░░░░░░░░░] 24%`
+`[█████░░░░░░░░░░░░░░░] 25%`
 
 **Completed:** `0.1 Alpha — Foundation` ✅  
 **Current milestone:** `0.2 Alpha — Native Window + First Renderer` 🚧
@@ -60,9 +61,14 @@ SwirUI is currently **pre-alpha**. APIs may change while the native renderer and
 - **display-aware per-window pacing capped to the active monitor refresh rate**
 - **automatic scheduler retargeting when a native window changes displays**
 - frame-time telemetry with configured/effective target FPS, active display refresh, instantaneous/smoothed FPS and pacing error
-- deterministic headless backend for tests and CI
+- deterministic headless backend for tests, servers and CI without a display
 - **direct native Win32 backend via Python `ctypes`**
 - real Win32 window creation without Tkinter, Qt or SDL
+- **direct native Linux/X11 backend via Python `ctypes` + system libX11**
+- real X11 window create/map/title/resize/hide/destroy lifecycle verified under Xvfb
+- normalized X11 resize, focus, pointer, keyboard, text-input and WM_DELETE_WINDOW close events
+- Linux automatically selects X11 when `DISPLAY` is available and retains the headless backend otherwise
+- X11 Tab / Shift+Tab key normalization compatible with SwirUI's keyboard-focus traversal
 - **DPI-aware decorated-window sizing that preserves the requested renderable client area exactly**
 - **exact physical client-area dimensions across creation and programmatic resize**
 - **logical client geometry preserved across Win32 DPI transitions**
@@ -117,6 +123,7 @@ SwirUI is currently **pre-alpha**. APIs may change while the native renderer and
 - median / p95 / worst-case / throughput benchmark reporting with machine-readable CI artifacts
 - **integrated real-Windows 0.2 gate covering mixed GPU shapes/text/images/paths, exact client resize, persistent context reuse and routed native pointer/focus input**
 - ABI3 native wheel build for Python 3.11+
+- real Linux X11 native-window smoke tests on Python 3.14
 - Windows native + rounded-GPU + path + shaped-text + image + clipping + mixed-DPI + presentation/display + keyboard/system-key smoke tests on Python 3.14
 - Ruff, Mypy, coverage and Python 3.11–3.14 CI
 
@@ -153,6 +160,8 @@ python examples/high_refresh_demo.py
 ```
 
 The rectangle demo submits prepared SwirUI rectangles into the persistent Rust/wgpu backend. Filled rectangles are batched into one instanced draw call and per-corner radii are evaluated in the fragment shader with anti-aliased SDF edges. The path demo exercises deterministic convex/concave `Path2D` tessellation and the full `SceneGraph → Python → Rust/wgpu` filled-triangle path with clipping and alpha compositing. The text demo exercises Unicode shaping through glyphon/cosmic-text and a persistent glyph atlas. The image demo generates RGBA pixels in memory, registers them once and reuses cached native textures; byte-identical image registrations under different logical ids share one retained native texture. The high-refresh demo follows the active display refresh rate automatically. Scene geometry remains authored in logical DIPs while native Win32 input and persistent GPU surfaces operate in physical pixels.
+
+The Linux backend currently provides native X11 windows and normalized input/lifecycle events. GPU/wgpu presentation on Linux and Wayland support are not claimed yet.
 
 ## Foundation API
 
@@ -196,8 +205,9 @@ Python Application API
         │
 SwirUI Runtime
         │
-        ├── Native Platform Backend
-        │     └── Win32 backend ✅
+        ├── Native Platform Backends
+        │     ├── Win32 backend ✅
+        │     └── Linux X11 backend ✅ window/input
         ├── exact DPI-aware Win32 client geometry ✅
         ├── logical-DIP ↔ physical-pixel boundary ✅
         ├── per-window active display + scale + refresh tracking ✅
@@ -213,10 +223,10 @@ SwirUI Runtime
         │
 Renderer Layer
         │
-        ├── GPU surface / swapchain ✅
-        ├── persistent per-window GPU context ✅
-        ├── DPI-scaled physical GPU submission ✅
-        ├── VSync / present-mode policy ✅
+        ├── GPU surface / swapchain ✅ Windows
+        ├── persistent per-window GPU context ✅ Windows
+        ├── DPI-scaled physical GPU submission ✅ Windows
+        ├── VSync / present-mode policy ✅ Windows
         ├── instanced anti-aliased rounded rectangles ✅
         ├── filled convex/concave Path2D triangles ✅
         ├── shaped text + persistent glyph atlas ✅
@@ -262,11 +272,11 @@ SwirUI Framework
 
 ## Current 0.2 Alpha focus
 
-The native Windows foundation, exact DPI-aware client geometry, persistent wgpu renderer, rounded and general filled GPU shapes, shaped GPU text, persistent content-addressed GPU images, hierarchical clipping/compositing, routed pointer/keyboard input, keyboard-only Tab traversal, focus healing, explicit present-mode policy, robust logical-DIP/physical-pixel HiDPI handling, multi-monitor discovery and display-aware high-refresh pacing are verified. A real Windows integration gate now exercises the mixed GPU scene, exact resize behavior, persistent context reuse and native routed input together. Retained-runtime performance budgets and the first backend-neutral accessibility semantic contract are also verified. The largest remaining 0.2 hardening work is:
+The native Windows foundation, exact DPI-aware client geometry, persistent wgpu renderer, rounded and general filled GPU shapes, shaped GPU text, persistent content-addressed GPU images, hierarchical clipping/compositing, routed pointer/keyboard input, keyboard-only Tab traversal, focus healing, explicit present-mode policy, robust logical-DIP/physical-pixel HiDPI handling, multi-monitor discovery and display-aware high-refresh pacing are verified. A real Windows integration gate exercises the mixed GPU scene, exact resize behavior, persistent context reuse and native routed input together. Retained-runtime performance budgets and the first backend-neutral accessibility semantic contract are also verified. Cross-platform native-window expansion has started with a direct X11 backend whose real window lifecycle and normalized input path are exercised under Xvfb. The largest remaining 0.2 hardening work is:
 
 1. native accessibility adapters / screen-reader integration
-2. continued measured retained-runtime/input optimization under CI budgets
-3. cross-platform native backend expansion after the Windows gate is hardened
+2. macOS native backend and continued Linux platform expansion beyond X11 window/input
+3. continued measured retained-runtime/input optimization under CI budgets
 
 See **[ROADMAP.md](ROADMAP.md)** for the full development plan.
 
@@ -286,6 +296,7 @@ retained-runtime performance budgets + JSON report artifact
 accessibility semantic-tree tests
 cargo check
 cargo test
+Linux real-X11 native-window smoke test under Xvfb
 Windows native smoke test
 Windows integrated 0.2 mixed-scene + exact-client + routed-input gate
 Windows active-display / refresh-rate mapping smoke test
@@ -309,7 +320,7 @@ SwirUI will not claim to outperform another framework without reproducible measu
 
 ```text
 Swirui/
-├── .github/workflows/      # Python, Rust and native GPU CI
+├── .github/workflows/      # Python, Rust and native platform/GPU CI
 ├── assets/                 # SwirUI visual assets and icon
 ├── benchmarks/             # reproducible performance budgets and scenarios
 ├── docs/                   # architecture and design documentation
