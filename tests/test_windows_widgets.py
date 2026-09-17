@@ -5,7 +5,17 @@ from typing import Any
 
 import pytest
 
-from swirui import App, Component, Input, PasswordInput, TextArea, Window, mount
+from swirui import (
+    App,
+    Checkbox,
+    Component,
+    Input,
+    PasswordInput,
+    Switch,
+    TextArea,
+    Window,
+    mount,
+)
 from swirui.platforms.windows import Win32PlatformBackend
 from swirui.rendering import Rect, SceneNodeKind, WgpuRenderer
 
@@ -31,6 +41,12 @@ def _user32() -> Any:
 
 def _lparam(x: int, y: int) -> int:
     return ((y & 0xFFFF) << 16) | (x & 0xFFFF)
+
+
+def _send_click(user32: Any, hwnd: int, x: int, y: int) -> None:
+    point = _lparam(x, y)
+    user32.SendMessageW(ctypes.c_void_p(hwnd), 0x0201, 0, point)  # WM_LBUTTONDOWN
+    user32.SendMessageW(ctypes.c_void_p(hwnd), 0x0202, 0, point)  # WM_LBUTTONUP
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="retained widget smoke requires Windows")
@@ -91,10 +107,6 @@ def test_retained_text_inputs_route_real_win32_text_and_reuse_wgpu_context() -> 
         assert username.value == "SwirUI"
         assert runtime.generation > 1
 
-        # process_events() is allowed to consume an invalidated frame itself.
-        # Request one explicit follow-up frame so this smoke test verifies the
-        # prepared widget scene on the persistent GPU context without depending
-        # on host speed or whether the event pump happened to hit a frame deadline.
         app.invalidate(window)
         rendered = app.render_pending(time.monotonic() + 1.0)
         assert rendered == 1
@@ -110,5 +122,77 @@ def test_retained_text_inputs_route_real_win32_text_and_reuse_wgpu_context() -> 
         assert username_text.text == "SwirUI"
         assert password_text.text == "••••••"
         assert password_text.text != password.value
+    finally:
+        app.stop()
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="retained widget smoke requires Windows")
+def test_retained_toggles_route_real_win32_input_and_reuse_wgpu_context() -> None:
+    renderer = WgpuRenderer()
+    backend = _isolated_backend()
+    app = App("SwirUI toggle smoke", platform_backend=backend, renderer=renderer)
+    window = app.add_window(Window(title="SwirUI retained toggles", width=620, height=300))
+    root = Component("root")
+    checkbox = Checkbox(
+        "Native checkbox",
+        key="native-checkbox",
+        bounds=Rect(28.0, 34.0, 260.0, 44.0),
+    )
+    switch = Switch(
+        "Native switch",
+        key="native-switch",
+        bounds=Rect(28.0, 104.0, 260.0, 44.0),
+    )
+    root.add(checkbox, switch)
+    runtime = mount(window, root)
+
+    try:
+        app.start()
+        assert window.native_handle is not None
+        assert renderer.frames_rendered == 1
+        assert renderer.persistent_context_count == 1
+        initial_contexts = renderer.persistent_context_count
+        hwnd = window.native_handle.value
+        user32 = _user32()
+
+        app.process_events()
+        _send_click(
+            user32,
+            hwnd,
+            max(1, round(90.0 * window.scale)),
+            max(1, round(54.0 * window.scale)),
+        )
+        app.process_events()
+        assert window.focused_component is checkbox
+        assert checkbox.checked is True
+
+        _send_click(
+            user32,
+            hwnd,
+            max(1, round(90.0 * window.scale)),
+            max(1, round(124.0 * window.scale)),
+        )
+        app.process_events()
+        assert window.focused_component is switch
+        assert switch.checked is True
+
+        user32.SendMessageW(ctypes.c_void_p(hwnd), 0x0100, 0x20, 0)  # WM_KEYDOWN / Space
+        user32.SendMessageW(ctypes.c_void_p(hwnd), 0x0101, 0x20, 0)  # WM_KEYUP / Space
+        app.process_events()
+        assert switch.checked is False
+        assert runtime.generation > 1
+
+        app.invalidate(window)
+        assert app.render_pending(time.monotonic() + 1.0) == 1
+        assert renderer.persistent_context_count == initial_contexts
+        assert window.scene is not None
+        checkbox_mark = next(
+            node for node in window.scene.walk() if node.key == "native-checkbox:mark"
+        )
+        switch_knob = next(
+            node for node in window.scene.walk() if node.key == "native-switch:knob"
+        )
+        assert checkbox_mark.kind is SceneNodeKind.TEXT
+        assert switch_knob.kind is SceneNodeKind.RECTANGLE
     finally:
         app.stop()
