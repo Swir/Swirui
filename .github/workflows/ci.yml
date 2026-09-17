@@ -188,6 +188,9 @@ jobs:
       - name: Verify retained core widgets
         run: pytest tests/test_windows_widgets.py -q
 
+      - name: Verify retained expander and accordion
+        run: pytest tests/test_windows_expander.py -q
+
       - name: Draw native GPU scene
         run: pytest tests/test_windows_gpu_bridge.py -q
 
