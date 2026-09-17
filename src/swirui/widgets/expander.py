@@ -416,7 +416,7 @@ class Accordion(Component):
         self._require_one = bool(require_one)
         if self._allow_multiple and self._require_one:
             raise ValueError("require_one is only supported for exclusive accordions.")
-        self._subscriptions: dict[str, Callable[[], None]] = {}
+        self._subscriptions: dict[int, Callable[[], None]] = {}
         self._coordinating = False
         if items:
             self.add(*items)
@@ -444,14 +444,14 @@ class Accordion(Component):
         return expanded[0] if expanded else None
 
     def add(self, *children: Component) -> Accordion:
-        if not all(isinstance(child, Expander) for child in children):
+        expanders = tuple(child for child in children if isinstance(child, Expander))
+        if len(expanders) != len(children):
             raise TypeError("Accordion children must be Expander instances.")
-        for child in children:
-            expander = child
+        for expander in expanders:
             if expander.parent is self:
                 continue
             super().add(expander)
-            self._subscriptions[expander.key] = expander.on(
+            self._subscriptions[id(expander)] = expander.on(
                 "expanded_changed",
                 lambda event, item=expander: self._on_expander_changed(item, event),
             )
@@ -463,7 +463,7 @@ class Accordion(Component):
     def remove(self, child: Component) -> Accordion:
         if not isinstance(child, Expander) or child.parent is not self:
             raise ValueError("Component is not an expander in this accordion.")
-        unsubscribe = self._subscriptions.pop(child.key, None)
+        unsubscribe = self._subscriptions.pop(id(child), None)
         if unsubscribe is not None:
             unsubscribe()
         super().remove(child)
