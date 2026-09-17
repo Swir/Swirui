@@ -13,7 +13,7 @@ from swirui.rendering import Rect
 
 def main() -> None:
     app = App("SwirUI Dialog Demo")
-    window = Window("SwirUI Modal / Dialog", width=760, height=460)
+    window = Window(title="SwirUI Modal / Dialog", width=760, height=460)
 
     root = Component("dialog-demo", key="dialog-demo")
     heading = Label(
