@@ -1,4 +1,4 @@
-"""Animate retained perspective and pointer-driven parallax on the GPU path pipeline."""
+"""Animate retained perspective with live pointer-driven parallax on the GPU path pipeline."""
 
 from __future__ import annotations
 
@@ -23,6 +23,7 @@ HEIGHT = 640
 VIEWPORT = Rect(0.0, 0.0, WIDTH, HEIGHT)
 CARD_BOUNDS = Rect(250.0, 170.0, 480.0, 300.0)
 START = time.monotonic()
+POINTER = Point(WIDTH * 0.5, HEIGHT * 0.5)
 PARALLAX = Parallax(
     max_rotation_x_degrees=10.0,
     max_rotation_y_degrees=14.0,
@@ -32,10 +33,6 @@ PARALLAX = Parallax(
 
 
 def build_scene(elapsed: float) -> Scene:
-    pointer = Point(
-        WIDTH * (0.5 + math.sin(elapsed * 0.75) * 0.42),
-        HEIGHT * (0.5 + math.cos(elapsed * 0.62) * 0.38),
-    )
     pedestal_depth = 20.0 + (math.sin(elapsed * 0.9) + 1.0) * 24.0
 
     root = SceneNode(
@@ -58,7 +55,7 @@ def build_scene(elapsed: float) -> Scene:
         PARALLAX.to_scene_node(
             "parallax-card",
             CARD_BOUNDS,
-            pointer=pointer,
+            pointer=POINTER,
             viewport=VIEWPORT,
             fill=Color.from_hex("#102A56"),
         ),
@@ -76,7 +73,7 @@ def build_scene(elapsed: float) -> Scene:
             key="subtitle",
             kind=SceneNodeKind.TEXT,
             bounds=Rect(330.0, 330.0, 340.0, 70.0),
-            text=f"retained Path2D perspective · pointer {pointer.x:3.0f}, {pointer.y:3.0f}",
+            text=f"live pointer parallax · {POINTER.x:3.0f}, {POINTER.y:3.0f} DIP",
             fill=Color.from_hex("#7ED8FF"),
             font_size=18.0,
             z_index=2,
@@ -92,10 +89,21 @@ window.set_scene(build_scene(0.0))
 app.add_window(window)
 
 
+def track_pointer(event: Event) -> None:
+    global POINTER
+    platform_event = event.data.get("event")
+    x = getattr(platform_event, "x", None)
+    y = getattr(platform_event, "y", None)
+    if x is None or y is None:
+        return
+    POINTER = Point(float(x), float(y))
+
+
 def animate(_: Event) -> None:
     window.set_scene(build_scene(time.monotonic() - START))
     app.invalidate(window)
 
 
+window.on("pointer_move", track_pointer)
 app.on("frame_rendered", animate)
 raise SystemExit(app.run())
