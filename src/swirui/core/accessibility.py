@@ -22,6 +22,7 @@ class AccessibilityRole(StrEnum):
     BUTTON = "button"
     CHECKBOX = "checkbox"
     CHIP = "chip"
+    DIALOG = "dialog"
     IMAGE = "image"
     LINK = "link"
     LIST = "list"
