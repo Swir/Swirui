@@ -17,7 +17,7 @@
 
 [![CI](https://img.shields.io/github/actions/workflow/status/Swir/Swirui/ci.yml?branch=main&style=flat-square&label=CI&color=0088FF)](https://github.com/Swir/Swirui/actions/workflows/ci.yml)
 ![Status](https://img.shields.io/badge/status-pre--alpha-0088FF?style=flat-square)
-![Progress](https://img.shields.io/badge/project%20progress-53%25-0088FF?style=flat-square)
+![Progress](https://img.shields.io/badge/project%20progress-54%25-0088FF?style=flat-square)
 
 </div>
 
@@ -25,11 +25,11 @@
 
 ## Project Status
 
-<img width="100%" src="assets/readme/progress-card.svg" alt="SwirUI project progress: 53.0% — 0.4 Alpha Core Widgets in progress; 12 of 15 widget groups verified">
+<img width="100%" src="assets/readme/progress-card.svg" alt="SwirUI project progress: 54.0% — 0.4 Alpha Core Widgets in progress; 13 of 15 widget groups verified">
 
-**53% — 0.4 Alpha Core Widgets underway; retained scrolling, disclosure, status, tooltip and surface controls are implemented and verified.**
+**54% — 0.4 Alpha Core Widgets underway; retained scrolling, disclosure, split-pane, status, tooltip and surface controls are implemented and verified.**
 
-`[███████████░░░░░░░░░] 53%`
+`[███████████░░░░░░░░░] 54%`
 
 - `0.1 Alpha — Foundation` ✅
 - `0.2 Alpha — Native Window + First Renderer` ✅
@@ -62,7 +62,7 @@ The Windows renderer uses a persistent per-window wgpu context and retained Scen
 | Materials | Native backdrop blur, `FrostedGlass` and `Acrylic` with deterministic grain |
 | Post-processing | Persistent scene blur, affine RGBA color filters and validated custom WGSL effects |
 | Custom shaders | Bounded Python `CustomShaderEffect` API, native Naga validation, persistent GPU pass and bounded pipeline reuse |
-| Core widgets | Retained Text/Label, Button/IconButton, text inputs, toggles, Slider/RangeSlider, determinate progress, Badge/Chip, Tooltip, Panel/Frame, Card/GlassCard, ScrollView and Expander/Accordion |
+| Core widgets | Retained Text/Label, Button/IconButton, text inputs, toggles, Slider/RangeSlider, determinate progress, Badge/Chip, Tooltip, Panel/Frame, Card/GlassCard, ScrollView, Expander/Accordion and SplitView |
 | Performance | Adaptive visual-quality profiles plus retained effect and GPU resource caches |
 | Accessibility | Semantic roles/tree, keyboard focus routing, keyboard-only traversal, checked state and numeric value/range semantics |
 
@@ -94,6 +94,7 @@ python examples/range_progress_demo.py
 python examples/core_surfaces_demo.py
 python examples/core_scroll_view_demo.py
 python examples/expander_accordion_demo.py
+python examples/core_split_view_demo.py
 ```
 
 ### Windows GPU development
@@ -190,6 +191,7 @@ examples/range_progress_demo.py
 examples/core_surfaces_demo.py
 examples/core_scroll_view_demo.py
 examples/expander_accordion_demo.py
+examples/core_split_view_demo.py
 examples/gpu_rectangles_demo.py
 examples/gpu_text_demo.py
 examples/gpu_image_demo.py
@@ -267,11 +269,11 @@ SwirUI does not claim performance superiority over other frameworks without repr
 
 ## Roadmap
 
-<img width="100%" src="assets/readme/progress-mini.svg" alt="SwirUI roadmap progress: 53.0% — 12 of 15 Core Widgets groups verified">
+<img width="100%" src="assets/readme/progress-mini.svg" alt="SwirUI roadmap progress: 54.0% — 13 of 15 Core Widgets groups verified">
 
 The authoritative plan is **[ROADMAP.md](ROADMAP.md)**.
 
-**0.4 Alpha — Core Widgets** is underway. The verified retained control surface now includes Text/Label, Button/IconButton, Input/PasswordInput/TextArea, Checkbox/RadioButton/Switch, Slider/RangeSlider, ProgressBar/ProgressRing, Badge/Chip, Tooltip, Panel/Frame, Card/GlassCard, ScrollView and Expander/Accordion. Remaining 0.4 work continues with SplitView, Modal/Dialog and Toast/Notification surfaces.
+**0.4 Alpha — Core Widgets** is underway. The verified retained control surface now includes Text/Label, Button/IconButton, Input/PasswordInput/TextArea, Checkbox/RadioButton/Switch, Slider/RangeSlider, ProgressBar/ProgressRing, Badge/Chip, Tooltip, Panel/Frame, Card/GlassCard, ScrollView, Expander/Accordion and SplitView. Remaining 0.4 work continues with Modal/Dialog and Toast/Notification surfaces.
 
 ## Releases
 
@@ -302,7 +304,7 @@ Swirui/
 
 ## 🔎 Search Keywords
 
-`python desktop gui` • `python gpu ui` • `native python ui framework` • `python retained widgets` • `python scrollview widget` • `python accordion widget` • `wgpu python renderer` • `rust pyo3 gui` • `win32 python gui` • `reactive desktop ui` • `high refresh rate ui` • `hidpi desktop ui` • `gpu text rendering` • `frosted glass ui` • `acrylic desktop ui` • `python glass card ui` • `custom wgsl effects` • `multi monitor python ui`
+`python desktop gui` • `python gpu ui` • `native python ui framework` • `python retained widgets` • `python scrollview widget` • `python accordion widget` • `python split view widget` • `wgpu python renderer` • `rust pyo3 gui` • `win32 python gui` • `reactive desktop ui` • `high refresh rate ui` • `hidpi desktop ui` • `gpu text rendering` • `frosted glass ui` • `acrylic desktop ui` • `python glass card ui` • `custom wgsl effects` • `multi monitor python ui`
 
 <img width="100%" src="https://raw.githubusercontent.com/Swir/Swir/main/assets/power-divider-v4.svg" alt="SWIR electric divider" />
 
