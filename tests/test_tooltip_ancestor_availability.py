@@ -5,12 +5,12 @@ from swirui.rendering import Rect
 def test_tooltip_respects_hidden_and_disabled_target_ancestors() -> None:
     parent = Component("parent")
     button = Button("Inspect", bounds=Rect(0.0, 0.0, 120.0, 40.0))
+    parent.add(button)
     tooltip = Tooltip(
         "Inspect retained node",
         target=button,
         bounds=Rect(0.0, 48.0, 180.0, 34.0),
     )
-    parent.add(button)
 
     parent.enabled = False
     button.emit("pointer_enter")
