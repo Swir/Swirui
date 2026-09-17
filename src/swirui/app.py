@@ -191,7 +191,7 @@ class App(EventEmitter):
         """Switch fixed/AUTO visual quality without recreating native windows.
 
         Fixed profiles remain fixed. ``AUTO`` starts from the policy's balanced
-        baseline and then adapts from frame-pacing telemetry. Applications that
+        baseline and then adapts from measured frame telemetry. Applications that
         build quality-aware retained effects can listen for
         ``visual_quality_changed`` and rebuild those subtrees with
         :attr:`effective_visual_quality`.
@@ -214,6 +214,7 @@ class App(EventEmitter):
             reason="configuration",
             smoothed_fps=None,
             target_fps=None,
+            render_duration_seconds=None,
         )
 
     def window_target_fps(self, window: Window) -> int:
@@ -254,12 +255,15 @@ class App(EventEmitter):
                 continue
             if scheduler.consume(frame_time):
                 rendered_quality = self.effective_visual_quality
+                render_started = time.perf_counter()
                 self.renderer.render(window, window.root)
+                render_duration_seconds = time.perf_counter() - render_started
                 frames += 1
                 stats = scheduler.stats
                 decision = self._quality_controller.observe_frame(
                     stats.smoothed_fps,
                     scheduler.target_fps,
+                    render_duration_seconds=render_duration_seconds,
                 )
                 if decision is not None:
                     self._apply_adaptive_quality_decision(decision)
@@ -278,6 +282,8 @@ class App(EventEmitter):
                     instantaneous_fps=stats.instantaneous_fps,
                     smoothed_fps=stats.smoothed_fps,
                     pacing_error=stats.pacing_error,
+                    render_duration_seconds=render_duration_seconds,
+                    render_budget_utilization=(render_duration_seconds * scheduler.target_fps),
                     visual_quality=rendered_quality,
                     effective_visual_quality=self.effective_visual_quality,
                     configured_visual_quality=self.config.visual_quality,
@@ -371,6 +377,7 @@ class App(EventEmitter):
             reason="configuration",
             smoothed_fps=None,
             target_fps=None,
+            render_duration_seconds=None,
         )
 
     def _apply_adaptive_quality_decision(self, decision: AdaptiveQualityDecision) -> None:
@@ -383,6 +390,7 @@ class App(EventEmitter):
             reason=decision.reason,
             smoothed_fps=decision.smoothed_fps,
             target_fps=decision.target_fps,
+            render_duration_seconds=decision.render_duration_seconds,
         )
 
     def _emit_quality_change(
@@ -395,6 +403,7 @@ class App(EventEmitter):
         reason: str,
         smoothed_fps: float | None,
         target_fps: int | None,
+        render_duration_seconds: float | None,
     ) -> None:
         self.emit(
             "visual_quality_changed",
@@ -405,6 +414,12 @@ class App(EventEmitter):
             reason=reason,
             smoothed_fps=smoothed_fps,
             target_fps=target_fps,
+            render_duration_seconds=render_duration_seconds,
+            render_budget_utilization=(
+                render_duration_seconds * target_fps
+                if render_duration_seconds is not None and target_fps is not None
+                else None
+            ),
         )
 
     def _initial_window_scale(self) -> float:
