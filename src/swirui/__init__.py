@@ -4,6 +4,10 @@ from .app import App
 from .core import (
     AccessibilityNode,
     AccessibilityRole,
+    AdaptiveQualityController,
+    AdaptiveQualityDecision,
+    AdaptiveQualityPolicy,
+    AdaptiveQualityStats,
     AppConfig,
     Component,
     PresentationMode,
@@ -16,6 +20,10 @@ from .window import Window
 __all__ = [
     "AccessibilityNode",
     "AccessibilityRole",
+    "AdaptiveQualityController",
+    "AdaptiveQualityDecision",
+    "AdaptiveQualityPolicy",
+    "AdaptiveQualityStats",
     "App",
     "AppConfig",
     "Component",
