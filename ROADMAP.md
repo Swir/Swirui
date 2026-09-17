@@ -4,9 +4,9 @@
 
 ## Project progress
 
-**Overall completion: 39%**
+**Overall completion: 40%**
 
-`[████████░░░░░░░░░░░░] 39%`
+`[████████░░░░░░░░░░░░] 40%`
 
 Progress is based on implemented and verified roadmap work. Ideas, mockups and unfinished prototypes do not increase the percentage.
 
@@ -117,7 +117,7 @@ Cross-platform native-window coverage now includes real Linux/X11 lifecycle/inpu
 - [x] Color filters
 - [x] Noise / grain
 - [ ] Custom shader effects
-- [ ] Effect caching
+- [x] Effect caching
 - [x] Adaptive quality profiles: Performance / Balanced / Quality / Ultra / Cinematic
 
 ## 0.4 Alpha — Core Widgets
@@ -389,6 +389,7 @@ AI output must remain ordinary, editable SwirUI code.
 - [x] Windows retained depth / perspective / parallax / reflections GPU smoke test
 - [x] Windows retained adaptive-lighting / glow / bloom / noise GPU smoke test
 - [x] Windows retained backdrop/background-blur + glass/acrylic GPU smoke test
+- [x] Windows retained native effect-frame cache smoke test
 - [x] Windows native GPU color-filter postprocess smoke test
 - [x] Windows mixed-DPI logical-DIP → physical-GPU smoke test
 - [x] Windows presentation-policy reconfiguration smoke test
@@ -458,6 +459,7 @@ Current native foundation:
 - [x] native filled-path pipeline
 - [x] native painter-order backdrop blur/compositor pipeline
 - [x] native affine RGBA color-filter postprocess pipeline
+- [x] native retained backdrop/material effect-frame cache
 
 Primary future candidates:
 
