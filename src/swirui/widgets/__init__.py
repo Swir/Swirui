@@ -3,6 +3,7 @@
 from .badges import Badge, Chip
 from .base import Widget
 from .button import Button, IconButton
+from .dialog import Dialog, DialogResult
 from .expander import Accordion, Expander
 from .input import Input, PasswordInput, TextArea
 from .progress import ProgressBar, ProgressRing
@@ -28,6 +29,8 @@ __all__ = [
     "Card",
     "Checkbox",
     "Chip",
+    "Dialog",
+    "DialogResult",
     "Expander",
     "Frame",
     "GlassCard",
