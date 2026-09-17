@@ -130,8 +130,13 @@ class SceneNode:
         if self.clip_to_bounds and not self.bounds.contains(point):
             return ()
 
+        candidates = (
+            (index, child)
+            for index, child in enumerate(self.children)
+            if child._subtree_may_hit(point)
+        )
         ordered_children = sorted(
-            enumerate(self.children),
+            candidates,
             key=lambda item: (item[1].z_index, item[0]),
             reverse=True,
         )
@@ -143,6 +148,23 @@ class SceneNode:
         if self._contains_visual_point(point):
             return (self,)
         return ()
+
+    def _subtree_may_hit(self, point: Point) -> bool:
+        """Reject a subtree only when it is impossible for it to hit ``point``.
+
+        Leaf visuals cannot hit outside their own bounds, so broad-phase culling
+        can remove them before z-order sorting. Containers with descendants stay
+        eligible outside their bounds unless clipping is enabled because SwirUI
+        permits descendants to paint and receive input beyond an unclipped parent.
+        """
+
+        if self.opacity <= 0.0:
+            return False
+        if self.bounds.contains(point):
+            return True
+        if self.clip_to_bounds:
+            return False
+        return bool(self.children)
 
     def _contains_visual_point(self, point: Point) -> bool:
         if not self.bounds.contains(point):

@@ -5,8 +5,8 @@
     "max_worst_us": 150000
   },
   "scene_hit_testing_1024": {
-    "max_median_us": 60000,
-    "max_p95_us": 120000,
-    "max_worst_us": 400000
+    "max_median_us": 30000,
+    "max_p95_us": 45000,
+    "max_worst_us": 100000
   }
 }
