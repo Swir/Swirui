@@ -1,6 +1,7 @@
 """Rendering contracts and backend-neutral primitives."""
 
 from .base import NullRenderer, Renderer
+from .bloom import Bloom
 from .effects import (
     DropShadow,
     DynamicShadow,
@@ -19,6 +20,7 @@ from .wgpu_renderer import WgpuRenderer
 from .windows_gdi import Win32PreviewRenderer
 
 __all__ = [
+    "Bloom",
     "Color",
     "CornerRadius",
     "DropShadow",

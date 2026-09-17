@@ -6,6 +6,7 @@ import pytest
 from swirui import App, Window
 from swirui.platforms.windows import Win32PlatformBackend
 from swirui.rendering import (
+    Bloom,
     Color,
     CornerRadius,
     DynamicShadow,
@@ -48,6 +49,13 @@ def _dynamic_effect_scene(light_direction_degrees: float) -> Scene:
             spread=1.0,
             steps=6,
         ).to_scene_node("card-glow", card_bounds, corner_radius=radius),
+        Bloom(
+            color=Color(0.0, 0.68, 1.0, 0.42),
+            blur_radius=28.0,
+            spread=2.0,
+            intensity=0.72,
+            steps=8,
+        ).to_scene_node("card-bloom", card_bounds, corner_radius=radius),
         SceneNode(
             key="card",
             kind=SceneNodeKind.RECTANGLE,
@@ -69,7 +77,7 @@ def _dynamic_effect_scene(light_direction_degrees: float) -> Scene:
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Native GPU effect smoke requires Windows")
-def test_dynamic_shadow_and_glow_reach_real_persistent_wgpu_batch() -> None:
+def test_dynamic_shadow_glow_and_bloom_reach_real_persistent_wgpu_batch() -> None:
     renderer = WgpuRenderer()
     app = App(
         "SwirUI Dynamic Effects Integration",
@@ -83,7 +91,7 @@ def test_dynamic_shadow_and_glow_reach_real_persistent_wgpu_batch() -> None:
     try:
         app.start()
         assert renderer.frames_rendered == 1
-        assert renderer.last_rectangle_count == 17
+        assert renderer.last_rectangle_count == 25
         assert renderer.last_text_count == 1
         assert renderer.last_image_count == 0
         assert renderer.last_path_count == 0
@@ -101,7 +109,7 @@ def test_dynamic_shadow_and_glow_reach_real_persistent_wgpu_batch() -> None:
         assert app.render_pending(time.monotonic() + 1.0) == 1
 
         assert renderer.frames_rendered == 2
-        assert renderer.last_rectangle_count == 17
+        assert renderer.last_rectangle_count == 25
         assert renderer.persistent_context_count == 1
         assert renderer._contexts[handle] is first_context
     finally:
