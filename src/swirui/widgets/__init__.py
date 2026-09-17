@@ -5,6 +5,7 @@ from .base import Widget
 from .button import Button, IconButton
 from .expander import Accordion, Expander
 from .input import Input, PasswordInput, TextArea
+from .overlays import Dialog, Modal, Notification, Toast
 from .progress import ProgressBar, ProgressRing
 from .runtime import (
     SceneChildPreparer,
@@ -28,12 +29,15 @@ __all__ = [
     "Card",
     "Checkbox",
     "Chip",
+    "Dialog",
     "Expander",
     "Frame",
     "GlassCard",
     "IconButton",
     "Input",
     "Label",
+    "Modal",
+    "Notification",
     "Panel",
     "PasswordInput",
     "ProgressBar",
@@ -48,6 +52,7 @@ __all__ = [
     "Switch",
     "Text",
     "TextArea",
+    "Toast",
     "Tooltip",
     "Widget",
     "WidgetRuntime",

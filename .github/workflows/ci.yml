@@ -194,6 +194,9 @@ jobs:
       - name: Verify retained SplitView
         run: pytest tests/test_windows_split_view.py -q
 
+      - name: Verify retained modal and notification surfaces
+        run: pytest tests/test_windows_overlays.py -q
+
       - name: Draw native GPU scene
         run: pytest tests/test_windows_gpu_bridge.py -q
 
