@@ -13,7 +13,13 @@ import sys
 from collections.abc import Callable
 from pathlib import Path
 
-from swirui.performance import BenchmarkResult, evaluate_budget, load_budgets, run_benchmark, write_report
+from swirui.performance import (
+    BenchmarkResult,
+    evaluate_budget,
+    load_budgets,
+    run_benchmark,
+    write_report,
+)
 from swirui.rendering import Color, Point, Rect, Scene, SceneNode, SceneNodeKind
 
 BenchmarkWorkload = Callable[[], object]
