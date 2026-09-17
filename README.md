@@ -17,7 +17,7 @@
 
 [![CI](https://img.shields.io/github/actions/workflow/status/Swir/Swirui/ci.yml?branch=main&style=flat-square&label=CI&color=0088FF)](https://github.com/Swir/Swirui/actions/workflows/ci.yml)
 ![Status](https://img.shields.io/badge/status-pre--alpha-0088FF?style=flat-square)
-![Progress](https://img.shields.io/badge/project%20progress-41%25-0088FF?style=flat-square)
+![Progress](https://img.shields.io/badge/project%20progress-43%25-0088FF?style=flat-square)
 
 </div>
 
@@ -25,14 +25,14 @@
 
 ## Project Status
 
-**41% — 0.3 Alpha Visual Engine complete; 0.4 Core Widgets is next.**
+**43% — 0.4 Alpha Core Widgets underway; retained Text/Label and Button/IconButton are verified.**
 
-`[████████░░░░░░░░░░░░] 41%`
+`[█████████░░░░░░░░░░░] 43%`
 
 - `0.1 Alpha — Foundation` ✅
 - `0.2 Alpha — Native Window + First Renderer` ✅
 - `0.3 Alpha — Visual Engine` ✅
-- `0.4 Alpha — Core Widgets` ⏭️
+- `0.4 Alpha — Core Widgets` 🚧
 
 Progress increases only for implemented and verified roadmap work. Documentation-only changes, skeletons and unfinished experiments do not increase the percentage.
 
@@ -50,6 +50,8 @@ The Windows renderer uses a persistent per-window wgpu context and retained Scen
 |---|---|
 | Native windows | Direct Win32, X11 and Cocoa/AppKit backends without Tkinter, Qt or SDL |
 | GPU renderer | Persistent Rust/wgpu renderer context on Windows with retained scene submission |
+| Core widgets | Retained `Text`/`Label` and `Button`/`IconButton` compile component trees into the existing SceneGraph/GPU paths |
+| Widget runtime | Bubbling retained invalidation rebuilds mounted widget scenes and reuses existing frame scheduling, focus and routed input |
 | Shapes | Anti-aliased rounded rectangles plus convex/concave `Path2D` geometry |
 | Text | Persistent shaped Unicode text through glyphon/cosmic-text |
 | Images | Content-addressed RGBA GPU cache with aliases, telemetry and safe lifetime management |
@@ -80,6 +82,12 @@ Run the native-window demo:
 
 ```powershell
 python examples/native_window_demo.py
+```
+
+Run the retained core-widget demo:
+
+```powershell
+python examples/core_widgets_demo.py
 ```
 
 ### Windows GPU development
@@ -141,6 +149,27 @@ counter.set(1)
 app.run()
 ```
 
+Retained core widgets use the same component tree, SceneGraph, routed input and frame scheduler:
+
+```python
+from swirui import App, Button, Component, Label, Window, mount
+from swirui.rendering import Rect
+
+app = App("SwirUI Widgets")
+window = app.add_window(Window(title="Core widgets", width=640, height=360))
+
+root = Component("root")
+status = Label("Ready", bounds=Rect(32.0, 32.0, 300.0, 32.0))
+button = Button("Run", bounds=Rect(32.0, 96.0, 160.0, 48.0))
+button.on("click", lambda _event: setattr(status, "text", "Activated"))
+root.add(status, button)
+mount(window, root)
+
+app.run()
+```
+
+`Button` and `IconButton` are focusable and use existing routed pointer/keyboard input. Enter and Space activate a focused button, while the visual widget tree compiles into the same retained renderer contracts used by manually authored scenes.
+
 When the native GPU extension is installed on Windows, SwirUI can select the wgpu renderer automatically. Explicit renderer injection remains available for tests and custom backends.
 
 ### Bounded custom WGSL effect
@@ -170,6 +199,7 @@ Changing only the four parameters updates a small native uniform buffer. Changin
 ### GPU and runtime examples
 
 ```text
+examples/core_widgets_demo.py
 examples/gpu_rectangles_demo.py
 examples/gpu_text_demo.py
 examples/gpu_image_demo.py
@@ -200,11 +230,13 @@ These examples exercise the same retained contracts used by applications. Public
 Python Application API
         │
         ├── App / Window / Component / State
+        ├── Text / Label / Button / IconButton
         ├── Routed input + accessibility semantics
         └── Runtime configuration + adaptive visual quality
         │
 SwirUI Runtime
         │
+        ├── retained widget invalidation + Component → SceneGraph bridge
         ├── Win32 / X11 / Cocoa native backends
         ├── logical DIP ↔ physical pixel boundary
         ├── retained RenderTree / SceneGraph
@@ -239,6 +271,7 @@ Every significant runtime change is expected to preserve the existing quality ga
 - real Win32 + wgpu smoke tests
 - integrated 0.2 native renderer/runtime gate
 - HiDPI, multi-monitor, presentation-policy, text, image, path, effects and cache coverage
+- retained core-widget compilation, invalidation and routed button interaction coverage
 - real custom-WGSL validation and persistent-runtime smoke coverage
 
 SwirUI does not claim performance superiority over other frameworks without reproducible measurements.
@@ -247,7 +280,9 @@ SwirUI does not claim performance superiority over other frameworks without repr
 
 The authoritative plan is **[ROADMAP.md](ROADMAP.md)**.
 
-The verified custom-shader runtime closes **0.3 Alpha — Visual Engine**. Development now moves into **0.4 Alpha — Core Widgets**, where retained rendering, routed input, focus/accessibility semantics and the Visual Engine can be composed into reusable application controls.
+**0.4 Alpha — Core Widgets is now underway.** The first verified control set includes retained `Text`/`Label` and `Button`/`IconButton`, backed by bubbling component invalidation and a `Component → SceneGraph` bridge that reuses the established GPU renderer, routed input, focus and accessibility contracts.
+
+The next core-widget work expands editable text/input controls and then the remaining interactive control families without bypassing the retained runtime.
 
 ## Releases
 
@@ -268,6 +303,7 @@ Swirui/
 ├── examples/               # native/runtime/GPU examples
 ├── native/                 # Rust + wgpu + PyO3 core
 ├── src/swirui/             # public Python framework and renderer bridge
+│   └── widgets/            # retained core widgets + Component/SceneGraph bridge
 ├── tests/                  # automated unit/integration/native smoke tests
 ├── CHANGELOG.md
 ├── CONTRIBUTING.md
@@ -277,7 +313,7 @@ Swirui/
 
 ## 🔎 Search Keywords
 
-`python desktop gui` • `python gpu ui` • `native python ui framework` • `wgpu python renderer` • `rust pyo3 gui` • `win32 python gui` • `reactive desktop ui` • `high refresh rate ui` • `hidpi desktop ui` • `gpu text rendering` • `frosted glass ui` • `acrylic desktop ui` • `custom wgsl effects` • `multi monitor python ui`
+`python desktop gui` • `python gpu ui` • `python gpu widgets` • `native python ui framework` • `wgpu python renderer` • `rust pyo3 gui` • `win32 python gui` • `reactive desktop ui` • `high refresh rate ui` • `hidpi desktop ui` • `gpu text rendering` • `python button widget` • `frosted glass ui` • `acrylic desktop ui` • `custom wgsl effects` • `multi monitor python ui`
 
 <img width="100%" src="https://raw.githubusercontent.com/Swir/Swir/main/assets/power-divider-v4.svg" alt="SWIR electric divider" />
 
