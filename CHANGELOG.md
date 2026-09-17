@@ -90,6 +90,9 @@ The project uses semantic versioning where practical during pre-alpha developmen
 - Public retained `FrostedGlass` and `Acrylic` material primitives composed from the verified backdrop path plus HiDPI-aware tint, border and luminosity layers.
 - Deterministic acrylic micro-grain with visual-quality-aware retained density, bounded cost and no per-frame random generation or image uploads.
 - `examples/gpu_backdrop_blur_demo.py` and `examples/gpu_glass_materials_demo.py`, plus real Win32/wgpu smoke coverage proving backdrop/material rendering across the same persistent GPU context.
+- Public retained `Noise` / grain effect with deterministic seeded geometry, quality-aware sample budgets and shared grain sampling used by acrylic materials.
+- Public retained `AdaptiveLighting` effect with elevation-, direction- and altitude-aware shadow/highlight lobes, deterministic quality scaling and non-interactive retained composition.
+- `examples/gpu_noise_demo.py` and `examples/gpu_adaptive_lighting_demo.py`, plus real Win32/wgpu smoke coverage proving noise and changing directional lighting render across the same persistent native GPU context.
 
 ### Changed
 - The wgpu renderer now reports submitted rectangle, path, text and image counts independently.
