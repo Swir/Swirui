@@ -73,6 +73,10 @@ def test_core_widgets_route_real_win32_text_and_pointer_input_through_wgpu() -> 
         assert field.value == "A"
         assert runtime.generation >= 3
 
+        # process_events() may render immediately when the frame deadline is due.
+        # Re-invalidate explicitly so this assertion verifies a deterministic
+        # second retained frame instead of depending on runner timing.
+        app.invalidate(window)
         rendered = app.render_pending(time.monotonic() + 1.0)
         assert rendered == 1
         assert renderer.persistent_context_count == 1
@@ -87,6 +91,7 @@ def test_core_widgets_route_real_win32_text_and_pointer_input_through_wgpu() -> 
         assert checkbox.checked is True
         assert window.focused_component is checkbox
 
+        app.invalidate(window)
         rendered = app.render_pending(time.monotonic() + 1.0)
         assert rendered == 1
         assert renderer.persistent_context_count == 1
