@@ -217,3 +217,6 @@ jobs:
 
       - name: Verify native custom shader runtime
         run: pytest tests/test_windows_custom_shaders.py -q
+
+      - name: Verify retained core widget input through Win32 + wgpu
+        run: pytest tests/test_windows_widgets.py -q
