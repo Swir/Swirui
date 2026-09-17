@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import suppress
 from typing import Any
 
 from swirui.core import Component, PresentationMode
@@ -59,10 +60,8 @@ class WgpuRenderer(_BackdropWgpuRenderer):
                 configured.append(context)
         except Exception:
             for context in configured:
-                try:
+                with suppress(Exception):
                     self._configure_custom_shader(context, previous)
-                except Exception:
-                    pass
             raise
         self.custom_shader = custom_shader
 
@@ -81,11 +80,14 @@ class WgpuRenderer(_BackdropWgpuRenderer):
         return surface
 
     def render(self, window: Window, root: Component | None) -> None:
-        if self.custom_shader is not None and window.native_handle is not None:
-            if window.native_handle.value not in self._contexts:
-                raise RuntimeError(
-                    "Custom shader effects require the persistent SwirUI native GPU context."
-                )
+        if (
+            self.custom_shader is not None
+            and window.native_handle is not None
+            and window.native_handle.value not in self._contexts
+        ):
+            raise RuntimeError(
+                "Custom shader effects require the persistent SwirUI native GPU context."
+            )
         super().render(window, root)
 
     @staticmethod
