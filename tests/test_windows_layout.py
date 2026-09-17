@@ -9,8 +9,13 @@ from swirui import (
     App,
     Button,
     CrossAxisAlignment,
+    Dock,
+    DockSide,
+    Flow,
     Grid,
     Insets,
+    Overlay,
+    OverlayAnchor,
     Row,
     Window,
     Wrap,
@@ -162,5 +167,90 @@ def test_grid_and_wrap_compile_in_real_win32_wgpu_session() -> None:
         app.invalidate(window)
         assert app.render_pending(time.monotonic() + 1.0) == 1
         assert renderer.persistent_context_count == initial_contexts
+    finally:
+        app.stop()
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Layout native smoke requires Windows")
+def test_dock_flow_overlay_route_input_in_real_win32_wgpu_session() -> None:
+    renderer = WgpuRenderer()
+    backend = _isolated_backend()
+    app = App("SwirUI advanced layout smoke", platform_backend=backend, renderer=renderer)
+    window = app.add_window(Window(title="SwirUI Dock + Flow + Overlay", width=760, height=420))
+
+    toolbar = Flow(
+        key="native-flow",
+        bounds=Rect(0.0, 0.0, 500.0, 48.0),
+        padding=Insets.symmetric(horizontal=8.0, vertical=4.0),
+        spacing=12.0,
+        wrap=False,
+    )
+    toolbar.add(
+        Button("One", key="flow-one", bounds=Rect(0.0, 0.0, 120.0, 40.0)),
+        Button("Two", key="flow-two", bounds=Rect(0.0, 0.0, 120.0, 40.0)),
+    )
+    sidebar = Button("Sidebar", key="dock-side", bounds=Rect(0.0, 0.0, 140.0, 80.0))
+    action = Button("Run", key="overlay-action", bounds=Rect(0.0, 0.0, 140.0, 46.0))
+    overlay = Overlay(key="native-overlay", bounds=Rect(0.0, 0.0, 1.0, 1.0))
+    overlay.add_overlay(
+        action,
+        anchor=OverlayAnchor.BOTTOM_RIGHT,
+        offset_x=-12.0,
+        offset_y=-12.0,
+    )
+    dock = Dock(
+        key="native-dock",
+        bounds=Rect(0.0, 0.0, 1.0, 1.0),
+        fill_viewport=True,
+        padding=24.0,
+    )
+    dock.add_docked(toolbar, DockSide.TOP)
+    dock.add_docked(sidebar, DockSide.LEFT)
+    dock.add_docked(overlay, DockSide.FILL)
+    runtime = mount(window, dock)
+    clicks: list[Event] = []
+    action.on("click", clicks.append)
+
+    try:
+        app.start()
+        assert renderer.frames_rendered == 1
+        assert renderer.persistent_context_count == 1
+        assert window.scene is not None
+
+        assert dock.bounds == Rect(0.0, 0.0, 760.0, 420.0)
+        assert toolbar.bounds == Rect(24.0, 24.0, 712.0, 48.0)
+        assert sidebar.bounds == Rect(24.0, 72.0, 140.0, 324.0)
+        assert overlay.bounds == Rect(164.0, 72.0, 572.0, 324.0)
+        assert action.bounds == Rect(584.0, 338.0, 140.0, 46.0)
+
+        target_x = round((action.bounds.x + action.bounds.width * 0.5) * window.scale)
+        target_y = round((action.bounds.y + action.bounds.height * 0.5) * window.scale)
+        hwnd = window.native_handle.value
+        user32 = _user32()
+        user32.SendMessageW(
+            ctypes.c_void_p(hwnd),
+            0x0201,
+            0x0001,
+            _lparam(target_x, target_y),
+        )
+        user32.SendMessageW(
+            ctypes.c_void_p(hwnd),
+            0x0202,
+            0,
+            _lparam(target_x, target_y),
+        )
+        app.process_events()
+
+        assert len(clicks) == 1
+        assert window.focused_component is action
+
+        initial_contexts = renderer.persistent_context_count
+        toolbar.spacing = 20.0
+        assert runtime.generation > 1
+        app.invalidate(window)
+        frame_time = time.monotonic() + 2.0
+        assert app.render_pending(frame_time) == 1
+        assert renderer.persistent_context_count == initial_contexts
+        assert renderer.frames_rendered >= 2
     finally:
         app.stop()
