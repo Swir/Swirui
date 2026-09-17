@@ -4,6 +4,7 @@ from .backdrop import BackdropBlur
 from .backdrop_wgpu_renderer import WgpuRenderer
 from .base import NullRenderer, Renderer
 from .bloom import Bloom
+from .color_filters import ColorFilter
 from .depth import Parallax, PerspectivePlane
 from .effects import (
     DropShadow,
@@ -31,6 +32,7 @@ __all__ = [
     "BackdropBlur",
     "Bloom",
     "Color",
+    "ColorFilter",
     "CornerRadius",
     "DropShadow",
     "DynamicShadow",
