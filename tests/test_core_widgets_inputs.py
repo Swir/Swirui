@@ -23,7 +23,12 @@ def _node(scene: Scene, key: str) -> SceneNode:
     return next(node for node in scene.walk() if node.key == key)
 
 
-def _keyboard(window: Window, handle: NativeWindowHandle, kind: PlatformEventKind, key: int) -> None:
+def _keyboard(
+    window: Window,
+    handle: NativeWindowHandle,
+    kind: PlatformEventKind,
+    key: int,
+) -> None:
     window._apply_platform_event(PlatformEvent(kind, handle, key_code=key))
 
 
