@@ -1,6 +1,7 @@
 """Rendering contracts and backend-neutral primitives."""
 
 from .base import NullRenderer, Renderer
+from .effects import DropShadow
 from .factory import create_renderer
 from .geometry import Color, CornerRadius, Path2D, Point, Rect, Size
 from .gradients import GradientStop, LinearGradient, MeshGradient, RadialGradient
@@ -14,6 +15,7 @@ from .windows_gdi import Win32PreviewRenderer
 __all__ = [
     "Color",
     "CornerRadius",
+    "DropShadow",
     "FrameScheduler",
     "FrameStats",
     "GradientStop",
