@@ -357,7 +357,12 @@ class Dialog(Widget):
         if not self.is_open or event.default_prevented:
             return
         platform_event = self._platform_event(event, PlatformEventKind.KEY_DOWN)
-        if platform_event is None or platform_event.ctrl or platform_event.alt or platform_event.meta:
+        if (
+            platform_event is None
+            or platform_event.ctrl
+            or platform_event.alt
+            or platform_event.meta
+        ):
             return
 
         if platform_event.key_code == _VK_TAB:
