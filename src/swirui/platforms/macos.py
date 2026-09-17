@@ -1,9 +1,15 @@
 """Direct Cocoa/AppKit platform backend for macOS.
 
-SwirUI intentionally keeps the native platform layer dependency-light.  This
+SwirUI intentionally keeps the native platform layer dependency-light. This
 backend talks to Objective-C/AppKit through ``ctypes`` and the system Objective-C
 runtime instead of requiring PyObjC, while exposing the same backend-neutral
 window and event contract used by Win32 and X11.
+
+The framework's native-window contract uses physical pixels at the platform
+boundary. Cocoa, however, sizes windows and reports pointer coordinates in
+logical points. This backend converts between those spaces using the window's
+live ``backingScaleFactor`` so public SwirUI geometry remains stable on Retina
+and mixed-scale displays.
 """
 
 from __future__ import annotations
@@ -29,8 +35,6 @@ class _NSRect(ctypes.Structure):
     _fields_ = [("origin", _NSPoint), ("size", _NSSize)]
 
 
-_CGPoint = _NSPoint
-_CGSize = _NSSize
 _CGRect = _NSRect
 
 _NSWindowStyleMaskTitled = 1 << 0
@@ -60,6 +64,7 @@ _NSEventModifierFlagOption = 1 << 19
 _NSEventModifierFlagCommand = 1 << 20
 
 _MAC_KEYCODE_TAB = 48
+_SCALE_EPSILON = 1e-6
 
 
 @dataclass(slots=True)
@@ -70,6 +75,8 @@ class _WindowState:
     focused: bool = False
     content_width: int = 0
     content_height: int = 0
+    scale: float = 1.0
+    display: DisplayInfo | None = None
 
 
 class MacOSCocoaPlatformBackend:
@@ -159,7 +166,15 @@ class MacOSCocoaPlatformBackend:
         self._require_initialized()
         window_class = self._class("NSWindow")
         allocated = self._send(window_class, "alloc")
-        rect = _NSRect(_NSPoint(0.0, 0.0), _NSSize(float(spec.width), float(spec.height)))
+        initial_display = self._primary_display()
+        initial_scale = initial_display.scale if initial_display is not None else 1.0
+        rect = _NSRect(
+            _NSPoint(0.0, 0.0),
+            _NSSize(
+                float(spec.width) / initial_scale,
+                float(spec.height) / initial_scale,
+            ),
+        )
         style = (
             _NSWindowStyleMaskTitled
             | _NSWindowStyleMaskClosable
@@ -182,13 +197,17 @@ class MacOSCocoaPlatformBackend:
         if not window:
             raise RuntimeError("SwirUI could not create an NSWindow.")
 
+        actual_scale = self._backing_scale(window)
         self._send(window, "setReleasedWhenClosed:", None, (ctypes.c_bool,), False)
         self._send(
             window,
             "setMinSize:",
             None,
             (_NSSize,),
-            _NSSize(float(spec.min_width), float(spec.min_height)),
+            _NSSize(
+                float(spec.min_width) / actual_scale,
+                float(spec.min_height) / actual_scale,
+            ),
         )
         self._send(
             window,
@@ -204,39 +223,26 @@ class MacOSCocoaPlatformBackend:
             spec=spec,
             content_width=spec.width,
             content_height=spec.height,
+            scale=actual_scale,
+            display=initial_display,
         )
+        self._windows[handle].display = self.window_display(handle)
         return handle
 
     def window_scale(self, handle: NativeWindowHandle) -> float:
         self._require_window(handle)
-        value = float(self._send(handle.value, "backingScaleFactor", ctypes.c_double) or 1.0)
-        return max(0.01, value)
+        return self._backing_scale(handle.value)
 
     def window_display(self, handle: NativeWindowHandle) -> DisplayInfo | None:
         self._require_window(handle)
-        screen = int(self._send(handle.value, "screen") or 0)
-        if screen:
-            description = int(self._send(screen, "deviceDescription") or 0)
-            if description:
-                key = self._ns_string("NSScreenNumber")
-                number = int(
-                    self._send(
-                        description,
-                        "objectForKey:",
-                        ctypes.c_void_p,
-                        (ctypes.c_void_p,),
-                        key,
-                    )
-                    or 0
-                )
-                if number:
-                    display_id = int(
-                        self._send(number, "unsignedIntValue", ctypes.c_uint32) or 0
-                    )
-                    display = self._display_by_id.get(display_id)
-                    if display is not None:
-                        return display
-        return self.displays()[0] if self._display_order else None
+        display_id = self._window_display_id(handle.value)
+        if display_id is None:
+            return self._primary_display()
+        display = self._display_by_id.get(display_id)
+        if display is None:
+            self._refresh_displays()
+            display = self._display_by_id.get(display_id)
+        return display if display is not None else self._primary_display()
 
     def show_window(self, handle: NativeWindowHandle) -> None:
         state = self._require_window(handle)
@@ -284,12 +290,13 @@ class MacOSCocoaPlatformBackend:
         if width <= 0 or height <= 0:
             raise ValueError("Cocoa window dimensions must be positive.")
         state = self._require_window(handle)
+        scale = self._backing_scale(handle.value)
         self._send(
             handle.value,
             "setContentSize:",
             None,
             (_NSSize,),
-            _NSSize(float(width), float(height)),
+            _NSSize(float(width) / scale, float(height) / scale),
         )
         state.spec = replace(state.spec, width=width, height=height)
 
@@ -362,9 +369,10 @@ class MacOSCocoaPlatformBackend:
             display_id = int(raw_id)
             bounds = self._core_graphics.CGDisplayBounds(display_id)
             pixel_width = int(self._core_graphics.CGDisplayPixelsWide(display_id))
-            logical_width = max(1, int(round(bounds.size.width)))
-            logical_height = max(1, int(round(bounds.size.height)))
+            pixel_height = int(self._core_graphics.CGDisplayPixelsHigh(display_id))
             scale = pixel_width / bounds.size.width if bounds.size.width > 0.0 else 1.0
+            logical_x = int(round(bounds.origin.x))
+            logical_y = int(round(bounds.origin.y))
             mode = self._core_graphics.CGDisplayCopyDisplayMode(display_id)
             refresh = 60.0
             if mode:
@@ -376,16 +384,16 @@ class MacOSCocoaPlatformBackend:
                     self._core_foundation.CFRelease(mode)
             by_id[display_id] = DisplayInfo(
                 name=f"macOS display {display_id}",
-                width=logical_width,
-                height=logical_height,
+                width=max(1, pixel_width),
+                height=max(1, pixel_height),
                 scale=max(0.01, scale),
                 primary=display_id == main_display,
-                x=int(round(bounds.origin.x)),
-                y=int(round(bounds.origin.y)),
-                work_x=int(round(bounds.origin.x)),
-                work_y=int(round(bounds.origin.y)),
-                work_width=logical_width,
-                work_height=logical_height,
+                x=logical_x,
+                y=logical_y,
+                work_x=logical_x,
+                work_y=logical_y,
+                work_width=max(1, pixel_width),
+                work_height=max(1, pixel_height),
                 refresh_rate_hz=refresh,
             )
             order.append(display_id)
@@ -410,13 +418,13 @@ class MacOSCocoaPlatformBackend:
             _NSEventTypeRightMouseDragged,
             _NSEventTypeOtherMouseDragged,
         }:
-            point = self._send_struct(event, "locationInWindow", _NSPoint)
+            x, y = self._event_pointer_pixels(event, window)
             return (
                 PlatformEvent(
                     PlatformEventKind.POINTER_MOVE,
                     handle,
-                    x=float(point.x),
-                    y=max(0.0, float(state.content_height) - float(point.y)),
+                    x=x,
+                    y=y,
                 ),
             )
 
@@ -431,7 +439,7 @@ class MacOSCocoaPlatformBackend:
             button = self._pointer_button(event_type, event)
             if button is None:
                 return ()
-            point = self._send_struct(event, "locationInWindow", _NSPoint)
+            x, y = self._event_pointer_pixels(event, window)
             kind = (
                 PlatformEventKind.POINTER_DOWN
                 if event_type
@@ -446,8 +454,8 @@ class MacOSCocoaPlatformBackend:
                 PlatformEvent(
                     kind,
                     handle,
-                    x=float(point.x),
-                    y=max(0.0, float(state.content_height) - float(point.y)),
+                    x=x,
+                    y=y,
                     button=button,
                 ),
             )
@@ -488,11 +496,27 @@ class MacOSCocoaPlatformBackend:
     def _poll_window_state(self) -> list[PlatformEvent]:
         events: list[PlatformEvent] = []
         for handle, state in tuple(self._windows.items()):
+            scale = self._backing_scale(handle.value)
+            if abs(scale - state.scale) > _SCALE_EPSILON:
+                state.scale = scale
+                events.append(
+                    PlatformEvent(
+                        PlatformEventKind.DPI_CHANGED,
+                        handle,
+                        scale=scale,
+                    )
+                )
+
+            display = self.window_display(handle)
+            if display != state.display:
+                state.display = display
+                events.append(PlatformEvent(PlatformEventKind.DISPLAY_CHANGED, handle))
+
             content_view = int(self._send(handle.value, "contentView") or 0)
             if content_view:
                 frame = self._send_struct(content_view, "frame", _NSRect)
-                width = max(1, int(round(frame.size.width)))
-                height = max(1, int(round(frame.size.height)))
+                width = max(1, int(round(frame.size.width * scale)))
+                height = max(1, int(round(frame.size.height * scale)))
                 if width != state.content_width or height != state.content_height:
                     state.content_width = width
                     state.content_height = height
@@ -524,6 +548,51 @@ class MacOSCocoaPlatformBackend:
             elif visible:
                 state.visible = True
         return events
+
+    def _event_pointer_pixels(self, event: int, window: int) -> tuple[float, float]:
+        point = self._send_struct(event, "locationInWindow", _NSPoint)
+        scale = self._backing_scale(window)
+        content_view = int(self._send(window, "contentView") or 0)
+        height_points = 0.0
+        if content_view:
+            frame = self._send_struct(content_view, "frame", _NSRect)
+            height_points = float(frame.size.height)
+        return (
+            float(point.x) * scale,
+            max(0.0, height_points - float(point.y)) * scale,
+        )
+
+    def _backing_scale(self, window: int) -> float:
+        value = float(self._send(window, "backingScaleFactor", ctypes.c_double) or 1.0)
+        return max(0.01, value)
+
+    def _window_display_id(self, window: int) -> int | None:
+        screen = int(self._send(window, "screen") or 0)
+        if not screen:
+            return None
+        description = int(self._send(screen, "deviceDescription") or 0)
+        if not description:
+            return None
+        key = self._ns_string("NSScreenNumber")
+        number = int(
+            self._send(
+                description,
+                "objectForKey:",
+                ctypes.c_void_p,
+                (ctypes.c_void_p,),
+                key,
+            )
+            or 0
+        )
+        if not number:
+            return None
+        return int(self._send(number, "unsignedIntValue", ctypes.c_uint32) or 0)
+
+    def _primary_display(self) -> DisplayInfo | None:
+        if not self._display_order:
+            return None
+        displays = [self._display_by_id[display_id] for display_id in self._display_order]
+        return next((display for display in displays if display.primary), displays[0])
 
     def _pointer_button(self, event_type: int, event: int) -> PointerButton | None:
         if event_type in {_NSEventTypeLeftMouseDown, _NSEventTypeLeftMouseUp}:
