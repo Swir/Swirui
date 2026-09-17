@@ -11,7 +11,9 @@ and batchable by the persistent native wgpu renderer.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
+
+from swirui.core.config import VisualQuality
 
 from .geometry import Color, CornerRadius, Point, Rect
 from .scene import SceneNode, SceneNodeKind
@@ -19,6 +21,47 @@ from .scene import SceneNode, SceneNodeKind
 _DEFAULT_EFFECT_STEPS = 12
 _MAX_EFFECT_STEPS = 64
 _GAUSSIAN_FALLOFF = 2.5
+
+
+@dataclass(frozen=True, slots=True)
+class EffectQualityProfile:
+    """Visual-effect tessellation budgets for one :class:`VisualQuality` level.
+
+    These budgets control retained geometry density only; they do not silently
+    alter layout, colors, light direction or effect extents. Applications may use
+    the existing ``AppConfig.visual_quality`` value to derive deterministic effect
+    detail while retaining an explicit ``steps=`` override on each primitive.
+    """
+
+    shadow_steps: int
+    glow_steps: int
+    dynamic_shadow_steps: int
+
+    def __post_init__(self) -> None:
+        for value in (self.shadow_steps, self.glow_steps, self.dynamic_shadow_steps):
+            if not 1 <= value <= _MAX_EFFECT_STEPS:
+                raise ValueError(
+                    f"Effect quality steps must be between 1 and {_MAX_EFFECT_STEPS}."
+                )
+
+
+_EFFECT_QUALITY_PROFILES: dict[VisualQuality, EffectQualityProfile] = {
+    VisualQuality.AUTO: EffectQualityProfile(12, 12, 16),
+    VisualQuality.PERFORMANCE: EffectQualityProfile(4, 4, 6),
+    VisualQuality.BALANCED: EffectQualityProfile(8, 8, 10),
+    VisualQuality.QUALITY: EffectQualityProfile(16, 16, 20),
+    VisualQuality.ULTRA: EffectQualityProfile(24, 24, 28),
+    VisualQuality.CINEMATIC: EffectQualityProfile(32, 32, 40),
+}
+
+
+def effect_quality_profile(quality: VisualQuality) -> EffectQualityProfile:
+    """Return the immutable retained-effect budget for ``quality``."""
+
+    try:
+        return _EFFECT_QUALITY_PROFILES[quality]
+    except KeyError as exc:  # pragma: no cover - defensive for foreign enum values.
+        raise ValueError(f"Unsupported visual quality: {quality!r}.") from exc
 
 
 def _validate_effect_parameters(
@@ -172,6 +215,11 @@ class DropShadow:
             steps=self.steps,
         )
 
+    def with_quality(self, quality: VisualQuality) -> DropShadow:
+        """Return this effect with its layer budget adapted to ``quality``."""
+
+        return replace(self, steps=effect_quality_profile(quality).shadow_steps)
+
     def to_scene_node(
         self,
         key: str,
@@ -215,6 +263,11 @@ class Glow:
             spread=self.spread,
             steps=self.steps,
         )
+
+    def with_quality(self, quality: VisualQuality) -> Glow:
+        """Return this glow with its retained layer budget adapted to ``quality``."""
+
+        return replace(self, steps=effect_quality_profile(quality).glow_steps)
 
     def to_scene_node(
         self,
@@ -286,6 +339,11 @@ class DynamicShadow:
             raise ValueError(
                 f"Dynamic-shadow steps must be between 1 and {_MAX_EFFECT_STEPS}."
             )
+
+    def with_quality(self, quality: VisualQuality) -> DynamicShadow:
+        """Return this light model with its layer budget adapted to ``quality``."""
+
+        return replace(self, steps=effect_quality_profile(quality).dynamic_shadow_steps)
 
     def resolved_shadow(self) -> DropShadow:
         """Resolve light/elevation parameters to a concrete retained drop shadow."""

@@ -1,11 +1,11 @@
-"""Animate elevation-aware shadows while reusing SwirUI's persistent GPU context."""
+"""Animate quality-aware elevation shadows while reusing a persistent GPU context."""
 
 from __future__ import annotations
 
 import math
 import time
 
-from swirui import App, AppConfig, Window
+from swirui import App, AppConfig, VisualQuality, Window
 from swirui.core import Event
 from swirui.rendering import (
     Color,
@@ -22,6 +22,7 @@ WIDTH = 980
 HEIGHT = 640
 CARD_BOUNDS = Rect(220.0, 170.0, 540.0, 300.0)
 CARD_RADIUS = CornerRadius.uniform(34.0)
+QUALITY = VisualQuality.QUALITY
 START = time.monotonic()
 
 
@@ -43,8 +44,9 @@ def build_scene(elapsed: float) -> Scene:
             light_altitude_degrees=48.0,
             softness=1.55,
             spread=2.0,
-            steps=18,
-        ).to_scene_node(
+        )
+        .with_quality(QUALITY)
+        .to_scene_node(
             "dynamic-shadow",
             CARD_BOUNDS,
             corner_radius=CARD_RADIUS,
@@ -54,8 +56,9 @@ def build_scene(elapsed: float) -> Scene:
             color=Color(0.0, 0.58, 1.0, 0.24),
             blur_radius=20.0,
             spread=1.0,
-            steps=12,
-        ).to_scene_node(
+        )
+        .with_quality(QUALITY)
+        .to_scene_node(
             "card-glow",
             CARD_BOUNDS,
             corner_radius=CARD_RADIUS,
@@ -82,8 +85,8 @@ def build_scene(elapsed: float) -> Scene:
             kind=SceneNodeKind.TEXT,
             bounds=Rect(285.0, 325.0, 410.0, 86.0),
             text=(
-                f"Elevation {elevation:4.1f} DIP · "
-                f"light direction {light_direction:5.1f}°"
+                f"{QUALITY.value} quality · elevation {elevation:4.1f} DIP · "
+                f"light {light_direction:5.1f}°"
             ),
             fill=Color.from_hex("#7ED8FF"),
             font_size=20.0,
@@ -95,7 +98,7 @@ def build_scene(elapsed: float) -> Scene:
 
 app = App(
     "SwirUI Dynamic GPU Effects",
-    config=AppConfig(target_fps=120),
+    config=AppConfig(target_fps=120, visual_quality=QUALITY),
 )
 window = Window(
     title="SwirUI — Dynamic Shadows + Glow",

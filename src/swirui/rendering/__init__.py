@@ -1,7 +1,13 @@
 """Rendering contracts and backend-neutral primitives."""
 
 from .base import NullRenderer, Renderer
-from .effects import DropShadow, DynamicShadow, Glow
+from .effects import (
+    DropShadow,
+    DynamicShadow,
+    EffectQualityProfile,
+    Glow,
+    effect_quality_profile,
+)
 from .factory import create_renderer
 from .geometry import Color, CornerRadius, Path2D, Point, Rect, Size
 from .gradients import GradientStop, LinearGradient, MeshGradient, RadialGradient
@@ -17,6 +23,7 @@ __all__ = [
     "CornerRadius",
     "DropShadow",
     "DynamicShadow",
+    "EffectQualityProfile",
     "FrameScheduler",
     "FrameStats",
     "Glow",
@@ -39,4 +46,5 @@ __all__ = [
     "WgpuRenderer",
     "Win32PreviewRenderer",
     "create_renderer",
+    "effect_quality_profile",
 ]
