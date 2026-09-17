@@ -4,9 +4,9 @@
 
 ## Project progress
 
-**Overall completion: 26%**
+**Overall completion: 27%**
 
-`[█████░░░░░░░░░░░░░░░] 26%`
+`[█████░░░░░░░░░░░░░░░] 27%`
 
 Progress is based on implemented and verified roadmap work. Ideas, mockups and unfinished prototypes do not increase the percentage.
 
@@ -109,7 +109,7 @@ Cross-platform native-window coverage now includes real Linux/X11 lifecycle/inpu
 - [ ] Background blur
 - [ ] Glow and bloom
 - [ ] Dynamic shadows
-- [ ] Linear / radial / mesh gradients
+- [x] Linear / radial / mesh gradients
 - [ ] Reflections
 - [ ] Depth and perspective
 - [ ] Adaptive lighting
@@ -385,6 +385,7 @@ AI output must remain ordinary, editable SwirUI code.
 - [x] Windows shaped-text SceneGraph → Python → Rust/wgpu smoke test
 - [x] Windows image-resource SceneGraph → Python → Rust/wgpu smoke test
 - [x] Windows filled Path2D SceneGraph → Python → Rust/wgpu smoke test
+- [x] Windows retained linear / radial / mesh gradient GPU smoke tests
 - [x] Windows mixed-DPI logical-DIP → physical-GPU smoke test
 - [x] Windows presentation-policy reconfiguration smoke test
 - [x] Display-aware high-refresh runtime pacing tests
@@ -517,7 +518,3 @@ The official showcase will be a real application rather than a Hello World scree
 ### 1.0 gate
 
 SwirUI 1.0 requires a stable public API, tested GPU renderer, complete core widgets, responsive layout, reactive state, animation, accessibility baseline, internationalization, packaging, documentation, automated tests, benchmark suite and real-world applications.
-
----
-
-**SwirUI — by [Swir](https://github.com/Swir)**
