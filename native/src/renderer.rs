@@ -1,10 +1,15 @@
-use crate::image::{ImageInstance, ImageSystem};
+use crate::image::ImageInstance;
 #[cfg(target_os = "windows")]
-use crate::postprocess::{
-    validate_blur_radius, BackdropCompositor, OffscreenRenderTarget, SeparableBlur,
-};
-use crate::shape::{ShapeSystem, ShapeVertex};
-use crate::text::{TextInstance, TextSystem};
+use crate::image::ImageSystem;
+use crate::postprocess::validate_blur_radius;
+#[cfg(target_os = "windows")]
+use crate::postprocess::{BackdropCompositor, OffscreenRenderTarget, SeparableBlur};
+use crate::shape::ShapeVertex;
+#[cfg(target_os = "windows")]
+use crate::shape::ShapeSystem;
+use crate::text::TextInstance;
+#[cfg(target_os = "windows")]
+use crate::text::TextSystem;
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 
