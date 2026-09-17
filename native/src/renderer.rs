@@ -1,5 +1,7 @@
 use crate::image::ImageInstance;
 #[cfg(target_os = "windows")]
+use crate::color_filter::{validate_color_matrix, ColorMatrixFilter};
+#[cfg(target_os = "windows")]
 use crate::image::ImageSystem;
 use crate::postprocess::validate_blur_radius;
 #[cfg(target_os = "windows")]
@@ -38,6 +40,9 @@ struct PersistentGpuContext {
     offscreen_target: OffscreenRenderTarget,
     postprocess_blur: Option<SeparableBlur>,
     postprocess_blur_radius: f32,
+    color_filter: Option<ColorMatrixFilter>,
+    color_filter_enabled: bool,
+    color_filter_uses_blur: bool,
     backdrop_compositor: Option<BackdropCompositor>,
     present_blitter: wgpu::util::TextureBlitter,
     frame_buffer: wgpu::Buffer,
@@ -176,6 +181,9 @@ impl PersistentGpuContext {
             offscreen_target,
             postprocess_blur: None,
             postprocess_blur_radius: 0.0,
+            color_filter: None,
+            color_filter_enabled: false,
+            color_filter_uses_blur: false,
             backdrop_compositor: None,
             present_blitter,
             frame_buffer,
@@ -211,6 +219,16 @@ impl PersistentGpuContext {
                 ) {
                     self.backdrop_compositor = None;
                 }
+            }
+            if let Some(filter) = &mut self.color_filter {
+                filter.resize(
+                    &self.device,
+                    self.config.format,
+                    width,
+                    height,
+                    self.offscreen_target.view(),
+                );
+                self.color_filter_uses_blur = false;
             }
         }
         let frame_uniforms = floats_to_bytes(&[width as f32, height as f32, 0.0, 0.0]);
@@ -253,6 +271,31 @@ impl PersistentGpuContext {
         }
     }
 
+    fn set_color_filter(&mut self, values: &[f32]) -> PyResult<()> {
+        validate_color_matrix(values).map_err(PyValueError::new_err)?;
+        if let Some(filter) = &mut self.color_filter {
+            filter.set_matrix(&self.queue, values);
+            filter.rebind_source(&self.device, self.offscreen_target.view());
+        } else {
+            self.color_filter = Some(ColorMatrixFilter::new(
+                &self.device,
+                &self.queue,
+                self.config.format,
+                self.config.width,
+                self.config.height,
+                self.offscreen_target.view(),
+                values,
+            ));
+        }
+        self.color_filter_enabled = true;
+        self.color_filter_uses_blur = false;
+        Ok(())
+    }
+
+    fn clear_color_filter(&mut self) {
+        self.color_filter_enabled = false;
+    }
+
     fn register_image_rgba(
         &mut self,
         resource_id: String,
@@ -268,7 +311,7 @@ impl PersistentGpuContext {
         self.image_system.unregister(resource_id)
     }
 
-    fn clear(&self, red: f64, green: f64, blue: f64, alpha: f64) -> PyResult<()> {
+    fn clear(&mut self, red: f64, green: f64, blue: f64, alpha: f64) -> PyResult<()> {
         validate_color(red, green, blue, alpha)?;
         let frame = acquire_surface_texture(&self.surface)?;
         let view = frame
@@ -653,13 +696,34 @@ impl PersistentGpuContext {
     }
 
     fn encode_postprocess<'a>(
-        &'a self,
+        &'a mut self,
         encoder: &mut wgpu::CommandEncoder,
     ) -> &'a wgpu::TextureView {
-        if self.postprocess_blur_radius > 0.0 {
-            if let Some(blur) = &self.postprocess_blur {
-                return blur.encode(&self.queue, encoder, self.postprocess_blur_radius);
+        let blur_enabled = self.postprocess_blur_radius > 0.0 && self.postprocess_blur.is_some();
+        if blur_enabled {
+            let blurred_view = self
+                .postprocess_blur
+                .as_ref()
+                .expect("blur pipeline must exist")
+                .encode(&self.queue, encoder, self.postprocess_blur_radius);
+            if self.color_filter_enabled {
+                let filter = self.color_filter.as_mut().expect("color filter must exist");
+                if !self.color_filter_uses_blur {
+                    filter.rebind_source(&self.device, blurred_view);
+                    self.color_filter_uses_blur = true;
+                }
+                return filter.encode(encoder);
             }
+            return blurred_view;
+        }
+
+        if self.color_filter_enabled {
+            let filter = self.color_filter.as_mut().expect("color filter must exist");
+            if self.color_filter_uses_blur {
+                filter.rebind_source(&self.device, self.offscreen_target.view());
+                self.color_filter_uses_blur = false;
+            }
+            return filter.encode(encoder);
         }
         self.offscreen_target.view()
     }
@@ -797,6 +861,27 @@ impl PyWin32GpuRenderer {
     }
 
     #[getter]
+    fn color_filter_enabled(&self) -> bool {
+        self.context.color_filter_enabled
+    }
+
+    #[getter]
+    fn color_filter_target_size(&self) -> Option<(u32, u32)> {
+        self.context
+            .color_filter
+            .as_ref()
+            .map(ColorMatrixFilter::size)
+    }
+
+    #[getter]
+    fn color_filter_generation(&self) -> Option<u64> {
+        self.context
+            .color_filter
+            .as_ref()
+            .map(ColorMatrixFilter::generation)
+    }
+
+    #[getter]
     fn backdrop_pipeline_ready(&self) -> bool {
         self.context.backdrop_compositor.is_some()
     }
@@ -822,6 +907,14 @@ impl PyWin32GpuRenderer {
         self.context.set_postprocess_blur_radius(radius_pixels)
     }
 
+    fn set_color_filter(&mut self, values: Vec<f32>) -> PyResult<()> {
+        self.context.set_color_filter(&values)
+    }
+
+    fn clear_color_filter(&mut self) {
+        self.context.clear_color_filter();
+    }
+
     fn register_image_rgba(
         &mut self,
         resource_id: String,
@@ -838,7 +931,7 @@ impl PyWin32GpuRenderer {
     }
 
     #[pyo3(signature = (red=0.027, green=0.043, blue=0.078, alpha=1.0))]
-    fn clear(&self, red: f64, green: f64, blue: f64, alpha: f64) -> PyResult<()> {
+    fn clear(&mut self, red: f64, green: f64, blue: f64, alpha: f64) -> PyResult<()> {
         self.context.clear(red, green, blue, alpha)
     }
 
@@ -978,7 +1071,7 @@ pub(crate) fn clear_win32_surface(
     blue: f64,
     alpha: f64,
 ) -> PyResult<(String, String)> {
-    let context = PersistentGpuContext::new(hwnd, width, height)?;
+    let mut context = PersistentGpuContext::new(hwnd, width, height)?;
     context.clear(red, green, blue, alpha)?;
     Ok((context.adapter_name, context.graphics_backend))
 }
