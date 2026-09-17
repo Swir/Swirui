@@ -11,11 +11,11 @@ use naga::valid::{Capabilities, ValidationFlags, Validator};
 const MAX_CUSTOM_SHADER_BYTES: usize = 96 * 1024;
 
 pub(crate) fn validate_custom_shader_wgsl(source: &str) -> Result<(), String> {
-    if source.trim().is_empty() {
-        return Err("custom shader WGSL cannot be empty".to_owned());
-    }
     if source.len() > MAX_CUSTOM_SHADER_BYTES {
         return Err("custom shader WGSL cannot exceed 96 KiB after SwirUI composition".to_owned());
+    }
+    if source.trim().is_empty() {
+        return Err("custom shader WGSL cannot be empty".to_owned());
     }
 
     let module = wgsl::parse_str(source).map_err(|error| format!("WGSL parse error: {error}"))?;
