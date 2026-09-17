@@ -4,9 +4,9 @@
 
 ## Project progress
 
-**Overall completion: 41%**
+**Overall completion: 43%**
 
-`[████████░░░░░░░░░░░░] 41%`
+`[█████████░░░░░░░░░░░] 43%`
 
 Progress is based on implemented and verified roadmap work. Ideas, mockups and unfinished prototypes do not increase the percentage.
 
@@ -128,10 +128,10 @@ The Visual Engine gate is complete with verified retained effects/materials, per
 
 ## 0.4 Alpha — Core Widgets
 
-**Status:** Next ⏭️
+**Status:** In progress 🚧
 
-- [ ] Text / Label
-- [ ] Button / IconButton
+- [x] Text / Label
+- [x] Button / IconButton
 - [ ] Input / PasswordInput / TextArea
 - [ ] Checkbox / RadioButton / Switch
 - [ ] Slider / RangeSlider
@@ -145,6 +145,8 @@ The Visual Engine gate is complete with verified retained effects/materials, per
 - [ ] SplitView
 - [ ] Modal / Dialog
 - [ ] Toast / Notification surface
+
+The verified 0.4 foundation compiles retained component widgets into the existing SceneGraph, bubbles property/tree invalidation to the mounted root, reuses native shaped text and rectangle GPU paths, and preserves routed pointer/keyboard input, focus and accessibility semantics. `Button`/`IconButton` are verified with pointer activation plus Enter/Space keyboard activation; disabled ancestor subtrees remain non-interactive.
 
 ## 0.5 Alpha — Layout Engine
 
@@ -410,7 +412,7 @@ AI output must remain ordinary, editable SwirUI code.
 - [x] Mypy quality gate
 - [x] SceneGraph hit-test and pointer-targeting tests
 - [x] Routed component input propagation tests
-- [ ] Widget interaction tests
+- [x] Widget interaction tests
 - [ ] Screenshot tests
 - [ ] Visual regression tests
 - [x] Accessibility tests
@@ -525,7 +527,7 @@ The official showcase will be a real application rather than a Hello World scree
 | 0.1 Alpha | Foundation ✅ |
 | 0.2 Alpha | Native window + first visible renderer ✅ |
 | 0.3 Alpha | Visual Engine ✅ |
-| 0.4 Alpha | Core widgets |
+| 0.4 Alpha | Core widgets 🚧 |
 | 0.5 Alpha | Layout Engine |
 | 0.6 Alpha | Reactive runtime |
 | 0.7 Alpha | Animation Engine |
