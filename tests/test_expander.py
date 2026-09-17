@@ -157,6 +157,7 @@ def test_required_accordion_keeps_one_item_open() -> None:
     second = Expander("Two", bounds=Rect(0.0, 50.0, 180.0, 40.0))
     accordion = Accordion(first, second, require_one=True)
 
+    assert accordion.expanded_item is first
     assert first.expanded is True
     first.collapse()
     assert first.expanded is True
@@ -166,6 +167,7 @@ def test_required_accordion_keeps_one_item_open() -> None:
     assert first.expanded is False
     second.collapse()
     assert second.expanded is True
+    assert accordion.expanded_item is second
 
 
 def test_multi_expand_accordion_allows_independent_items() -> None:
