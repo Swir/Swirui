@@ -21,6 +21,7 @@ class Component(EventEmitter):
         accessibility_role: AccessibilityRole = AccessibilityRole.GENERIC,
         accessible_name: str | None = None,
         accessible_description: str | None = None,
+        accessible_checked: bool | None = None,
     ) -> None:
         super().__init__()
         self.name = name or self.__class__.__name__
@@ -33,6 +34,7 @@ class Component(EventEmitter):
         self.accessibility_role = accessibility_role
         self.accessible_name = accessible_name
         self.accessible_description = accessible_description
+        self.accessible_checked = accessible_checked
 
     @property
     def enabled(self) -> bool:
