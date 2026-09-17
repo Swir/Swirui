@@ -22,7 +22,10 @@ def _isolated_backend() -> Win32PlatformBackend:
     return backend
 
 
-@pytest.mark.skipif(sys.platform != "win32", reason="Native GPU radial gradient smoke needs Windows")
+@pytest.mark.skipif(
+    sys.platform != "win32",
+    reason="Native GPU radial gradient smoke needs Windows",
+)
 def test_radial_gradient_scene_reaches_real_persistent_wgpu_path_batch() -> None:
     root = SceneNode(
         key="root",
