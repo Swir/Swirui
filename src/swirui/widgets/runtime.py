@@ -19,6 +19,13 @@ class SceneRenderable(Protocol):
 
 
 @runtime_checkable
+class SceneLayoutPreparer(Protocol):
+    """Optional pre-compilation hook for retained layout containers."""
+
+    def prepare_layout(self, viewport: Rect) -> None: ...
+
+
+@runtime_checkable
 class SceneChildPreparer(Protocol):
     """Optional hook for containers that transform compiled child scene nodes."""
 
@@ -38,10 +45,10 @@ def compile_component_scene(
     """Compile a visible component tree into a renderer-ready SceneGraph.
 
     Logical container components become transparent scene groups only when they
-    contain visual descendants. This keeps existing non-widget component trees
-    compatible with manually prepared scenes while giving widgets a direct path
-    into the existing GPU renderer. Disabled ancestors make their full visual
-    subtree non-hit-testable without hiding it.
+    contain visual descendants. Layout preparation runs before descendant
+    compilation, allowing retained containers to arrange child Widget bounds
+    without rebuilding the tree a second time. Disabled ancestors make their
+    full visual subtree non-hit-testable without hiding it.
     """
 
     viewport = Rect(0.0, 0.0, float(width), float(height))
@@ -63,27 +70,32 @@ def _compile_component(
         return None
 
     effective_enabled = ancestors_enabled and component.enabled
+    if isinstance(component, SceneLayoutPreparer):
+        component.prepare_layout(viewport)
+
+    visual_node = component.build_scene_node() if isinstance(component, SceneRenderable) else None
+    descendant_viewport = visual_node.bounds if visual_node is not None else viewport
+
     child_nodes = tuple(
         node
         for child in component.children
         if (
             node := _compile_component(
                 child,
-                viewport=viewport,
+                viewport=_child_viewport(child, descendant_viewport),
                 ancestors_enabled=effective_enabled,
             )
         )
         is not None
     )
 
-    if isinstance(component, SceneRenderable):
-        node = component.build_scene_node()
+    if visual_node is not None:
         if not effective_enabled:
-            node.hit_testable = False
+            visual_node.hit_testable = False
         if isinstance(component, SceneChildPreparer):
             child_nodes = component.prepare_scene_children(child_nodes)
-        node.add(*child_nodes)
-        return node
+        visual_node.add(*child_nodes)
+        return visual_node
 
     if not child_nodes:
         return None
@@ -95,6 +107,13 @@ def _compile_component(
     )
     node.add(*child_nodes)
     return node
+
+
+def _child_viewport(child: Component, fallback: Rect) -> Rect:
+    """Prefer an already-arranged child bounds rectangle for nested layouts."""
+
+    bounds = getattr(child, "bounds", None)
+    return bounds if isinstance(bounds, Rect) else fallback
 
 
 class WidgetRuntime:
