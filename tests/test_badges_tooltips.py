@@ -158,6 +158,26 @@ def test_tooltip_follows_target_hover_and_focus_without_stealing_hits() -> None:
     assert runtime.generation >= 4
 
 
+def test_tooltip_closes_when_bound_target_becomes_unavailable() -> None:
+    button = Button("Inspect", bounds=Rect(0.0, 0.0, 120.0, 40.0))
+    tooltip = Tooltip(
+        "Inspect retained node",
+        target=button,
+        bounds=Rect(0.0, 48.0, 180.0, 34.0),
+    )
+
+    button.emit("pointer_enter")
+    assert tooltip.is_open is True
+    button.enabled = False
+    assert tooltip.is_open is False
+
+    button.enabled = True
+    button.emit("focus_gained")
+    assert tooltip.is_open is True
+    button.visible = False
+    assert tooltip.is_open is False
+
+
 def test_tooltip_semantics_are_visible_only_while_open() -> None:
     root = Component("root")
     tooltip = Tooltip(
