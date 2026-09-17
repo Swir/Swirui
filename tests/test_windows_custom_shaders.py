@@ -4,9 +4,7 @@ import pytest
 
 from swirui.rendering import CustomShaderEffect
 
-
 pytestmark = pytest.mark.skipif(sys.platform != "win32", reason="requires Windows native extension")
-
 
 VALID_SOURCE = """
 fn swirui_effect(
@@ -23,7 +21,11 @@ fn swirui_effect(
 
 def test_maturin_extension_validates_composed_custom_shader() -> None:
     native = pytest.importorskip("_swirui_native")
-    effect = CustomShaderEffect(VALID_SOURCE, parameters=(1.2, 0.0, 0.0, 0.0), label="edge-swap")
+    effect = CustomShaderEffect(
+        VALID_SOURCE,
+        parameters=(1.2, 0.0, 0.0, 0.0),
+        label="edge-swap",
+    )
 
     effect.validate_native(native)
 
