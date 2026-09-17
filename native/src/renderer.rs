@@ -1,4 +1,6 @@
 use crate::image::{ImageInstance, ImageSystem};
+#[cfg(target_os = "windows")]
+use crate::postprocess::OffscreenRenderTarget;
 use crate::shape::{ShapeSystem, ShapeVertex};
 use crate::text::{TextInstance, TextSystem};
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
@@ -24,6 +26,8 @@ struct PersistentGpuContext {
     device: wgpu::Device,
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
+    offscreen_target: OffscreenRenderTarget,
+    present_blitter: wgpu::util::TextureBlitter,
     frame_buffer: wgpu::Buffer,
     bind_group_layout: wgpu::BindGroupLayout,
     pipeline: wgpu::RenderPipeline,
@@ -71,6 +75,8 @@ impl PersistentGpuContext {
         config.desired_maximum_frame_latency = maximum_frame_latency;
         surface.configure(&device, &config);
 
+        let offscreen_target = OffscreenRenderTarget::new(&device, config.format, width, height);
+        let present_blitter = wgpu::util::TextureBlitter::new(&device, config.format);
         let frame_uniforms = floats_to_bytes(&[width as f32, height as f32, 0.0, 0.0]);
         let frame_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("SwirUI persistent frame uniforms"),
@@ -155,6 +161,8 @@ impl PersistentGpuContext {
             device,
             queue,
             config,
+            offscreen_target,
+            present_blitter,
             frame_buffer,
             bind_group_layout,
             pipeline,
@@ -174,6 +182,8 @@ impl PersistentGpuContext {
         self.config.width = width;
         self.config.height = height;
         self.surface.configure(&self.device, &self.config);
+        self.offscreen_target
+            .resize(&self.device, self.config.format, width, height);
         let frame_uniforms = floats_to_bytes(&[width as f32, height as f32, 0.0, 0.0]);
         self.queue.write_buffer(&self.frame_buffer, 0, &frame_uniforms);
         self.text_system.resize(&self.queue, width, height);
@@ -220,9 +230,9 @@ impl PersistentGpuContext {
             });
         {
             let _render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("SwirUI persistent clear pass"),
+                label: Some("SwirUI persistent offscreen clear pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &view,
+                    view: self.offscreen_target.view(),
                     depth_slice: None,
                     resolve_target: None,
                     ops: wgpu::Operations {
@@ -241,6 +251,12 @@ impl PersistentGpuContext {
                 multiview_mask: None,
             });
         }
+        self.present_blitter.copy(
+            &self.device,
+            &mut encoder,
+            self.offscreen_target.view(),
+            &view,
+        );
         self.queue.submit([encoder.finish()]);
         self.queue.present(frame);
         Ok(())
@@ -348,9 +364,9 @@ impl PersistentGpuContext {
             });
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("SwirUI persistent scene pass"),
+                label: Some("SwirUI persistent offscreen scene pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &view,
+                    view: self.offscreen_target.view(),
                     depth_slice: None,
                     resolve_target: None,
                     ops: wgpu::Operations {
@@ -385,6 +401,12 @@ impl PersistentGpuContext {
             }
         }
 
+        self.present_blitter.copy(
+            &self.device,
+            &mut encoder,
+            self.offscreen_target.view(),
+            &view,
+        );
         self.queue.submit([encoder.finish()]);
         self.queue.present(frame);
         if !texts.is_empty() {
@@ -495,6 +517,16 @@ impl PyWin32GpuRenderer {
     #[getter]
     fn image_resource_count(&self) -> usize {
         self.context.image_system.resource_count()
+    }
+
+    #[getter]
+    fn offscreen_size(&self) -> (u32, u32) {
+        self.context.offscreen_target.size()
+    }
+
+    #[getter]
+    fn offscreen_generation(&self) -> u64 {
+        self.context.offscreen_target.generation()
     }
 
     fn image_resource_size(&self, resource_id: &str) -> Option<(u32, u32)> {
@@ -996,7 +1028,10 @@ mod tests {
 
     #[test]
     fn validates_presentation_configuration() {
-        assert_eq!(parse_present_mode("auto_vsync").unwrap(), wgpu::PresentMode::AutoVsync);
+        assert_eq!(
+            parse_present_mode("auto_vsync").unwrap(),
+            wgpu::PresentMode::AutoVsync
+        );
         assert_eq!(
             parse_present_mode("auto_no_vsync").unwrap(),
             wgpu::PresentMode::AutoNoVsync
