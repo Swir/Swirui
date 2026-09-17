@@ -1,7 +1,7 @@
 """Direct X11 platform backend for Linux.
 
 The backend intentionally depends only on ``ctypes`` and the system X11 client
-library.  SwirUI keeps the public platform contract backend-neutral while this
+library. SwirUI keeps the public platform contract backend-neutral while this
 module translates X11 windows and events into the same normalized event stream
 used by the Win32 backend.
 """
@@ -489,7 +489,7 @@ class LinuxX11PlatformBackend:
         if length <= 0:
             return None
         text = bytes(buffer.raw[:length]).decode(self._encoding, errors="ignore")
-        if not text or all(character.iscontrol() for character in text):
+        if not text or not any(character.isprintable() for character in text):
             return None
         return PlatformEvent(
             PlatformEventKind.TEXT_INPUT,
