@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import math
+from typing import Any
 
 from swirui.core import AccessibilityRole, Component, Event
 from swirui.platforms import PlatformEvent, PlatformEventKind, PointerButton
@@ -11,7 +11,7 @@ from swirui.rendering.scene import SceneNode, SceneNodeKind
 
 from .base import Widget
 
-_ACTIVATION_KEYS = {0x0D, 0x20, 0xFF0D, 0xFF8D, 36, 49, 76}
+_ACTIVATION_KEYS = {0x0D, 0x20, 0xFF0D, 0xFF8D}
 _DEFAULT_TRACK = Color.from_hex("#253746")
 _DEFAULT_TRACK_CHECKED = Color.from_hex("#087FCE")
 _DEFAULT_TRACK_HOVER = Color.from_hex("#315065")
@@ -130,7 +130,11 @@ class _ToggleBase(Widget):
             self._set_interaction_state(hovered=True, reason="pointer_enter")
 
     def _on_pointer_leave(self, _event: Event) -> None:
-        self._set_interaction_state(hovered=False, pressed=False, reason="pointer_leave")
+        self._set_interaction_state(
+            hovered=False,
+            pressed=False,
+            reason="pointer_leave",
+        )
 
     def _on_pointer_down(self, event: Event) -> None:
         platform_event = self._platform_event(event, PlatformEventKind.POINTER_DOWN)
@@ -178,7 +182,11 @@ class _ToggleBase(Widget):
         self._set_interaction_state(focused=True, reason="focus_gained")
 
     def _on_focus_lost(self, _event: Event) -> None:
-        self._set_interaction_state(focused=False, pressed=False, reason="focus_lost")
+        self._set_interaction_state(
+            focused=False,
+            pressed=False,
+            reason="focus_lost",
+        )
 
     def _on_invalidated(self, event: Event) -> None:
         if event.data.get("reason") == "enabled" and not self.enabled:
@@ -238,6 +246,7 @@ class Checkbox(_ToggleBase):
 
     def build_scene_node(self) -> SceneNode:
         box_size = min(22.0, self.bounds.height)
+        box_y = self.bounds.y + ((self.bounds.height - box_size) / 2.0)
         root = SceneNode(
             key=self.key,
             kind=SceneNodeKind.GROUP,
@@ -247,13 +256,12 @@ class Checkbox(_ToggleBase):
             fill=_TRANSPARENT,
             hit_testable=self.enabled,
         )
-        box_color = self._box_color()
         root.add(
             SceneNode(
                 key=f"{self.key}:box",
                 kind=SceneNodeKind.RECTANGLE,
-                bounds=Rect(self.bounds.x, self.bounds.y + (self.bounds.height - box_size) / 2.0, box_size, box_size),
-                fill=box_color,
+                bounds=Rect(self.bounds.x, box_y, box_size, box_size),
+                fill=self._box_color(),
                 corner_radius=CornerRadius.uniform(5.0),
                 hit_testable=False,
             )
@@ -263,7 +271,12 @@ class Checkbox(_ToggleBase):
                 SceneNode(
                     key=f"{self.key}:mark",
                     kind=SceneNodeKind.TEXT,
-                    bounds=Rect(self.bounds.x + 3.0, self.bounds.y + (self.bounds.height - box_size) / 2.0, box_size - 6.0, box_size),
+                    bounds=Rect(
+                        self.bounds.x + 3.0,
+                        box_y,
+                        box_size - 6.0,
+                        box_size,
+                    ),
                     fill=_DEFAULT_FOREGROUND,
                     text="✓",
                     font_size=16.0,
@@ -273,19 +286,25 @@ class Checkbox(_ToggleBase):
                 )
             )
         if self._text:
-            root.add(
-                SceneNode(
-                    key=f"{self.key}:label",
-                    kind=SceneNodeKind.TEXT,
-                    bounds=Rect(self.bounds.x + box_size + 9.0, self.bounds.y, max(0.0, self.bounds.width - box_size - 9.0), self.bounds.height),
-                    fill=self._foreground,
-                    text=self._text,
-                    font_size=16.0,
-                    font_family="Segoe UI",
-                    hit_testable=False,
-                )
-            )
+            root.add(self._label_node(box_size))
         return root
+
+    def _label_node(self, indicator_size: float) -> SceneNode:
+        return SceneNode(
+            key=f"{self.key}:label",
+            kind=SceneNodeKind.TEXT,
+            bounds=Rect(
+                self.bounds.x + indicator_size + 9.0,
+                self.bounds.y,
+                max(0.0, self.bounds.width - indicator_size - 9.0),
+                self.bounds.height,
+            ),
+            fill=self._foreground,
+            text=self._text,
+            font_size=16.0,
+            font_family="Segoe UI",
+            hit_testable=False,
+        )
 
     def _box_color(self) -> Color:
         if not self.enabled:
@@ -307,7 +326,7 @@ class RadioButton(Checkbox):
         bounds: Rect,
         group: str = "default",
         checked: bool = False,
-        **kwargs: object,
+        **kwargs: Any,
     ) -> None:
         normalized_group = str(group).strip()
         if not normalized_group:
@@ -325,17 +344,21 @@ class RadioButton(Checkbox):
         if normalized and not self._checked:
             root = self._tree_root()
             for component in root.walk():
-                if (
-                    isinstance(component, RadioButton)
-                    and component is not self
-                    and component.group == self.group
-                    and component.checked
-                ):
+                if self._is_checked_peer(component):
                     component._set_checked(False, reason="radio_group")
         super()._set_checked(normalized, reason=reason)
 
+    def _is_checked_peer(self, component: Component) -> bool:
+        return (
+            isinstance(component, RadioButton)
+            and component is not self
+            and component.group == self.group
+            and component.checked
+        )
+
     def build_scene_node(self) -> SceneNode:
         diameter = min(22.0, self.bounds.height)
+        ring_y = self.bounds.y + ((self.bounds.height - diameter) / 2.0)
         root = SceneNode(
             key=self.key,
             kind=SceneNodeKind.GROUP,
@@ -345,13 +368,12 @@ class RadioButton(Checkbox):
             fill=_TRANSPARENT,
             hit_testable=self.enabled,
         )
-        outer_color = self._box_color()
         root.add(
             SceneNode(
                 key=f"{self.key}:ring",
                 kind=SceneNodeKind.RECTANGLE,
-                bounds=Rect(self.bounds.x, self.bounds.y + (self.bounds.height - diameter) / 2.0, diameter, diameter),
-                fill=outer_color,
+                bounds=Rect(self.bounds.x, ring_y, diameter, diameter),
+                fill=self._box_color(),
                 corner_radius=CornerRadius.uniform(diameter / 2.0),
                 hit_testable=False,
             )
@@ -363,7 +385,12 @@ class RadioButton(Checkbox):
                 SceneNode(
                     key=f"{self.key}:dot",
                     kind=SceneNodeKind.RECTANGLE,
-                    bounds=Rect(self.bounds.x + inset, self.bounds.y + (self.bounds.height - diameter) / 2.0 + inset, inner, inner),
+                    bounds=Rect(
+                        self.bounds.x + inset,
+                        ring_y + inset,
+                        inner,
+                        inner,
+                    ),
                     fill=_DEFAULT_FOREGROUND,
                     corner_radius=CornerRadius.uniform(inner / 2.0),
                     hit_testable=False,
@@ -371,18 +398,7 @@ class RadioButton(Checkbox):
                 )
             )
         if self.text:
-            root.add(
-                SceneNode(
-                    key=f"{self.key}:label",
-                    kind=SceneNodeKind.TEXT,
-                    bounds=Rect(self.bounds.x + diameter + 9.0, self.bounds.y, max(0.0, self.bounds.width - diameter - 9.0), self.bounds.height),
-                    fill=self._foreground,
-                    text=self.text,
-                    font_size=16.0,
-                    font_family="Segoe UI",
-                    hit_testable=False,
-                )
-            )
+            root.add(self._label_node(diameter))
         return root
 
     def _tree_root(self) -> Component:
@@ -427,29 +443,31 @@ class Switch(_ToggleBase):
 
     def build_scene_node(self) -> SceneNode:
         radius = self.bounds.height / 2.0
-        track = self._track_color()
         root = SceneNode(
             key=self.key,
             kind=SceneNodeKind.RECTANGLE,
             bounds=self.bounds,
             opacity=self.opacity,
             z_index=self.z_index,
-            fill=track,
+            fill=self._track_color(),
             corner_radius=CornerRadius.uniform(radius),
             hit_testable=self.enabled,
         )
         inset = max(2.0, self.bounds.height * 0.10)
         thumb_size = max(1.0, self.bounds.height - (2.0 * inset))
-        x = (
-            self.bounds.x + self.bounds.width - inset - thumb_size
-            if self.checked
-            else self.bounds.x + inset
-        )
+        thumb_x = self.bounds.x + inset
+        if self.checked:
+            thumb_x = self.bounds.x + self.bounds.width - inset - thumb_size
         root.add(
             SceneNode(
                 key=f"{self.key}:thumb",
                 kind=SceneNodeKind.RECTANGLE,
-                bounds=Rect(x, self.bounds.y + inset, thumb_size, thumb_size),
+                bounds=Rect(
+                    thumb_x,
+                    self.bounds.y + inset,
+                    thumb_size,
+                    thumb_size,
+                ),
                 fill=self._thumb,
                 corner_radius=CornerRadius.uniform(thumb_size / 2.0),
                 hit_testable=False,
