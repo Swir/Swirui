@@ -1,4 +1,5 @@
 import sys
+import time
 
 import pytest
 
@@ -7,8 +8,8 @@ from swirui.platforms.windows import Win32PlatformBackend
 from swirui.rendering import (
     Color,
     CornerRadius,
-    DropShadow,
-    Point,
+    DynamicShadow,
+    Glow,
     Rect,
     Scene,
     SceneNode,
@@ -23,8 +24,7 @@ def _isolated_backend() -> Win32PlatformBackend:
     return backend
 
 
-@pytest.mark.skipif(sys.platform != "win32", reason="Native GPU shadow smoke requires Windows")
-def test_drop_shadow_reaches_real_persistent_wgpu_rectangle_batch() -> None:
+def _dynamic_effect_scene(light_direction_degrees: float) -> Scene:
     card_bounds = Rect(110.0, 95.0, 500.0, 245.0)
     root = SceneNode(
         key="root",
@@ -33,13 +33,21 @@ def test_drop_shadow_reaches_real_persistent_wgpu_rectangle_batch() -> None:
     )
     radius = CornerRadius.uniform(28.0)
     root.add(
-        DropShadow(
-            color=Color(0.1, 0.45, 1.0, 0.4),
-            offset=Point(0.0, 16.0),
-            blur_radius=30.0,
-            spread=3.0,
-            steps=12,
+        DynamicShadow(
+            elevation=20.0,
+            color=Color(0.02, 0.12, 0.28, 0.38),
+            light_direction_degrees=light_direction_degrees,
+            light_altitude_degrees=48.0,
+            softness=1.5,
+            spread=2.0,
+            steps=10,
         ).to_scene_node("card-shadow", card_bounds, corner_radius=radius),
+        Glow(
+            color=Color(0.0, 0.58, 1.0, 0.26),
+            blur_radius=18.0,
+            spread=1.0,
+            steps=6,
+        ).to_scene_node("card-glow", card_bounds, corner_radius=radius),
         SceneNode(
             key="card",
             kind=SceneNodeKind.RECTANGLE,
@@ -51,32 +59,50 @@ def test_drop_shadow_reaches_real_persistent_wgpu_rectangle_batch() -> None:
             key="title",
             kind=SceneNodeKind.TEXT,
             bounds=Rect(155.0, 175.0, 410.0, 72.0),
-            text="SwirUI GPU Shadow",
+            text="SwirUI Dynamic GPU Effects",
             fill=Color.from_hex("#FFFFFF"),
             font_size=32.0,
             z_index=2,
         ),
     )
+    return Scene(720.0, 440.0, root)
 
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Native GPU effect smoke requires Windows")
+def test_dynamic_shadow_and_glow_reach_real_persistent_wgpu_batch() -> None:
     renderer = WgpuRenderer()
     app = App(
-        "SwirUI Shadow Integration",
+        "SwirUI Dynamic Effects Integration",
         platform_backend=_isolated_backend(),
         renderer=renderer,
     )
-    window = Window(title="SwirUI GPU Shadow Smoke", width=720, height=440)
-    window.set_scene(Scene(720.0, 440.0, root))
+    window = Window(title="SwirUI GPU Effects Smoke", width=720, height=440)
+    window.set_scene(_dynamic_effect_scene(270.0))
     app.add_window(window)
 
     try:
         app.start()
         assert renderer.frames_rendered == 1
-        assert renderer.last_rectangle_count == 13
+        assert renderer.last_rectangle_count == 17
         assert renderer.last_text_count == 1
         assert renderer.last_image_count == 0
         assert renderer.last_path_count == 0
         assert renderer.persistent_context_count == 1
         assert renderer.adapter_name
         assert renderer.graphics_backend
+
+        native_handle = window.native_handle
+        assert native_handle is not None
+        handle = native_handle.value
+        first_context = renderer._contexts[handle]
+
+        window.set_scene(_dynamic_effect_scene(180.0))
+        app.invalidate(window)
+        assert app.render_pending(time.monotonic() + 1.0) == 1
+
+        assert renderer.frames_rendered == 2
+        assert renderer.last_rectangle_count == 17
+        assert renderer.persistent_context_count == 1
+        assert renderer._contexts[handle] is first_context
     finally:
         app.stop()
