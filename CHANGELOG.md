@@ -63,6 +63,8 @@ The project uses semantic versioning where practical during pre-alpha developmen
 - Dependency-free retained-runtime benchmark helpers with median, p95, worst-case, throughput and explicit latency-budget evaluation.
 - CI performance guardrails for 1024-node retained SceneGraph traversal and pointer hit-testing workloads.
 - Machine-readable JSON performance reports uploaded from CI for regression inspection.
+- Direct Linux/X11 native-window backend using Python `ctypes` and the system libX11 client library, with normalized resize, focus, pointer, keyboard, text-input and window-close events.
+- Real X11 native-window smoke coverage on Python 3.14 under Xvfb, including create, map, title, resize, event polling, hide and destroy lifecycle checks.
 
 ### Changed
 - The wgpu renderer now reports submitted rectangle, path, text and image counts independently.
@@ -81,6 +83,7 @@ The project uses semantic versioning where practical during pre-alpha developmen
 - Adjacent Win32 resize/DPI transitions are normalized so resize pixels are interpreted with the incoming monitor scale rather than the previous scale.
 - The temporary GDI preview renderer now follows the same logical-DIP → physical-pixel scaling contract as the native wgpu renderer.
 - CI now has a dedicated retained-runtime performance job in addition to the Python quality/test matrix, Rust checks and Windows native smoke gate.
+- Linux platform selection now chooses the direct X11 backend when `DISPLAY` is available while retaining the deterministic headless backend for Linux servers and CI sessions without a display.
 
 ## [0.1.0a1] - 2026-09-16
 
