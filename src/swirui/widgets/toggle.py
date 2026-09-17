@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, TypeGuard
 
 from swirui.core import AccessibilityRole, Component, Event
 from swirui.platforms import PlatformEvent, PlatformEventKind, PointerButton
@@ -348,7 +348,7 @@ class RadioButton(Checkbox):
                     component._set_checked(False, reason="radio_group")
         super()._set_checked(normalized, reason=reason)
 
-    def _is_checked_peer(self, component: Component) -> bool:
+    def _is_checked_peer(self, component: Component) -> TypeGuard[RadioButton]:
         return (
             isinstance(component, RadioButton)
             and component is not self
