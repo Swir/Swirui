@@ -98,6 +98,9 @@ The project uses semantic versioning where practical during pre-alpha developmen
 - `examples/gpu_depth_demo.py` plus real Win32/wgpu smoke coverage proving changing perspective/parallax geometry renders across the same persistent native GPU context.
 - Public quality-aware retained `Reflection` effect with normalized specular bands compiled into clipped, non-interactive linear-gradient/path geometry.
 - `examples/gpu_reflections_demo.py` plus deterministic reflection tessellation performance coverage and real Win32/wgpu persistent-context smoke coverage.
+- Immutable, composable `ColorFilter` transforms for affine RGBA post-processing, including brightness, contrast, saturation, grayscale, sepia, invert, opacity and hue rotation.
+- Persistent native Rust/wgpu color-filter post-processing with reusable output texture, pipeline, bind group and uniform state after scene/backdrop blur composition.
+- `examples/gpu_color_filters_demo.py` plus real Win32/wgpu color-filter smoke coverage across repeated frames and persistent context reuse.
 
 ### Changed
 - The wgpu renderer now reports submitted rectangle, path, text and image counts independently.
@@ -123,6 +126,7 @@ The project uses semantic versioning where practical during pre-alpha developmen
 - Native Win32/wgpu scene rendering now targets the persistent offscreen texture first and presents through a final fullscreen blit, establishing a real post-processing boundary for the 0.3 Visual Engine.
 - Final Win32/wgpu presentation can now select the retained separable-blur output without reallocating the blur pipeline or render targets on every frame.
 - Backdrop boundaries now reuse the persistent offscreen scene target and blur pipeline in painter order, and material decoration uses reserved negative z-indices so default-z child content remains sharp, visible and interactive above frosted/acrylic layers.
+- Native color filters run after scene/backdrop blur so one composable affine transform applies consistently to the final rendered scene without rebuilding retained geometry.
 
 ## [0.1.0a1] - 2026-09-16
 
