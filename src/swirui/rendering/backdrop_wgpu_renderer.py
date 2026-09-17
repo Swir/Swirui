@@ -179,7 +179,7 @@ class WgpuRenderer(_BaseWgpuRenderer):
         if node.kind in (SceneNodeKind.GROUP, SceneNodeKind.RECTANGLE):
             if node.fill is None or node.bounds.width <= 0.0 or node.bounds.height <= 0.0:
                 return
-            fill = node.fill
+            rectangle_fill = node.fill
             radius = node.corner_radius
             clip_left, clip_top, clip_right, clip_bottom = self._clip_tuple(clip, scale)
             rectangles.append(
@@ -188,10 +188,10 @@ class WgpuRenderer(_BaseWgpuRenderer):
                     self._scale(node.bounds.y, scale),
                     self._scale(node.bounds.width, scale),
                     self._scale(node.bounds.height, scale),
-                    fill.r,
-                    fill.g,
-                    fill.b,
-                    fill.a * effective_opacity,
+                    rectangle_fill.r,
+                    rectangle_fill.g,
+                    rectangle_fill.b,
+                    rectangle_fill.a * effective_opacity,
                     self._scale(radius.top_left, scale),
                     self._scale(radius.top_right, scale),
                     self._scale(radius.bottom_right, scale),
@@ -207,7 +207,7 @@ class WgpuRenderer(_BaseWgpuRenderer):
         if node.kind is SceneNodeKind.TEXT:
             if not node.text or node.bounds.width <= 0.0 or node.bounds.height <= 0.0:
                 return
-            fill = node.fill or _DEFAULT_TEXT_COLOR
+            text_fill = node.fill or _DEFAULT_TEXT_COLOR
             texts.append(
                 (
                     node.text,
@@ -216,10 +216,10 @@ class WgpuRenderer(_BaseWgpuRenderer):
                     self._scale(node.bounds.width, scale),
                     self._scale(node.bounds.height, scale),
                     self._scale(node.font_size, scale),
-                    fill.r,
-                    fill.g,
-                    fill.b,
-                    fill.a * effective_opacity,
+                    text_fill.r,
+                    text_fill.g,
+                    text_fill.b,
+                    text_fill.a * effective_opacity,
                     node.font_family,
                     self._clip_tuple(clip, scale),
                 )
@@ -250,25 +250,25 @@ class WgpuRenderer(_BaseWgpuRenderer):
 
         if node.kind is SceneNodeKind.PATH:
             path = node.path
-            fill = node.fill
+            path_fill = node.fill
             if (
                 path is None
-                or fill is None
+                or path_fill is None
                 or node.bounds.width <= 0.0
                 or node.bounds.height <= 0.0
             ):
                 return
             clip_left, clip_top, clip_right, clip_bottom = self._clip_tuple(clip, scale)
-            alpha = fill.a * effective_opacity
+            alpha = path_fill.a * effective_opacity
             for triangle in path.triangulate():
                 for point in triangle:
                     paths.append(
                         (
                             self._scale(node.bounds.x + point.x, scale),
                             self._scale(node.bounds.y + point.y, scale),
-                            fill.r,
-                            fill.g,
-                            fill.b,
+                            path_fill.r,
+                            path_fill.g,
+                            path_fill.b,
                             alpha,
                             clip_left,
                             clip_top,
