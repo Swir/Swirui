@@ -74,7 +74,10 @@ def test_linear_gradient_scene_reaches_real_persistent_wgpu_path_batch() -> None
         app.stop()
 
 
-@pytest.mark.skipif(sys.platform != "win32", reason="Native GPU mesh gradient smoke requires Windows")
+@pytest.mark.skipif(
+    sys.platform != "win32",
+    reason="Native GPU mesh gradient smoke requires Windows",
+)
 def test_mesh_gradient_scene_reaches_real_persistent_wgpu_path_batch() -> None:
     root = SceneNode(
         key="root",
