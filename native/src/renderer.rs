@@ -24,6 +24,7 @@ use wgpu::util::DeviceExt;
 
 type RectangleInstance = Vec<f32>;
 type BackdropRegion = Vec<f32>;
+type EffectCacheCounts = (usize, usize, usize, usize, usize);
 const LEGACY_RECTANGLE_INSTANCE_FLOATS: usize = 12;
 const RECTANGLE_INSTANCE_FLOATS: usize = 16;
 const BACKDROP_REGION_FLOATS: usize = 9;
@@ -44,6 +45,11 @@ struct PersistentGpuContext {
     color_filter_enabled: bool,
     color_filter_uses_blur: bool,
     backdrop_compositor: Option<BackdropCompositor>,
+    effect_cache_token: Option<u64>,
+    effect_cache_background: Option<[f64; 4]>,
+    effect_cache_counts: Option<EffectCacheCounts>,
+    effect_cache_hits: u64,
+    effect_cache_misses: u64,
     present_blitter: wgpu::util::TextureBlitter,
     frame_buffer: wgpu::Buffer,
     bind_group_layout: wgpu::BindGroupLayout,
@@ -185,6 +191,11 @@ impl PersistentGpuContext {
             color_filter_enabled: false,
             color_filter_uses_blur: false,
             backdrop_compositor: None,
+            effect_cache_token: None,
+            effect_cache_background: None,
+            effect_cache_counts: None,
+            effect_cache_hits: 0,
+            effect_cache_misses: 0,
             present_blitter,
             frame_buffer,
             bind_group_layout,
@@ -230,6 +241,7 @@ impl PersistentGpuContext {
                 );
                 self.color_filter_uses_blur = false;
             }
+            self.invalidate_effect_cache();
         }
         let frame_uniforms = floats_to_bytes(&[width as f32, height as f32, 0.0, 0.0]);
         self.queue.write_buffer(&self.frame_buffer, 0, &frame_uniforms);
@@ -304,15 +316,22 @@ impl PersistentGpuContext {
         rgba: &[u8],
     ) -> PyResult<()> {
         self.image_system
-            .register_rgba(&self.device, &self.queue, resource_id, width, height, rgba)
+            .register_rgba(&self.device, &self.queue, resource_id, width, height, rgba)?;
+        self.invalidate_effect_cache();
+        Ok(())
     }
 
     fn unregister_image(&mut self, resource_id: &str) -> bool {
-        self.image_system.unregister(resource_id)
+        let removed = self.image_system.unregister(resource_id);
+        if removed {
+            self.invalidate_effect_cache();
+        }
+        removed
     }
 
     fn clear(&mut self, red: f64, green: f64, blue: f64, alpha: f64) -> PyResult<()> {
         validate_color(red, green, blue, alpha)?;
+        self.invalidate_effect_cache();
         let frame = acquire_surface_texture(&self.surface)?;
         let view = frame
             .texture
@@ -414,6 +433,7 @@ impl PersistentGpuContext {
             background_blue,
             background_alpha,
         )?;
+        self.invalidate_effect_cache();
         if !rectangles.is_empty() {
             validate_rectangles(rectangles)?;
             self.ensure_rectangle_capacity(rectangles.len())?;
@@ -514,7 +534,62 @@ impl PersistentGpuContext {
         background_green: f64,
         background_blue: f64,
         background_alpha: f64,
-    ) -> PyResult<(usize, usize, usize, usize, usize)> {
+    ) -> PyResult<EffectCacheCounts> {
+        self.draw_scene_with_backdrops_impl(
+            rectangle_segments,
+            text_segments,
+            image_segments,
+            shape_segments,
+            backdrops,
+            None,
+            background_red,
+            background_green,
+            background_blue,
+            background_alpha,
+        )
+    }
+
+    fn draw_scene_with_backdrops_cached(
+        &mut self,
+        rectangle_segments: &[Vec<RectangleInstance>],
+        text_segments: &[Vec<TextInstance>],
+        image_segments: &[Vec<ImageInstance>],
+        shape_segments: &[Vec<ShapeVertex>],
+        backdrops: &[BackdropRegion],
+        effect_cache_token: u64,
+        background_red: f64,
+        background_green: f64,
+        background_blue: f64,
+        background_alpha: f64,
+    ) -> PyResult<EffectCacheCounts> {
+        self.draw_scene_with_backdrops_impl(
+            rectangle_segments,
+            text_segments,
+            image_segments,
+            shape_segments,
+            backdrops,
+            Some(effect_cache_token),
+            background_red,
+            background_green,
+            background_blue,
+            background_alpha,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn draw_scene_with_backdrops_impl(
+        &mut self,
+        rectangle_segments: &[Vec<RectangleInstance>],
+        text_segments: &[Vec<TextInstance>],
+        image_segments: &[Vec<ImageInstance>],
+        shape_segments: &[Vec<ShapeVertex>],
+        backdrops: &[BackdropRegion],
+        effect_cache_token: Option<u64>,
+        background_red: f64,
+        background_green: f64,
+        background_blue: f64,
+        background_alpha: f64,
+    ) -> PyResult<EffectCacheCounts> {
         validate_color(
             background_red,
             background_green,
@@ -528,6 +603,27 @@ impl PersistentGpuContext {
             shape_segments,
             backdrops,
         )?;
+
+        let background = [
+            background_red,
+            background_green,
+            background_blue,
+            background_alpha,
+        ];
+        if let Some(token) = effect_cache_token {
+            if self.effect_cache_token == Some(token)
+                && self.effect_cache_background == Some(background)
+            {
+                if let Some(counts) = self.effect_cache_counts {
+                    self.present_offscreen()?;
+                    self.effect_cache_hits = self.effect_cache_hits.saturating_add(1);
+                    return Ok(counts);
+                }
+            }
+            self.effect_cache_misses = self.effect_cache_misses.saturating_add(1);
+        } else {
+            self.invalidate_effect_cache();
+        }
 
         let frame = acquire_surface_texture(&self.surface)?;
         let view = frame
@@ -573,13 +669,19 @@ impl PersistentGpuContext {
         self.queue.submit([encoder.finish()]);
         self.queue.present(frame);
 
-        Ok((
+        let counts = (
             rectangle_count,
             text_count,
             image_count,
             shape_count,
             backdrops.len(),
-        ))
+        );
+        if let Some(token) = effect_cache_token {
+            self.effect_cache_token = Some(token);
+            self.effect_cache_background = Some(background);
+            self.effect_cache_counts = Some(counts);
+        }
+        Ok(counts)
     }
 
     fn draw_segment_to_offscreen(
@@ -693,6 +795,35 @@ impl PersistentGpuContext {
             );
         self.queue.submit([encoder.finish()]);
         Ok(())
+    }
+
+    fn present_offscreen(&mut self) -> PyResult<()> {
+        let frame = acquire_surface_texture(&self.surface)?;
+        let view = frame
+            .texture
+            .create_view(&wgpu::TextureViewDescriptor::default());
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("SwirUI retained effect-cache presentation encoder"),
+            });
+        let presentation_source = self.encode_postprocess(&mut encoder);
+        self.present_blitter
+            .copy(&self.device, &mut encoder, &presentation_source, &view);
+        self.queue.submit([encoder.finish()]);
+        self.queue.present(frame);
+        Ok(())
+    }
+
+    fn invalidate_effect_cache(&mut self) {
+        self.effect_cache_token = None;
+        self.effect_cache_background = None;
+        self.effect_cache_counts = None;
+    }
+
+    fn reset_effect_cache_stats(&mut self) {
+        self.effect_cache_hits = 0;
+        self.effect_cache_misses = 0;
     }
 
     fn encode_postprocess(&mut self, encoder: &mut wgpu::CommandEncoder) -> wgpu::TextureView {
@@ -883,6 +1014,21 @@ impl PyWin32GpuRenderer {
         self.context.backdrop_compositor.is_some()
     }
 
+    #[getter]
+    fn effect_cache_ready(&self) -> bool {
+        self.context.effect_cache_token.is_some() && self.context.effect_cache_counts.is_some()
+    }
+
+    #[getter]
+    fn effect_cache_hits(&self) -> u64 {
+        self.context.effect_cache_hits
+    }
+
+    #[getter]
+    fn effect_cache_misses(&self) -> u64 {
+        self.context.effect_cache_misses
+    }
+
     fn image_resource_size(&self, resource_id: &str) -> Option<(u32, u32)> {
         self.context.image_system.resource_size(resource_id)
     }
@@ -910,6 +1056,14 @@ impl PyWin32GpuRenderer {
 
     fn clear_color_filter(&mut self) {
         self.context.clear_color_filter();
+    }
+
+    fn clear_effect_cache(&mut self) {
+        self.context.invalidate_effect_cache();
+    }
+
+    fn reset_effect_cache_stats(&mut self) {
+        self.context.reset_effect_cache_stats();
     }
 
     fn register_image_rgba(
@@ -1041,13 +1195,52 @@ impl PyWin32GpuRenderer {
         background_green: f64,
         background_blue: f64,
         background_alpha: f64,
-    ) -> PyResult<(usize, usize, usize, usize, usize)> {
+    ) -> PyResult<EffectCacheCounts> {
         self.context.draw_scene_with_backdrops(
             &rectangle_segments,
             &text_segments,
             &image_segments,
             &shape_segments,
             &backdrops,
+            background_red,
+            background_green,
+            background_blue,
+            background_alpha,
+        )
+    }
+
+    #[pyo3(signature = (
+        rectangle_segments,
+        text_segments,
+        image_segments,
+        shape_segments,
+        backdrops,
+        effect_cache_token,
+        background_red=0.027,
+        background_green=0.043,
+        background_blue=0.078,
+        background_alpha=1.0
+    ))]
+    fn draw_scene_with_backdrops_cached(
+        &mut self,
+        rectangle_segments: Vec<Vec<RectangleInstance>>,
+        text_segments: Vec<Vec<TextInstance>>,
+        image_segments: Vec<Vec<ImageInstance>>,
+        shape_segments: Vec<Vec<ShapeVertex>>,
+        backdrops: Vec<BackdropRegion>,
+        effect_cache_token: u64,
+        background_red: f64,
+        background_green: f64,
+        background_blue: f64,
+        background_alpha: f64,
+    ) -> PyResult<EffectCacheCounts> {
+        self.context.draw_scene_with_backdrops_cached(
+            &rectangle_segments,
+            &text_segments,
+            &image_segments,
+            &shape_segments,
+            &backdrops,
+            effect_cache_token,
             background_red,
             background_green,
             background_blue,

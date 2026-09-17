@@ -34,6 +34,7 @@ class _BackdropPayloadCacheEntry:
     scale: float
     image_aliases: tuple[tuple[str, str], ...]
     payload: BackdropPayload | None
+    native_effect_token: int | None
 
 
 class WgpuRenderer(_BaseWgpuRenderer):
@@ -51,6 +52,13 @@ class WgpuRenderer(_BaseWgpuRenderer):
     high-refresh frame. ``Scene.touch()`` is the explicit invalidation boundary
     for in-place scene mutations; replacing the scene, changing DPI scale or
     rebinding image aliases also invalidates the prepared payload automatically.
+
+    Native cores that expose ``draw_scene_with_backdrops_cached`` additionally
+    retain the fully composed backdrop/material frame in the persistent offscreen
+    target. An unchanged scene can therefore present that retained GPU result
+    without repeating primitive submission, backdrop blur or material composition.
+    Every prepared payload generation receives a stable token; any scene, DPI or
+    image-alias invalidation receives a fresh token and forces a native rebuild.
 
     ``color_filter`` is an optional affine RGBA transform applied by one retained
     native post-process pass after scene blur/backdrop composition and before the
@@ -80,6 +88,7 @@ class WgpuRenderer(_BaseWgpuRenderer):
         self._backdrop_payload_cache: dict[int, _BackdropPayloadCacheEntry] = {}
         self._backdrop_payload_cache_hits = 0
         self._backdrop_payload_cache_misses = 0
+        self._next_native_effect_token = 1
 
     @property
     def backdrop_payload_cache_hits(self) -> int:
@@ -99,25 +108,62 @@ class WgpuRenderer(_BaseWgpuRenderer):
 
         return len(self._backdrop_payload_cache)
 
+    @property
+    def native_effect_cache_hits(self) -> int:
+        """Return native retained-frame cache hits across live GPU contexts."""
+
+        return sum(
+            int(getattr(context, "effect_cache_hits", 0))
+            for context in self._contexts.values()
+        )
+
+    @property
+    def native_effect_cache_misses(self) -> int:
+        """Return native retained-frame cache misses across live GPU contexts."""
+
+        return sum(
+            int(getattr(context, "effect_cache_misses", 0))
+            for context in self._contexts.values()
+        )
+
     def clear_backdrop_payload_cache(self, window: Window | None = None) -> None:
         """Drop prepared backdrop payloads globally or for one window.
 
         Applications normally do not need this method: replacing ``Window.scene``
         or calling ``Scene.touch()`` after an in-place mutation invalidates the
         cached payload automatically. This hook is useful for diagnostics and
-        explicit resource-pressure handling.
+        explicit resource-pressure handling. When supported by the installed
+        native core, the matching retained GPU effect-frame cache is cleared too.
         """
 
         if window is None:
             self._backdrop_payload_cache.clear()
+            for context in self._contexts.values():
+                clear_native = getattr(context, "clear_effect_cache", None)
+                if clear_native is not None:
+                    clear_native()
             return
         self._backdrop_payload_cache.pop(self._backdrop_cache_key(window), None)
+        if window.native_handle is not None:
+            context = self._contexts.get(window.native_handle.value)
+            if context is not None:
+                clear_native = getattr(context, "clear_effect_cache", None)
+                if clear_native is not None:
+                    clear_native()
 
     def reset_backdrop_payload_cache_stats(self) -> None:
         """Reset hit/miss telemetry without discarding retained payloads."""
 
         self._backdrop_payload_cache_hits = 0
         self._backdrop_payload_cache_misses = 0
+
+    def reset_native_effect_cache_stats(self) -> None:
+        """Reset native effect-frame hit/miss telemetry without discarding frames."""
+
+        for context in self._contexts.values():
+            reset = getattr(context, "reset_effect_cache_stats", None)
+            if reset is not None:
+                reset()
 
     def set_color_filter(self, color_filter: ColorFilter | None) -> None:
         """Update the final GPU color transform for current and future windows."""
@@ -139,7 +185,7 @@ class WgpuRenderer(_BaseWgpuRenderer):
         super().destroy_surface(window)
 
     def shutdown(self) -> None:
-        self._backdrop_payload_cache.clear()
+        self.clear_backdrop_payload_cache()
         super().shutdown()
 
     def render(self, window: Window, root: Component | None) -> None:
@@ -178,17 +224,34 @@ class WgpuRenderer(_BaseWgpuRenderer):
         self._configure_scene_blur(context, window.scale)
         rectangles, texts, images, paths, backdrops = payload
         background = self.background
-        counts = draw(
-            rectangles,
-            texts,
-            images,
-            paths,
-            backdrops,
-            background.r,
-            background.g,
-            background.b,
-            background.a,
-        )
+        cache_entry = self._backdrop_payload_cache.get(self._backdrop_cache_key(window))
+        native_effect_token = None if cache_entry is None else cache_entry.native_effect_token
+        draw_cached = getattr(context, "draw_scene_with_backdrops_cached", None)
+        if draw_cached is not None and native_effect_token is not None:
+            counts = draw_cached(
+                rectangles,
+                texts,
+                images,
+                paths,
+                backdrops,
+                native_effect_token,
+                background.r,
+                background.g,
+                background.b,
+                background.a,
+            )
+        else:
+            counts = draw(
+                rectangles,
+                texts,
+                images,
+                paths,
+                backdrops,
+                background.r,
+                background.g,
+                background.b,
+                background.a,
+            )
         (
             rectangle_count,
             text_count,
@@ -244,6 +307,7 @@ class WgpuRenderer(_BaseWgpuRenderer):
                 scale=window.scale,
                 image_aliases=image_aliases,
                 payload=None,
+                native_effect_token=None,
             )
             return None
 
@@ -283,8 +347,10 @@ class WgpuRenderer(_BaseWgpuRenderer):
             )
 
         payload: BackdropPayload | None
+        native_effect_token: int | None
         if not backdrops:
             payload = None
+            native_effect_token = None
         else:
             payload = (
                 rectangle_segments,
@@ -293,14 +359,21 @@ class WgpuRenderer(_BaseWgpuRenderer):
                 path_segments,
                 backdrops,
             )
+            native_effect_token = self._allocate_native_effect_token()
         self._backdrop_payload_cache[cache_key] = _BackdropPayloadCacheEntry(
             scene=scene,
             generation=scene.generation,
             scale=window.scale,
             image_aliases=image_aliases,
             payload=payload,
+            native_effect_token=native_effect_token,
         )
         return payload
+
+    def _allocate_native_effect_token(self) -> int:
+        token = self._next_native_effect_token
+        self._next_native_effect_token += 1
+        return token
 
     @staticmethod
     def _backdrop_cache_key(window: Window) -> int:

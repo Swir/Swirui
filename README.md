@@ -15,7 +15,7 @@
 ![macOS Native](https://img.shields.io/badge/macOS-Cocoa%20native-000000?logo=apple&logoColor=white)
 ![GPU](https://img.shields.io/badge/GPU-wgpu%2030-6E56CF)
 ![Status](https://img.shields.io/badge/status-pre--alpha-7C3AED)
-![Progress](https://img.shields.io/badge/project%20progress-39%25-00BFFF)
+![Progress](https://img.shields.io/badge/project%20progress-40%25-00BFFF)
 
 </div>
 
@@ -23,9 +23,9 @@
 
 ## Project progress
 
-**39% — 0.3 Alpha Visual Engine underway; automatic runtime visual-quality adaptation is verified**
+**40% — 0.3 Alpha Visual Engine underway; native retained effect-frame caching is verified**
 
-`[████████░░░░░░░░░░░░] 39%`
+`[████████░░░░░░░░░░░░] 40%`
 
 **Completed:** `0.1 Alpha — Foundation` ✅ · `0.2 Alpha — Native Window + First Renderer` ✅  
 **Current milestone:** `0.3 Alpha — Visual Engine` 🚧
@@ -98,6 +98,8 @@ SwirUI is currently **pre-alpha**. APIs may change while the renderer, component
 - concrete visual-quality budgets spanning Performance / Balanced / Quality / Ultra / Cinematic for implemented retained effects
 - **automatic `AUTO` profile resolution that steps between concrete quality budgets only after sustained measured pressure or headroom**
 - frame telemetry exposing render duration, frame-budget utilization and configured/effective visual quality
+- **native retained effect-frame caching that presents unchanged composed backdrop/material scenes without repeating primitive submission, backdrop blur or material composition**
+- effect-cache invalidation for scene generation, DPI, image-resource, resize and background changes plus native hit/miss telemetry
 
 The Windows renderer currently owns the verified wgpu presentation path. Linux/X11 and macOS/Cocoa provide real native window/input backends; GPU presentation on those platforms and Wayland remain future work and are not claimed yet.
 
@@ -144,11 +146,12 @@ python examples/gpu_scene_blur_demo.py
 python examples/gpu_backdrop_blur_demo.py
 python examples/gpu_glass_materials_demo.py
 python examples/gpu_color_filters_demo.py
+python examples/gpu_native_effect_frame_cache_demo.py
 python examples/adaptive_quality_demo.py
 python examples/high_refresh_demo.py
 ```
 
-The demos exercise the same retained scene contracts used by applications. Geometry remains authored in logical DIPs while native surfaces and GPU submission operate in physical pixels. The color-filter demo exercises the persistent affine RGBA postprocess after scene/backdrop composition without recreating the per-window wgpu context. The adaptive-quality demo drives quality-aware retained effects from the runtime's concrete `effective_visual_quality` while `AUTO` evaluates real renderer cost and frame pacing.
+The demos exercise the same retained scene contracts used by applications. Geometry remains authored in logical DIPs while native surfaces and GPU submission operate in physical pixels. The color-filter demo exercises the persistent affine RGBA postprocess after scene/backdrop composition without recreating the per-window wgpu context. The native effect-frame cache demo repeatedly presents an unchanged frosted-glass scene at a high target refresh rate while exposing native cache hit/miss telemetry. The adaptive-quality demo drives quality-aware retained effects from the runtime's concrete `effective_visual_quality` while `AUTO` evaluates real renderer cost and frame pacing.
 
 ## Foundation API
 
@@ -218,7 +221,8 @@ Renderer Layer
         ├── painter-order backdrop blur ✅ Windows
         ├── frosted glass + acrylic ✅ Windows
         ├── affine RGBA color-filter postprocess ✅ Windows
-        └── custom shader effects / full effect caching 🚧
+        ├── retained backdrop/material effect-frame cache ✅ Windows
+        └── custom shader effects 🚧
         │
 Native Core
         │
@@ -257,11 +261,13 @@ SwirUI Framework
 
 ## Current milestone: 0.3 Alpha — Visual Engine
 
-The 0.2 Alpha native/runtime gate is verified complete. 0.3 is active and now includes verified gradients, depth/perspective, parallax, reflections, dynamic shadows, adaptive lighting, glow, source-driven bloom, deterministic grain, background blur, frosted glass, acrylic-like materials, native GPU color filters and automatic runtime visual-quality adaptation.
+The 0.2 Alpha native/runtime gate is verified complete. 0.3 is active and now includes verified gradients, depth/perspective, parallax, reflections, dynamic shadows, adaptive lighting, glow, source-driven bloom, deterministic grain, background blur, frosted glass, acrylic-like materials, native GPU color filters, automatic runtime visual-quality adaptation and native retained effect-frame caching.
 
 `VisualQuality.AUTO` now resolves to concrete Performance / Balanced / Quality / Ultra / Cinematic budgets from two independent runtime signals: smoothed frame cadence and measured renderer-call cost. Fast sustained-pressure demotion, conservative sustained-headroom promotion, a neutral hysteresis band and a post-transition cooldown prevent idle invalidation-driven windows and brief spikes from causing profile thrashing. Fixed profiles remain fixed, and applications can inspect `effective_visual_quality`, quality telemetry or `visual_quality_changed` events without recreating native windows.
 
-The next high-impact 0.3 work is broader native effect caching for unchanged material/backdrop/postprocess work across high-refresh frames, followed by reusable custom-shader effects. Native accessibility adapters, Wayland/Linux expansion, macOS GPU presentation and continued measured performance work remain important cross-cutting follow-ups without reopening the completed 0.2 gate.
+Unchanged backdrop/material scenes now retain their fully composed offscreen result inside the persistent per-window native wgpu context. Stable scene-generation tokens let high-refresh presentations skip primitive preparation/submission and expensive backdrop blur/material composition until scene content, DPI, image resources, surface size or renderer background actually changes. Final scene blur and affine color filtering remain live presentation-stage postprocesses, and native hit/miss telemetry makes the cache behavior observable.
+
+The next high-impact 0.3 work is a reusable custom-shader effect contract with safe WGSL validation, persistent native pipeline caching and a Python-first API. Native accessibility adapters, Wayland/Linux expansion, macOS GPU presentation and continued measured performance work remain important cross-cutting follow-ups without reopening the completed 0.2 gate.
 
 See **[ROADMAP.md](ROADMAP.md)** for the full development plan.
 
@@ -297,6 +303,7 @@ Windows retained gradient smoke tests
 Windows retained depth / parallax / reflection smoke test
 Windows retained adaptive-lighting / glow / bloom / noise smoke test
 Windows retained backdrop blur + glass/acrylic smoke test
+Windows retained native effect-frame cache smoke test
 Windows native GPU color-filter postprocess smoke test
 Windows shaped-text smoke test
 Windows image-resource smoke test
