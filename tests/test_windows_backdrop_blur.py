@@ -89,7 +89,8 @@ def test_backdrop_blur_uses_persistent_wgpu_context_and_blur_targets() -> None:
         renderer=renderer,
     )
     window = Window(title="SwirUI Backdrop Blur Smoke", width=760, height=460)
-    window.set_scene(_scene(95.0))
+    retained_scene = _scene(95.0)
+    window.set_scene(retained_scene)
     app.add_window(window)
 
     try:
@@ -110,19 +111,43 @@ def test_backdrop_blur_uses_persistent_wgpu_context_and_blur_targets() -> None:
         context = renderer._contexts[handle]
         assert context.backdrop_pipeline_ready is True
         assert context.blur_target_size == window.pixel_size
+        assert context.effect_cache_ready is True
+        assert context.effect_cache_hits == 0
+        assert context.effect_cache_misses == 1
         first_blur_generation = context.blur_generation
         assert first_blur_generation is not None
+
+        app.invalidate(window)
+        assert app.render_pending(time.monotonic() + 1.0) == 1
+        assert renderer.frames_rendered == 2
+        assert renderer._contexts[handle] is context
+        assert context.effect_cache_ready is True
+        assert context.effect_cache_hits == 1
+        assert context.effect_cache_misses == 1
+        assert renderer.native_effect_cache_hits == 1
+        assert renderer.native_effect_cache_misses == 1
+        assert context.blur_generation == first_blur_generation
+
+        retained_scene.touch()
+        app.invalidate(window)
+        assert app.render_pending(time.monotonic() + 1.0) == 1
+        assert renderer.frames_rendered == 3
+        assert context.effect_cache_hits == 1
+        assert context.effect_cache_misses == 2
+        assert context.blur_generation == first_blur_generation
 
         window.set_scene(_scene(265.0, acrylic=True))
         app.invalidate(window)
         assert app.render_pending(time.monotonic() + 1.0) == 1
 
-        assert renderer.frames_rendered == 2
+        assert renderer.frames_rendered == 4
         assert renderer.last_rectangle_count == 18
         assert renderer.last_text_count == 1
         assert renderer.last_backdrop_count == 1
         assert renderer._contexts[handle] is context
         assert context.backdrop_pipeline_ready is True
+        assert context.effect_cache_hits == 1
+        assert context.effect_cache_misses == 3
         assert context.blur_generation == first_blur_generation
     finally:
         app.stop()
