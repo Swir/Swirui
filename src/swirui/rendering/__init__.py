@@ -1,5 +1,6 @@
 """Rendering contracts and backend-neutral primitives."""
 
+from .backdrop import BackdropBlur
 from .base import NullRenderer, Renderer
 from .bloom import Bloom
 from .effects import (
@@ -20,6 +21,7 @@ from .wgpu_renderer import WgpuRenderer
 from .windows_gdi import Win32PreviewRenderer
 
 __all__ = [
+    "BackdropBlur",
     "Bloom",
     "Color",
     "CornerRadius",
