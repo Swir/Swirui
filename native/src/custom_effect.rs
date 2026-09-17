@@ -39,7 +39,7 @@ pub(crate) struct CustomShaderPass {
 impl CustomShaderPass {
     pub(crate) fn new(
         device: &wgpu::Device,
-        queue: &wgpu::Queue,
+        _queue: &wgpu::Queue,
         format: wgpu::TextureFormat,
         width: u32,
         height: u32,
