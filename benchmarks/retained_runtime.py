@@ -115,7 +115,7 @@ def _reflection_build_workload() -> BenchmarkWorkload:
 def _cached_effect_build_workload() -> BenchmarkWorkload:
     """Exercise the hot path used by unchanged high-quality retained effects."""
 
-    cache = EffectCache(max_entries=4)
+    cache = EffectCache(max_entries=4, max_nodes=256)
     glow = Glow(
         color=Color(0.0, 0.7, 1.0, 0.55),
         blur_radius=42.0,
@@ -125,6 +125,8 @@ def _cached_effect_build_workload() -> BenchmarkWorkload:
     bounds = Rect(120.0, 80.0, 640.0, 360.0)
     radius = CornerRadius.uniform(32.0)
     cache.render(glow, "warm", bounds, corner_radius=radius)
+    if cache.stats.retained_nodes != 65:
+        raise RuntimeError("Effect-cache benchmark retained an unexpected node cost.")
     sequence = 0
 
     def workload() -> object:
@@ -138,6 +140,8 @@ def _cached_effect_build_workload() -> BenchmarkWorkload:
         )
         if len(node.children) != 64:
             raise RuntimeError("Cached retained effect returned an unexpected layer count.")
+        if cache.stats.entries != 1 or cache.stats.retained_nodes != 65:
+            raise RuntimeError("Cached effect hot path violated its retained-node budget.")
         return node
 
     return workload

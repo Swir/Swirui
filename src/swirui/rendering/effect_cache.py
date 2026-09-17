@@ -1,10 +1,8 @@
 """Bounded retained-effect caching for immutable visual-effect inputs.
 
-The cache sits above the renderer: it memoizes deterministic ``SceneNode``
-subtrees produced by retained effects, then returns a structurally independent
-clone for each logical scene key. Immutable geometry/color/path objects are
-shared safely while mutable node/children containers are never exposed from the
-cache itself.
+The cache memoizes deterministic ``SceneNode`` subtrees and returns a structurally
+independent clone for each logical scene key. Entry-count and retained-node limits
+bound both cache cardinality and the cost of high-quality retained effects.
 """
 
 from __future__ import annotations
@@ -41,9 +39,12 @@ class EffectCacheStats:
     """Immutable cache telemetry snapshot."""
 
     entries: int
+    retained_nodes: int
     hits: int
     misses: int
     evictions: int
+    evicted_nodes: int
+    oversize_bypasses: int
 
     @property
     def requests(self) -> int:
@@ -55,27 +56,38 @@ class EffectCacheStats:
         return 0.0 if requests == 0 else self.hits / requests
 
 
+@dataclass(slots=True)
+class _CacheEntry:
+    template: SceneNode
+    node_count: int
+
+
 _CacheKey = tuple[object, object, Rect, CornerRadius, float, int]
 
 
 class EffectCache:
-    """Thread-safe bounded LRU cache for deterministic retained effects.
+    """Thread-safe LRU cache for deterministic retained effects.
 
-    Standard frozen SwirUI effects such as ``DropShadow``, ``Glow``, ``Bloom``,
-    ``DynamicShadow`` and ``AdaptiveLighting`` satisfy :class:`RetainedEffect`.
-    Cache identity intentionally excludes the logical scene ``key`` so identical
-    effect geometry can be reused while callers still receive independently keyed
-    node trees.
+    Cache identity excludes the logical scene ``key`` so identical effect geometry
+    can be reused while callers receive independently keyed node trees. A single
+    effect larger than ``max_nodes`` bypasses storage instead of evicting useful
+    entries.
     """
 
-    def __init__(self, max_entries: int = 128) -> None:
+    def __init__(self, max_entries: int = 128, *, max_nodes: int = 4096) -> None:
         if max_entries <= 0:
             raise ValueError("EffectCache max_entries must be positive.")
+        if max_nodes <= 0:
+            raise ValueError("EffectCache max_nodes must be positive.")
         self._max_entries = max_entries
-        self._entries: OrderedDict[_CacheKey, SceneNode] = OrderedDict()
+        self._max_nodes = max_nodes
+        self._entries: OrderedDict[_CacheKey, _CacheEntry] = OrderedDict()
+        self._retained_nodes = 0
         self._hits = 0
         self._misses = 0
         self._evictions = 0
+        self._evicted_nodes = 0
+        self._oversize_bypasses = 0
         self._lock = RLock()
 
     @property
@@ -83,13 +95,20 @@ class EffectCache:
         return self._max_entries
 
     @property
+    def max_nodes(self) -> int:
+        return self._max_nodes
+
+    @property
     def stats(self) -> EffectCacheStats:
         with self._lock:
             return EffectCacheStats(
                 entries=len(self._entries),
+                retained_nodes=self._retained_nodes,
                 hits=self._hits,
                 misses=self._misses,
                 evictions=self._evictions,
+                evicted_nodes=self._evicted_nodes,
+                oversize_bypasses=self._oversize_bypasses,
             )
 
     def __len__(self) -> int:
@@ -101,14 +120,10 @@ class EffectCache:
 
         with self._lock:
             self._entries.clear()
+            self._retained_nodes = 0
 
     def invalidate(self, effect: RetainedEffect) -> int:
-        """Drop every cached variant for ``effect`` and return the removed count.
-
-        Bounds, radius, opacity and z-index are deliberately ignored so callers
-        can release all retained variants of one immutable effect in a single
-        operation without disturbing unrelated cache entries.
-        """
+        """Drop every cached variant for ``effect`` and return the removed count."""
 
         try:
             hash(effect)
@@ -122,16 +137,19 @@ class EffectCache:
                 if cache_key[0] is type(effect) and cache_key[1] == effect
             ]
             for cache_key in matching:
-                del self._entries[cache_key]
+                entry = self._entries.pop(cache_key)
+                self._retained_nodes -= entry.node_count
             return len(matching)
 
     def reset_stats(self) -> None:
-        """Reset hit/miss/eviction counters without invalidating cached templates."""
+        """Reset counters without invalidating cached templates."""
 
         with self._lock:
             self._hits = 0
             self._misses = 0
             self._evictions = 0
+            self._evicted_nodes = 0
+            self._oversize_bypasses = 0
 
     def render(
         self,
@@ -143,12 +161,7 @@ class EffectCache:
         opacity: float = 1.0,
         z_index: int = 0,
     ) -> SceneNode:
-        """Return a cached retained-effect subtree with caller-owned node identity.
-
-        A cache hit skips the effect's tessellation/build work. Returned nodes are
-        always fresh mutable containers, so adding/removing children on one scene
-        cannot corrupt the cached template or another window's scene graph.
-        """
+        """Return a cached retained-effect subtree with caller-owned node identity."""
 
         if not key:
             raise ValueError("Cached effect scene keys cannot be empty.")
@@ -167,11 +180,11 @@ class EffectCache:
             raise TypeError("Cached retained effects must be hashable and immutable.") from exc
 
         with self._lock:
-            template = self._entries.pop(cache_key, None)
-            if template is not None:
-                self._entries[cache_key] = template
+            entry = self._entries.pop(cache_key, None)
+            if entry is not None:
+                self._entries[cache_key] = entry
                 self._hits += 1
-                return _clone_tree(template, _TEMPLATE_KEY, key)
+                return _clone_tree(entry.template, _TEMPLATE_KEY, key)
 
             self._misses += 1
             template = effect.to_scene_node(
@@ -181,10 +194,18 @@ class EffectCache:
                 opacity=opacity,
                 z_index=z_index,
             )
-            self._entries[cache_key] = template
-            if len(self._entries) > self._max_entries:
-                self._entries.popitem(last=False)
+            node_count = sum(1 for _ in template.walk())
+            if node_count > self._max_nodes:
+                self._oversize_bypasses += 1
+                return _clone_tree(template, _TEMPLATE_KEY, key)
+
+            self._entries[cache_key] = _CacheEntry(template, node_count)
+            self._retained_nodes += node_count
+            while len(self._entries) > self._max_entries or self._retained_nodes > self._max_nodes:
+                _, evicted = self._entries.popitem(last=False)
+                self._retained_nodes -= evicted.node_count
                 self._evictions += 1
+                self._evicted_nodes += evicted.node_count
             return _clone_tree(template, _TEMPLATE_KEY, key)
 
 
