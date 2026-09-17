@@ -14,6 +14,7 @@ from .effects import (
 from .factory import create_renderer
 from .geometry import Color, CornerRadius, Path2D, Point, Rect, Size
 from .gradients import GradientStop, LinearGradient, MeshGradient, RadialGradient
+from .materials import Acrylic, FrostedGlass
 from .scene import Scene, SceneNode, SceneNodeKind
 from .scheduler import FrameScheduler, FrameStats
 from .surface import RenderSurface
@@ -21,6 +22,7 @@ from .tree import RenderNode, RenderTree
 from .windows_gdi import Win32PreviewRenderer
 
 __all__ = [
+    "Acrylic",
     "BackdropBlur",
     "Bloom",
     "Color",
@@ -30,6 +32,7 @@ __all__ = [
     "EffectQualityProfile",
     "FrameScheduler",
     "FrameStats",
+    "FrostedGlass",
     "Glow",
     "GradientStop",
     "LinearGradient",
