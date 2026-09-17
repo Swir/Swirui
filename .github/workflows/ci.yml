@@ -191,6 +191,9 @@ jobs:
       - name: Verify retained expander and accordion
         run: pytest tests/test_windows_expander.py -q
 
+      - name: Verify retained SplitView
+        run: pytest tests/test_windows_split_view.py -q
+
       - name: Draw native GPU scene
         run: pytest tests/test_windows_gpu_bridge.py -q
 

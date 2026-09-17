@@ -15,6 +15,7 @@ from .runtime import (
 )
 from .scrolling import ScrollView
 from .slider import RangeSlider, Slider
+from .split_view import SplitView
 from .surfaces import Card, Frame, GlassCard, Panel
 from .text import Label, Text
 from .toggle import Checkbox, RadioButton, Switch
@@ -43,6 +44,7 @@ __all__ = [
     "SceneRenderable",
     "ScrollView",
     "Slider",
+    "SplitView",
     "Switch",
     "Text",
     "TextArea",
