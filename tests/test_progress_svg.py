@@ -28,14 +28,16 @@ render_mini = progress_svg.render_mini
 SVG_NS = {"svg": "http://www.w3.org/2000/svg"}
 
 
-def _roadmap(percent: str, completed: int, total: int = 15) -> str:
+def _roadmap(percent: str, completed: int, total: int = 12) -> str:
     boxes = ["- [x] done"] * completed + ["- [ ] pending"] * (total - completed)
     return (
         "# Roadmap\n\n"
         f"**Overall completion: {percent}%**\n\n"
         "## 0.4 Alpha — Core Widgets\n\n"
+        "- [x] completed previous milestone\n\n"
+        "## 0.5 Alpha — Layout Engine\n\n"
         + "\n".join(boxes)
-        + "\n\n## 0.5 Alpha — Layout Engine\n"
+        + "\n\n## 0.6 Alpha — Reactive Runtime\n"
     )
 
 
@@ -48,37 +50,46 @@ def _fill_width(svg: str) -> Decimal | None:
 
 
 def test_parse_progress_reproduces_verified_weighting() -> None:
-    data = parse_progress(_roadmap("51", completed=10))
+    data = parse_progress(_roadmap("59", completed=3))
 
-    assert data.percentage == Decimal("51")
-    assert data.completed == 10
-    assert data.total == 15
+    assert data.percentage == Decimal("59")
+    assert data.completed == 3
+    assert data.total == 12
     assert data.status == "IN PROGRESS"
+    assert data.counter_text == "3 / 12 layout groups verified"
 
 
 def test_parse_progress_rejects_stale_documented_percentage() -> None:
     with pytest.raises(ValueError, match="stale or contradictory"):
-        parse_progress(_roadmap("50", completed=10))
+        parse_progress(_roadmap("58", completed=3))
 
 
 def test_completed_milestone_scope_does_not_imply_project_100_percent() -> None:
-    data = parse_progress(_roadmap("56", completed=15))
+    data = parse_progress(_roadmap("68", completed=12))
 
     assert data.status == "COMPLETE"
+    assert data.percentage == Decimal("68")
+    assert data.counter_text == "12 / 12 layout groups verified"
+
+
+def test_zero_verified_layout_groups_preserve_completed_04_baseline() -> None:
+    data = parse_progress(_roadmap("56", completed=0))
+
     assert data.percentage == Decimal("56")
-    assert data.counter_text == "15 / 15 widget groups verified"
+    assert data.completed == 0
+    assert data.status == "IN PROGRESS"
 
 
 def test_empty_scope_is_unverifiable_instead_of_zero_percent() -> None:
     with pytest.raises(ValueError, match="No checklist items"):
-        parse_progress(_roadmap("41", completed=0, total=0))
+        parse_progress(_roadmap("56", completed=0, total=0))
 
 
 @pytest.mark.parametrize(
     ("percentage", "card_width", "mini_width"),
     [
         (Decimal("0"), None, None),
-        (Decimal("51"), Decimal("561"), Decimal("357")),
+        (Decimal("59"), Decimal("649"), Decimal("413")),
         (Decimal("100"), CARD_TRACK_WIDTH, MINI_TRACK_WIDTH),
     ],
 )
@@ -89,12 +100,12 @@ def test_progress_fill_is_bounded(
 ) -> None:
     data = ProgressData(
         project="SwirUI",
-        scope="0.4 Alpha — Core Widgets",
+        scope="0.5 Alpha — Layout Engine",
         status="IN PROGRESS",
         percentage=percentage,
-        completed=10,
-        total=15,
-        counter_label="widget groups verified",
+        completed=3,
+        total=12,
+        counter_label="layout groups verified",
     )
 
     assert _fill_width(render_card(data)) == card_width
@@ -125,9 +136,9 @@ def test_long_scope_expands_card_instead_of_overlapping() -> None:
             "without colliding with the progress track"
         ),
         status="IN PROGRESS",
-        percentage=Decimal("51"),
-        completed=10,
-        total=15,
+        percentage=Decimal("59"),
+        completed=3,
+        total=12,
         counter_label="items verified",
     )
 

@@ -197,6 +197,9 @@ jobs:
       - name: Verify retained modal and notification surfaces
         run: pytest tests/test_windows_overlays.py -q
 
+      - name: Verify retained Row / Column layout
+        run: pytest tests/test_windows_layout.py -q
+
       - name: Draw native GPU scene
         run: pytest tests/test_windows_gpu_bridge.py -q
 

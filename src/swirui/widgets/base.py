@@ -3,10 +3,34 @@
 from __future__ import annotations
 
 import math
+from dataclasses import dataclass
 
 from swirui.core import AccessibilityRole, Component
-from swirui.rendering.geometry import Rect
+from swirui.rendering.geometry import Rect, Size
 from swirui.rendering.scene import SceneNode
+
+
+@dataclass(frozen=True, slots=True)
+class LayoutConstraints:
+    """Min/max logical-DIP size constraints shared by retained layouts."""
+
+    min_width: float = 0.0
+    min_height: float = 0.0
+    max_width: float = math.inf
+    max_height: float = math.inf
+
+    def __post_init__(self) -> None:
+        values = (self.min_width, self.min_height, self.max_width, self.max_height)
+        if any(math.isnan(value) or value < 0.0 for value in values):
+            raise ValueError("Layout constraints must be non-negative and not NaN.")
+        if self.min_width > self.max_width or self.min_height > self.max_height:
+            raise ValueError("Minimum layout constraints cannot exceed maximum constraints.")
+
+    def constrain(self, size: Size) -> Size:
+        return Size(
+            min(max(size.width, self.min_width), self.max_width),
+            min(max(size.height, self.min_height), self.max_height),
+        )
 
 
 class Widget(Component):
@@ -15,6 +39,10 @@ class Widget(Component):
     Widgets author logical-DIP geometry and compile it to backend-neutral
     :class:`~swirui.rendering.scene.SceneNode` objects. The existing renderer
     pipeline remains responsible for HiDPI conversion and native GPU submission.
+
+    ``layout_constraints`` and ``layout_grow`` are intentionally backend-neutral.
+    Layout containers may arrange ``bounds`` during scene preparation without
+    emitting a second invalidation from inside the same retained rebuild.
     """
 
     def __init__(
@@ -43,6 +71,8 @@ class Widget(Component):
         self._opacity = self._validate_opacity(opacity)
         self._z_index = int(z_index)
         self._clip_to_bounds = bool(clip_to_bounds)
+        self._layout_constraints = LayoutConstraints()
+        self._layout_grow = 0.0
 
     @property
     def bounds(self) -> Rect:
@@ -91,6 +121,66 @@ class Widget(Component):
         self._clip_to_bounds = normalized
         self.invalidate(reason="clip_to_bounds")
 
+    @property
+    def layout_constraints(self) -> LayoutConstraints:
+        return self._layout_constraints
+
+    @layout_constraints.setter
+    def layout_constraints(self, value: LayoutConstraints) -> None:
+        if value == self._layout_constraints:
+            return
+        self._layout_constraints = value
+        self.invalidate(reason="layout_constraints")
+
+    @property
+    def layout_grow(self) -> float:
+        return self._layout_grow
+
+    @layout_grow.setter
+    def layout_grow(self, value: float) -> None:
+        normalized = float(value)
+        if not math.isfinite(normalized) or normalized < 0.0:
+            raise ValueError("layout_grow must be a finite non-negative value.")
+        if normalized == self._layout_grow:
+            return
+        self._layout_grow = normalized
+        self.invalidate(reason="layout_grow")
+
+    def set_layout_constraints(
+        self,
+        *,
+        min_width: float = 0.0,
+        min_height: float = 0.0,
+        max_width: float = math.inf,
+        max_height: float = math.inf,
+    ) -> Widget:
+        self.layout_constraints = LayoutConstraints(
+            min_width=min_width,
+            min_height=min_height,
+            max_width=max_width,
+            max_height=max_height,
+        )
+        return self
+
+    def set_layout_grow(self, grow: float) -> Widget:
+        self.layout_grow = grow
+        return self
+
+    def measure(self, available: Size | None = None) -> Size:
+        """Return this widget's preferred constrained logical-DIP size."""
+
+        preferred = self.layout_constraints.constrain(self.bounds.size)
+        if available is None:
+            return preferred
+        available_width = max(0.0, float(available.width))
+        available_height = max(0.0, float(available.height))
+        return self.layout_constraints.constrain(
+            Size(
+                min(preferred.width, available_width),
+                min(preferred.height, available_height),
+            )
+        )
+
     def build_scene_node(self) -> SceneNode:
         """Compile this widget's own visual node.
 
@@ -99,6 +189,11 @@ class Widget(Component):
         """
 
         raise NotImplementedError
+
+    def _set_layout_bounds(self, value: Rect) -> None:
+        """Apply bounds inside an active layout pass without recursive invalidation."""
+
+        self._bounds = value
 
     @staticmethod
     def _validate_opacity(value: float) -> float:

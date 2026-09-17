@@ -4,9 +4,9 @@
 
 ## Project progress
 
-**Overall completion: 56%**
+**Overall completion: 59%**
 
-`[███████████░░░░░░░░░] 56%`
+`[████████████░░░░░░░░] 59%`
 
 Progress is based on implemented and verified roadmap work. Ideas, mockups and unfinished prototypes do not increase the percentage.
 
@@ -152,18 +152,24 @@ The Core Widgets gate is complete with all 15 retained widget groups implemented
 
 ## 0.5 Alpha — Layout Engine
 
-- [ ] Row / Column
-- [ ] Stack / Grid / Wrap
+**Status:** Underway 🚧
+
+- [x] Row / Column
+- [x] Stack / Grid / Wrap
 - [ ] Dock / Flow / Overlay
 - [ ] Constraint layout
 - [ ] Intrinsic sizing
-- [ ] Min / max constraints
+- [x] Min / max constraints
 - [ ] Responsive breakpoints
 - [ ] Adaptive navigation
 - [ ] Dynamic typography
 - [ ] Compact / desktop / ultrawide variants
 - [ ] DPI-aware spacing
 - [ ] Layout invalidation optimization
+
+### 0.5 verified foundation
+
+The first verified layout foundation provides retained `Row`, `Column`, `Stack`, weighted `Grid` and `Wrap` containers with logical-DIP padding, spacing, alignment and viewport reflow. Widget-level min/max constraints plus weighted grow/shrink sizing are applied before descendant SceneGraph compilation, including nested layouts, without recursively invalidating the tree from inside the same layout pass. Deterministic component tests and real Win32/wgpu smoke coverage verify routed pointer input through arranged bounds and persistent per-window GPU-context reuse. The remaining 0.5 groups are still open and the milestone is not complete.
 
 ## 0.6 Alpha — Reactive Runtime
 
@@ -419,6 +425,7 @@ AI output must remain ordinary, editable SwirUI code.
 - [x] Windows retained Expander / Accordion + persistent wgpu smoke test
 - [x] Windows retained SplitView + persistent wgpu smoke test
 - [x] Windows retained Modal / Dialog + Toast / Notification + persistent wgpu smoke test
+- [x] Windows retained layout engine + persistent wgpu smoke test
 - [ ] Screenshot tests
 - [ ] Visual regression tests
 - [x] Accessibility tests
