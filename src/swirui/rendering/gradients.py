@@ -74,14 +74,14 @@ class LinearGradient:
         start_color: Color,
         end_color: Color,
         *,
-        start: Point = Point(0.0, 0.5),
-        end: Point = Point(1.0, 0.5),
+        start: Point | None = None,
+        end: Point | None = None,
     ) -> LinearGradient:
         """Create the common two-color gradient spanning offsets 0 → 1."""
 
         return cls(
-            start=start,
-            end=end,
+            start=Point(0.0, 0.5) if start is None else start,
+            end=Point(1.0, 0.5) if end is None else end,
             stops=(GradientStop(0.0, start_color), GradientStop(1.0, end_color)),
         )
 
