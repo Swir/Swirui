@@ -7,9 +7,13 @@ import pytest
 
 from swirui import (
     App,
+    Badge,
     Checkbox,
+    Chip,
     Component,
+    GlassCard,
     Input,
+    Label,
     PasswordInput,
     ProgressBar,
     ProgressRing,
@@ -17,6 +21,7 @@ from swirui import (
     Slider,
     Switch,
     TextArea,
+    Tooltip,
     Window,
     mount,
 )
@@ -294,5 +299,87 @@ def test_retained_ranges_and_progress_render_in_persistent_wgpu_context() -> Non
         ]
         assert len(ring_segments) == 24
         assert all(node.kind is SceneNodeKind.PATH for node in ring_segments)
+    finally:
+        app.stop()
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="retained widget smoke requires Windows")
+def test_retained_content_surfaces_and_tooltip_reuse_real_wgpu_context() -> None:
+    renderer = WgpuRenderer()
+    backend = _isolated_backend()
+    app = App("SwirUI surface widget smoke", platform_backend=backend, renderer=renderer)
+    window = app.add_window(Window(title="SwirUI retained surfaces", width=720, height=380))
+    root = Component("root")
+    glass = GlassCard(
+        key="native-glass",
+        bounds=Rect(24.0, 24.0, 440.0, 250.0),
+        accessible_name="Native glass card",
+    )
+    title = Label(
+        "Persistent GPU surface",
+        key="native-glass-title",
+        bounds=Rect(48.0, 48.0, 280.0, 30.0),
+    )
+    chip = Chip(
+        "GPU active",
+        key="native-chip",
+        bounds=Rect(48.0, 96.0, 150.0, 40.0),
+        accessible_name="GPU active",
+    )
+    badge = Badge(
+        "retained",
+        key="native-badge",
+        bounds=Rect(48.0, 158.0, 104.0, 28.0),
+    )
+    glass.add(title, chip, badge)
+    tooltip = Tooltip(
+        "Toggle retained state",
+        key="native-tooltip",
+        target=chip,
+        bounds=Rect(216.0, 98.0, 190.0, 36.0),
+    )
+    root.add(glass, tooltip)
+    runtime = mount(window, root)
+
+    try:
+        app.start()
+        assert window.native_handle is not None
+        assert renderer.frames_rendered == 1
+        assert renderer.persistent_context_count == 1
+        initial_contexts = renderer.persistent_context_count
+        hwnd = window.native_handle.value
+        user32 = _user32()
+
+        app.process_events()
+        x = max(1, round(90.0 * window.scale))
+        y = max(1, round(116.0 * window.scale))
+        user32.SendMessageW(ctypes.c_void_p(hwnd), 0x0200, 0, _lparam(x, y))
+        app.process_events()
+        assert tooltip.is_open is True
+
+        _send_click(user32, hwnd, x, y)
+        app.process_events()
+        assert window.focused_component is chip
+        assert chip.selected is True
+        assert tooltip.is_open is True
+        assert runtime.generation > 1
+
+        app.invalidate(window)
+        frame_time = time.monotonic() + 1.0
+        assert app.render_pending(frame_time) == 1
+        assert renderer.persistent_context_count == initial_contexts
+        assert window.scene is not None
+        assert next(
+            node for node in window.scene.walk() if node.key == "native-glass"
+        ).kind is SceneNodeKind.BACKDROP_BLUR
+        assert next(
+            node for node in window.scene.walk() if node.key == "native-chip"
+        ).kind is SceneNodeKind.RECTANGLE
+        assert next(
+            node for node in window.scene.walk() if node.key == "native-badge"
+        ).kind is SceneNodeKind.RECTANGLE
+        assert next(
+            node for node in window.scene.walk() if node.key == "native-tooltip"
+        ).kind is SceneNodeKind.RECTANGLE
     finally:
         app.stop()
