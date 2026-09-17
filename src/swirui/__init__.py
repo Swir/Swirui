@@ -15,7 +15,18 @@ from .core import (
     VisualQuality,
     build_accessibility_tree,
 )
-from .widgets import Button, IconButton, Label, Text, Widget, WidgetRuntime, mount
+from .widgets import (
+    Button,
+    IconButton,
+    Input,
+    Label,
+    PasswordInput,
+    Text,
+    TextArea,
+    Widget,
+    WidgetRuntime,
+    mount,
+)
 from .window import Window
 
 __all__ = [
@@ -30,10 +41,13 @@ __all__ = [
     "Button",
     "Component",
     "IconButton",
+    "Input",
     "Label",
+    "PasswordInput",
     "PresentationMode",
     "State",
     "Text",
+    "TextArea",
     "VisualQuality",
     "Widget",
     "WidgetRuntime",
