@@ -1,7 +1,7 @@
 """Rendering contracts and backend-neutral primitives."""
 
 from .base import NullRenderer, Renderer
-from .effects import DropShadow
+from .effects import DropShadow, DynamicShadow, Glow
 from .factory import create_renderer
 from .geometry import Color, CornerRadius, Path2D, Point, Rect, Size
 from .gradients import GradientStop, LinearGradient, MeshGradient, RadialGradient
@@ -16,8 +16,10 @@ __all__ = [
     "Color",
     "CornerRadius",
     "DropShadow",
+    "DynamicShadow",
     "FrameScheduler",
     "FrameStats",
+    "Glow",
     "GradientStop",
     "LinearGradient",
     "MeshGradient",
