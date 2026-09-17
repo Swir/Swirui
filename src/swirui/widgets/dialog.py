@@ -262,7 +262,9 @@ class Dialog(Widget):
                     kind=SceneNodeKind.RECTANGLE,
                     bounds=border,
                     fill=self._panel_border_color,
-                    corner_radius=CornerRadius.uniform(self._corner_radius + self._border_width),
+                    corner_radius=CornerRadius.uniform(
+                        self._corner_radius + self._border_width
+                    ),
                     z_index=1,
                     hit_testable=False,
                 )
@@ -458,7 +460,9 @@ class Dialog(Widget):
         current = self.parent
         while current is not None:
             if not current.enabled or not current.visible:
-                raise ValueError("Dialog ancestors must be enabled and visible before opening.")
+                raise ValueError(
+                    "Dialog ancestors must be enabled and visible before opening."
+                )
             current = current.parent
 
     def _is_focus_candidate_for_open(self, component: Component) -> bool:
