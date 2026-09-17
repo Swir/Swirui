@@ -18,5 +18,10 @@
     "max_median_us": 10000,
     "max_p95_us": 20000,
     "max_worst_us": 75000
+  },
+  "cached_backdrop_payload_256": {
+    "max_median_us": 5000,
+    "max_p95_us": 10000,
+    "max_worst_us": 50000
   }
 }
