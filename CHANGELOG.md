@@ -78,6 +78,8 @@ The project uses semantic versioning where practical during pre-alpha developmen
 - Retained `Glow` and elevation-aware `DynamicShadow` effects with configurable light direction/altitude and deterministic Gaussian-like layer generation.
 - Visual-quality-aware retained effect budgets for `Performance`, `Balanced`, `Quality`, `Ultra`, `Cinematic` and `Auto` profiles without changing effect geometry, colors or extents.
 - `examples/gpu_dynamic_effects_demo.py` for live quality-aware glow and dynamic-shadow animation on a persistent GPU context.
+- Retained source-driven `Bloom` that splits one quality-aware layer budget into normalized wide-spill and tight-core light bands while reusing the persistent HiDPI-aware wgpu rectangle batch.
+- `examples/gpu_bloom_demo.py` plus real Win32/wgpu bloom smoke coverage across persistent frames alongside dynamic shadows and glow.
 - Persistent sampleable offscreen scene targets in the native Win32/wgpu renderer, with one reusable fullscreen blitter for final swapchain presentation.
 - Native offscreen-target lifecycle telemetry and real Win32/wgpu smoke coverage proving reuse across frames, recreation on physical resize and no redundant same-size reallocation.
 - Persistent two-pass separable Gaussian GPU blur with retained ping/output render targets and pipeline state that survive ordinary frames and are recreated only on real physical resize.
