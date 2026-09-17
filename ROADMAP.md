@@ -4,9 +4,9 @@
 
 ## Project progress
 
-**Overall completion: 40%**
+**Overall completion: 41%**
 
-`[████████░░░░░░░░░░░░] 40%`
+`[████████░░░░░░░░░░░░] 41%`
 
 Progress is based on implemented and verified roadmap work. Ideas, mockups and unfinished prototypes do not increase the percentage.
 
@@ -104,6 +104,8 @@ Cross-platform native-window coverage now includes real Linux/X11 lifecycle/inpu
 
 ## 0.3 Alpha — Visual Engine
 
+**Status:** Complete ✅
+
 - [x] Glass / frosted glass
 - [x] Acrylic-like materials
 - [x] Background blur
@@ -116,11 +118,17 @@ Cross-platform native-window coverage now includes real Linux/X11 lifecycle/inpu
 - [x] Parallax
 - [x] Color filters
 - [x] Noise / grain
-- [ ] Custom shader effects
+- [x] Custom shader effects
 - [x] Effect caching
 - [x] Adaptive quality profiles: Performance / Balanced / Quality / Ultra / Cinematic
 
+### 0.3 gate
+
+The Visual Engine gate is complete with verified retained effects/materials, persistent native post-processing and adaptive-quality/caching behavior. Custom effects use a bounded Python-authored WGSL contract, native Naga validation, a persistent Rust/wgpu fullscreen pass, four-float uniform updates and a bounded compiled-pipeline cache. Real Win32/wgpu smoke coverage verifies execution in the same persistent per-window context alongside blur and color filtering.
+
 ## 0.4 Alpha — Core Widgets
+
+**Status:** Next ⏭️
 
 - [ ] Text / Label
 - [ ] Button / IconButton
@@ -391,6 +399,7 @@ AI output must remain ordinary, editable SwirUI code.
 - [x] Windows retained backdrop/background-blur + glass/acrylic GPU smoke test
 - [x] Windows retained native effect-frame cache smoke test
 - [x] Windows native GPU color-filter postprocess smoke test
+- [x] Windows validated custom-WGSL persistent GPU postprocess smoke test
 - [x] Windows mixed-DPI logical-DIP → physical-GPU smoke test
 - [x] Windows presentation-policy reconfiguration smoke test
 - [x] Display-aware high-refresh runtime pacing tests
@@ -459,6 +468,7 @@ Current native foundation:
 - [x] native filled-path pipeline
 - [x] native painter-order backdrop blur/compositor pipeline
 - [x] native affine RGBA color-filter postprocess pipeline
+- [x] native bounded custom-WGSL postprocess pipeline cache
 - [x] native retained backdrop/material effect-frame cache
 
 Primary future candidates:
@@ -514,7 +524,7 @@ The official showcase will be a real application rather than a Hello World scree
 | --- | --- |
 | 0.1 Alpha | Foundation ✅ |
 | 0.2 Alpha | Native window + first visible renderer ✅ |
-| 0.3 Alpha | Visual Engine |
+| 0.3 Alpha | Visual Engine ✅ |
 | 0.4 Alpha | Core widgets |
 | 0.5 Alpha | Layout Engine |
 | 0.6 Alpha | Reactive runtime |
