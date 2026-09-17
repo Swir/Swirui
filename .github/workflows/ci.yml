@@ -112,8 +112,6 @@ jobs:
 
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
 
       - name: Install
         run: python -m pip install --upgrade pip && python -m pip install -e ".[dev]"
@@ -195,6 +193,9 @@ jobs:
 
       - name: Verify GPU linear gradients
         run: pytest tests/test_windows_gradients.py -q
+
+      - name: Verify GPU radial gradients
+        run: pytest tests/test_windows_radial_gradients.py -q
 
       - name: Verify GPU resource cache
         run: pytest tests/test_windows_resource_cache.py -q
