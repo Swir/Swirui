@@ -15,7 +15,7 @@
 ![macOS Native](https://img.shields.io/badge/macOS-Cocoa%20native-000000?logo=apple&logoColor=white)
 ![GPU](https://img.shields.io/badge/GPU-wgpu%2030-6E56CF)
 ![Status](https://img.shields.io/badge/status-pre--alpha-7C3AED)
-![Progress](https://img.shields.io/badge/project%20progress-26%25-00BFFF)
+![Progress](https://img.shields.io/badge/project%20progress-27%25-00BFFF)
 
 </div>
 
@@ -23,9 +23,9 @@
 
 ## Project progress
 
-**26% — 0.2 Alpha verified complete; 0.3 Alpha Visual Engine is next**
+**27% — 0.3 Alpha Visual Engine underway; retained GPU gradients verified**
 
-`[█████░░░░░░░░░░░░░░░] 26%`
+`[█████░░░░░░░░░░░░░░░] 27%`
 
 **Completed:** `0.1 Alpha — Foundation` ✅ · `0.2 Alpha — Native Window + First Renderer` ✅  
 **Current milestone:** `0.3 Alpha — Visual Engine` 🚧
@@ -54,6 +54,8 @@ SwirUI is currently **pre-alpha**. APIs may change while the native renderer and
 - **backend-neutral `Path2D` polygon geometry with deterministic convex/concave tessellation**
 - **SceneNodeKind.PATH → Python WgpuRenderer → persistent Rust/wgpu triangle rendering**
 - path-aware hit testing, clipping, cumulative opacity and reusable native shape buffers
+- **immutable multi-stop linear and radial gradients compiled into retained clipped GPU path geometry**
+- **rectangular mesh gradients with bilinear color-lattice sampling and deterministic retained GPU cells**
 - invalidation-driven `FrameScheduler`
 - backend-neutral `RenderSurface` lifecycle
 - render scheduling connected to `AppConfig.target_fps`
@@ -133,6 +135,7 @@ SwirUI is currently **pre-alpha**. APIs may change while the native renderer and
 - real Linux X11 native-window smoke tests on Python 3.14
 - real macOS Cocoa native-window + Retina logical-geometry smoke tests on Python 3.14
 - Windows native + rounded-GPU + path + shaped-text + image + clipping + mixed-DPI + presentation/display + keyboard/system-key smoke tests on Python 3.14
+- **real Win32/wgpu smoke coverage for retained linear, radial and mesh gradients**
 - Ruff, Mypy, coverage and Python 3.11–3.14 CI
 
 ## Native and GPU demos
@@ -164,10 +167,13 @@ python examples/gpu_rectangles_demo.py
 python examples/gpu_text_demo.py
 python examples/gpu_image_demo.py
 python examples/gpu_paths_demo.py
+python examples/gpu_gradients_demo.py
+python examples/gpu_radial_gradients_demo.py
+python examples/gpu_mesh_gradients_demo.py
 python examples/high_refresh_demo.py
 ```
 
-The rectangle demo submits prepared SwirUI rectangles into the persistent Rust/wgpu backend. Filled rectangles are batched into one instanced draw call and per-corner radii are evaluated in the fragment shader with anti-aliased SDF edges. The path demo exercises deterministic convex/concave `Path2D` tessellation and the full `SceneGraph → Python → Rust/wgpu` filled-triangle path with clipping and alpha compositing. The text demo exercises Unicode shaping through glyphon/cosmic-text and a persistent glyph atlas. The image demo generates RGBA pixels in memory, registers them once and reuses cached native textures; byte-identical image registrations under different logical ids share one retained native texture. The high-refresh demo follows the active display refresh rate automatically. Scene geometry remains authored in logical DIPs while native Win32 input and persistent GPU surfaces operate in physical pixels.
+The rectangle demo submits prepared SwirUI rectangles into the persistent Rust/wgpu backend. Filled rectangles are batched into one instanced draw call and per-corner radii are evaluated in the fragment shader with anti-aliased SDF edges. The path demo exercises deterministic convex/concave `Path2D` tessellation and the full `SceneGraph → Python → Rust/wgpu` filled-triangle path with clipping and alpha compositing. The gradient demos exercise multi-stop linear, radial and rectangular color-lattice mesh gradients through the retained path pipeline. The text demo exercises Unicode shaping through glyphon/cosmic-text and a persistent glyph atlas. The image demo generates RGBA pixels in memory, registers them once and reuses cached native textures; byte-identical image registrations under different logical ids share one retained native texture. The high-refresh demo follows the active display refresh rate automatically. Scene geometry remains authored in logical DIPs while native Win32 input and persistent GPU surfaces operate in physical pixels.
 
 The Linux backend currently provides native X11 windows and normalized input/lifecycle events. The macOS backend provides native Cocoa/AppKit windows, display/Retina scaling and normalized input/lifecycle events. GPU/wgpu presentation on Linux and macOS, plus Wayland support, are not claimed yet.
 
@@ -238,6 +244,7 @@ Renderer Layer
         ├── VSync / present-mode policy ✅ Windows
         ├── instanced anti-aliased rounded rectangles ✅
         ├── filled convex/concave Path2D triangles ✅
+        ├── retained linear / radial / mesh gradients ✅
         ├── shaped text + persistent glyph atlas ✅
         ├── persistent content-addressed RGBA image cache ✅
         ├── hierarchical clipping / opacity compositing ✅
@@ -281,9 +288,9 @@ SwirUI Framework
 
 ## Current milestone: 0.3 Alpha — Visual Engine
 
-The 0.2 Alpha native/runtime gate is now verified complete. Windows has the persistent wgpu renderer and integrated mixed-scene native gate; Linux has a real direct X11 native window/input path under Xvfb; macOS has a direct Cocoa/AppKit native window/input path with Retina logical-geometry verification. Cross-platform GPU presentation beyond Windows remains future work and is not implied by the native-window milestone.
+The 0.2 Alpha native/runtime gate is verified complete. Windows has the persistent wgpu renderer and integrated mixed-scene native gate; Linux has a real direct X11 native window/input path under Xvfb; macOS has a direct Cocoa/AppKit native window/input path with Retina logical-geometry verification. Cross-platform GPU presentation beyond Windows remains future work and is not implied by the native-window milestone.
 
-The next milestone is the Visual Engine. Its first high-impact work will build reusable GPU visual-effect primitives on top of the now-verified renderer foundation, beginning with gradients/material composition and the effect infrastructure needed for glass, blur, glow, shadows and quality profiles. Native accessibility adapters, Wayland/Linux expansion, macOS GPU presentation and continued measured performance work remain important cross-cutting follow-ups without reopening the completed 0.2 gate.
+0.3 is now active. Its first completed visual-engine family is retained **linear / radial / mesh gradients**, all flowing through the clipped, HiDPI-aware native GPU path pipeline and protected by deterministic tests plus real Win32/wgpu smoke coverage. The next high-impact work is reusable effect infrastructure for shadows, glass, blur, glow and quality-aware effect caching. Native accessibility adapters, Wayland/Linux expansion, macOS GPU presentation and continued measured performance work remain important cross-cutting follow-ups without reopening the completed 0.2 gate.
 
 See **[ROADMAP.md](ROADMAP.md)** for the full development plan.
 
@@ -313,6 +320,7 @@ Windows keyboard / system-key normalization smoke test
 Windows wgpu clear/present smoke test
 Windows persistent rounded-rectangle GPU draw smoke test
 Windows filled Path2D SceneGraph → Python → Rust/wgpu smoke test
+Windows retained linear / radial / mesh gradient GPU smoke tests
 Windows shaped-text SceneGraph → Python → Rust/wgpu smoke test
 Windows image-resource SceneGraph → Python → Rust/wgpu smoke test
 Windows clipped mixed-scene GPU smoke test
