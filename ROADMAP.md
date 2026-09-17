@@ -4,9 +4,9 @@
 
 ## Project progress
 
-**Overall completion: 19%**
+**Overall completion: 20%**
 
-`[████░░░░░░░░░░░░░░░░] 19%`
+`[████░░░░░░░░░░░░░░░░] 20%`
 
 Progress is based on implemented and verified roadmap work. Ideas, mockups and unfinished prototypes do not increase the percentage.
 
@@ -49,6 +49,9 @@ Progress is based on implemented and verified roadmap work. Ideas, mockups and u
 - [x] Automatic platform backend selection
 - [x] Automatic renderer selection on Windows: wgpu first, preview fallback
 - [x] Windows-native smoke test on GitHub Actions
+- [x] Exact decorated Win32 client-area sizing across create and programmatic resize
+- [x] DPI-aware native minimum-track sizing
+- [x] Logical client geometry preserved across Win32 DPI transitions
 - [x] Scene-level z-aware hit testing
 - [x] Pointer events enriched with SceneGraph target + ancestry path
 - [x] Pointer enter / leave transitions
@@ -94,6 +97,8 @@ Progress is based on implemented and verified roadmap work. Ideas, mockups and u
 ### 0.2 gate
 
 0.2 is complete only when SwirUI can open a native window and render a visible GPU-backed scene containing shapes and text while handling resize and input correctly, with the milestone's renderer/runtime hardening complete enough to support the first real widgets.
+
+The current Windows integration gate verifies one real native session containing clipped rounded shapes, Unicode text, an image and a concave path while also checking exact client-area resize, persistent GPU-context reuse and routed native pointer/focus input.
 
 ## 0.3 Alpha — Visual Engine
 
@@ -365,6 +370,7 @@ AI output must remain ordinary, editable SwirUI code.
 - [x] Unit-test foundation
 - [x] Headless native-window test backend
 - [x] Windows real-native-window smoke test
+- [x] Windows integrated 0.2 mixed-scene + exact-client + routed-input gate
 - [x] Windows active-display / refresh-rate mapping smoke test
 - [x] Windows `WM_DISPLAYCHANGE` / `WM_DPICHANGED` normalization smoke tests
 - [x] Windows real-wgpu surface/present smoke test
