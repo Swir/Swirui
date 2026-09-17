@@ -20,7 +20,18 @@ from swirui.performance import (
     run_benchmark,
     write_report,
 )
-from swirui.rendering import Color, Point, Rect, Reflection, Scene, SceneNode, SceneNodeKind
+from swirui.rendering import (
+    Color,
+    CornerRadius,
+    EffectCache,
+    Glow,
+    Point,
+    Rect,
+    Reflection,
+    Scene,
+    SceneNode,
+    SceneNodeKind,
+)
 
 BenchmarkWorkload = Callable[[], object]
 
@@ -98,6 +109,37 @@ def _reflection_build_workload() -> BenchmarkWorkload:
     return workload
 
 
+def _cached_effect_build_workload() -> BenchmarkWorkload:
+    """Exercise the hot path used by unchanged high-quality retained effects."""
+
+    cache = EffectCache(max_entries=4)
+    glow = Glow(
+        color=Color(0.0, 0.7, 1.0, 0.55),
+        blur_radius=42.0,
+        spread=3.0,
+        steps=64,
+    )
+    bounds = Rect(120.0, 80.0, 640.0, 360.0)
+    radius = CornerRadius.uniform(32.0)
+    cache.render(glow, "warm", bounds, corner_radius=radius)
+    sequence = 0
+
+    def workload() -> object:
+        nonlocal sequence
+        sequence += 1
+        node = cache.render(
+            glow,
+            f"benchmark-cached-glow-{sequence}",
+            bounds,
+            corner_radius=radius,
+        )
+        if len(node.children) != 64:
+            raise RuntimeError("Cached retained effect returned an unexpected layer count.")
+        return node
+
+    return workload
+
+
 def _run_suite(budget_path: Path) -> list[BenchmarkResult]:
     scene = _build_grid_scene()
     budgets = load_budgets(budget_path)
@@ -105,6 +147,7 @@ def _run_suite(budget_path: Path) -> list[BenchmarkResult]:
         ("retained_scene_walk_1024", _scene_walk_workload(scene), 60, 10),
         ("scene_hit_testing_1024", _hit_test_workload(scene), 40, 8),
         ("reflection_tessellation_96", _reflection_build_workload(), 40, 8),
+        ("cached_effect_clone_64", _cached_effect_build_workload(), 80, 12),
     )
 
     results: list[BenchmarkResult] = []
