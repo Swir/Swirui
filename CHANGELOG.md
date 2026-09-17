@@ -105,6 +105,8 @@ The project uses semantic versioning where practical during pre-alpha developmen
 - Hysteresis, fast sustained-pressure demotion, conservative sustained-headroom promotion and cooldown protection for stable automatic quality without idle-window false positives.
 - Runtime `App.set_visual_quality()`, `effective_visual_quality`, quality diagnostics and `visual_quality_changed` events without native-window recreation.
 - Frame telemetry for renderer duration, frame-budget utilization and configured/effective visual quality, plus `examples/adaptive_quality_demo.py` and focused pressure/headroom/idle regression tests.
+- Native retained effect-frame caching for unchanged backdrop/material scenes, keyed by stable prepared-scene generation tokens and renderer background while reusing each window's persistent offscreen wgpu target.
+- Native effect-cache hit/miss telemetry, explicit invalidation/reset hooks, deterministic Python token/invalidation coverage, `examples/gpu_native_effect_frame_cache_demo.py` and a real Win32/wgpu cache-hit smoke gate.
 
 ### Changed
 - The wgpu renderer now reports submitted rectangle, path, text and image counts independently.
@@ -132,6 +134,7 @@ The project uses semantic versioning where practical during pre-alpha developmen
 - Backdrop boundaries now reuse the persistent offscreen scene target and blur pipeline in painter order, and material decoration uses reserved negative z-indices so default-z child content remains sharp, visible and interactive above frosted/acrylic layers.
 - Native color filters run after scene/backdrop blur so one composable affine transform applies consistently to the final rendered scene without rebuilding retained geometry.
 - `VisualQuality.AUTO` now changes quality only when both cadence and measured renderer cost indicate sustained pressure/headroom; fixed profiles remain fixed and direct config changes synchronize at frame boundaries.
+- Unchanged backdrop/material scenes now skip primitive preparation/submission and backdrop blur/composition after the first successful frame; final scene blur and color filters remain live postprocess stages on every presentation.
 
 ## [0.1.0a1] - 2026-09-16
 
