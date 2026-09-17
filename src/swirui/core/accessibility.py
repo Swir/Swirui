@@ -1,8 +1,7 @@
 """Backend-neutral accessibility semantics for SwirUI components.
 
-This module defines the semantic information that native accessibility adapters
-will consume later. It does not claim screen-reader integration by itself; it
-provides a stable, testable component-to-semantic-tree contract first.
+This module defines semantic information that native accessibility adapters can
+consume without coupling the component tree to one operating-system API.
 """
 
 from __future__ import annotations
@@ -29,6 +28,7 @@ class AccessibilityRole(StrEnum):
     MENU = "menu"
     MENU_ITEM = "menu_item"
     PASSWORD_BOX = "password_box"
+    PROGRESS_BAR = "progress_bar"
     RADIO = "radio"
     SLIDER = "slider"
     SWITCH = "switch"
@@ -48,6 +48,10 @@ class AccessibilityNode:
     focusable: bool
     focused: bool
     checked: bool | None = None
+    value: float | None = None
+    min_value: float | None = None
+    max_value: float | None = None
+    value_text: str | None = None
     children: tuple[AccessibilityNode, ...] = ()
 
     def find(self, key: str) -> AccessibilityNode | None:
@@ -66,12 +70,7 @@ def build_accessibility_tree(
     *,
     focused: Component | None = None,
 ) -> AccessibilityNode | None:
-    """Build a visible semantic tree from a component hierarchy.
-
-    Invisible components prune their full subtree because descendants cannot be
-    reached visually or through the current focus contract. Component names are
-    used as a deterministic fallback when no explicit accessible name is set.
-    """
+    """Build a visible semantic tree from a component hierarchy."""
 
     if root is None or not root.visible:
         return None
@@ -90,5 +89,9 @@ def build_accessibility_tree(
         focusable=root.focusable,
         focused=root is focused,
         checked=root.accessible_checked,
+        value=root.accessible_value,
+        min_value=root.accessible_min_value,
+        max_value=root.accessible_max_value,
+        value_text=root.accessible_value_text,
         children=children,
     )
