@@ -171,7 +171,12 @@ class Tooltip(Widget):
         return Rect(self.bounds.x + self._padding, y, width, height)
 
     def _target_available(self) -> bool:
-        return self._target is None or (self._target.enabled and self._target.visible)
+        component = self._target
+        while component is not None:
+            if not component.enabled or not component.visible:
+                return False
+            component = component.parent
+        return True
 
     def _sync_target_visibility(self) -> None:
         self.visible = self._target_available() and (self._hover_open or self._focus_open)
