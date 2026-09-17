@@ -117,8 +117,15 @@ def test_backdrop_blur_uses_persistent_wgpu_context_and_blur_targets() -> None:
         first_blur_generation = context.blur_generation
         assert first_blur_generation is not None
 
+        # Advance one synthetic monotonic timeline instead of repeatedly deriving
+        # nearly identical future timestamps from the wall clock. This keeps the
+        # high-refresh scheduler deterministic even when CI executes consecutive
+        # invalidations faster than one native frame interval.
+        frame_time = time.monotonic() + 1.0
+
         app.invalidate(window)
-        assert app.render_pending(time.monotonic() + 1.0) == 1
+        assert app.render_pending(frame_time) == 1
+        frame_time += 1.0
         assert renderer.frames_rendered == 2
         assert renderer._contexts[handle] is context
         assert context.effect_cache_ready is True
@@ -130,7 +137,8 @@ def test_backdrop_blur_uses_persistent_wgpu_context_and_blur_targets() -> None:
 
         retained_scene.touch()
         app.invalidate(window)
-        assert app.render_pending(time.monotonic() + 1.0) == 1
+        assert app.render_pending(frame_time) == 1
+        frame_time += 1.0
         assert renderer.frames_rendered == 3
         assert context.effect_cache_hits == 1
         assert context.effect_cache_misses == 2
@@ -138,7 +146,7 @@ def test_backdrop_blur_uses_persistent_wgpu_context_and_blur_targets() -> None:
 
         window.set_scene(_scene(265.0, acrylic=True))
         app.invalidate(window)
-        assert app.render_pending(time.monotonic() + 1.0) == 1
+        assert app.render_pending(frame_time) == 1
 
         assert renderer.frames_rendered == 4
         assert renderer.last_rectangle_count == 18
