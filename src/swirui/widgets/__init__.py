@@ -3,6 +3,7 @@
 from .badges import Badge, Chip
 from .base import Widget
 from .button import Button, IconButton
+from .expander import Accordion, Expander
 from .input import Input, PasswordInput, TextArea
 from .progress import ProgressBar, ProgressRing
 from .runtime import SceneRenderable, WidgetRuntime, compile_component_scene, mount
@@ -13,11 +14,13 @@ from .toggle import Checkbox, RadioButton, Switch
 from .tooltip import Tooltip
 
 __all__ = [
+    "Accordion",
     "Badge",
     "Button",
     "Card",
     "Checkbox",
     "Chip",
+    "Expander",
     "Frame",
     "GlassCard",
     "IconButton",
