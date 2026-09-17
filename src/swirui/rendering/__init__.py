@@ -3,7 +3,7 @@
 from .base import NullRenderer, Renderer
 from .factory import create_renderer
 from .geometry import Color, CornerRadius, Path2D, Point, Rect, Size
-from .gradients import GradientStop, LinearGradient
+from .gradients import GradientStop, LinearGradient, RadialGradient
 from .scene import Scene, SceneNode, SceneNodeKind
 from .scheduler import FrameScheduler, FrameStats
 from .surface import RenderSurface
@@ -21,6 +21,7 @@ __all__ = [
     "NullRenderer",
     "Path2D",
     "Point",
+    "RadialGradient",
     "Rect",
     "RenderNode",
     "Renderer",
