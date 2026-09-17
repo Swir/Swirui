@@ -5,7 +5,15 @@ import pytest
 
 from swirui import App, Window
 from swirui.platforms.windows import Win32PlatformBackend
-from swirui.rendering import Color, ColorFilter, Rect, Scene, SceneNode, SceneNodeKind, WgpuRenderer
+from swirui.rendering import (
+    Color,
+    ColorFilter,
+    Rect,
+    Scene,
+    SceneNode,
+    SceneNodeKind,
+    WgpuRenderer,
+)
 
 
 def _isolated_backend() -> Win32PlatformBackend:
@@ -72,7 +80,8 @@ def test_color_filter_reuses_real_persistent_wgpu_pipeline() -> None:
         first_context = context
         first_generation = context.color_filter_generation
 
-        renderer.set_color_filter(ColorFilter.hue_rotate(110.0).then(ColorFilter.saturation(1.3)))
+        updated_filter = ColorFilter.hue_rotate(110.0).then(ColorFilter.saturation(1.3))
+        renderer.set_color_filter(updated_filter)
         app.invalidate(window)
         assert app.render_pending(time.monotonic() + 1.0) == 1
 
