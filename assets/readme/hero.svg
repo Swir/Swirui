@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 360" role="img" aria-labelledby="title desc">
+  <title id="title">SwirUI — native reactive GPU-first Python UI</title>
+  <desc id="desc">Dark electric-cyan SwirUI banner with the project monogram, GPU pipeline motif and Python to Rust to wgpu architecture.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#02050A"/>
+      <stop offset="0.52" stop-color="#07111C"/>
+      <stop offset="1" stop-color="#02050A"/>
+    </linearGradient>
+    <linearGradient id="neon" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#62F6FF"/>
+      <stop offset="0.5" stop-color="#0088FF"/>
+      <stop offset="1" stop-color="#7657FF"/>
+    </linearGradient>
+    <linearGradient id="line" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#62E5FF" stop-opacity="0"/>
+      <stop offset="0.5" stop-color="#62E5FF" stop-opacity="0.9"/>
+      <stop offset="1" stop-color="#0088FF" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="9" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <pattern id="grid" width="36" height="36" patternUnits="userSpaceOnUse">
+      <path d="M36 0H0V36" fill="none" stroke="#0D2942" stroke-width="1" opacity="0.38"/>
+    </pattern>
+  </defs>
+
+  <rect width="1200" height="360" rx="28" fill="url(#bg)"/>
+  <rect x="1" y="1" width="1198" height="358" rx="27" fill="none" stroke="#123B58" stroke-width="2"/>
+  <rect width="1200" height="360" rx="28" fill="url(#grid)"/>
+  <path d="M0 292 C220 248 354 338 568 285 S930 236 1200 280" fill="none" stroke="url(#line)" stroke-width="2" opacity="0.65"/>
+  <path d="M0 303 C250 263 390 345 600 300 S960 260 1200 296" fill="none" stroke="#0088FF" stroke-width="1" opacity="0.28"/>
+
+  <g transform="translate(62 58)">
+    <rect x="0" y="0" width="244" height="244" rx="58" fill="#050816" stroke="#173C75" stroke-width="4"/>
+    <path d="M34 84C51 50 89 34 132 41c29 5 54 19 73 42l-35 25c-14-16-29-25-48-27-22-3-41 3-48 16-7 13 2 22 30 28l27 6c49 11 72 37 60 69-13 36-58 55-108 44-29-6-53-22-69-44l36-26c13 16 28 25 47 29 24 5 45-1 51-15 6-13-5-22-33-29l-26-6c-48-11-69-35-57-65Z" fill="none" stroke="url(#neon)" stroke-width="15" stroke-linecap="round" stroke-linejoin="round" filter="url(#glow)"/>
+    <path d="M153 49 111 123h30l-67 87 26-65H69l49-96Z" fill="url(#neon)" opacity="0.98" filter="url(#glow)"/>
+  </g>
+
+  <g font-family="Segoe UI, Inter, Arial, sans-serif">
+    <text x="356" y="112" fill="#F2FBFF" font-size="64" font-weight="800" letter-spacing="1">SwirUI</text>
+    <text x="358" y="153" fill="#62E5FF" font-size="22" font-weight="600" letter-spacing="2.2">NATIVE • REACTIVE • GPU-FIRST</text>
+    <text x="358" y="202" fill="#B9D8E8" font-size="25">A modern Python desktop UI framework with a Rust + wgpu core.</text>
+
+    <g transform="translate(358 238)" font-size="17" font-weight="650">
+      <rect x="0" y="0" width="138" height="44" rx="12" fill="#071827" stroke="#1C607D"/>
+      <text x="69" y="28" text-anchor="middle" fill="#D9F8FF">Python API</text>
+      <path d="M148 22H186" stroke="#62E5FF" stroke-width="2"/>
+      <path d="m181 17 8 5-8 5" fill="none" stroke="#62E5FF" stroke-width="2"/>
+      <rect x="198" y="0" width="138" height="44" rx="12" fill="#071827" stroke="#1C607D"/>
+      <text x="267" y="28" text-anchor="middle" fill="#D9F8FF">Rust + PyO3</text>
+      <path d="M346 22H384" stroke="#62E5FF" stroke-width="2"/>
+      <path d="m379 17 8 5-8 5" fill="none" stroke="#62E5FF" stroke-width="2"/>
+      <rect x="396" y="0" width="138" height="44" rx="12" fill="#071827" stroke="#1C607D"/>
+      <text x="465" y="28" text-anchor="middle" fill="#D9F8FF">wgpu GPU</text>
+      <path d="M544 22H582" stroke="#62E5FF" stroke-width="2"/>
+      <path d="m577 17 8 5-8 5" fill="none" stroke="#62E5FF" stroke-width="2"/>
+      <rect x="594" y="0" width="164" height="44" rx="12" fill="#071827" stroke="#1C607D"/>
+      <text x="676" y="28" text-anchor="middle" fill="#D9F8FF">Native Window</text>
+    </g>
+  </g>
+
+  <circle cx="1106" cy="73" r="5" fill="#62F6FF" filter="url(#glow)"/>
+  <circle cx="1145" cy="106" r="3" fill="#0088FF"/>
+  <circle cx="1080" cy="129" r="2.5" fill="#7657FF"/>
+</svg>

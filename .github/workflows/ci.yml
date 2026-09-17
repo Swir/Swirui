@@ -215,5 +215,5 @@ jobs:
       - name: Verify presentation policy
         run: pytest tests/test_windows_presentation.py -q
 
-      - name: Verify native custom shader validation
+      - name: Verify native custom shader runtime
         run: pytest tests/test_windows_custom_shaders.py -q
