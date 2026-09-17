@@ -45,12 +45,63 @@ class FakeBackdropContext:
         self.height = height
 
 
+class FakeCachedBackdropContext(FakeBackdropContext):
+    def __init__(self, hwnd: int, width: int, height: int) -> None:
+        super().__init__(hwnd, width, height)
+        self.cached_tokens: list[int] = []
+        self.effect_cache_hits = 0
+        self.effect_cache_misses = 0
+        self._cached_token: int | None = None
+        self._cached_counts: tuple[int, int, int, int, int] | None = None
+
+    def draw_scene_with_backdrops_cached(
+        self, *args: Any
+    ) -> tuple[int, int, int, int, int]:
+        token = int(args[5])
+        self.calls.append(args)
+        self.cached_tokens.append(token)
+        if token == self._cached_token and self._cached_counts is not None:
+            self.effect_cache_hits += 1
+            return self._cached_counts
+
+        rectangles, texts, images, paths, backdrops = args[:5]
+        counts = (
+            sum(len(segment) for segment in rectangles),
+            sum(len(segment) for segment in texts),
+            sum(len(segment) for segment in images),
+            sum(len(segment) for segment in paths) // 3,
+            len(backdrops),
+        )
+        self.effect_cache_misses += 1
+        self._cached_token = token
+        self._cached_counts = counts
+        return counts
+
+    def clear_effect_cache(self) -> None:
+        self._cached_token = None
+        self._cached_counts = None
+
+    def reset_effect_cache_stats(self) -> None:
+        self.effect_cache_hits = 0
+        self.effect_cache_misses = 0
+
+
 class FakeBackdropNative:
     def __init__(self) -> None:
         self.contexts: list[FakeBackdropContext] = []
 
     def Win32GpuRenderer(self, hwnd: int, width: int, height: int) -> FakeBackdropContext:
         context = FakeBackdropContext(hwnd, width, height)
+        self.contexts.append(context)
+        return context
+
+
+class FakeCachedBackdropNative:
+    def __init__(self) -> None:
+        self.contexts: list[FakeCachedBackdropContext] = []
+
+    def Win32GpuRenderer(self, hwnd: int, width: int, height: int) -> FakeCachedBackdropContext:
+        context = FakeCachedBackdropContext(hwnd, width, height)
         self.contexts.append(context)
         return context
 
@@ -277,3 +328,45 @@ def test_backdrop_scene_uses_persistent_native_segmented_path() -> None:
 
     app.stop()
     assert renderer.backdrop_payload_cache_entries == 0
+
+
+def test_backdrop_scene_reuses_native_effect_token_until_retained_scene_changes() -> None:
+    native = FakeCachedBackdropNative()
+    renderer = WgpuRenderer(native_module=native)
+    app = App(platform_backend=NullPlatformBackend(), renderer=renderer)
+    window = Window(width=640, height=360)
+    scene = _backdrop_scene()
+    window.set_scene(scene)
+    app.add_window(window)
+
+    app.start()
+    context = native.contexts[0]
+    assert context.effect_cache_misses == 1
+    assert context.effect_cache_hits == 0
+    assert len(context.cached_tokens) == 1
+    first_token = context.cached_tokens[0]
+
+    renderer.render(window, window.root)
+    assert context.cached_tokens == [first_token, first_token]
+    assert context.effect_cache_hits == 1
+    assert context.effect_cache_misses == 1
+    assert renderer.native_effect_cache_hits == 1
+    assert renderer.native_effect_cache_misses == 1
+
+    scene.touch()
+    renderer.render(window, window.root)
+    assert context.cached_tokens[-1] != first_token
+    assert context.effect_cache_hits == 1
+    assert context.effect_cache_misses == 2
+
+    renderer.reset_native_effect_cache_stats()
+    assert renderer.native_effect_cache_hits == 0
+    assert renderer.native_effect_cache_misses == 0
+
+    renderer.clear_backdrop_payload_cache(window)
+    renderer.render(window, window.root)
+    assert context.effect_cache_hits == 0
+    assert context.effect_cache_misses == 1
+    assert context.cached_tokens[-1] != context.cached_tokens[-2]
+
+    app.stop()
