@@ -148,16 +148,17 @@ def test_backdrop_payload_cache_invalidates_on_scene_touch_and_dpi_change() -> N
     assert first is not None
 
     background = scene.root.children[0]
-    background.fill = Color.from_hex("#112233")
+    new_fill = Color.from_hex("#112233")
+    background.fill = new_fill
     scene.touch()
     touched = renderer._backdrop_payload(window)
     assert touched is not None
     assert touched is not first
     assert touched[0][0][0][4:8] == (
-        background.fill.r,
-        background.fill.g,
-        background.fill.b,
-        background.fill.a,
+        new_fill.r,
+        new_fill.g,
+        new_fill.b,
+        new_fill.a,
     )
 
     window.scale = 1.5
