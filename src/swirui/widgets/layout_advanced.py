@@ -25,11 +25,7 @@ class DockSide(StrEnum):
 
 
 class Dock(_PanelLayout):
-    """Consume a retained content rectangle from its edges in child order.
-
-    Children added with the ordinary ``add`` API default to ``FILL``. Use
-    :meth:`add_docked` or :meth:`set_dock` for explicit edge placement.
-    """
+    """Consume a retained content rectangle from its edges in child order."""
 
     def __init__(
         self,
@@ -66,7 +62,7 @@ class Dock(_PanelLayout):
         return self
 
     def set_dock(self, child: Widget, side: DockSide) -> Dock:
-        """Change an existing child's dock side and invalidate layout once."""
+        """Change an existing direct child's dock side."""
 
         if child.parent is not self:
             raise ValueError("Dock placement can only be changed for a direct child.")
@@ -91,27 +87,22 @@ class Dock(_PanelLayout):
         return removed
 
     def measure(self, available: Size | None = None) -> Size:
-        children = self._layout_children()
-        if not children:
-            return self.layout_constraints.constrain(self._add_padding(Size(0.0, 0.0)))
-
-        sizes = [(child, child.measure(available)) for child in children]
+        sizes = [(child, child.measure(available)) for child in self._layout_children()]
         horizontal = sum(
             size.width
             for child, size in sizes
-            if self._dock_sides.get(child, DockSide.FILL) in {DockSide.LEFT, DockSide.RIGHT}
+            if self._side(child) in {DockSide.LEFT, DockSide.RIGHT}
         )
         vertical = sum(
             size.height
             for child, size in sizes
-            if self._dock_sides.get(child, DockSide.FILL) in {DockSide.TOP, DockSide.BOTTOM}
+            if self._side(child) in {DockSide.TOP, DockSide.BOTTOM}
         )
         center_width = max(
             (
                 size.width
                 for child, size in sizes
-                if self._dock_sides.get(child, DockSide.FILL)
-                in {DockSide.TOP, DockSide.BOTTOM, DockSide.FILL}
+                if self._side(child) in {DockSide.TOP, DockSide.BOTTOM, DockSide.FILL}
             ),
             default=0.0,
         )
@@ -119,122 +110,100 @@ class Dock(_PanelLayout):
             (
                 size.height
                 for child, size in sizes
-                if self._dock_sides.get(child, DockSide.FILL)
-                in {DockSide.LEFT, DockSide.RIGHT, DockSide.FILL}
+                if self._side(child) in {DockSide.LEFT, DockSide.RIGHT, DockSide.FILL}
             ),
             default=0.0,
         )
-        return self.layout_constraints.constrain(
-            self._add_padding(Size(horizontal + center_width, vertical + center_height))
-        )
+        natural = Size(horizontal + center_width, vertical + center_height)
+        return self.layout_constraints.constrain(self._add_padding(natural))
 
     def prepare_layout(self, viewport: Rect) -> None:
         remaining = self._prepare_bounds(viewport)
         for child in self._layout_children():
-            side = self._dock_sides.get(child, DockSide.FILL)
+            side = self._side(child)
             measured = child.measure(remaining.size)
-            constraints = child.layout_constraints
-
             if side in {DockSide.LEFT, DockSide.RIGHT}:
-                width = measured.width
-                height = _aligned_extent(
-                    measured.height,
-                    remaining.height,
-                    constraints.min_height,
-                    constraints.max_height,
-                    CrossAxisAlignment.STRETCH,
-                )
-                x = remaining.x if side is DockSide.LEFT else remaining.right - width
-                y = _aligned_origin(
-                    remaining.y,
-                    remaining.height,
-                    height,
-                    CrossAxisAlignment.START,
-                )
-                child._set_layout_bounds(Rect(x, y, width, height))
-                consumed = min(width, remaining.width)
-                if side is DockSide.LEFT:
-                    remaining = Rect(
-                        remaining.x + consumed,
-                        remaining.y,
-                        max(0.0, remaining.width - consumed),
-                        remaining.height,
-                    )
-                else:
-                    remaining = Rect(
-                        remaining.x,
-                        remaining.y,
-                        max(0.0, remaining.width - consumed),
-                        remaining.height,
-                    )
-                continue
+                remaining = self._place_horizontal(child, measured, remaining, side)
+            elif side in {DockSide.TOP, DockSide.BOTTOM}:
+                remaining = self._place_vertical(child, measured, remaining, side)
+            else:
+                self._place_fill(child, measured, remaining)
 
-            if side in {DockSide.TOP, DockSide.BOTTOM}:
-                width = _aligned_extent(
-                    measured.width,
-                    remaining.width,
-                    constraints.min_width,
-                    constraints.max_width,
-                    CrossAxisAlignment.STRETCH,
-                )
-                height = measured.height
-                x = _aligned_origin(
-                    remaining.x,
-                    remaining.width,
-                    width,
-                    CrossAxisAlignment.START,
-                )
-                y = remaining.y if side is DockSide.TOP else remaining.bottom - height
-                child._set_layout_bounds(Rect(x, y, width, height))
-                consumed = min(height, remaining.height)
-                if side is DockSide.TOP:
-                    remaining = Rect(
-                        remaining.x,
-                        remaining.y + consumed,
-                        remaining.width,
-                        max(0.0, remaining.height - consumed),
-                    )
-                else:
-                    remaining = Rect(
-                        remaining.x,
-                        remaining.y,
-                        remaining.width,
-                        max(0.0, remaining.height - consumed),
-                    )
-                continue
+    def _side(self, child: Widget) -> DockSide:
+        return self._dock_sides.get(child, DockSide.FILL)
 
-            width = _aligned_extent(
-                measured.width,
-                remaining.width,
-                constraints.min_width,
-                constraints.max_width,
-                CrossAxisAlignment.STRETCH,
-            )
-            height = _aligned_extent(
-                measured.height,
-                remaining.height,
-                constraints.min_height,
-                constraints.max_height,
-                CrossAxisAlignment.STRETCH,
-            )
-            child._set_layout_bounds(
-                Rect(
-                    _aligned_origin(
-                        remaining.x,
-                        remaining.width,
-                        width,
-                        CrossAxisAlignment.START,
-                    ),
-                    _aligned_origin(
-                        remaining.y,
-                        remaining.height,
-                        height,
-                        CrossAxisAlignment.START,
-                    ),
-                    width,
-                    height,
-                )
-            )
+    @staticmethod
+    def _place_horizontal(
+        child: Widget,
+        measured: Size,
+        remaining: Rect,
+        side: DockSide,
+    ) -> Rect:
+        constraints = child.layout_constraints
+        width = measured.width
+        height = _aligned_extent(
+            measured.height,
+            remaining.height,
+            constraints.min_height,
+            constraints.max_height,
+            CrossAxisAlignment.STRETCH,
+        )
+        x = remaining.x if side is DockSide.LEFT else remaining.right - width
+        child._set_layout_bounds(Rect(x, remaining.y, width, height))
+        consumed = min(width, remaining.width)
+        next_x = remaining.x + consumed if side is DockSide.LEFT else remaining.x
+        return Rect(
+            next_x,
+            remaining.y,
+            max(0.0, remaining.width - consumed),
+            remaining.height,
+        )
+
+    @staticmethod
+    def _place_vertical(
+        child: Widget,
+        measured: Size,
+        remaining: Rect,
+        side: DockSide,
+    ) -> Rect:
+        constraints = child.layout_constraints
+        width = _aligned_extent(
+            measured.width,
+            remaining.width,
+            constraints.min_width,
+            constraints.max_width,
+            CrossAxisAlignment.STRETCH,
+        )
+        height = measured.height
+        y = remaining.y if side is DockSide.TOP else remaining.bottom - height
+        child._set_layout_bounds(Rect(remaining.x, y, width, height))
+        consumed = min(height, remaining.height)
+        next_y = remaining.y + consumed if side is DockSide.TOP else remaining.y
+        return Rect(
+            remaining.x,
+            next_y,
+            remaining.width,
+            max(0.0, remaining.height - consumed),
+        )
+
+    @staticmethod
+    def _place_fill(child: Widget, measured: Size, remaining: Rect) -> None:
+        constraints = child.layout_constraints
+        width = _aligned_extent(
+            measured.width,
+            remaining.width,
+            constraints.min_width,
+            constraints.max_width,
+            CrossAxisAlignment.STRETCH,
+        )
+        height = _aligned_extent(
+            measured.height,
+            remaining.height,
+            constraints.min_height,
+            constraints.max_height,
+            CrossAxisAlignment.STRETCH,
+        )
+        child._set_layout_bounds(Rect(remaining.x, remaining.y, width, height))
 
 
 class FlowOrientation(StrEnum):
@@ -355,75 +324,83 @@ class Flow(_PanelLayout):
         self.invalidate(reason="flow_run_alignment")
 
     def measure(self, available: Size | None = None) -> Size:
-        main_limit = self._main_limit(available)
-        runs = self._runs(main_limit, available)
-        main = max(
-            (
-                sum(self._main_size(size) for _child, size in run)
-                + self.spacing * max(0, len(run) - 1)
-                for run in runs
-            ),
-            default=0.0,
-        )
-        cross = sum(
-            max(self._cross_size(size) for _child, size in run) for run in runs
-        )
+        runs = self._runs(self._main_limit(available), available)
+        main = max((self._run_main(run) for run in runs), default=0.0)
+        cross = sum(self._run_cross(run) for run in runs)
         cross += self.run_spacing * max(0, len(runs) - 1)
-        natural = Size(main, cross) if self.orientation is FlowOrientation.HORIZONTAL else Size(cross, main)
+        if self.orientation is FlowOrientation.HORIZONTAL:
+            natural = Size(main, cross)
+        else:
+            natural = Size(cross, main)
         return self.layout_constraints.constrain(self._add_padding(natural))
 
     def prepare_layout(self, viewport: Rect) -> None:
         content = self._prepare_bounds(viewport)
-        main_limit = content.width if self.orientation is FlowOrientation.HORIZONTAL else content.height
+        main_limit = (
+            content.width if self.orientation is FlowOrientation.HORIZONTAL else content.height
+        )
         runs = self._runs(main_limit, content.size)
         run_cursor = content.y if self.orientation is FlowOrientation.HORIZONTAL else content.x
 
         for run in runs:
-            run_cross = max(self._cross_size(size) for _child, size in run)
+            run_cross = self._run_cross(run)
             item_cursor = content.x if self.orientation is FlowOrientation.HORIZONTAL else content.y
             for child, size in run:
-                constraints = child.layout_constraints
-                if self.orientation is FlowOrientation.HORIZONTAL:
-                    cross = _aligned_extent(
-                        size.height,
-                        run_cross,
-                        constraints.min_height,
-                        constraints.max_height,
-                        self.run_alignment,
-                    )
-                    child._set_layout_bounds(
-                        Rect(
-                            item_cursor,
-                            _aligned_origin(run_cursor, run_cross, cross, self.run_alignment),
-                            size.width,
-                            cross,
-                        )
-                    )
-                    item_cursor += size.width + self.spacing
-                else:
-                    cross = _aligned_extent(
-                        size.width,
-                        run_cross,
-                        constraints.min_width,
-                        constraints.max_width,
-                        self.run_alignment,
-                    )
-                    child._set_layout_bounds(
-                        Rect(
-                            _aligned_origin(run_cursor, run_cross, cross, self.run_alignment),
-                            item_cursor,
-                            cross,
-                            size.height,
-                        )
-                    )
-                    item_cursor += size.height + self.spacing
+                item_cursor = self._place_flow_child(
+                    child,
+                    size,
+                    run_cursor=run_cursor,
+                    run_cross=run_cross,
+                    item_cursor=item_cursor,
+                )
             run_cursor += run_cross + self.run_spacing
+
+    def _place_flow_child(
+        self,
+        child: Widget,
+        size: Size,
+        *,
+        run_cursor: float,
+        run_cross: float,
+        item_cursor: float,
+    ) -> float:
+        constraints = child.layout_constraints
+        if self.orientation is FlowOrientation.HORIZONTAL:
+            cross = _aligned_extent(
+                size.height,
+                run_cross,
+                constraints.min_height,
+                constraints.max_height,
+                self.run_alignment,
+            )
+            y = _aligned_origin(run_cursor, run_cross, cross, self.run_alignment)
+            child._set_layout_bounds(Rect(item_cursor, y, size.width, cross))
+            return item_cursor + size.width + self.spacing
+
+        cross = _aligned_extent(
+            size.width,
+            run_cross,
+            constraints.min_width,
+            constraints.max_width,
+            self.run_alignment,
+        )
+        x = _aligned_origin(run_cursor, run_cross, cross, self.run_alignment)
+        child._set_layout_bounds(Rect(x, item_cursor, cross, size.height))
+        return item_cursor + size.height + self.spacing
 
     def _main_limit(self, available: Size | None) -> float:
         if available is not None:
-            raw = available.width if self.orientation is FlowOrientation.HORIZONTAL else available.height
+            raw = (
+                available.width
+                if self.orientation is FlowOrientation.HORIZONTAL
+                else available.height
+            )
         else:
-            raw = self.bounds.width if self.orientation is FlowOrientation.HORIZONTAL else self.bounds.height
+            raw = (
+                self.bounds.width
+                if self.orientation is FlowOrientation.HORIZONTAL
+                else self.bounds.height
+            )
         padding = (
             self.padding.left + self.padding.right
             if self.orientation is FlowOrientation.HORIZONTAL
@@ -439,15 +416,7 @@ class Flow(_PanelLayout):
         children = list(self._layout_children())
         if self.reverse:
             children.reverse()
-
-        if available is None:
-            measure_available = (
-                Size(main_limit, math.inf)
-                if self.orientation is FlowOrientation.HORIZONTAL
-                else Size(math.inf, main_limit)
-            )
-        else:
-            measure_available = available
+        measure_available = self._measure_available(main_limit, available)
 
         runs: list[list[tuple[Widget, Size]]] = []
         current: list[tuple[Widget, Size]] = []
@@ -467,11 +436,27 @@ class Flow(_PanelLayout):
             runs.append(current)
         return runs
 
+    def _measure_available(self, main_limit: float, available: Size | None) -> Size:
+        if available is not None:
+            return available
+        if self.orientation is FlowOrientation.HORIZONTAL:
+            return Size(main_limit, math.inf)
+        return Size(math.inf, main_limit)
+
     def _main_size(self, size: Size) -> float:
         return size.width if self.orientation is FlowOrientation.HORIZONTAL else size.height
 
     def _cross_size(self, size: Size) -> float:
         return size.height if self.orientation is FlowOrientation.HORIZONTAL else size.width
+
+    def _run_main(self, run: list[tuple[Widget, Size]]) -> float:
+        return sum(self._main_size(size) for _child, size in run) + self.spacing * max(
+            0,
+            len(run) - 1,
+        )
+
+    def _run_cross(self, run: list[tuple[Widget, Size]]) -> float:
+        return max((self._cross_size(size) for _child, size in run), default=0.0)
 
 
 class OverlayAnchor(StrEnum):
@@ -494,6 +479,9 @@ class _OverlayPlacement:
     anchor: OverlayAnchor
     offset_x: float
     offset_y: float
+
+
+_DEFAULT_OVERLAY_PLACEMENT = _OverlayPlacement(OverlayAnchor.TOP_LEFT, 0.0, 0.0)
 
 
 class Overlay(_PanelLayout):
@@ -558,7 +546,7 @@ class Overlay(_PanelLayout):
         if child.parent is not self:
             raise ValueError("Overlay placement can only be changed for a direct child.")
         placement = self._placement(anchor, offset_x, offset_y)
-        if self._placements.get(child, self._placement(OverlayAnchor.TOP_LEFT, 0.0, 0.0)) == placement:
+        if self._placements.get(child, _DEFAULT_OVERLAY_PLACEMENT) == placement:
             return self
         self._placements[child] = placement
         self.invalidate(reason="overlay_placement", source=child)
@@ -571,47 +559,48 @@ class Overlay(_PanelLayout):
         return removed
 
     def measure(self, available: Size | None = None) -> Size:
-        children = self._layout_children()
-        if not children:
-            return self.layout_constraints.constrain(self._add_padding(Size(0.0, 0.0)))
-        sizes = [child.measure(available) for child in children]
+        sizes = [child.measure(available) for child in self._layout_children()]
         natural = Size(
-            max(size.width for size in sizes),
-            max(size.height for size in sizes),
+            max((size.width for size in sizes), default=0.0),
+            max((size.height for size in sizes), default=0.0),
         )
         return self.layout_constraints.constrain(self._add_padding(natural))
 
     def prepare_layout(self, viewport: Rect) -> None:
         content = self._prepare_bounds(viewport)
         for child in self._layout_children():
-            placement = self._placements.get(
-                child,
-                _OverlayPlacement(OverlayAnchor.TOP_LEFT, 0.0, 0.0),
-            )
+            placement = self._placements.get(child, _DEFAULT_OVERLAY_PLACEMENT)
             measured = child.measure(content.size)
-            constraints = child.layout_constraints
-            if placement.anchor is OverlayAnchor.STRETCH:
-                width = _aligned_extent(
-                    measured.width,
-                    content.width,
-                    constraints.min_width,
-                    constraints.max_width,
-                    CrossAxisAlignment.STRETCH,
-                )
-                height = _aligned_extent(
-                    measured.height,
-                    content.height,
-                    constraints.min_height,
-                    constraints.max_height,
-                    CrossAxisAlignment.STRETCH,
-                )
-            else:
-                width = measured.width
-                height = measured.height
-
+            width, height = self._overlay_size(child, measured, content, placement.anchor)
             x = self._anchored_x(content, width, placement.anchor) + placement.offset_x
             y = self._anchored_y(content, height, placement.anchor) + placement.offset_y
             child._set_layout_bounds(Rect(x, y, width, height))
+
+    @staticmethod
+    def _overlay_size(
+        child: Widget,
+        measured: Size,
+        content: Rect,
+        anchor: OverlayAnchor,
+    ) -> tuple[float, float]:
+        if anchor is not OverlayAnchor.STRETCH:
+            return measured.width, measured.height
+        constraints = child.layout_constraints
+        width = _aligned_extent(
+            measured.width,
+            content.width,
+            constraints.min_width,
+            constraints.max_width,
+            CrossAxisAlignment.STRETCH,
+        )
+        height = _aligned_extent(
+            measured.height,
+            content.height,
+            constraints.min_height,
+            constraints.max_height,
+            CrossAxisAlignment.STRETCH,
+        )
+        return width, height
 
     @staticmethod
     def _placement(

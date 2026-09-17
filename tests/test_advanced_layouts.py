@@ -9,7 +9,6 @@ from swirui import (
     DockSide,
     Flow,
     FlowOrientation,
-    Insets,
     Overlay,
     OverlayAnchor,
     Window,
@@ -58,9 +57,9 @@ def test_flow_wraps_horizontally_and_supports_vertical_reverse_order() -> None:
     horizontal.add(first, second, third)
     mount(Window(width=300, height=220), horizontal)
 
-    assert first.bounds == Rect(20.0, 25.0, 100.0, 30.0)
-    assert second.bounds == Rect(128.0, 20.0, 100.0, 40.0)
-    assert third.bounds == Rect(20.0, 66.0, 100.0, 20.0)
+    assert first.bounds == Rect(20.0, 35.0, 100.0, 30.0)
+    assert second.bounds == Rect(128.0, 30.0, 100.0, 40.0)
+    assert third.bounds == Rect(20.0, 76.0, 100.0, 20.0)
 
     vertical = Flow(
         bounds=Rect(0.0, 0.0, 200.0, 210.0),
