@@ -4,6 +4,7 @@ from .backdrop import BackdropBlur
 from .backdrop_wgpu_renderer import WgpuRenderer
 from .base import NullRenderer, Renderer
 from .bloom import Bloom
+from .depth import Parallax, PerspectivePlane
 from .effects import (
     DropShadow,
     DynamicShadow,
@@ -42,7 +43,9 @@ __all__ = [
     "MeshGradient",
     "Noise",
     "NullRenderer",
+    "Parallax",
     "Path2D",
+    "PerspectivePlane",
     "Point",
     "RadialGradient",
     "Rect",
