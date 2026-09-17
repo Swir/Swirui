@@ -13,7 +13,7 @@
 ![Windows Native](https://img.shields.io/badge/Windows-Win32%20native-0078D4?logo=windows11&logoColor=white)
 ![GPU](https://img.shields.io/badge/GPU-wgpu%2030-6E56CF)
 ![Status](https://img.shields.io/badge/status-pre--alpha-7C3AED)
-![Progress](https://img.shields.io/badge/project%20progress-19%25-00BFFF)
+![Progress](https://img.shields.io/badge/project%20progress-20%25-00BFFF)
 
 </div>
 
@@ -21,9 +21,9 @@
 
 ## Project progress
 
-**19% — 0.2 Alpha: Native Window + First Renderer in progress**
+**20% — 0.2 Alpha: Native Window + First Renderer in progress**
 
-`[████░░░░░░░░░░░░░░░░] 19%`
+`[████░░░░░░░░░░░░░░░░] 20%`
 
 **Completed:** `0.1 Alpha — Foundation` ✅  
 **Current milestone:** `0.2 Alpha — Native Window + First Renderer` 🚧
@@ -63,6 +63,10 @@ SwirUI is currently **pre-alpha**. APIs may change while the native renderer and
 - deterministic headless backend for tests and CI
 - **direct native Win32 backend via Python `ctypes`**
 - real Win32 window creation without Tkinter, Qt or SDL
+- **DPI-aware decorated-window sizing that preserves the requested renderable client area exactly**
+- **exact physical client-area dimensions across creation and programmatic resize**
+- **logical client geometry preserved across Win32 DPI transitions**
+- **DPI-aware native minimum-track sizing through `WM_GETMINMAXINFO`**
 - native Windows event pump
 - normalized close, resize, focus, mouse, keyboard and text-input events
 - **Win32 multi-monitor enumeration with virtual-desktop geometry, work areas, per-display scale and refresh rate**
@@ -104,6 +108,7 @@ SwirUI is currently **pre-alpha**. APIs may change while the native renderer and
 - **focusable component contract with pointer-down focus handoff and deterministic focus traversal**
 - **routed keyboard and text-input events through the focused component path**
 - propagation cancellation with `Event.stop_propagation()`
+- **integrated real-Windows 0.2 gate covering mixed GPU shapes/text/images/paths, exact client resize, persistent context reuse and routed native pointer/focus input**
 - ABI3 native wheel build for Python 3.11+
 - Windows native + rounded-GPU + path + shaped-text + image + clipping + mixed-DPI + presentation/display smoke tests on Python 3.14
 - Ruff, Mypy, coverage and Python 3.11–3.14 CI
@@ -185,6 +190,7 @@ SwirUI Runtime
         │
         ├── Native Platform Backend
         │     └── Win32 backend ✅
+        ├── exact DPI-aware Win32 client geometry ✅
         ├── logical-DIP ↔ physical-pixel boundary ✅
         ├── per-window active display + scale + refresh tracking ✅
         ├── Render Tree ✅
@@ -248,12 +254,11 @@ SwirUI Framework
 
 ## Current 0.2 Alpha focus
 
-The native Windows foundation, persistent wgpu renderer, rounded and general filled GPU shapes, shaped GPU text, persistent content-addressed GPU images, hierarchical clipping/compositing, routed pointer/keyboard input, explicit present-mode policy, robust logical-DIP/physical-pixel HiDPI handling, multi-monitor discovery and display-aware high-refresh pacing are verified. The largest remaining 0.2 hardening work is:
+The native Windows foundation, exact DPI-aware client geometry, persistent wgpu renderer, rounded and general filled GPU shapes, shaped GPU text, persistent content-addressed GPU images, hierarchical clipping/compositing, routed pointer/keyboard input, explicit present-mode policy, robust logical-DIP/physical-pixel HiDPI handling, multi-monitor discovery and display-aware high-refresh pacing are verified. A real Windows integration gate now exercises the mixed GPU scene, exact resize behavior, persistent context reuse and native routed input together. The largest remaining 0.2 hardening work is:
 
-1. exact decorated-window client-area sizing across create/resize and DPI transitions
-2. deeper focus management and accessibility semantics
-3. performance budgets and regression benchmarks for retained rendering
-4. cross-platform native backend expansion after the Windows gate is hardened
+1. deeper focus management and accessibility semantics
+2. performance budgets and regression benchmarks for retained rendering
+3. cross-platform native backend expansion after the Windows gate is hardened
 
 See **[ROADMAP.md](ROADMAP.md)** for the full development plan.
 
@@ -272,6 +277,7 @@ Python 3.14
 cargo check
 cargo test
 Windows native smoke test
+Windows integrated 0.2 mixed-scene + exact-client + routed-input gate
 Windows active-display / refresh-rate mapping smoke test
 Windows WM_DISPLAYCHANGE / WM_DPICHANGED normalization smoke tests
 Windows wgpu clear/present smoke test
