@@ -7,7 +7,8 @@
 
 use wgpu::util::DeviceExt;
 
-const MAX_BLUR_RADIUS_PIXELS: f32 = 256.0;
+const MAX_BLUR_RADIUS_PIXELS: f32 = 512.0;
+const BLUR_KERNEL_MAX_OFFSET: f32 = 3.230_769_2;
 
 pub(crate) struct OffscreenRenderTarget {
     _texture: wgpu::Texture,
@@ -322,7 +323,7 @@ pub(crate) fn validate_blur_radius(radius_pixels: f32) -> Result<(), &'static st
         return Err("post-process blur radius must be finite");
     }
     if !(0.0..=MAX_BLUR_RADIUS_PIXELS).contains(&radius_pixels) {
-        return Err("post-process blur radius must be between 0 and 256 physical pixels");
+        return Err("post-process blur radius must be between 0 and 512 physical pixels");
     }
     Ok(())
 }
@@ -330,9 +331,10 @@ pub(crate) fn validate_blur_radius(radius_pixels: f32) -> Result<(), &'static st
 fn blur_directions(radius_pixels: f32, width: u32, height: u32) -> ([f32; 4], [f32; 4]) {
     let width = width.max(1) as f32;
     let height = height.max(1) as f32;
+    let sample_step_pixels = radius_pixels / BLUR_KERNEL_MAX_OFFSET;
     (
-        [radius_pixels / width, 0.0, 0.0, 0.0],
-        [0.0, radius_pixels / height, 0.0, 0.0],
+        [sample_step_pixels / width, 0.0, 0.0, 0.0],
+        [0.0, sample_step_pixels / height, 0.0, 0.0],
     )
 }
 
@@ -412,18 +414,22 @@ mod tests {
     #[test]
     fn validates_physical_blur_radius_budget() {
         assert!(validate_blur_radius(0.0).is_ok());
-        assert!(validate_blur_radius(16.0).is_ok());
-        assert!(validate_blur_radius(256.0).is_ok());
+        assert!(validate_blur_radius(64.0).is_ok());
+        assert!(validate_blur_radius(320.0).is_ok());
+        assert!(validate_blur_radius(512.0).is_ok());
         assert!(validate_blur_radius(-0.01).is_err());
-        assert!(validate_blur_radius(256.01).is_err());
+        assert!(validate_blur_radius(512.01).is_err());
         assert!(validate_blur_radius(f32::NAN).is_err());
         assert!(validate_blur_radius(f32::INFINITY).is_err());
     }
 
     #[test]
-    fn blur_direction_is_resolution_aware() {
-        let (horizontal, vertical) = blur_directions(12.0, 600, 300);
-        assert_eq!(horizontal, [0.02, 0.0, 0.0, 0.0]);
-        assert_eq!(vertical, [0.0, 0.04, 0.0, 0.0]);
+    fn blur_radius_maps_to_farthest_kernel_sample_at_any_resolution() {
+        let radius = 12.0;
+        let (horizontal, vertical) = blur_directions(radius, 600, 300);
+        let horizontal_extent = horizontal[0] * 600.0 * BLUR_KERNEL_MAX_OFFSET;
+        let vertical_extent = vertical[1] * 300.0 * BLUR_KERNEL_MAX_OFFSET;
+        assert!((horizontal_extent - radius).abs() < 0.0001);
+        assert!((vertical_extent - radius).abs() < 0.0001);
     }
 }
