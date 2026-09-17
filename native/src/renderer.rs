@@ -347,7 +347,7 @@ impl PersistentGpuContext {
         }
         let presentation_source = self.encode_postprocess(&mut encoder);
         self.present_blitter
-            .copy(&self.device, &mut encoder, presentation_source, &view);
+            .copy(&self.device, &mut encoder, &presentation_source, &view);
         self.queue.submit([encoder.finish()]);
         self.queue.present(frame);
         Ok(())
@@ -494,7 +494,7 @@ impl PersistentGpuContext {
 
         let presentation_source = self.encode_postprocess(&mut encoder);
         self.present_blitter
-            .copy(&self.device, &mut encoder, presentation_source, &view);
+            .copy(&self.device, &mut encoder, &presentation_source, &view);
         self.queue.submit([encoder.finish()]);
         self.queue.present(frame);
         if !texts.is_empty() {
@@ -569,7 +569,7 @@ impl PersistentGpuContext {
             });
         let presentation_source = self.encode_postprocess(&mut encoder);
         self.present_blitter
-            .copy(&self.device, &mut encoder, presentation_source, &view);
+            .copy(&self.device, &mut encoder, &presentation_source, &view);
         self.queue.submit([encoder.finish()]);
         self.queue.present(frame);
 
@@ -695,10 +695,7 @@ impl PersistentGpuContext {
         Ok(())
     }
 
-    fn encode_postprocess<'a>(
-        &'a mut self,
-        encoder: &mut wgpu::CommandEncoder,
-    ) -> &'a wgpu::TextureView {
+    fn encode_postprocess(&mut self, encoder: &mut wgpu::CommandEncoder) -> wgpu::TextureView {
         let blur_enabled = self.postprocess_blur_radius > 0.0 && self.postprocess_blur.is_some();
         if blur_enabled {
             let blurred_view = self
@@ -712,9 +709,9 @@ impl PersistentGpuContext {
                     filter.rebind_source(&self.device, blurred_view);
                     self.color_filter_uses_blur = true;
                 }
-                return filter.encode(encoder);
+                return filter.encode(encoder).clone();
             }
-            return blurred_view;
+            return blurred_view.clone();
         }
 
         if self.color_filter_enabled {
@@ -723,9 +720,9 @@ impl PersistentGpuContext {
                 filter.rebind_source(&self.device, self.offscreen_target.view());
                 self.color_filter_uses_blur = false;
             }
-            return filter.encode(encoder);
+            return filter.encode(encoder).clone();
         }
-        self.offscreen_target.view()
+        self.offscreen_target.view().clone()
     }
 
     fn ensure_rectangle_capacity(&mut self, required: usize) -> PyResult<()> {
