@@ -117,6 +117,8 @@ The project uses semantic versioning where practical during pre-alpha developmen
 - `examples/core_scroll_view_demo.py` plus real Win32/wgpu coverage for clipped translated content, routed child interaction and persistent renderer-context reuse.
 - Retained `Expander` and `Accordion` controls with managed disclosure content, pointer/keyboard interaction, expanded/collapsed accessibility state, exclusive or multi-open coordination and optional require-one behavior.
 - `examples/expander_accordion_demo.py` plus real Win32/wgpu smoke coverage that switches accordion sections through native input while preserving the persistent renderer context.
+- Retained `SplitView` with horizontal/vertical pane-local geometry, clipped translated child subtrees, bounded split ratios, draggable and keyboard-adjustable divider interaction and slider-style accessibility semantics.
+- `examples/core_split_view_demo.py` plus real Win32/wgpu smoke coverage for native divider dragging and persistent renderer-context reuse.
 
 ### Changed
 - The wgpu renderer now reports submitted rectangle, path, text and image counts independently.
