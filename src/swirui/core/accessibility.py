@@ -28,6 +28,7 @@ class AccessibilityRole(StrEnum):
     LIST_ITEM = "list_item"
     MENU = "menu"
     MENU_ITEM = "menu_item"
+    PASSWORD_BOX = "password_box"
     RADIO = "radio"
     SLIDER = "slider"
     SWITCH = "switch"
