@@ -7,8 +7,10 @@ from typing import Any
 from swirui.core import Component, PresentationMode
 from swirui.window import Window
 
+from .color_filters import ColorFilter
 from .geometry import Color, Rect
 from .scene import SceneNode, SceneNodeKind
+from .surface import RenderSurface
 from .wgpu_renderer import ImageInstance, RectangleInstance, ShapeVertex, TextInstance
 from .wgpu_renderer import WgpuRenderer as _BaseWgpuRenderer
 
@@ -25,13 +27,18 @@ _DEFAULT_TEXT_COLOR = Color(1.0, 1.0, 1.0, 1.0)
 
 
 class WgpuRenderer(_BaseWgpuRenderer):
-    """Persistent GPU renderer with painter-order backdrop blur boundaries.
+    """Persistent GPU renderer with backdrop blur and final color filtering.
 
     Backdrop nodes split a retained scene into ordered segments. Each segment is
     submitted into the same persistent offscreen target, the already-painted
     backdrop is blurred and composited into the requested rounded region, and
     later segments are then drawn sharp on top. Scenes without backdrop nodes
     stay on the existing fast path without extra segmentation or GPU passes.
+
+    ``color_filter`` is an optional affine RGBA transform applied by one retained
+    native post-process pass after scene blur/backdrop composition and before the
+    swapchain blit. Changing the filter only updates a uniform buffer; it does not
+    rebuild the wgpu pipeline or recreate its full-size output target.
     """
 
     def __init__(
@@ -42,6 +49,7 @@ class WgpuRenderer(_BaseWgpuRenderer):
         presentation_mode: PresentationMode = PresentationMode.AUTO_VSYNC,
         maximum_frame_latency: int = 1,
         scene_blur_radius: float = 0.0,
+        color_filter: ColorFilter | None = None,
     ) -> None:
         super().__init__(
             background=background,
@@ -50,11 +58,35 @@ class WgpuRenderer(_BaseWgpuRenderer):
             maximum_frame_latency=maximum_frame_latency,
             scene_blur_radius=scene_blur_radius,
         )
+        self.color_filter = color_filter
         self.last_backdrop_count = 0
+
+    def set_color_filter(self, color_filter: ColorFilter | None) -> None:
+        """Update the final GPU color transform for current and future windows."""
+
+        self.color_filter = color_filter
+        for context in self._contexts.values():
+            self._configure_color_filter(context)
+
+    def create_surface(self, window: Window) -> RenderSurface:
+        surface = super().create_surface(window)
+        if window.native_handle is not None:
+            context = self._contexts.get(window.native_handle.value)
+            if context is not None:
+                self._configure_color_filter(context)
+        return surface
 
     def render(self, window: Window, root: Component | None) -> None:
         payload = self._backdrop_payload(window)
         if payload is None:
+            if (
+                self.color_filter is not None
+                and window.native_handle is not None
+                and window.native_handle.value not in self._contexts
+            ):
+                raise RuntimeError(
+                    "Color filters require the persistent SwirUI native GPU context."
+                )
             self.last_backdrop_count = 0
             super().render(window, root)
             return
@@ -105,6 +137,19 @@ class WgpuRenderer(_BaseWgpuRenderer):
         self.last_backdrop_count = int(backdrop_count)
         self._capture_adapter_info(context)
         self.frames_rendered += 1
+
+    def _configure_color_filter(self, context: Any) -> None:
+        if self.color_filter is None:
+            clear = getattr(context, "clear_color_filter", None)
+            if clear is not None:
+                clear()
+            return
+        configure = getattr(context, "set_color_filter", None)
+        if configure is None:
+            raise RuntimeError(
+                "Installed SwirUI native GPU core does not support color filters."
+            )
+        configure(list(self.color_filter.native_values()))
 
     def _backdrop_payload(self, window: Window) -> BackdropPayload | None:
         scene = window.scene
