@@ -61,7 +61,7 @@ The project uses semantic versioning where practical during pre-alpha developmen
 - Native physical pointer and resize input normalization back into logical DIPs before SceneGraph hit testing and routed component input.
 - Deterministic 150% → 200% scale-transition coverage plus a real Win32/wgpu mixed-DPI smoke test that verifies rectangles, Unicode text, images, input coordinates and persistent surface reconfiguration.
 - Dependency-free retained-runtime benchmark helpers with median, p95, worst-case, throughput and explicit latency-budget evaluation.
-- CI performance guardrails for 1024-node retained SceneGraph traversal and pointer hit-testing workloads.
+- CI performance guardrails for 1024-node retained SceneGraph traversal, pointer hit-testing and deterministic reflection tessellation workloads.
 - Machine-readable JSON performance reports uploaded from CI for regression inspection.
 - Direct Linux/X11 native-window backend using Python `ctypes` and the system libX11 client library, with normalized resize, focus, pointer, keyboard, text-input and window-close events.
 - Real X11 native-window smoke coverage on Python 3.14 under Xvfb, including create, map, title, resize, event polling, hide and destroy lifecycle checks.
@@ -96,6 +96,8 @@ The project uses semantic versioning where practical during pre-alpha developmen
 - Public retained `PerspectivePlane` projection with bounded logical-DIP X/Y rotation, camera distance, depth translation and normalized transform origin.
 - Public pointer-driven `Parallax` mapping that clamps viewport input and compiles directly into the existing clipped, HiDPI-aware retained `Path2D` GPU pipeline.
 - `examples/gpu_depth_demo.py` plus real Win32/wgpu smoke coverage proving changing perspective/parallax geometry renders across the same persistent native GPU context.
+- Public quality-aware retained `Reflection` effect with normalized specular bands compiled into clipped, non-interactive linear-gradient/path geometry.
+- `examples/gpu_reflections_demo.py` plus deterministic reflection tessellation performance coverage and real Win32/wgpu persistent-context smoke coverage.
 
 ### Changed
 - The wgpu renderer now reports submitted rectangle, path, text and image counts independently.

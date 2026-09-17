@@ -4,9 +4,9 @@
 
 ## Project progress
 
-**Overall completion: 36%**
+**Overall completion: 37%**
 
-`[███████░░░░░░░░░░░░░] 36%`
+`[███████░░░░░░░░░░░░░] 37%`
 
 Progress is based on implemented and verified roadmap work. Ideas, mockups and unfinished prototypes do not increase the percentage.
 
@@ -110,7 +110,7 @@ Cross-platform native-window coverage now includes real Linux/X11 lifecycle/inpu
 - [x] Glow and bloom
 - [x] Dynamic shadows
 - [x] Linear / radial / mesh gradients
-- [ ] Reflections
+- [x] Reflections
 - [x] Depth and perspective
 - [x] Adaptive lighting
 - [x] Parallax
@@ -386,7 +386,7 @@ AI output must remain ordinary, editable SwirUI code.
 - [x] Windows image-resource SceneGraph → Python → Rust/wgpu smoke test
 - [x] Windows filled Path2D SceneGraph → Python → Rust/wgpu smoke test
 - [x] Windows retained linear / radial / mesh gradient GPU smoke tests
-- [x] Windows retained depth / perspective / parallax GPU smoke test
+- [x] Windows retained depth / perspective / parallax / reflections GPU smoke test
 - [x] Windows retained adaptive-lighting / glow / bloom / noise GPU smoke test
 - [x] Windows retained backdrop/background-blur + glass/acrylic GPU smoke test
 - [x] Windows mixed-DPI logical-DIP → physical-GPU smoke test
@@ -469,7 +469,7 @@ Primary future candidates:
 
 ## Benchmarks
 
-SwirUI publishes reproducible benchmark guardrails instead of unsupported performance claims. The current CI suite measures retained 1024-node SceneGraph traversal and pointer hit testing with median, p95 and worst-case latency budgets and stores a machine-readable JSON report artifact for each run.
+SwirUI publishes reproducible benchmark guardrails instead of unsupported performance claims. The current CI suite measures retained 1024-node SceneGraph traversal and pointer hit testing plus deterministic 96-step reflection tessellation, with median, p95 and worst-case latency budgets and a machine-readable JSON report artifact for each run.
 
 Metrics planned for continued expansion include:
 
