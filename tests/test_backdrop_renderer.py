@@ -4,7 +4,15 @@ from typing import Any
 
 from swirui import App, Window
 from swirui.platforms import NullPlatformBackend
-from swirui.rendering import BackdropBlur, Color, Rect, Scene, SceneNode, SceneNodeKind, WgpuRenderer
+from swirui.rendering import (
+    BackdropBlur,
+    Color,
+    Rect,
+    Scene,
+    SceneNode,
+    SceneNodeKind,
+    WgpuRenderer,
+)
 
 
 class FakeBackdropContext:
