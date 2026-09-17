@@ -4,8 +4,9 @@ The first Visual Engine gradient slices deliberately reuse the already-verified
 filled-path renderer instead of introducing effect-specific native pipelines.
 Linear gradients are tessellated into convex projection bands. Radial gradients
 are tessellated into nested convex disks over an edge-color backing rectangle.
-Both forms therefore flow through the same clipped, HiDPI-aware native GPU shape
-batch as ordinary :class:`SceneNodeKind.PATH` content.
+Mesh gradients use a rectangular color lattice sampled into retained convex
+cells. All forms therefore flow through the same clipped, HiDPI-aware native GPU
+shape batch as ordinary :class:`SceneNodeKind.PATH` content.
 
 Coordinates are normalized relative to the supplied bounds. ``Point(0, 0)`` is
 the top-left corner and ``Point(1, 1)`` is the bottom-right corner. Normalized
@@ -27,8 +28,10 @@ _DEFAULT_STEPS = 96
 _DEFAULT_RADIAL_STEPS = 64
 _DEFAULT_RADIAL_SEGMENTS = 48
 _DEFAULT_RADIAL_RADIUS = 0.7071067811865476
+_DEFAULT_MESH_SUBDIVISIONS = 8
 _MAX_STEPS = 512
 _MAX_RADIAL_SEGMENTS = 256
+_MAX_MESH_SUBDIVISIONS = 32
 _UNIT_RECTANGLE = (
     Point(0.0, 0.0),
     Point(1.0, 0.0),
@@ -283,6 +286,124 @@ class RadialGradient:
             )
             for index in range(segments)
         )
+
+
+@dataclass(frozen=True, slots=True)
+class MeshGradient:
+    """Immutable rectangular color-lattice mesh gradient.
+
+    ``colors`` is a two-dimensional rectangular lattice ordered top-to-bottom and
+    left-to-right. Colors are bilinearly interpolated inside each lattice cell.
+    Rendering samples every control cell into a retained grid of convex quads so
+    the result uses SwirUI's existing native GPU path batch without introducing a
+    separate shader contract.
+    """
+
+    colors: tuple[tuple[Color, ...], ...]
+
+    def __post_init__(self) -> None:
+        if len(self.colors) < 2:
+            raise ValueError("Mesh gradients require at least two color rows.")
+        column_count = len(self.colors[0])
+        if column_count < 2:
+            raise ValueError("Mesh gradients require at least two color columns.")
+        if any(len(row) != column_count for row in self.colors):
+            raise ValueError("Mesh gradient color rows must all have the same length.")
+
+    @classmethod
+    def four_corner(
+        cls,
+        top_left: Color,
+        top_right: Color,
+        bottom_left: Color,
+        bottom_right: Color,
+    ) -> MeshGradient:
+        """Create the common two-by-two corner-color mesh."""
+
+        return cls(((top_left, top_right), (bottom_left, bottom_right)))
+
+    @property
+    def row_count(self) -> int:
+        return len(self.colors)
+
+    @property
+    def column_count(self) -> int:
+        return len(self.colors[0])
+
+    def color_at(self, x: float, y: float) -> Color:
+        """Sample the mesh in normalized object-bounds coordinates."""
+
+        if not math.isfinite(x) or not math.isfinite(y):
+            raise ValueError("Mesh gradient sample coordinates must be finite.")
+        x = min(max(x, 0.0), 1.0)
+        y = min(max(y, 0.0), 1.0)
+
+        column_position = x * (self.column_count - 1)
+        row_position = y * (self.row_count - 1)
+        column = min(int(column_position), self.column_count - 2)
+        row = min(int(row_position), self.row_count - 2)
+        local_x = column_position - column
+        local_y = row_position - row
+
+        top = _mix_color(self.colors[row][column], self.colors[row][column + 1], local_x)
+        bottom = _mix_color(
+            self.colors[row + 1][column],
+            self.colors[row + 1][column + 1],
+            local_x,
+        )
+        return _mix_color(top, bottom, local_y)
+
+    def to_scene_node(
+        self,
+        key: str,
+        bounds: Rect,
+        *,
+        subdivisions: int = _DEFAULT_MESH_SUBDIVISIONS,
+        opacity: float = 1.0,
+        z_index: int = 0,
+    ) -> SceneNode:
+        """Build a retained mesh subtree rendered by the native GPU path batch.
+
+        ``subdivisions`` is applied independently inside each lattice cell. Cell
+        boundaries always align with the source control grid, avoiding color
+        discontinuities while keeping the generated geometry deterministic.
+        """
+
+        _validate_visual_arguments(key, bounds, opacity)
+        if not 1 <= subdivisions <= _MAX_MESH_SUBDIVISIONS:
+            raise ValueError(
+                "Mesh gradient subdivisions must be between "
+                f"1 and {_MAX_MESH_SUBDIVISIONS}."
+            )
+
+        total_columns = (self.column_count - 1) * subdivisions
+        total_rows = (self.row_count - 1) * subdivisions
+        group = _gradient_group(key, bounds, opacity, z_index)
+
+        for row in range(total_rows):
+            top = row / total_rows
+            bottom = (row + 1) / total_rows
+            center_y = (top + bottom) * 0.5
+            for column in range(total_columns):
+                left = column / total_columns
+                right = (column + 1) / total_columns
+                center_x = (left + right) * 0.5
+                points = (
+                    Point(left * bounds.width, top * bounds.height),
+                    Point(right * bounds.width, top * bounds.height),
+                    Point(right * bounds.width, bottom * bounds.height),
+                    Point(left * bounds.width, bottom * bounds.height),
+                )
+                group.add(
+                    SceneNode(
+                        key=key,
+                        kind=SceneNodeKind.PATH,
+                        bounds=bounds,
+                        fill=self.color_at(center_x, center_y),
+                        path=Path2D(points),
+                    )
+                )
+        return group
 
 
 def _validate_stops(stops: tuple[GradientStop, ...]) -> None:
