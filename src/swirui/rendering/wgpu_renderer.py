@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib
 import sys
+from math import isfinite
 from typing import Any
 
 from swirui.core import Component, PresentationMode
@@ -62,6 +63,7 @@ ShapeVertex = tuple[
 ]
 
 _DEFAULT_TEXT_COLOR = Color(1.0, 1.0, 1.0, 1.0)
+_MAX_SCENE_BLUR_RADIUS = 64.0
 
 
 class WgpuRenderer:
@@ -78,6 +80,11 @@ class WgpuRenderer:
     single native texture even when applications expose them under different
     logical resource ids. Logical ids are rebound transactionally while native
     textures stay alive until their final alias is released.
+
+    ``scene_blur_radius`` enables the native two-pass post-processing blur for
+    the complete composed scene. The public radius is expressed in logical DIPs
+    and is converted to physical pixels per window so the visual radius remains
+    stable across mixed-DPI displays.
     """
 
     name = "wgpu"
@@ -89,12 +96,15 @@ class WgpuRenderer:
         native_module: Any | None = None,
         presentation_mode: PresentationMode = PresentationMode.AUTO_VSYNC,
         maximum_frame_latency: int = 1,
+        scene_blur_radius: float = 0.0,
     ) -> None:
         if maximum_frame_latency <= 0:
             raise ValueError("maximum_frame_latency must be positive.")
+        self._validate_scene_blur_radius(scene_blur_radius)
         self.background = background or Color.from_hex("#070B14")
         self.presentation_mode = presentation_mode
         self.maximum_frame_latency = maximum_frame_latency
+        self.scene_blur_radius = float(scene_blur_radius)
         self.initialized = False
         self.frames_rendered = 0
         self.last_rectangle_count = 0
@@ -105,6 +115,7 @@ class WgpuRenderer:
         self.graphics_backend: str | None = None
         self.surfaces: dict[int, RenderSurface] = {}
         self._contexts: dict[int, Any] = {}
+        self._context_scales: dict[int, float] = {}
         self._image_resources: dict[str, ImageResource] = {}
         self._image_aliases: dict[str, str] = {}
         self._image_content_index: dict[ImageResource, str] = {}
@@ -165,6 +176,14 @@ class WgpuRenderer:
                     "SwirUI native GPU core is not installed. Build/install native/ with Maturin."
                 ) from exc
         self.initialized = True
+
+    def set_scene_blur_radius(self, radius: float) -> None:
+        """Update whole-scene blur in logical DIPs for all persistent contexts."""
+
+        self._validate_scene_blur_radius(radius)
+        self.scene_blur_radius = float(radius)
+        for handle, context in self._contexts.items():
+            self._configure_scene_blur(context, self._context_scales.get(handle, 1.0))
 
     def register_image_rgba(
         self,
@@ -275,6 +294,8 @@ class WgpuRenderer:
                     self.maximum_frame_latency,
                 )
             self._contexts[handle] = context
+            self._context_scales[handle] = window.scale
+            self._configure_scene_blur(context, window.scale)
             self._upload_registered_images(context)
             self._capture_adapter_info(context)
         return surface
@@ -283,15 +304,19 @@ class WgpuRenderer:
         self._surface_for(window).resize(width, height)
         if window.native_handle is None:
             return
-        context = self._contexts.get(window.native_handle.value)
+        handle = window.native_handle.value
+        context = self._contexts.get(handle)
         if context is not None:
             context.resize(width, height)
+            self._context_scales[handle] = window.scale
+            self._configure_scene_blur(context, window.scale)
 
     def destroy_surface(self, window: Window) -> None:
         if window.native_handle is None:
             return
         handle = window.native_handle.value
         self._contexts.pop(handle, None)
+        self._context_scales.pop(handle, None)
         surface = self.surfaces.pop(handle, None)
         if surface is not None:
             surface.destroy()
@@ -311,8 +336,11 @@ class WgpuRenderer:
         images = self._image_instances(window)
         paths = self._path_vertices(window)
         background = self.background
-        context = self._contexts.get(window.native_handle.value)
+        handle = window.native_handle.value
+        context = self._contexts.get(handle)
         if context is not None:
+            self._context_scales[handle] = window.scale
+            self._configure_scene_blur(context, window.scale)
             if rectangles or texts or images or paths:
                 if images and getattr(context, "register_image_rgba", None) is None:
                     raise RuntimeError(
@@ -380,12 +408,17 @@ class WgpuRenderer:
                 self.last_path_count = 0
             self._capture_adapter_info(context)
         else:
+            if self.scene_blur_radius > 0.0:
+                raise RuntimeError(
+                    "Whole-scene blur requires the persistent SwirUI native GPU context."
+                )
             self._render_stateless(window, rectangles, texts, images, paths)
 
         self.frames_rendered += 1
 
     def shutdown(self) -> None:
         self._contexts.clear()
+        self._context_scales.clear()
         for surface in self.surfaces.values():
             surface.destroy()
         self.surfaces.clear()
@@ -467,6 +500,24 @@ class WgpuRenderer:
 
         self.adapter_name = str(adapter_name)
         self.graphics_backend = str(graphics_backend)
+
+    def _configure_scene_blur(self, context: Any, scale: float) -> None:
+        radius_pixels = self.scene_blur_radius * scale
+        configure = getattr(context, "set_postprocess_blur_radius", None)
+        if configure is None:
+            if radius_pixels > 0.0:
+                raise RuntimeError(
+                    "Installed SwirUI native GPU core does not support scene post-processing blur."
+                )
+            return
+        configure(radius_pixels)
+
+    @staticmethod
+    def _validate_scene_blur_radius(radius: float) -> None:
+        if not isfinite(radius):
+            raise ValueError("scene_blur_radius must be finite.")
+        if not 0.0 <= radius <= _MAX_SCENE_BLUR_RADIUS:
+            raise ValueError("scene_blur_radius must be between 0 and 64 logical DIPs.")
 
     def _upload_registered_images(self, context: Any) -> None:
         if not self._image_resources:
