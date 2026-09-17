@@ -25,6 +25,17 @@ def test_linux_factory_selects_x11_when_display_is_available(
     assert backend.name == "x11"
 
 
+def test_linux_factory_keeps_headless_backend_without_display(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from swirui.platforms.factory import create_platform_backend
+
+    monkeypatch.delenv("DISPLAY", raising=False)
+    backend = create_platform_backend()
+
+    assert backend.name == "headless"
+
+
 def test_x11_normalizes_tab_and_pointer_buttons() -> None:
     from swirui.platforms.linux import LinuxX11PlatformBackend
 
