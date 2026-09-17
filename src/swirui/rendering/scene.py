@@ -35,6 +35,7 @@ class SceneNode:
     resource_id: str | None = None
     children: list[SceneNode] = field(default_factory=list)
     clip_to_bounds: bool = False
+    hit_testable: bool = True
 
     def __post_init__(self) -> None:
         if not 0.0 <= self.opacity <= 1.0:
@@ -116,7 +117,9 @@ class SceneNode:
         Children with larger ``z_index`` values win. Equal z-index values use
         later insertion as the topmost visual, matching painter-style ordering.
         Transparent groups participate in the ancestry path but are not direct
-        visual hit targets unless they have a fill.
+        visual hit targets unless they have a fill. Decorative nodes can opt out
+        of direct hit testing with ``hit_testable=False`` while their descendants
+        remain independently eligible.
         """
 
         path = self.hit_path(point)
@@ -167,7 +170,7 @@ class SceneNode:
         return bool(self.children)
 
     def _contains_visual_point(self, point: Point) -> bool:
-        if not self.bounds.contains(point):
+        if not self.hit_testable or not self.bounds.contains(point):
             return False
         if self.kind is SceneNodeKind.GROUP:
             return self.fill is not None

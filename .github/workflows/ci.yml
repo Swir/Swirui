@@ -197,6 +197,9 @@ jobs:
       - name: Verify GPU radial gradients
         run: pytest tests/test_windows_radial_gradients.py -q
 
+      - name: Verify retained GPU shadows
+        run: pytest tests/test_windows_effects.py -q
+
       - name: Verify GPU resource cache
         run: pytest tests/test_windows_resource_cache.py -q
 
