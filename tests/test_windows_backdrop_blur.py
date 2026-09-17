@@ -6,9 +6,10 @@ import pytest
 from swirui import App, Window
 from swirui.platforms.windows import Win32PlatformBackend
 from swirui.rendering import (
-    BackdropBlur,
+    Acrylic,
     Color,
     CornerRadius,
+    FrostedGlass,
     Rect,
     Scene,
     SceneNode,
@@ -23,7 +24,7 @@ def _isolated_backend() -> Win32PlatformBackend:
     return backend
 
 
-def _scene(accent_x: float) -> Scene:
+def _scene(accent_x: float, *, acrylic: bool = False) -> Scene:
     root = SceneNode("root", SceneNodeKind.GROUP, Rect(0.0, 0.0, 760.0, 460.0))
     root.add(
         SceneNode(
@@ -42,27 +43,28 @@ def _scene(accent_x: float) -> Scene:
             z_index=1,
         ),
     )
-    glass = BackdropBlur(
-        radius=22.0,
-        corner_radius=CornerRadius.uniform(30.0),
-    ).to_scene_node("glass", Rect(155.0, 105.0, 450.0, 245.0), z_index=2)
-    glass.add(
-        SceneNode(
-            "glass-tint",
-            SceneNodeKind.RECTANGLE,
-            Rect(155.0, 105.0, 450.0, 245.0),
-            fill=Color(0.07, 0.13, 0.24, 0.38),
+    if acrylic:
+        glass = Acrylic(
+            blur_radius=28.0,
+            grain_samples=12,
+            grain_seed=77,
             corner_radius=CornerRadius.uniform(30.0),
-        ),
+        ).to_scene_node("glass", Rect(155.0, 105.0, 450.0, 245.0), z_index=2)
+    else:
+        glass = FrostedGlass(
+            blur_radius=22.0,
+            corner_radius=CornerRadius.uniform(30.0),
+        ).to_scene_node("glass", Rect(155.0, 105.0, 450.0, 245.0), z_index=2)
+    glass.add(
         SceneNode(
             "glass-title",
             SceneNodeKind.TEXT,
             Rect(205.0, 185.0, 350.0, 58.0),
-            text="SwirUI Backdrop Blur",
+            text="SwirUI Glass Materials",
             fill=Color.from_hex("#FFFFFF"),
             font_size=30.0,
-            z_index=1,
-        ),
+            z_index=10,
+        )
     )
     root.add(
         glass,
@@ -93,7 +95,7 @@ def test_backdrop_blur_uses_persistent_wgpu_context_and_blur_targets() -> None:
     try:
         app.start()
         assert renderer.frames_rendered == 1
-        assert renderer.last_rectangle_count == 4
+        assert renderer.last_rectangle_count == 5
         assert renderer.last_text_count == 1
         assert renderer.last_image_count == 0
         assert renderer.last_path_count == 0
@@ -111,11 +113,13 @@ def test_backdrop_blur_uses_persistent_wgpu_context_and_blur_targets() -> None:
         first_blur_generation = context.blur_generation
         assert first_blur_generation is not None
 
-        window.set_scene(_scene(265.0))
+        window.set_scene(_scene(265.0, acrylic=True))
         app.invalidate(window)
         assert app.render_pending(time.monotonic() + 1.0) == 1
 
         assert renderer.frames_rendered == 2
+        assert renderer.last_rectangle_count == 18
+        assert renderer.last_text_count == 1
         assert renderer.last_backdrop_count == 1
         assert renderer._contexts[handle] is context
         assert context.backdrop_pipeline_ready is True
