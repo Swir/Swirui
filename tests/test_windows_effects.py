@@ -12,6 +12,8 @@ from swirui.rendering import (
     CornerRadius,
     Glow,
     Noise,
+    Parallax,
+    Point,
     Rect,
     Scene,
     SceneNode,
@@ -34,6 +36,11 @@ def _dynamic_effect_scene(light_direction_degrees: float) -> Scene:
         bounds=Rect(0.0, 0.0, 720.0, 440.0),
     )
     radius = CornerRadius.uniform(28.0)
+    pointer = (
+        Point(650.0, 70.0)
+        if light_direction_degrees > 200.0
+        else Point(70.0, 370.0)
+    )
     root.add(
         AdaptiveLighting(
             elevation=20.0,
@@ -82,12 +89,26 @@ def _dynamic_effect_scene(light_direction_degrees: float) -> Scene:
             font_size=32.0,
             z_index=2,
         ),
+        Parallax(
+            max_rotation_x_degrees=8.0,
+            max_rotation_y_degrees=12.0,
+            perspective=820.0,
+            depth=12.0,
+        ).to_scene_node(
+            "perspective-accent",
+            Rect(250.0, 285.0, 220.0, 28.0),
+            pointer=pointer,
+            viewport=Rect(0.0, 0.0, 720.0, 440.0),
+            fill=Color(0.15, 0.72, 1.0, 0.68),
+            z_index=3,
+            hit_testable=False,
+        ),
     )
     return Scene(720.0, 440.0, root)
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Native GPU effect smoke requires Windows")
-def test_adaptive_lighting_glow_bloom_and_noise_reach_real_persistent_wgpu_batch() -> None:
+def test_adaptive_lighting_glow_bloom_noise_and_parallax_reach_persistent_wgpu() -> None:
     renderer = WgpuRenderer()
     app = App(
         "SwirUI Dynamic Effects Integration",
@@ -104,7 +125,7 @@ def test_adaptive_lighting_glow_bloom_and_noise_reach_real_persistent_wgpu_batch
         assert renderer.last_rectangle_count == 67
         assert renderer.last_text_count == 1
         assert renderer.last_image_count == 0
-        assert renderer.last_path_count == 0
+        assert renderer.last_path_count == 2
         assert renderer.persistent_context_count == 1
         assert renderer.adapter_name
         assert renderer.graphics_backend
@@ -120,6 +141,7 @@ def test_adaptive_lighting_glow_bloom_and_noise_reach_real_persistent_wgpu_batch
 
         assert renderer.frames_rendered == 2
         assert renderer.last_rectangle_count == 67
+        assert renderer.last_path_count == 2
         assert renderer.persistent_context_count == 1
         assert renderer._contexts[handle] is first_context
     finally:
