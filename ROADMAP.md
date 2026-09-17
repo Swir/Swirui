@@ -4,9 +4,9 @@
 
 ## Project progress
 
-**Overall completion: 54%**
+**Overall completion: 56%**
 
-`[███████████░░░░░░░░░] 54%`
+`[███████████░░░░░░░░░] 56%`
 
 Progress is based on implemented and verified roadmap work. Ideas, mockups and unfinished prototypes do not increase the percentage.
 
@@ -128,7 +128,7 @@ The Visual Engine gate is complete with verified retained effects/materials, per
 
 ## 0.4 Alpha — Core Widgets
 
-**Status:** Underway 🚧
+**Status:** Complete ✅
 
 - [x] Text / Label
 - [x] Button / IconButton
@@ -143,8 +143,12 @@ The Visual Engine gate is complete with verified retained effects/materials, per
 - [x] ScrollView
 - [x] Expander / Accordion
 - [x] SplitView
-- [ ] Modal / Dialog
-- [ ] Toast / Notification surface
+- [x] Modal / Dialog
+- [x] Toast / Notification surface
+
+### 0.4 gate
+
+The Core Widgets gate is complete with all 15 retained widget groups implemented as Python public APIs and compiled through the SceneGraph. Pointer and keyboard routing, focus/accessibility semantics, deterministic component tests and real Win32/wgpu smoke coverage protect interactive controls while the renderer keeps one persistent per-window GPU context. Completion applies to the named 0.4 milestone only and does not imply release readiness.
 
 ## 0.5 Alpha — Layout Engine
 
@@ -414,6 +418,7 @@ AI output must remain ordinary, editable SwirUI code.
 - [x] Windows retained ScrollView + persistent wgpu smoke test
 - [x] Windows retained Expander / Accordion + persistent wgpu smoke test
 - [x] Windows retained SplitView + persistent wgpu smoke test
+- [x] Windows retained Modal / Dialog + Toast / Notification + persistent wgpu smoke test
 - [ ] Screenshot tests
 - [ ] Visual regression tests
 - [x] Accessibility tests

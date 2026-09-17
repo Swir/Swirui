@@ -18,10 +18,12 @@ class AccessibilityRole(StrEnum):
     """Framework roles mapped to platform accessibility APIs by native adapters."""
 
     GENERIC = "generic"
+    ALERT = "alert"
     GROUP = "group"
     BUTTON = "button"
     CHECKBOX = "checkbox"
     CHIP = "chip"
+    DIALOG = "dialog"
     IMAGE = "image"
     LINK = "link"
     LIST = "list"
