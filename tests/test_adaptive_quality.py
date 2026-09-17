@@ -25,21 +25,22 @@ def test_auto_quality_demotes_quickly_and_promotes_after_sustained_headroom() ->
     )
 
     assert controller.resolved_quality is VisualQuality.QUALITY
-    assert controller.observe_frame(45.0, 60) is None
-    demotion = controller.observe_frame(45.0, 60)
+    assert controller.observe_frame(45.0, 60, render_duration_seconds=0.020) is None
+    demotion = controller.observe_frame(45.0, 60, render_duration_seconds=0.020)
 
     assert demotion is not None
     assert demotion.old_quality is VisualQuality.QUALITY
     assert demotion.new_quality is VisualQuality.BALANCED
-    assert demotion.reason == "sustained_under_budget"
+    assert demotion.reason == "sustained_frame_pressure"
     assert demotion.fps_ratio == pytest.approx(0.75)
+    assert demotion.render_budget_utilization == pytest.approx(1.2)
     assert controller.stats.cooldown_remaining == 1
 
-    assert controller.observe_frame(60.0, 60) is None
+    assert controller.observe_frame(60.0, 60, render_duration_seconds=0.002) is None
     assert controller.stats.cooldown_remaining == 0
-    assert controller.observe_frame(60.0, 60) is None
-    assert controller.observe_frame(60.0, 60) is None
-    promotion = controller.observe_frame(60.0, 60)
+    assert controller.observe_frame(60.0, 60, render_duration_seconds=0.002) is None
+    assert controller.observe_frame(60.0, 60, render_duration_seconds=0.002) is None
+    promotion = controller.observe_frame(60.0, 60, render_duration_seconds=0.002)
 
     assert promotion is not None
     assert promotion.old_quality is VisualQuality.BALANCED
@@ -60,23 +61,35 @@ def test_auto_quality_hysteresis_clears_streaks_in_neutral_band() -> None:
         )
     )
 
-    assert controller.observe_frame(45.0, 60) is None
+    assert controller.observe_frame(45.0, 60, render_duration_seconds=0.020) is None
     assert controller.stats.below_budget_streak == 1
-    assert controller.observe_frame(54.0, 60) is None
+    assert controller.observe_frame(54.0, 60, render_duration_seconds=0.020) is None
     assert controller.stats.below_budget_streak == 0
     assert controller.stats.above_budget_streak == 0
 
-    assert controller.observe_frame(60.0, 60) is None
+    assert controller.observe_frame(60.0, 60, render_duration_seconds=0.002) is None
     assert controller.stats.above_budget_streak == 1
-    assert controller.observe_frame(54.0, 60) is None
+    assert controller.observe_frame(54.0, 60, render_duration_seconds=0.002) is None
     assert controller.stats.above_budget_streak == 0
+
+
+def test_sparse_idle_frames_do_not_trigger_false_quality_demotions() -> None:
+    controller = AdaptiveQualityController()
+
+    for _ in range(30):
+        assert controller.observe_frame(5.0, 60, render_duration_seconds=0.001) is None
+
+    assert controller.resolved_quality is VisualQuality.BALANCED
+    assert controller.stats.below_budget_streak == 0
+    assert controller.stats.automatic_changes == 0
+    assert controller.stats.last_render_budget_utilization == pytest.approx(0.06)
 
 
 def test_fixed_quality_never_adapts_and_mode_switch_resets_auto_baseline() -> None:
     controller = AdaptiveQualityController(VisualQuality.CINEMATIC)
 
     for _ in range(30):
-        assert controller.observe_frame(15.0, 60) is None
+        assert controller.observe_frame(15.0, 60, render_duration_seconds=0.050) is None
     assert controller.resolved_quality is VisualQuality.CINEMATIC
     assert controller.stats.automatic_changes == 0
 
@@ -86,6 +99,7 @@ def test_fixed_quality_never_adapts_and_mode_switch_resets_auto_baseline() -> No
     assert controller.resolved_quality is VisualQuality.BALANCED
     assert controller.stats.below_budget_streak == 0
     assert controller.stats.cooldown_remaining == 0
+    assert controller.stats.last_render_duration_seconds is None
 
 
 def test_policy_and_samples_reject_invalid_values() -> None:
@@ -93,19 +107,26 @@ def test_policy_and_samples_reject_invalid_values() -> None:
         AdaptiveQualityPolicy(initial_quality=VisualQuality.AUTO)
     with pytest.raises(ValueError, match="exceed"):
         AdaptiveQualityPolicy(downgrade_fps_ratio=0.9, upgrade_fps_ratio=0.8)
+    with pytest.raises(ValueError, match="upgrade_render_budget_ratio"):
+        AdaptiveQualityPolicy(
+            downgrade_render_budget_ratio=0.5,
+            upgrade_render_budget_ratio=0.6,
+        )
     with pytest.raises(ValueError, match="positive"):
         AdaptiveQualityPolicy(downgrade_frames=0)
 
     controller = AdaptiveQualityController()
     with pytest.raises(ValueError, match="target_fps"):
-        controller.observe_frame(60.0, 0)
+        controller.observe_frame(60.0, 0, render_duration_seconds=0.001)
     with pytest.raises(ValueError, match="positive finite"):
-        controller.observe_frame(float("nan"), 60)
+        controller.observe_frame(float("nan"), 60, render_duration_seconds=0.001)
     with pytest.raises(ValueError, match="positive finite"):
-        controller.observe_frame(0.0, 60)
+        controller.observe_frame(0.0, 60, render_duration_seconds=0.001)
+    with pytest.raises(ValueError, match="finite non-negative"):
+        controller.observe_frame(60.0, 60, render_duration_seconds=-0.001)
 
 
-def test_app_auto_quality_reacts_to_sustained_pacing_and_emits_transition() -> None:
+def test_app_auto_quality_reacts_to_real_frame_pressure_and_emits_transition() -> None:
     renderer = NullRenderer()
     app = App(
         config=AppConfig(visual_quality=VisualQuality.AUTO, target_fps=60),
@@ -117,6 +138,12 @@ def test_app_auto_quality_reacts_to_sustained_pacing_and_emits_transition() -> N
     frame_events: list[Event] = []
     app.on("visual_quality_changed", quality_events.append)
     app.on("frame_rendered", frame_events.append)
+
+    render_clock_values = iter(
+        [0.0, 0.001]
+        + [value for index in range(6) for value in (index + 1.0, index + 1.020)]
+    )
+    app._render_clock = lambda: next(render_clock_values)
 
     app.start()
     assert app.effective_visual_quality is VisualQuality.BALANCED
@@ -133,15 +160,19 @@ def test_app_auto_quality_reacts_to_sustained_pacing_and_emits_transition() -> N
     assert change["old_quality"] is VisualQuality.BALANCED
     assert change["quality"] is VisualQuality.PERFORMANCE
     assert change["mode"] is VisualQuality.AUTO
-    assert change["reason"] == "sustained_under_budget"
+    assert change["reason"] == "sustained_frame_pressure"
     assert change["smoothed_fps"] == pytest.approx(30.0)
     assert change["target_fps"] == 60
+    assert change["render_duration_seconds"] == pytest.approx(0.020)
+    assert change["render_budget_utilization"] == pytest.approx(1.2)
     assert app.quality_stats.automatic_changes == 1
 
     last_frame = frame_events[-1].data
     assert last_frame["visual_quality"] is VisualQuality.BALANCED
     assert last_frame["effective_visual_quality"] is VisualQuality.PERFORMANCE
     assert last_frame["configured_visual_quality"] is VisualQuality.AUTO
+    assert last_frame["render_duration_seconds"] == pytest.approx(0.020)
+    assert last_frame["render_budget_utilization"] == pytest.approx(1.2)
 
     app.stop()
 
