@@ -9,13 +9,8 @@ from swirui.window import Window
 
 from .geometry import Color, Rect
 from .scene import SceneNode, SceneNodeKind
-from .wgpu_renderer import (
-    ImageInstance,
-    RectangleInstance,
-    ShapeVertex,
-    TextInstance,
-    WgpuRenderer as _BaseWgpuRenderer,
-)
+from .wgpu_renderer import ImageInstance, RectangleInstance, ShapeVertex, TextInstance
+from .wgpu_renderer import WgpuRenderer as _BaseWgpuRenderer
 
 BackdropRegion = tuple[float, float, float, float, float, float, float, float, float]
 BackdropPayload = tuple[
