@@ -15,7 +15,7 @@
 ![macOS Native](https://img.shields.io/badge/macOS-Cocoa%20native-000000?logo=apple&logoColor=white)
 ![GPU](https://img.shields.io/badge/GPU-wgpu%2030-6E56CF)
 ![Status](https://img.shields.io/badge/status-pre--alpha-7C3AED)
-![Progress](https://img.shields.io/badge/project%20progress-29%25-00BFFF)
+![Progress](https://img.shields.io/badge/project%20progress-32%25-00BFFF)
 
 </div>
 
@@ -23,9 +23,9 @@
 
 ## Project progress
 
-**29% — 0.3 Alpha Visual Engine underway; gradients, dynamic shadows, glow and retained bloom verified**
+**32% — 0.3 Alpha Visual Engine underway; GPU backdrop blur, frosted glass and acrylic are verified**
 
-`[██████░░░░░░░░░░░░░░] 29%`
+`[██████░░░░░░░░░░░░░░] 32%`
 
 **Completed:** `0.1 Alpha — Foundation` ✅ · `0.2 Alpha — Native Window + First Renderer` ✅  
 **Current milestone:** `0.3 Alpha — Visual Engine` 🚧
@@ -59,6 +59,9 @@ SwirUI is currently **pre-alpha**. APIs may change while the native renderer and
 - **retained `DropShadow`, `Glow`, `DynamicShadow` and source-driven `Bloom` effects flowing through the persistent GPU rectangle batch**
 - **quality-aware effect budgets spanning Performance / Balanced / Quality / Ultra / Cinematic profiles**
 - **persistent offscreen scene target plus separable GPU scene-blur postprocess on Windows**
+- **painter-order `BackdropBlur` boundaries that blur only already-painted background content while keeping later foreground content sharp**
+- **retained `FrostedGlass` and `Acrylic` materials composed from native GPU backdrop blur, tint, border and luminosity layers**
+- **deterministic acrylic micro-grain with visual-quality-aware retained density and no per-frame random generation or image uploads**
 - invalidation-driven `FrameScheduler`
 - backend-neutral `RenderSurface` lifecycle
 - render scheduling connected to `AppConfig.target_fps`
@@ -140,6 +143,7 @@ SwirUI is currently **pre-alpha**. APIs may change while the native renderer and
 - Windows native + rounded-GPU + path + shaped-text + image + clipping + mixed-DPI + presentation/display + keyboard/system-key smoke tests on Python 3.14
 - **real Win32/wgpu smoke coverage for retained linear, radial and mesh gradients**
 - **real Win32/wgpu smoke coverage for persistent dynamic shadows, glow and source-driven bloom**
+- **real Win32/wgpu smoke coverage for painter-order background blur, frosted glass and acrylic across persistent frames**
 - Ruff, Mypy, coverage and Python 3.11–3.14 CI
 
 ## Native and GPU demos
@@ -178,10 +182,12 @@ python examples/gpu_shadows_demo.py
 python examples/gpu_dynamic_effects_demo.py
 python examples/gpu_bloom_demo.py
 python examples/gpu_scene_blur_demo.py
+python examples/gpu_backdrop_blur_demo.py
+python examples/gpu_glass_materials_demo.py
 python examples/high_refresh_demo.py
 ```
 
-The rectangle demo submits prepared SwirUI rectangles into the persistent Rust/wgpu backend. Filled rectangles are batched into one instanced draw call and per-corner radii are evaluated in the fragment shader with anti-aliased SDF edges. The path demo exercises deterministic convex/concave `Path2D` tessellation and the full `SceneGraph → Python → Rust/wgpu` filled-triangle path with clipping and alpha compositing. The gradient demos exercise multi-stop linear, radial and rectangular color-lattice mesh gradients through the retained path pipeline. The dynamic-effects and bloom demos exercise retained shadows, glow and explicit source-driven bloom with quality-aware layer budgets. The scene-blur demo exercises the persistent offscreen target and separable full-scene GPU postprocess; backdrop-only/background blur remains a separate open roadmap item. The text demo exercises Unicode shaping through glyphon/cosmic-text and a persistent glyph atlas. The image demo generates RGBA pixels in memory, registers them once and reuses cached native textures; byte-identical image registrations under different logical ids share one retained native texture. The high-refresh demo follows the active display refresh rate automatically. Scene geometry remains authored in logical DIPs while native Win32 input and persistent GPU surfaces operate in physical pixels.
+The rectangle demo submits prepared SwirUI rectangles into the persistent Rust/wgpu backend. Filled rectangles are batched into one instanced draw call and per-corner radii are evaluated in the fragment shader with anti-aliased SDF edges. The path demo exercises deterministic convex/concave `Path2D` tessellation and the full `SceneGraph → Python → Rust/wgpu` filled-triangle path with clipping and alpha compositing. The gradient demos exercise multi-stop linear, radial and rectangular color-lattice mesh gradients through the retained path pipeline. The dynamic-effects and bloom demos exercise retained shadows, glow and explicit source-driven bloom with quality-aware layer budgets. The scene-blur demo exercises the persistent offscreen target and separable full-scene GPU postprocess. The backdrop-blur demo exercises rounded painter-order background-only blur, while the glass-materials demo composes that verified native boundary into frosted glass and acrylic with sharp foreground content. The text demo exercises Unicode shaping through glyphon/cosmic-text and a persistent glyph atlas. The image demo generates RGBA pixels in memory, registers them once and reuses cached native textures; byte-identical image registrations under different logical ids share one retained native texture. The high-refresh demo follows the active display refresh rate automatically. Scene geometry remains authored in logical DIPs while native Win32 input and persistent GPU surfaces operate in physical pixels.
 
 The Linux backend currently provides native X11 windows and normalized input/lifecycle events. The macOS backend provides native Cocoa/AppKit windows, display/Retina scaling and normalized input/lifecycle events. GPU/wgpu presentation on Linux and macOS, plus Wayland support, are not claimed yet.
 
@@ -255,6 +261,8 @@ Renderer Layer
         ├── retained linear / radial / mesh gradients ✅
         ├── retained shadows / glow / source bloom ✅
         ├── persistent offscreen target + separable scene blur ✅ Windows
+        ├── painter-order rounded backdrop/background blur ✅ Windows
+        ├── retained frosted glass + acrylic materials ✅ Windows
         ├── shaped text + persistent glyph atlas ✅
         ├── persistent content-addressed RGBA image cache ✅
         ├── hierarchical clipping / opacity compositing ✅
@@ -300,7 +308,7 @@ SwirUI Framework
 
 The 0.2 Alpha native/runtime gate is verified complete. Windows has the persistent wgpu renderer and integrated mixed-scene native gate; Linux has a real direct X11 native window/input path under Xvfb; macOS has a direct Cocoa/AppKit native window/input path with Retina logical-geometry verification. Cross-platform GPU presentation beyond Windows remains future work and is not implied by the native-window milestone.
 
-0.3 is now active. Retained **linear / radial / mesh gradients**, **dynamic shadows**, **glow** and explicit **source-driven bloom** are implemented and verified through the clipped, HiDPI-aware persistent GPU scene pipeline, including real Win32/wgpu smoke coverage. A persistent offscreen target and separable full-scene blur postprocess are also online as infrastructure, but backdrop-only/background blur is not claimed complete yet. The next high-impact work is a backdrop-aware material/effect composition path for background blur, glass and acrylic, followed by quality-aware effect caching. Native accessibility adapters, Wayland/Linux expansion, macOS GPU presentation and continued measured performance work remain important cross-cutting follow-ups without reopening the completed 0.2 gate.
+0.3 is now active. Retained **linear / radial / mesh gradients**, **dynamic shadows**, **glow**, explicit **source-driven bloom**, **painter-order background blur**, **frosted glass** and **acrylic-like materials** are implemented and verified through the clipped, HiDPI-aware persistent GPU scene pipeline, including real Win32/wgpu smoke coverage. Backdrop regions reuse persistent native blur/compositor resources, and material foreground content remains sharp above deterministic tint, border, luminosity and quality-aware grain layers. The next high-impact work is effect caching for unchanged backdrop/material regions so expensive intermediate blur work can be reused safely across high-refresh frames, followed by a reusable color-filter/custom-shader path. Native accessibility adapters, Wayland/Linux expansion, macOS GPU presentation and continued measured performance work remain important cross-cutting follow-ups without reopening the completed 0.2 gate.
 
 See **[ROADMAP.md](ROADMAP.md)** for the full development plan.
 
@@ -332,6 +340,7 @@ Windows persistent rounded-rectangle GPU draw smoke test
 Windows filled Path2D SceneGraph → Python → Rust/wgpu smoke test
 Windows retained linear / radial / mesh gradient GPU smoke tests
 Windows retained dynamic-shadow / glow / bloom GPU smoke test
+Windows retained backdrop/background-blur + glass/acrylic GPU smoke test
 Windows shaped-text SceneGraph → Python → Rust/wgpu smoke test
 Windows image-resource SceneGraph → Python → Rust/wgpu smoke test
 Windows clipped mixed-scene GPU smoke test

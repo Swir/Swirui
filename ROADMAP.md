@@ -4,9 +4,9 @@
 
 ## Project progress
 
-**Overall completion: 29%**
+**Overall completion: 32%**
 
-`[██████░░░░░░░░░░░░░░] 29%`
+`[██████░░░░░░░░░░░░░░] 32%`
 
 Progress is based on implemented and verified roadmap work. Ideas, mockups and unfinished prototypes do not increase the percentage.
 
@@ -104,9 +104,9 @@ Cross-platform native-window coverage now includes real Linux/X11 lifecycle/inpu
 
 ## 0.3 Alpha — Visual Engine
 
-- [ ] Glass / frosted glass
-- [ ] Acrylic-like materials
-- [ ] Background blur
+- [x] Glass / frosted glass
+- [x] Acrylic-like materials
+- [x] Background blur
 - [x] Glow and bloom
 - [x] Dynamic shadows
 - [x] Linear / radial / mesh gradients
@@ -387,6 +387,7 @@ AI output must remain ordinary, editable SwirUI code.
 - [x] Windows filled Path2D SceneGraph → Python → Rust/wgpu smoke test
 - [x] Windows retained linear / radial / mesh gradient GPU smoke tests
 - [x] Windows retained dynamic-shadow / glow / bloom GPU smoke test
+- [x] Windows retained backdrop/background-blur + glass/acrylic GPU smoke test
 - [x] Windows mixed-DPI logical-DIP → physical-GPU smoke test
 - [x] Windows presentation-policy reconfiguration smoke test
 - [x] Display-aware high-refresh runtime pacing tests
@@ -453,6 +454,7 @@ Current native foundation:
 - [x] native text pipeline
 - [x] native image pipeline
 - [x] native filled-path pipeline
+- [x] native painter-order backdrop blur/compositor pipeline
 
 Primary future candidates:
 
