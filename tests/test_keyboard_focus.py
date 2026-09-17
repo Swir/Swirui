@@ -224,7 +224,9 @@ def test_tab_default_action_traverses_and_shift_tab_reverses() -> None:
         "keyboard_focus_traversed",
         lambda event: traversed.append(
             (
-                event.data["component"].name if event.data["component"] else None,
+                event.data["component"].name
+                if event.data["component"] is not None
+                else None,
                 event.data["reverse"],
             )
         ),
