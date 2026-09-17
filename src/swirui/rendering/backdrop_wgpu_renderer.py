@@ -112,14 +112,18 @@ class WgpuRenderer(_BaseWgpuRenderer):
     def native_effect_cache_hits(self) -> int:
         """Return native retained-frame cache hits across live GPU contexts."""
 
-        return sum(int(getattr(context, "effect_cache_hits", 0)) for context in self._contexts.values())
+        return sum(
+            int(getattr(context, "effect_cache_hits", 0))
+            for context in self._contexts.values()
+        )
 
     @property
     def native_effect_cache_misses(self) -> int:
         """Return native retained-frame cache misses across live GPU contexts."""
 
         return sum(
-            int(getattr(context, "effect_cache_misses", 0)) for context in self._contexts.values()
+            int(getattr(context, "effect_cache_misses", 0))
+            for context in self._contexts.values()
         )
 
     def clear_backdrop_payload_cache(self, window: Window | None = None) -> None:
