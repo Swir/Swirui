@@ -19,6 +19,10 @@ from .scene import SceneNode, SceneNodeKind
 
 _MAX_MATERIAL_BORDER_WIDTH = 16.0
 _MAX_GRAIN_SAMPLES = 192
+_MATERIAL_BORDER_Z = -30
+_MATERIAL_TINT_Z = -20
+_MATERIAL_LUMINOSITY_Z = -10
+_MATERIAL_GRAIN_Z = -5
 _ACRYLIC_QUALITY_SAMPLES: dict[VisualQuality, int] = {
     VisualQuality.AUTO: 40,
     VisualQuality.PERFORMANCE: 12,
@@ -101,7 +105,7 @@ def _add_base_material_layers(
                 bounds,
                 border_color,
                 corner_radius,
-                z_index=0,
+                z_index=_MATERIAL_BORDER_Z,
             )
         )
     root.add(
@@ -110,7 +114,7 @@ def _add_base_material_layers(
             inner_bounds,
             tint,
             inner_radius,
-            z_index=1,
+            z_index=_MATERIAL_TINT_Z,
         )
     )
     return inner_bounds
@@ -140,8 +144,9 @@ class FrostedGlass:
     """A retained frosted-glass surface with native backdrop blur.
 
     The returned scene node is a non-interactive backdrop boundary. Applications
-    can attach labels and controls directly to it; decoration layers are marked
-    non-hit-testable, while later descendants remain independently interactive.
+    can attach labels and controls directly to it; internal decoration uses
+    reserved negative z-indices so ordinary child content at the default z-index
+    stays sharp and paints above the material layers.
     """
 
     blur_radius: float = 22.0
@@ -235,7 +240,7 @@ class Acrylic:
                 inner_bounds,
                 self.luminosity,
                 inner_radius,
-                z_index=2,
+                z_index=_MATERIAL_LUMINOSITY_Z,
             )
         )
 
@@ -267,7 +272,7 @@ class Acrylic:
             key=f"{key}:grain",
             kind=SceneNodeKind.GROUP,
             bounds=grain_bounds,
-            z_index=3,
+            z_index=_MATERIAL_GRAIN_Z,
             clip_to_bounds=True,
             hit_testable=False,
         )
