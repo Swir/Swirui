@@ -1,127 +1,89 @@
+<!-- SWIR-README-STANDARD:v1 -->
+
 <div align="center">
 
 <img src="assets/swirui-icon.svg" width="136" alt="SwirUI icon">
 
 # ⚡ SwirUI
 
-### Next-generation Python UI framework for native, reactive and GPU-first desktop applications.
+### Native, reactive and GPU-first desktop UI framework for Python
 
-**Beautiful by default. Native at the core. Built for the future.**
+**Python public API • Rust + wgpu native core • High-refresh desktop rendering**
 
-[![CI](https://github.com/Swir/Swirui/actions/workflows/ci.yml/badge.svg)](https://github.com/Swir/Swirui/actions/workflows/ci.yml)
-![Python](https://img.shields.io/badge/Python-3.11%20%7C%203.12%20%7C%203.13%20%7C%203.14-3776AB?logo=python&logoColor=white)
-![Windows Native](https://img.shields.io/badge/Windows-Win32%20native-0078D4?logo=windows11&logoColor=white)
-![Linux Native](https://img.shields.io/badge/Linux-X11%20native-FCC624?logo=linux&logoColor=black)
-![macOS Native](https://img.shields.io/badge/macOS-Cocoa%20native-000000?logo=apple&logoColor=white)
-![GPU](https://img.shields.io/badge/GPU-wgpu%2030-6E56CF)
-![Status](https://img.shields.io/badge/status-pre--alpha-7C3AED)
-![Progress](https://img.shields.io/badge/project%20progress-40%25-00BFFF)
+![Python](https://img.shields.io/badge/Python-3.11%20%7C%203.12%20%7C%203.13%20%7C%203.14-02050A?style=for-the-badge&logo=python&logoColor=62E5FF)
+![Rust](https://img.shields.io/badge/Rust-Native%20Core-02050A?style=for-the-badge&logo=rust&logoColor=62E5FF)
+![wgpu](https://img.shields.io/badge/wgpu-30.0.1-02050A?style=for-the-badge&logo=webgpu&logoColor=62E5FF)
+![Windows](https://img.shields.io/badge/Windows-Win32%20GPU-02050A?style=for-the-badge&logo=windows11&logoColor=62E5FF)
+
+[![CI](https://img.shields.io/github/actions/workflow/status/Swir/Swirui/ci.yml?branch=main&style=flat-square&label=CI&color=0088FF)](https://github.com/Swir/Swirui/actions/workflows/ci.yml)
+![Status](https://img.shields.io/badge/status-pre--alpha-0088FF?style=flat-square)
+![Progress](https://img.shields.io/badge/project%20progress-40%25-0088FF?style=flat-square)
 
 </div>
 
----
+<img width="100%" src="https://raw.githubusercontent.com/Swir/Swir/main/assets/power-divider-v4.svg" alt="SWIR electric divider" />
 
-## Project progress
+## Project Status
 
-**40% — 0.3 Alpha Visual Engine underway; native retained effect-frame caching is verified**
+**40% — 0.3 Alpha Visual Engine is active.**
 
 `[████████░░░░░░░░░░░░] 40%`
 
-**Completed:** `0.1 Alpha — Foundation` ✅ · `0.2 Alpha — Native Window + First Renderer` ✅  
-**Current milestone:** `0.3 Alpha — Visual Engine` 🚧
+- `0.1 Alpha — Foundation` ✅
+- `0.2 Alpha — Native Window + First Renderer` ✅
+- `0.3 Alpha — Visual Engine` 🚧
 
-Progress only increases for implemented and verified roadmap work. Ideas, mockups, documentation-only changes and unfinished experiments do not count.
+Progress increases only for implemented and verified roadmap work. Documentation-only changes, skeletons and unfinished experiments do not increase the percentage.
 
-## What is SwirUI?
+SwirUI is **pre-alpha**. Public APIs may still change while the renderer, widget system and higher-level runtime are developed. There is no public GitHub Release yet.
 
-SwirUI is being built as a complete Python application framework rather than a visual skin over Tkinter, Qt or another widget toolkit. Python remains the public developer API while Rust, wgpu and PyO3 own performance-critical native rendering work.
+## Overview
 
-The long-term goal is a framework that combines a simple Python developer experience with native windows, GPU rendering, responsive layouts, rich effects, animation, professional widgets, accessibility, visual tooling, packaging and AI-assisted development.
+SwirUI is being built as a complete Python desktop application framework rather than a visual skin over Tkinter, Qt or another widget toolkit. Python remains the public developer API, while Rust, wgpu and PyO3 own performance-critical native rendering work.
 
-SwirUI is currently **pre-alpha**. APIs may change while the renderer, component system and Visual Engine are being developed.
+The current Windows renderer uses a persistent per-window wgpu context and a retained SceneGraph. Linux/X11 and macOS/Cocoa already have real native window and input backends. GPU presentation on Linux/macOS and Wayland support remain future work and are not claimed as complete.
 
-## What already works
+## Highlights
 
-### Runtime and native windows
+| Feature | Current verified capability |
+|---|---|
+| Native windows | Direct Win32, X11 and Cocoa/AppKit backends without Tkinter/Qt/SDL |
+| GPU renderer | Persistent Rust/wgpu renderer context on Windows with retained scene submission |
+| Shapes | Anti-aliased rounded rectangles plus convex/concave `Path2D` geometry |
+| Text | Persistent shaped Unicode text through glyphon/cosmic-text |
+| Images | Content-addressed RGBA GPU cache with aliases, telemetry and safe lifetime management |
+| Composition | Hierarchical clipping, cumulative opacity and painter-order retained composition |
+| HiDPI | Logical-DIP public geometry with physical-pixel native/GPU conversion |
+| Displays | Multi-monitor mapping, refresh discovery and 60/120/144+ Hz display-aware pacing |
+| Visual Engine | Gradients, shadows, glow, bloom, depth, parallax, reflections and adaptive lighting |
+| Materials | Native backdrop blur, FrostedGlass and Acrylic with deterministic grain |
+| Post-processing | Persistent scene blur and affine RGBA color filters |
+| Performance | Adaptive visual-quality profiles plus retained effect and GPU resource caches |
+| Accessibility | Semantic roles/tree, keyboard focus routing and keyboard-only traversal foundation |
+| Custom shaders | Bounded Python WGSL effect contract and native validation are in progress; runtime shader application is not complete yet |
 
-- application and window lifecycle
-- component tree with cycle protection and reparenting
-- direct/capture/target/bubble event routing
-- thread-safe reactive `State`
-- invalidation-driven `FrameScheduler`
-- runtime target-FPS retargeting and frame-time telemetry
-- display-aware frame pacing capped to the active monitor refresh rate
-- automatic scheduler retargeting across display changes
-- automatic `VisualQuality.AUTO` adaptation from measured render cost and smoothed frame cadence, with hysteresis and cooldown protection
-- runtime `App.set_visual_quality()` switching between fixed profiles and automatic quality without recreating windows
-- direct Win32 backend via Python `ctypes`
-- direct Linux/X11 backend via Python `ctypes` + system libX11
-- direct macOS Cocoa/AppKit backend via Python `ctypes` + Objective-C runtime
-- logical-DIP public geometry with native physical-pixel conversion
-- exact Win32 client-area sizing and DPI-aware minimum-track sizing
-- Win32 per-monitor DPI, multi-monitor mapping and display-refresh discovery
-- Retina-safe Cocoa logical geometry
-- normalized pointer, keyboard, text-input, focus, resize and close events
-- keyboard focus routing, Tab / Shift+Tab traversal and preventable default actions
-- backend-neutral accessibility roles and semantic-tree snapshots
+## Quick Start
 
-### Retained renderer
-
-- retained `RenderTree` and renderer-ready `SceneGraph`
-- `Path2D` convex/concave polygon tessellation and path-aware hit testing
-- hierarchical clipping and cumulative opacity composition
-- persistent per-window Rust/wgpu context on Windows
-- GPU surface/swapchain, adapter/device/queue creation and present-mode reconfiguration
-- instanced anti-aliased rounded rectangles with per-corner radii
-- shaped Unicode text through glyphon/cosmic-text with persistent glyph resources
-- persistent content-addressed RGBA image cache with logical aliases and telemetry
-- clipped rounded rectangles, filled paths, text and images in one GPU scene
-- native VSync / AutoNoVSync presentation policy and maximum-frame-latency control
-- persistent offscreen scene target and separable Gaussian scene blur
-- painter-order rounded backdrop blur that keeps later foreground content sharp
-
-### 0.3 Visual Engine
-
-- immutable multi-stop linear and radial gradients
-- rectangular mesh gradients with deterministic retained tessellation
-- `PerspectivePlane` depth projection
-- bounded pointer-driven `Parallax`
-- quality-aware retained `Reflection`
-- retained `DropShadow`, `Glow`, `DynamicShadow` and source-driven `Bloom`
-- `AdaptiveLighting` with directional shadow/highlight lobes
-- deterministic quality-aware `Noise` / grain
-- retained `FrostedGlass` and `Acrylic` materials over native backdrop blur
-- deterministic acrylic micro-grain
-- **immutable composable `ColorFilter` affine RGBA transforms**
-- **persistent native Rust/wgpu color-filter postprocess after scene/backdrop blur**
-- presets/composition for brightness, contrast, saturation, grayscale, sepia, invert, opacity and hue rotation
-- concrete visual-quality budgets spanning Performance / Balanced / Quality / Ultra / Cinematic for implemented retained effects
-- **automatic `AUTO` profile resolution that steps between concrete quality budgets only after sustained measured pressure or headroom**
-- frame telemetry exposing render duration, frame-budget utilization and configured/effective visual quality
-- **native retained effect-frame caching that presents unchanged composed backdrop/material scenes without repeating primitive submission, backdrop blur or material composition**
-- effect-cache invalidation for scene generation, DPI, image-resource, resize and background changes plus native hit/miss telemetry
-
-The Windows renderer currently owns the verified wgpu presentation path. Linux/X11 and macOS/Cocoa provide real native window/input backends; GPU presentation on those platforms and Wayland remain future work and are not claimed yet.
-
-## Native and GPU demos
-
-Install SwirUI in development mode:
+### Python development environment
 
 ```powershell
 git clone https://github.com/Swir/Swirui.git
 cd Swirui
 python -m venv .venv
 .venv\Scripts\activate
+python -m pip install --upgrade pip
 python -m pip install -e ".[dev]"
 ```
 
-Native Win32 lifecycle/input demo:
+Run the native-window demo:
 
 ```powershell
 python examples/native_window_demo.py
 ```
 
-For Rust/wgpu demos, install the native core in the same environment:
+### Windows GPU development
+
+The verified wgpu presentation path currently targets Windows. Build the PyO3 extension into the active environment:
 
 ```powershell
 python -m pip install maturin==1.15.0
@@ -129,31 +91,23 @@ cd native
 maturin develop --release
 cd ..
 python examples/gpu_rectangles_demo.py
-python examples/gpu_text_demo.py
-python examples/gpu_image_demo.py
-python examples/gpu_paths_demo.py
-python examples/gpu_gradients_demo.py
-python examples/gpu_radial_gradients_demo.py
-python examples/gpu_mesh_gradients_demo.py
-python examples/gpu_depth_demo.py
-python examples/gpu_reflections_demo.py
-python examples/gpu_shadows_demo.py
-python examples/gpu_dynamic_effects_demo.py
-python examples/gpu_bloom_demo.py
-python examples/gpu_noise_demo.py
-python examples/gpu_adaptive_lighting_demo.py
-python examples/gpu_scene_blur_demo.py
-python examples/gpu_backdrop_blur_demo.py
-python examples/gpu_glass_materials_demo.py
-python examples/gpu_color_filters_demo.py
-python examples/gpu_native_effect_frame_cache_demo.py
-python examples/adaptive_quality_demo.py
-python examples/high_refresh_demo.py
 ```
 
-The demos exercise the same retained scene contracts used by applications. Geometry remains authored in logical DIPs while native surfaces and GPU submission operate in physical pixels. The color-filter demo exercises the persistent affine RGBA postprocess after scene/backdrop composition without recreating the per-window wgpu context. The native effect-frame cache demo repeatedly presents an unchanged frosted-glass scene at a high target refresh rate while exposing native cache hit/miss telemetry. The adaptive-quality demo drives quality-aware retained effects from the runtime's concrete `effective_visual_quality` while `AUTO` evaluates real renderer cost and frame pacing.
+## Requirements & Compatibility
 
-## Foundation API
+| Area | Status |
+|---|---|
+| Python | 3.11, 3.12, 3.13 and 3.14 are tested in CI |
+| Windows | Native Win32 backend + verified Rust/wgpu presentation path |
+| Linux | Native X11 window/input backend verified under Xvfb |
+| macOS | Native Cocoa/AppKit window/input backend with Retina logical geometry |
+| Wayland | Planned |
+| Linux/macOS GPU presentation | Planned; not yet claimed |
+| Native GPU build | Stable Rust toolchain + Maturin + PyO3 ABI3 |
+
+## Usage
+
+Foundation API:
 
 ```python
 from swirui import App, AppConfig, Component, State, Window
@@ -180,166 +134,125 @@ counter.set(1)
 app.run()
 ```
 
-When the native GPU extension is installed on Windows, `App()` selects the wgpu renderer automatically. Explicit renderer injection remains available for tests and custom backends.
+When the native GPU extension is installed on Windows, SwirUI can select the wgpu renderer automatically. Explicit renderer injection remains available for tests and custom backends.
 
-## Architecture
+### GPU and runtime examples
+
+```text
+examples/gpu_rectangles_demo.py
+examples/gpu_text_demo.py
+examples/gpu_image_demo.py
+examples/gpu_paths_demo.py
+examples/gpu_gradients_demo.py
+examples/gpu_mesh_gradients_demo.py
+examples/gpu_depth_demo.py
+examples/gpu_reflections_demo.py
+examples/gpu_dynamic_effects_demo.py
+examples/gpu_bloom_demo.py
+examples/gpu_noise_demo.py
+examples/gpu_adaptive_lighting_demo.py
+examples/gpu_scene_blur_demo.py
+examples/gpu_backdrop_blur_demo.py
+examples/gpu_glass_materials_demo.py
+examples/gpu_color_filters_demo.py
+examples/gpu_native_effect_frame_cache_demo.py
+examples/adaptive_quality_demo.py
+examples/high_refresh_demo.py
+```
+
+These examples exercise the same retained contracts used by applications. Public geometry remains in logical DIPs while native surfaces and GPU submission operate in physical pixels.
+
+## Technology & Architecture
 
 ```text
 Python Application API
         │
-        ├── App / Window lifecycle
-        ├── Components / Routed Events ✅
-        ├── Accessibility semantics ✅
-        ├── Reactive State
-        └── Runtime configuration / adaptive visual quality ✅
+        ├── App / Window / Component / State
+        ├── Routed input + accessibility semantics
+        └── Runtime configuration + adaptive visual quality
         │
 SwirUI Runtime
         │
-        ├── Native Platform Backends
-        │     ├── Win32 ✅
-        │     ├── Linux X11 ✅ window/input
-        │     └── macOS Cocoa ✅ window/input/Retina
-        ├── logical DIP ↔ physical pixel boundary ✅
-        ├── per-window display / scale / refresh tracking ✅
-        ├── Render Tree / Scene Graph ✅
-        ├── Path2D tessellation ✅
-        ├── retained depth / parallax / reflection geometry ✅
-        ├── z/clip/path-aware hit testing ✅
-        ├── SceneNode → Component mapping ✅
-        ├── render-cost + pacing quality feedback ✅
-        └── display-aware frame scheduling ✅
+        ├── Win32 / X11 / Cocoa native backends
+        ├── logical DIP ↔ physical pixel boundary
+        ├── retained RenderTree / SceneGraph
+        └── display-aware frame scheduler
         │
 Renderer Layer
         │
-        ├── persistent wgpu surface/context ✅ Windows
-        ├── VSync / present-mode policy ✅ Windows
-        ├── rounded rectangles / paths / shaped text / images ✅
-        ├── gradients / depth / reflections ✅
-        ├── shadows / glow / source bloom / lighting / grain ✅
-        ├── quality-aware retained effect budgets ✅
-        ├── offscreen target + separable scene blur ✅ Windows
-        ├── painter-order backdrop blur ✅ Windows
-        ├── frosted glass + acrylic ✅ Windows
-        ├── affine RGBA color-filter postprocess ✅ Windows
-        ├── retained backdrop/material effect-frame cache ✅ Windows
-        └── custom shader effects 🚧
+        ├── persistent Windows wgpu context
+        ├── rectangles / paths / shaped text / images
+        ├── blur / backdrop / glass / acrylic
+        ├── gradients / depth / lighting / bloom / color filters
+        └── retained GPU/effect caches
         │
 Native Core
         │
-        └── Rust 2024 + wgpu 30 + PyO3 ✅
-        │
-GPU / Operating System
+        └── Rust 2024 + wgpu 30 + PyO3 ABI3
 ```
 
-## Design goals
+The active custom-shader work keeps the Python API intentionally narrow: application code supplies a pure WGSL color-effect function, while SwirUI owns GPU bindings, entry points and validation. Native runtime pipeline creation and persistent pipeline caching are still required before the roadmap item can be marked complete.
 
-- **Future-grade visuals** — glass, blur, glow, mesh gradients, depth, lighting and shaders.
-- **GPU-first rendering** — designed for modern displays and high refresh rates.
-- **Simple Python API** — powerful UI without excessive boilerplate.
-- **Reactive by default** — state changes should update only what needs to change.
-- **Native desktop integration** — real operating-system windows and input pipelines.
-- **Responsive layouts** — compact windows through 4K and ultrawide displays.
-- **Professional widgets** — DataGrid, docking, charts, media, editor, terminal and 3D viewport.
-- **Developer tooling** — hot reload, inspector, profiler, testing and packaging.
-- **Accessibility and i18n** — first-class architecture rather than late add-ons.
-- **Measured performance** — reproducible benchmarks instead of unsupported claims.
+## Testing & Quality
 
-## Planned ecosystem
+Every significant runtime change is expected to preserve the existing quality gates:
 
-```text
-SwirUI Framework
-├── SwirUI Renderer
-├── SwirUI Visual Engine
-├── SwirUI Components
-├── SwirUI Studio
-├── SwirUI CLI
-├── SwirUI Inspector
-├── SwirUI AI Builder
-├── SwirUI Package Builder
-└── SwirUI Marketplace
-```
+- Ruff and strict Mypy
+- pytest on Python 3.11–3.14
+- retained-runtime performance budgets with JSON reports
+- `cargo check` and `cargo test`
+- Maturin / PyO3 native build
+- real Linux/X11 and macOS/Cocoa native-window smoke tests
+- real Win32 + wgpu smoke tests
+- integrated 0.2 native renderer/runtime gate
+- HiDPI, multi-monitor, presentation-policy, text, image, path, effects and cache coverage
 
-## Current milestone: 0.3 Alpha — Visual Engine
+SwirUI does not claim performance superiority over other frameworks without reproducible measurements.
 
-The 0.2 Alpha native/runtime gate is verified complete. 0.3 is active and now includes verified gradients, depth/perspective, parallax, reflections, dynamic shadows, adaptive lighting, glow, source-driven bloom, deterministic grain, background blur, frosted glass, acrylic-like materials, native GPU color filters, automatic runtime visual-quality adaptation and native retained effect-frame caching.
+## Roadmap
 
-`VisualQuality.AUTO` now resolves to concrete Performance / Balanced / Quality / Ultra / Cinematic budgets from two independent runtime signals: smoothed frame cadence and measured renderer-call cost. Fast sustained-pressure demotion, conservative sustained-headroom promotion, a neutral hysteresis band and a post-transition cooldown prevent idle invalidation-driven windows and brief spikes from causing profile thrashing. Fixed profiles remain fixed, and applications can inspect `effective_visual_quality`, quality telemetry or `visual_quality_changed` events without recreating native windows.
+The authoritative plan is **[ROADMAP.md](ROADMAP.md)**.
 
-Unchanged backdrop/material scenes now retain their fully composed offscreen result inside the persistent per-window native wgpu context. Stable scene-generation tokens let high-refresh presentations skip primitive preparation/submission and expensive backdrop blur/material composition until scene content, DPI, image resources, surface size or renderer background actually changes. Final scene blur and affine color filtering remain live presentation-stage postprocesses, and native hit/miss telemetry makes the cache behavior observable.
+The remaining 0.3 milestone item is **Custom shader effects**. The current branch-level work establishes a bounded Python effect contract and native Naga WGSL validation, but the roadmap item remains open until persistent native pipeline creation/caching and real renderer application are implemented and verified.
 
-The next high-impact 0.3 work is a reusable custom-shader effect contract with safe WGSL validation, persistent native pipeline caching and a Python-first API. Native accessibility adapters, Wayland/Linux expansion, macOS GPU presentation and continued measured performance work remain important cross-cutting follow-ups without reopening the completed 0.2 gate.
+## Releases
 
-See **[ROADMAP.md](ROADMAP.md)** for the full development plan.
+There is currently **no public GitHub Release** for SwirUI. Development is source-first while the alpha gates are still being completed.
 
-## Quality policy
+- Development history: **[CHANGELOG.md](CHANGELOG.md)**
+- Full roadmap: **[ROADMAP.md](ROADMAP.md)**
+- CI status: **[GitHub Actions](https://github.com/Swir/Swirui/actions)**
 
-Every significant runtime change is expected to pass:
-
-```text
-Ruff
-Mypy strict mode
-pytest + coverage
-Python 3.11
-Python 3.12
-Python 3.13
-Python 3.14
-retained-runtime performance budgets + JSON report artifact
-accessibility semantic-tree tests
-adaptive visual-quality pressure/headroom/idle-regression tests
-cargo check
-cargo test
-Maturin / PyO3 native build
-Linux real-X11 native-window smoke test under Xvfb
-macOS real-Cocoa native-window + Retina logical-geometry smoke test
-Windows native smoke test
-Windows integrated 0.2 mixed-scene + exact-client + routed-input gate
-Windows active-display / refresh-rate mapping smoke test
-Windows WM_DISPLAYCHANGE / WM_DPICHANGED normalization smoke tests
-Windows keyboard / system-key normalization smoke test
-Windows wgpu clear/present smoke test
-Windows persistent rounded-rectangle GPU draw smoke test
-Windows filled Path2D smoke test
-Windows retained gradient smoke tests
-Windows retained depth / parallax / reflection smoke test
-Windows retained adaptive-lighting / glow / bloom / noise smoke test
-Windows retained backdrop blur + glass/acrylic smoke test
-Windows retained native effect-frame cache smoke test
-Windows native GPU color-filter postprocess smoke test
-Windows shaped-text smoke test
-Windows image-resource smoke test
-Windows clipped mixed-scene smoke test
-Windows mixed-DPI smoke test
-Windows presentation-policy reconfiguration smoke test
-Display-aware high-refresh pacing tests
-Routed keyboard focus / text-input / preventable Tab traversal tests
-```
-
-SwirUI will not claim to outperform another framework without reproducible measurements. Current CI guardrails cover retained 1024-node SceneGraph traversal, pointer hit testing and deterministic reflection tessellation. Planned expansion includes startup time, RAM, CPU/GPU usage, frame time, input latency, component creation, large lists and animation performance.
-
-## Repository layout
+## Repository Structure
 
 ```text
 Swirui/
-├── .github/workflows/      # Python, Rust and native platform/GPU CI
-├── assets/                 # SwirUI visual assets and icon
-├── benchmarks/             # reproducible performance budgets and scenarios
-├── docs/                   # architecture and design documentation
-├── examples/               # native and GPU examples
-├── native/                 # Rust + wgpu + PyO3 GPU core
-├── src/swirui/             # framework source
-├── tests/                  # automated tests
+├── .github/workflows/      # Python, Rust and native-platform CI
+├── assets/                 # SwirUI icon and visual assets
+├── benchmarks/             # reproducible performance budgets
+├── docs/                   # architecture documentation
+├── examples/               # native/runtime/GPU examples
+├── native/                 # Rust + wgpu + PyO3 core
+├── src/swirui/             # public Python framework and renderer bridge
+├── tests/                  # automated unit/integration/native smoke tests
 ├── CHANGELOG.md
 ├── CONTRIBUTING.md
 ├── ROADMAP.md
 └── pyproject.toml
 ```
 
----
+## 🔎 Search Keywords
+
+`python desktop gui` • `python gpu ui` • `native python ui framework` • `wgpu python renderer` • `rust pyo3 gui` • `win32 python gui` • `reactive desktop ui` • `high refresh rate ui` • `hidpi desktop ui` • `gpu text rendering` • `frosted glass ui` • `acrylic desktop ui` • `custom wgsl effects` • `multi monitor python ui`
+
+<img width="100%" src="https://raw.githubusercontent.com/Swir/Swir/main/assets/power-divider-v4.svg" alt="SWIR electric divider" />
 
 <div align="center">
 
-### ⚡ SwirUI
+### `BUILD • TEST • RENDER • EVOLVE`
 
-**Designed and developed by [Swir](https://github.com/Swir)**
+⭐ **If SwirUI is useful or interesting, consider leaving a star.**
+
+[**← SWIR profile**](https://github.com/Swir) · [**All projects →**](https://github.com/Swir?tab=repositories)
 
 </div>

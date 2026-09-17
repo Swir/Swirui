@@ -10,10 +10,11 @@ mod image;
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 mod postprocess;
 mod renderer;
+mod shader_validation;
 mod shape;
 mod text;
 
-use pyo3::exceptions::PyRuntimeError;
+use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use renderer::{clear_win32_surface, draw_rectangles_win32_surface};
 
@@ -44,6 +45,11 @@ fn probe_adapter() -> PyResult<(String, String)> {
     Ok((info.name, info.backend.to_string()))
 }
 
+#[pyfunction]
+fn validate_custom_shader_wgsl(source: &str) -> PyResult<()> {
+    shader_validation::validate_custom_shader_wgsl(source).map_err(PyValueError::new_err)
+}
+
 fn backend_names(backends: wgpu::Backends) -> Vec<&'static str> {
     let candidates = [
         (wgpu::Backends::DX12, "dx12"),
@@ -64,6 +70,7 @@ fn _swirui_native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(core_version, module)?)?;
     module.add_function(wrap_pyfunction!(enabled_backends, module)?)?;
     module.add_function(wrap_pyfunction!(probe_adapter, module)?)?;
+    module.add_function(wrap_pyfunction!(validate_custom_shader_wgsl, module)?)?;
     module.add_function(wrap_pyfunction!(clear_win32_surface, module)?)?;
     module.add_function(wrap_pyfunction!(draw_rectangles_win32_surface, module)?)?;
     #[cfg(target_os = "windows")]

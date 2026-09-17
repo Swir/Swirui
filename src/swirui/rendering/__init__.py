@@ -5,6 +5,7 @@ from .backdrop_wgpu_renderer import WgpuRenderer
 from .base import NullRenderer, Renderer
 from .bloom import Bloom
 from .color_filters import ColorFilter
+from .custom_shaders import CustomShaderEffect, ShaderParameters
 from .depth import Parallax, PerspectivePlane
 from .effect_cache import EffectCache, EffectCacheStats, RetainedEffect
 from .effects import (
@@ -35,6 +36,7 @@ __all__ = [
     "Color",
     "ColorFilter",
     "CornerRadius",
+    "CustomShaderEffect",
     "DropShadow",
     "DynamicShadow",
     "EffectCache",
@@ -64,6 +66,7 @@ __all__ = [
     "Scene",
     "SceneNode",
     "SceneNodeKind",
+    "ShaderParameters",
     "Size",
     "WgpuRenderer",
     "Win32PreviewRenderer",
