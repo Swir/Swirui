@@ -5,11 +5,21 @@ from .component import Component
 from .config import AppConfig, PresentationMode, VisualQuality
 from .events import Event, EventEmitter, EventPhase
 from .logging import configure_logging, get_logger
+from .quality import (
+    AdaptiveQualityController,
+    AdaptiveQualityDecision,
+    AdaptiveQualityPolicy,
+    AdaptiveQualityStats,
+)
 from .state import State
 
 __all__ = [
     "AccessibilityNode",
     "AccessibilityRole",
+    "AdaptiveQualityController",
+    "AdaptiveQualityDecision",
+    "AdaptiveQualityPolicy",
+    "AdaptiveQualityStats",
     "AppConfig",
     "Component",
     "Event",
