@@ -36,13 +36,7 @@ impl ColorMatrixFilter {
         values: &[f32],
     ) -> Self {
         debug_assert!(validate_color_matrix(values).is_ok());
-        let output_target = OffscreenRenderTarget::new_labeled(
-            device,
-            format,
-            width,
-            height,
-            "SwirUI persistent color-filter output target",
-        );
+        let output_target = OffscreenRenderTarget::new(device, format, width, height);
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             label: Some("SwirUI color-filter linear sampler"),
             mag_filter: wgpu::FilterMode::Linear,
@@ -171,10 +165,7 @@ impl ColorMatrixFilter {
         resized
     }
 
-    pub(crate) fn encode(
-        &self,
-        encoder: &mut wgpu::CommandEncoder,
-    ) -> &wgpu::TextureView {
+    pub(crate) fn encode(&self, encoder: &mut wgpu::CommandEncoder) -> &wgpu::TextureView {
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("SwirUI affine RGBA color-filter pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
