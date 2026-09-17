@@ -261,7 +261,12 @@ class LinuxX11PlatformBackend:
         self._x11.XUnmapWindow.restype = ctypes.c_int
         self._x11.XDestroyWindow.argtypes = [ctypes.c_void_p, ctypes.c_ulong]
         self._x11.XDestroyWindow.restype = ctypes.c_int
-        self._x11.XResizeWindow.argtypes = [ctypes.c_void_p, ctypes.c_ulong, ctypes.c_uint, ctypes.c_uint]
+        self._x11.XResizeWindow.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_ulong,
+            ctypes.c_uint,
+            ctypes.c_uint,
+        ]
         self._x11.XResizeWindow.restype = ctypes.c_int
         self._x11.XPending.argtypes = [ctypes.c_void_p]
         self._x11.XPending.restype = ctypes.c_int
@@ -449,9 +454,11 @@ class LinuxX11PlatformBackend:
                 return (keyboard,)
             text = self._text_input_event(event)
             return (keyboard,) if text is None else (keyboard, text)
-        if event.type == _ClientMessage:
-            if int(event.xclient.data.l[0]) == self._wm_delete_window:
-                return (PlatformEvent(PlatformEventKind.CLOSE, handle),)
+        if (
+            event.type == _ClientMessage
+            and int(event.xclient.data.l[0]) == self._wm_delete_window
+        ):
+            return (PlatformEvent(PlatformEventKind.CLOSE, handle),)
         if event.type == _DestroyNotify:
             return (PlatformEvent(PlatformEventKind.CLOSE, handle),)
         return ()
