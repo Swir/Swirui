@@ -118,6 +118,9 @@ jobs:
       - name: Create and paint real Win32 window
         run: pytest tests/test_windows_backend.py -q
 
+      - name: Verify 0.2 integrated native gate
+        run: pytest tests/test_windows_02_gate.py -q
+
       - name: Draw native GPU scene
         run: pytest tests/test_windows_gpu_bridge.py -q
 
