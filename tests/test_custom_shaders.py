@@ -12,7 +12,8 @@ fn swirui_effect(
     params: vec4<f32>,
 ) -> vec4<f32> {
     let gain = 1.0 + params.x;
-    let vignette = clamp(1.0 - distance(uv, vec2<f32>(0.5, 0.5)) * params.y, 0.0, 1.0);
+    let offset = distance(uv, vec2<f32>(0.5, 0.5));
+    let vignette = clamp(1.0 - offset * params.y, 0.0, 1.0);
     return vec4<f32>(color.rgb * gain * vignette, color.a);
 }
 """
@@ -56,7 +57,8 @@ def test_rejects_invalid_contract_and_unsafe_gpu_surface_area() -> None:
         CustomShaderEffect(
             VALID_SOURCE.replace(
                 "let gain = 1.0 + params.x;",
-                "var gain = 1.0; for (var i = 0; i < 2; i += 1) { gain += params.x; }",
+                "var gain = 1.0; for (var i = 0; i < 2; i += 1) { "
+                "gain += params.x; }",
             )
         )
 
