@@ -6,7 +6,16 @@ import time
 from collections.abc import Callable
 from types import TracebackType
 
-from .core import AppConfig, Event, EventEmitter, configure_logging
+from .core import (
+    AdaptiveQualityController,
+    AdaptiveQualityDecision,
+    AdaptiveQualityStats,
+    AppConfig,
+    Event,
+    EventEmitter,
+    VisualQuality,
+    configure_logging,
+)
 from .platforms import (
     NativeWindowSpec,
     NullPlatformBackend,
@@ -43,6 +52,19 @@ class App(EventEmitter):
         self.exit_code = 0
         self._frame_schedulers: dict[Window, FrameScheduler] = {}
         self._window_unsubscribers: dict[Window, list[Callable[[], None]]] = {}
+        self._quality_controller = AdaptiveQualityController(self.config.visual_quality)
+
+    @property
+    def effective_visual_quality(self) -> VisualQuality:
+        """Return the concrete quality profile currently used by the runtime."""
+
+        return self._quality_controller.resolved_quality
+
+    @property
+    def quality_stats(self) -> AdaptiveQualityStats:
+        """Return immutable adaptive-quality telemetry for diagnostics."""
+
+        return self._quality_controller.stats
 
     def add_window(self, window: Window) -> Window:
         if window not in self.windows:
@@ -165,6 +187,35 @@ class App(EventEmitter):
             target_fps=target_fps,
         )
 
+    def set_visual_quality(self, quality: VisualQuality) -> None:
+        """Switch fixed/AUTO visual quality without recreating native windows.
+
+        Fixed profiles remain fixed. ``AUTO`` starts from the policy's balanced
+        baseline and then adapts from frame-pacing telemetry. Applications that
+        build quality-aware retained effects can listen for
+        ``visual_quality_changed`` and rebuild those subtrees with
+        :attr:`effective_visual_quality`.
+        """
+
+        normalized = VisualQuality(quality)
+        old_mode = VisualQuality(self.config.visual_quality)
+        if normalized is old_mode and self._quality_controller.mode is normalized:
+            return
+
+        old_quality = self.effective_visual_quality
+        self.config.visual_quality = normalized
+        _, new_quality = self._quality_controller.set_mode(normalized)
+        self.invalidate()
+        self._emit_quality_change(
+            old_quality=old_quality,
+            new_quality=new_quality,
+            old_mode=old_mode,
+            new_mode=normalized,
+            reason="configuration",
+            smoothed_fps=None,
+            target_fps=None,
+        )
+
     def window_target_fps(self, window: Window) -> int:
         """Return the effective frame-rate ceiling for one application window."""
 
@@ -195,15 +246,23 @@ class App(EventEmitter):
 
         if not self.running:
             return 0
+        self._sync_visual_quality_mode()
         frame_time = time.monotonic() if now is None else now
         frames = 0
         for window, scheduler in tuple(self._frame_schedulers.items()):
             if window.closed or not window.visible:
                 continue
             if scheduler.consume(frame_time):
+                rendered_quality = self.effective_visual_quality
                 self.renderer.render(window, window.root)
                 frames += 1
                 stats = scheduler.stats
+                decision = self._quality_controller.observe_frame(
+                    stats.smoothed_fps,
+                    scheduler.target_fps,
+                )
+                if decision is not None:
+                    self._apply_adaptive_quality_decision(decision)
                 self.emit(
                     "frame_rendered",
                     window=window,
@@ -219,6 +278,9 @@ class App(EventEmitter):
                     instantaneous_fps=stats.instantaneous_fps,
                     smoothed_fps=stats.smoothed_fps,
                     pacing_error=stats.pacing_error,
+                    visual_quality=rendered_quality,
+                    effective_visual_quality=self.effective_visual_quality,
+                    configured_visual_quality=self.config.visual_quality,
                 )
         return frames
 
@@ -288,6 +350,61 @@ class App(EventEmitter):
             target_fps=target_fps,
             configured_target_fps=self.config.target_fps,
             display=window.display,
+        )
+
+    def _sync_visual_quality_mode(self) -> None:
+        """Honor direct ``AppConfig.visual_quality`` mutation at frame boundaries."""
+
+        configured_mode = VisualQuality(self.config.visual_quality)
+        if configured_mode is self._quality_controller.mode:
+            return
+        old_mode = self._quality_controller.mode
+        old_quality = self.effective_visual_quality
+        self.config.visual_quality = configured_mode
+        _, new_quality = self._quality_controller.set_mode(configured_mode)
+        self.invalidate()
+        self._emit_quality_change(
+            old_quality=old_quality,
+            new_quality=new_quality,
+            old_mode=old_mode,
+            new_mode=configured_mode,
+            reason="configuration",
+            smoothed_fps=None,
+            target_fps=None,
+        )
+
+    def _apply_adaptive_quality_decision(self, decision: AdaptiveQualityDecision) -> None:
+        self.invalidate()
+        self._emit_quality_change(
+            old_quality=decision.old_quality,
+            new_quality=decision.new_quality,
+            old_mode=VisualQuality.AUTO,
+            new_mode=VisualQuality.AUTO,
+            reason=decision.reason,
+            smoothed_fps=decision.smoothed_fps,
+            target_fps=decision.target_fps,
+        )
+
+    def _emit_quality_change(
+        self,
+        *,
+        old_quality: VisualQuality,
+        new_quality: VisualQuality,
+        old_mode: VisualQuality,
+        new_mode: VisualQuality,
+        reason: str,
+        smoothed_fps: float | None,
+        target_fps: int | None,
+    ) -> None:
+        self.emit(
+            "visual_quality_changed",
+            old_quality=old_quality,
+            quality=new_quality,
+            old_mode=old_mode,
+            mode=new_mode,
+            reason=reason,
+            smoothed_fps=smoothed_fps,
+            target_fps=target_fps,
         )
 
     def _initial_window_scale(self) -> float:
