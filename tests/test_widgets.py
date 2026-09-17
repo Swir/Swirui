@@ -11,13 +11,12 @@ from swirui.platforms import (
     PlatformEventKind,
     PointerButton,
 )
-from swirui.rendering import Color, NullRenderer, Point, Rect, SceneNodeKind
+from swirui.rendering import Color, NullRenderer, Point, Rect, Scene, SceneNode, SceneNodeKind
 from swirui.widgets import WidgetRuntime, compile_component_scene
 
 
-def _node(scene: object, key: str) -> object:
-    walk = getattr(scene, "walk")
-    return next(node for node in walk() if node.key == key)
+def _node(scene: Scene, key: str) -> SceneNode:
+    return next(node for node in scene.walk() if node.key == key)
 
 
 def test_label_compiles_to_native_text_scene_and_invalidates_root() -> None:
