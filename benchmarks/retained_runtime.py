@@ -164,10 +164,12 @@ def _cached_backdrop_payload_workload() -> BenchmarkWorkload:
         )
         for index in range(256)
     ]
-    glass = BackdropBlur(radius=24.0).to_scene_node(
+    glass = BackdropBlur(
+        radius=24.0,
+        corner_radius=CornerRadius.uniform(28.0),
+    ).to_scene_node(
         "benchmark-glass",
         Rect(192.0, 128.0, 640.0, 360.0),
-        corner_radius=CornerRadius.uniform(28.0),
         z_index=2,
     )
     glass.add(
