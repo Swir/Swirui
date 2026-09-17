@@ -148,6 +148,12 @@ def test_custom_shader_runs_in_real_persistent_wgpu_postprocess_chain() -> None:
         assert context.custom_shader_generation == first_target_generation
         assert context.custom_shader_pipeline_generation == first_pipeline_generation + 1
 
+        renderer.set_custom_shader(initial.with_parameters(0.8, 0.0, 0.0, 0.0))
+        app.invalidate(window)
+        assert app.render_pending(time.monotonic() + 1.0) == 1
+        assert context.custom_shader_generation == first_target_generation
+        assert context.custom_shader_pipeline_generation == first_pipeline_generation + 1
+
         renderer.set_custom_shader(None)
         app.invalidate(window)
         assert app.render_pending(time.monotonic() + 1.0) == 1
