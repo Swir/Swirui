@@ -363,12 +363,15 @@ class Dialog(Widget):
         if platform_event.key_code == _VK_TAB:
             self._focus_next(reverse=platform_event.shift)
             event.prevent_default()
+            event.stop_propagation()
         elif platform_event.key_code == _VK_ESCAPE and self._dismiss_on_escape:
             self.cancel()
             event.prevent_default()
+            event.stop_propagation()
         elif platform_event.key_code == _VK_RETURN and self._accept_on_enter:
             self.accept()
             event.prevent_default()
+            event.stop_propagation()
 
     def _focus_next(self, *, reverse: bool) -> Component:
         window = self._window
