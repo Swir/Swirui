@@ -31,9 +31,11 @@ class AccessibilityRole(StrEnum):
     PROGRESS_BAR = "progress_bar"
     RADIO = "radio"
     SLIDER = "slider"
+    STATUS = "status"
     SWITCH = "switch"
     TEXT = "text"
     TEXT_BOX = "text_box"
+    TOOLTIP = "tooltip"
 
 
 @dataclass(frozen=True, slots=True)
