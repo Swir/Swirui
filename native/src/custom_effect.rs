@@ -11,6 +11,7 @@ use crate::postprocess::OffscreenRenderTarget;
 use crate::shader_validation::validate_custom_shader_wgsl;
 
 pub(crate) const CUSTOM_SHADER_PARAMETER_FLOATS: usize = 4;
+const MAX_RETAINED_CUSTOM_PIPELINES: usize = 8;
 
 pub(crate) fn validate_custom_shader_parameters(values: &[f32]) -> Result<(), &'static str> {
     if values.len() != CUSTOM_SHADER_PARAMETER_FLOATS {
@@ -28,6 +29,7 @@ pub(crate) struct CustomShaderPass {
     bind_group_layout: wgpu::BindGroupLayout,
     pipeline_layout: wgpu::PipelineLayout,
     pipeline: wgpu::RenderPipeline,
+    pipeline_cache: Vec<(String, wgpu::RenderPipeline)>,
     params: wgpu::Buffer,
     bind_group: wgpu::BindGroup,
     source: String,
@@ -74,7 +76,6 @@ impl CustomShaderPass {
             &sampler,
             &params,
         );
-        queue.write_buffer(&params, 0, &floats_to_bytes(parameters));
 
         Ok(Self {
             output_target,
@@ -82,6 +83,7 @@ impl CustomShaderPass {
             bind_group_layout,
             pipeline_layout,
             pipeline,
+            pipeline_cache: Vec::new(),
             params,
             bind_group,
             source: source.to_owned(),
@@ -100,11 +102,31 @@ impl CustomShaderPass {
             return Ok(false);
         }
 
-        self.pipeline = create_pipeline(device, format, &self.pipeline_layout, source);
-        self.source.clear();
-        self.source.push_str(source);
+        if let Some(index) = self
+            .pipeline_cache
+            .iter()
+            .position(|(cached_source, _)| cached_source == source)
+        {
+            let (cached_source, cached_pipeline) = self.pipeline_cache.swap_remove(index);
+            let previous_source = std::mem::replace(&mut self.source, cached_source);
+            let previous_pipeline = std::mem::replace(&mut self.pipeline, cached_pipeline);
+            self.retain_pipeline(previous_source, previous_pipeline);
+            return Ok(false);
+        }
+
+        let next_pipeline = create_pipeline(device, format, &self.pipeline_layout, source);
+        let previous_source = std::mem::replace(&mut self.source, source.to_owned());
+        let previous_pipeline = std::mem::replace(&mut self.pipeline, next_pipeline);
+        self.retain_pipeline(previous_source, previous_pipeline);
         self.pipeline_generation = self.pipeline_generation.saturating_add(1);
         Ok(true)
+    }
+
+    fn retain_pipeline(&mut self, source: String, pipeline: wgpu::RenderPipeline) {
+        self.pipeline_cache.push((source, pipeline));
+        while self.pipeline_cache.len() + 1 > MAX_RETAINED_CUSTOM_PIPELINES {
+            self.pipeline_cache.remove(0);
+        }
     }
 
     pub(crate) fn set_parameters(
@@ -298,5 +320,10 @@ mod tests {
         assert!(validate_custom_shader_parameters(&[0.0, 1.0, -1.0]).is_err());
         assert!(validate_custom_shader_parameters(&[0.0, f32::NAN, 0.0, 0.0]).is_err());
         assert!(validate_custom_shader_parameters(&[0.0, f32::INFINITY, 0.0, 0.0]).is_err());
+    }
+
+    #[test]
+    fn retained_pipeline_budget_is_small_and_non_zero() {
+        assert_eq!(MAX_RETAINED_CUSTOM_PIPELINES, 8);
     }
 }
