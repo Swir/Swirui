@@ -265,11 +265,12 @@ class Modal(Widget):
         platform_event = self._platform_event(event, PlatformEventKind.KEY_DOWN)
         if platform_event is None:
             return
-        if platform_event.key_code == _VK_ESCAPE and not (
-            platform_event.ctrl or platform_event.alt or platform_event.meta
+        if (
+            platform_event.key_code == _VK_ESCAPE
+            and not (platform_event.ctrl or platform_event.alt or platform_event.meta)
+            and self.dismiss(reason="escape")
         ):
-            if self.dismiss(reason="escape"):
-                event.prevent_default()
+            event.prevent_default()
 
     @staticmethod
     def _contains_point(bounds: Rect, x: float, y: float) -> bool:
@@ -469,7 +470,12 @@ class Toast(Widget):
             SceneNode(
                 key=f"{self.key}:accent",
                 kind=SceneNodeKind.RECTANGLE,
-                bounds=Rect(self.bounds.x + 1.0, self.bounds.y + 1.0, 5.0, self.bounds.height - 2.0),
+                bounds=Rect(
+                    self.bounds.x + 1.0,
+                    self.bounds.y + 1.0,
+                    5.0,
+                    self.bounds.height - 2.0,
+                ),
                 fill=accent,
                 corner_radius=CornerRadius.uniform(2.5),
                 z_index=-10,
@@ -522,9 +528,12 @@ class Toast(Widget):
         if platform_event is None or platform_event.button is not PointerButton.LEFT:
             return
         scene_target = event.data.get("scene_target")
-        if isinstance(scene_target, SceneNode) and scene_target.key == self.key:
-            if self.dismiss(reason="click"):
-                event.prevent_default()
+        if (
+            isinstance(scene_target, SceneNode)
+            and scene_target.key == self.key
+            and self.dismiss(reason="click")
+        ):
+            event.prevent_default()
 
     @staticmethod
     def _validate_kind(value: str) -> str:
