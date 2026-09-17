@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from typing import Any
 
 from swirui.core import AccessibilityRole, Event
 from swirui.platforms import PlatformEvent, PlatformEventKind
@@ -11,16 +12,14 @@ from swirui.rendering.scene import SceneNode, SceneNodeKind
 
 from .base import Widget
 
-# SwirUI currently preserves native key codes in PlatformEvent. These sets cover
-# the Win32 virtual-key values plus the X11 keysyms and Cocoa hardware key codes
-# emitted by the existing native backends.
-_BACKSPACE_KEYS = {0x08, 0xFF08, 51}
-_DELETE_KEYS = {0x2E, 0xFFFF, 117}
-_LEFT_KEYS = {0x25, 0xFF51, 123}
-_RIGHT_KEYS = {0x27, 0xFF53, 124}
-_HOME_KEYS = {0x24, 0xFF50, 115}
-_END_KEYS = {0x23, 0xFF57, 119}
-_RETURN_KEYS = {0x0D, 0xFF0D, 0xFF8D, 36, 76}
+# Normalized Win32-style values plus X11 keysyms currently emitted by SwirUI.
+_BACKSPACE_KEYS = {0x08, 0xFF08}
+_DELETE_KEYS = {0x2E, 0xFFFF}
+_LEFT_KEYS = {0x25, 0xFF51}
+_RIGHT_KEYS = {0x27, 0xFF53}
+_HOME_KEYS = {0x24, 0xFF50}
+_END_KEYS = {0x23, 0xFF57}
+_RETURN_KEYS = {0x0D, 0xFF0D, 0xFF8D}
 
 _DEFAULT_BACKGROUND = Color.from_hex("#07111C")
 _DEFAULT_FOCUSED_BACKGROUND = Color.from_hex("#0A1724")
@@ -31,13 +30,7 @@ _DEFAULT_CARET = Color.from_hex("#62E5FF")
 
 
 class Input(Widget):
-    """Single-line retained text input using routed native keyboard/text events.
-
-    The widget keeps editing state in Python while rendering through the existing
-    shaped-text and rectangle GPU paths. It deliberately consumes TEXT_INPUT for
-    character insertion and KEY_DOWN only for editing/navigation commands, which
-    avoids keyboard-layout assumptions in the public widget API.
-    """
+    """Single-line retained text input driven by routed native input events."""
 
     def __init__(
         self,
@@ -169,9 +162,8 @@ class Input(Widget):
         return self._focused
 
     def clear(self) -> None:
-        if self._read_only:
-            return
-        self._replace_value("", caret=0, reason="clear")
+        if not self._read_only:
+            self._replace_value("", caret=0, reason="clear")
 
     def build_scene_node(self) -> SceneNode:
         node = SceneNode(
@@ -192,35 +184,18 @@ class Input(Widget):
         content = self._content_bounds()
         if content.width <= 0.0 or content.height <= 0.0:
             return
-
         display, visible_caret = self._visible_single_line()
         if display:
-            node.add(
-                SceneNode(
-                    key=f"{self.key}:text",
-                    kind=SceneNodeKind.TEXT,
-                    bounds=content,
-                    fill=self._foreground,
-                    text=display,
-                    font_size=self._font_size,
-                    font_family=self._font_family,
-                    hit_testable=False,
-                )
-            )
+            node.add(self._text_node(f"{self.key}:text", content, display, self._foreground))
         elif self._placeholder:
             node.add(
-                SceneNode(
-                    key=f"{self.key}:placeholder",
-                    kind=SceneNodeKind.TEXT,
-                    bounds=content,
-                    fill=self._placeholder_color,
-                    text=self._placeholder,
-                    font_size=self._font_size,
-                    font_family=self._font_family,
-                    hit_testable=False,
+                self._text_node(
+                    f"{self.key}:placeholder",
+                    content,
+                    self._placeholder,
+                    self._placeholder_color,
                 )
             )
-
         if self._focused and self.enabled and not self._read_only:
             char_width = self._estimated_char_width()
             caret_x = min(
@@ -238,13 +213,28 @@ class Input(Widget):
                 )
             )
 
+    def _text_node(self, key: str, bounds: Rect, text: str, color: Color) -> SceneNode:
+        return SceneNode(
+            key=key,
+            kind=SceneNodeKind.TEXT,
+            bounds=bounds,
+            fill=color,
+            text=text,
+            font_size=self._font_size,
+            font_family=self._font_family,
+            hit_testable=False,
+        )
+
     def _visible_single_line(self) -> tuple[str, int]:
         display = self._display_value()
         content = self._content_bounds()
         capacity = max(1, int(content.width / self._estimated_char_width()))
         if len(display) <= capacity:
             return display, self._caret_index
-        start = max(0, min(self._caret_index - capacity + 1, len(display) - capacity))
+        start = max(
+            0,
+            min(self._caret_index - capacity + 1, len(display) - capacity),
+        )
         end = min(len(display), start + capacity)
         return display[start:end], self._caret_index - start
 
@@ -271,10 +261,11 @@ class Input(Widget):
         if not self.enabled or self._read_only:
             return
         platform_event = self._platform_event(event, PlatformEventKind.TEXT_INPUT)
-        if platform_event is None or platform_event.ctrl or platform_event.alt or platform_event.meta:
+        if platform_event is None:
             return
-        text = platform_event.text or ""
-        text = self._normalize_inserted_text(text)
+        if platform_event.ctrl or platform_event.alt or platform_event.meta:
+            return
+        text = self._normalize_inserted_text(platform_event.text or "")
         if not text:
             return
         self._insert_text(text, reason="text_input")
@@ -284,10 +275,9 @@ class Input(Widget):
         platform_event = self._platform_event(event, PlatformEventKind.KEY_DOWN)
         if not self.enabled or platform_event is None or platform_event.key_code is None:
             return
-        key = platform_event.key_code
         if platform_event.ctrl or platform_event.alt or platform_event.meta:
             return
-
+        key = platform_event.key_code
         handled = False
         if key in _LEFT_KEYS:
             self.caret_index = self._caret_index - 1
@@ -301,27 +291,26 @@ class Input(Widget):
         elif key in _END_KEYS:
             self.caret_index = len(self._value)
             handled = True
-        elif key in _BACKSPACE_KEYS and not self._read_only:
-            if self._caret_index > 0:
+        elif key in _BACKSPACE_KEYS:
+            handled = True
+            if not self._read_only and self._caret_index > 0:
                 index = self._caret_index
                 self._replace_value(
                     self._value[: index - 1] + self._value[index:],
                     caret=index - 1,
                     reason="backspace",
                 )
+        elif key in _DELETE_KEYS:
             handled = True
-        elif key in _DELETE_KEYS and not self._read_only:
-            if self._caret_index < len(self._value):
+            if not self._read_only and self._caret_index < len(self._value):
                 index = self._caret_index
                 self._replace_value(
                     self._value[:index] + self._value[index + 1 :],
                     caret=index,
                     reason="delete",
                 )
-            handled = True
         elif key in _RETURN_KEYS:
             handled = self._handle_return(event)
-
         if handled:
             event.prevent_default()
 
@@ -409,7 +398,7 @@ class Input(Widget):
 
 
 class PasswordInput(Input):
-    """Single-line Input that never exposes its value through the visual scene."""
+    """Single-line Input that masks its value in the prepared visual scene."""
 
     def __init__(
         self,
@@ -419,7 +408,7 @@ class PasswordInput(Input):
         mask_character: str = "•",
         reveal: bool = False,
         accessible_name: str | None = None,
-        **kwargs: object,
+        **kwargs: Any,
     ) -> None:
         normalized_mask = str(mask_character)
         if len(normalized_mask) != 1 or not normalized_mask.isprintable():
@@ -450,13 +439,11 @@ class PasswordInput(Input):
         self.invalidate(reason="reveal")
 
     def _display_value(self) -> str:
-        if self._reveal:
-            return self._value
-        return self._mask_character * len(self._value)
+        return self._value if self._reveal else self._mask_character * len(self._value)
 
 
 class TextArea(Input):
-    """Multiline retained text editor with line-aware caret navigation/rendering."""
+    """Multiline retained text editor with line-aware caret navigation."""
 
     def __init__(
         self,
@@ -465,7 +452,7 @@ class TextArea(Input):
         bounds: Rect,
         line_spacing: float = 1.25,
         accessible_name: str | None = None,
-        **kwargs: object,
+        **kwargs: Any,
     ) -> None:
         self._line_spacing = self._validate_positive(line_spacing, "line_spacing")
         super().__init__(
@@ -480,12 +467,15 @@ class TextArea(Input):
 
     def _normalize_inserted_text(self, value: str) -> str:
         normalized = value.replace("\r\n", "\n").replace("\r", "\n")
-        return "".join(character for character in normalized if character == "\n" or character.isprintable())
+        return "".join(
+            character
+            for character in normalized
+            if character == "\n" or character.isprintable()
+        )
 
     def _handle_return(self, _event: Event) -> bool:
-        if self._read_only:
-            return True
-        self._insert_text("\n", reason="newline")
+        if not self._read_only:
+            self._insert_text("\n", reason="newline")
         return True
 
     def _append_content_nodes(self, node: SceneNode) -> None:
@@ -497,58 +487,54 @@ class TextArea(Input):
         )
         if content.width <= 0.0 or content.height <= 0.0:
             return
-
         line_height = self._font_size * self._line_spacing
         visible_count = max(1, int(content.height / line_height))
         lines = self._display_value().split("\n")
         before = self._value[: self._caret_index]
         caret_line = before.count("\n")
         caret_column = len(before.rsplit("\n", 1)[-1])
-        first_line = max(0, min(caret_line - visible_count + 1, max(0, len(lines) - visible_count)))
+        first_line = max(
+            0,
+            min(caret_line - visible_count + 1, max(0, len(lines) - visible_count)),
+        )
         visible_lines = lines[first_line : first_line + visible_count]
-
-        has_content = any(visible_lines)
-        if has_content:
+        if any(visible_lines):
             for offset, line in enumerate(visible_lines):
                 if not line:
                     continue
+                line_bounds = Rect(
+                    content.x,
+                    content.y + (offset * line_height),
+                    content.width,
+                    line_height,
+                )
                 node.add(
-                    SceneNode(
-                        key=f"{self.key}:line:{first_line + offset}",
-                        kind=SceneNodeKind.TEXT,
-                        bounds=Rect(
-                            content.x,
-                            content.y + (offset * line_height),
-                            content.width,
-                            line_height,
-                        ),
-                        fill=self._foreground,
-                        text=line,
-                        font_size=self._font_size,
-                        font_family=self._font_family,
-                        hit_testable=False,
+                    self._text_node(
+                        f"{self.key}:line:{first_line + offset}",
+                        line_bounds,
+                        line,
+                        self._foreground,
                     )
                 )
         elif self._placeholder:
             node.add(
-                SceneNode(
-                    key=f"{self.key}:placeholder",
-                    kind=SceneNodeKind.TEXT,
-                    bounds=Rect(content.x, content.y, content.width, line_height),
-                    fill=self._placeholder_color,
-                    text=self._placeholder,
-                    font_size=self._font_size,
-                    font_family=self._font_family,
-                    hit_testable=False,
+                self._text_node(
+                    f"{self.key}:placeholder",
+                    Rect(content.x, content.y, content.width, line_height),
+                    self._placeholder,
+                    self._placeholder_color,
                 )
             )
-
         if self._focused and self.enabled and not self._read_only:
             caret_row = caret_line - first_line
             if 0 <= caret_row < visible_count:
                 caret_x = min(
                     content.x + content.width - 1.5,
                     content.x + (caret_column * self._estimated_char_width()),
+                )
+                caret_height = min(
+                    line_height,
+                    content.height - (caret_row * line_height),
                 )
                 node.add(
                     SceneNode(
@@ -558,7 +544,7 @@ class TextArea(Input):
                             caret_x,
                             content.y + (caret_row * line_height),
                             1.5,
-                            min(line_height, content.height - (caret_row * line_height)),
+                            caret_height,
                         ),
                         fill=self._caret_color,
                         hit_testable=False,
@@ -575,12 +561,11 @@ class TextArea(Input):
             and not platform_event.alt
             and not platform_event.meta
         ):
-            key = platform_event.key_code
-            if key in _HOME_KEYS:
+            if platform_event.key_code in _HOME_KEYS:
                 self.caret_index = self._line_start(self._caret_index)
                 event.prevent_default()
                 return
-            if key in _END_KEYS:
+            if platform_event.key_code in _END_KEYS:
                 self.caret_index = self._line_end(self._caret_index)
                 event.prevent_default()
                 return
