@@ -38,13 +38,22 @@ _FORBIDDEN_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
     (re.compile(r"@"), "WGSL attributes are owned by SwirUI"),
     (re.compile(r"\bvar\s*<"), "address-space variables are not allowed"),
     (re.compile(r"\batomic\s*<"), "atomics are not allowed"),
-    (re.compile(r"\btexture_[A-Za-z0-9_]*"), "texture declarations/operations are not allowed"),
+    (
+        re.compile(r"\btexture_[A-Za-z0-9_]*"),
+        "texture declarations/operations are not allowed",
+    ),
     (re.compile(r"\bsampler\b"), "sampler declarations are not allowed"),
-    (re.compile(r"\bworkgroup[A-Za-z0-9_]*\b"), "workgroup operations are not allowed"),
+    (
+        re.compile(r"\bworkgroup[A-Za-z0-9_]*\b"),
+        "workgroup operations are not allowed",
+    ),
     (re.compile(r"\bstorageBarrier\s*\("), "storage barriers are not allowed"),
     (re.compile(r"\bloop\b"), "unbounded loops are not allowed"),
     (re.compile(r"\bwhile\b"), "while loops are not allowed"),
-    (re.compile(r"\bfor\b"), "for loops are not allowed in the initial shader contract"),
+    (
+        re.compile(r"\bfor\b"),
+        "for loops are not allowed in the initial shader contract",
+    ),
 )
 _RESERVED_SYMBOLS = (
     "SwirUiVertexOutput",
@@ -181,20 +190,28 @@ fn fs_main(input: SwirUiVertexOutput) -> @location(0) vec4<f32> {{
                 module = importlib.import_module("_swirui_native")
             except ImportError as exc:
                 raise RuntimeError(
-                    "Native custom shader validation requires the SwirUI Maturin extension."
+                    "Native custom shader validation requires the SwirUI "
+                    "Maturin extension."
                 ) from exc
         validate = getattr(module, "validate_custom_shader_wgsl", None)
         if validate is None:
             raise RuntimeError(
-                "Installed SwirUI native core does not expose custom shader WGSL validation."
+                "Installed SwirUI native core does not expose custom shader "
+                "WGSL validation."
             )
         validate(self.native_wgsl())
 
     @staticmethod
     def _validate_label(label: str) -> None:
-        if not label or len(label) > _MAX_LABEL_LENGTH or _LABEL_PATTERN.fullmatch(label) is None:
+        valid = (
+            bool(label)
+            and len(label) <= _MAX_LABEL_LENGTH
+            and _LABEL_PATTERN.fullmatch(label) is not None
+        )
+        if not valid:
             raise ValueError(
-                "Custom shader label must be 1-64 characters using letters, numbers, spaces, ., _ or -."
+                "Custom shader label must be 1-64 characters using letters, "
+                "numbers, spaces, ., _ or -."
             )
 
     @staticmethod
@@ -213,15 +230,21 @@ fn fs_main(input: SwirUiVertexOutput) -> @location(0) vec4<f32> {{
         if len(source.encode("utf-8")) > _MAX_SOURCE_BYTES:
             raise ValueError("Custom shader source cannot exceed 32 KiB.")
         if len(re.findall(r"\bfn\s+swirui_effect\b", source)) != 1:
-            raise ValueError("Custom shader source must define exactly one swirui_effect function.")
+            raise ValueError(
+                "Custom shader source must define exactly one swirui_effect function."
+            )
         if _EFFECT_SIGNATURE.search(source) is None:
             raise ValueError(
-                "swirui_effect must accept (color: vec4<f32>, uv: vec2<f32>, params: vec4<f32>) "
-                "and return vec4<f32>."
+                "swirui_effect must accept (color: vec4<f32>, uv: vec2<f32>, "
+                "params: vec4<f32>) and return vec4<f32>."
             )
         for pattern, reason in _FORBIDDEN_PATTERNS:
             if pattern.search(source) is not None:
-                raise ValueError(f"Custom shader source is outside the safe contract: {reason}.")
+                raise ValueError(
+                    f"Custom shader source is outside the safe contract: {reason}."
+                )
         for symbol in _RESERVED_SYMBOLS:
             if re.search(rf"\b{re.escape(symbol)}\b", source) is not None:
-                raise ValueError(f"Custom shader source uses reserved SwirUI symbol {symbol!r}.")
+                raise ValueError(
+                    f"Custom shader source uses reserved SwirUI symbol {symbol!r}."
+                )
