@@ -50,7 +50,10 @@ def _clamp(value: float, minimum: float, maximum: float) -> float:
 
 
 def _snap(value: float, minimum: float, maximum: float, step: float) -> float:
-    value = _clamp(float(value), minimum, maximum)
+    value = float(value)
+    if not math.isfinite(value):
+        raise ValueError("value must be finite.")
+    value = _clamp(value, minimum, maximum)
     steps = round((value - minimum) / step)
     snapped = minimum + (steps * step)
     return _clamp(snapped, minimum, maximum)
