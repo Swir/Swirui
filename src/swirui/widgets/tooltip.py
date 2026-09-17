@@ -112,6 +112,7 @@ class Tooltip(Widget):
                     target.on("focus_lost", self._on_target_focus_lost),
                 )
             )
+        self._target_unsubscribers.append(target.on("invalidated", self._on_target_invalidated))
         return self
 
     def detach(self) -> None:
@@ -169,11 +170,14 @@ class Tooltip(Widget):
         y = self.bounds.y + max(0.0, (self.bounds.height - height) * 0.5)
         return Rect(self.bounds.x + self._padding, y, width, height)
 
+    def _target_available(self) -> bool:
+        return self._target is None or (self._target.enabled and self._target.visible)
+
     def _sync_target_visibility(self) -> None:
-        self.visible = self._hover_open or self._focus_open
+        self.visible = self._target_available() and (self._hover_open or self._focus_open)
 
     def _on_target_pointer_enter(self, _event: Event) -> None:
-        self._hover_open = True
+        self._hover_open = self._target_available()
         self._sync_target_visibility()
 
     def _on_target_pointer_leave(self, _event: Event) -> None:
@@ -181,11 +185,19 @@ class Tooltip(Widget):
         self._sync_target_visibility()
 
     def _on_target_focus_gained(self, _event: Event) -> None:
-        self._focus_open = True
+        self._focus_open = self._target_available()
         self._sync_target_visibility()
 
     def _on_target_focus_lost(self, _event: Event) -> None:
         self._focus_open = False
+        self._sync_target_visibility()
+
+    def _on_target_invalidated(self, event: Event) -> None:
+        if event.data.get("reason") not in {"enabled", "visible"}:
+            return
+        if not self._target_available():
+            self._hover_open = False
+            self._focus_open = False
         self._sync_target_visibility()
 
     @staticmethod
