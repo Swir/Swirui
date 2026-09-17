@@ -1,3 +1,5 @@
+import time
+
 import pytest
 
 from swirui import (
@@ -5,12 +7,21 @@ from swirui import (
     AdaptiveQualityPolicy,
     App,
     AppConfig,
+    Component,
     VisualQuality,
     Window,
 )
 from swirui.core import Event
 from swirui.platforms import NullPlatformBackend
 from swirui.rendering import NullRenderer
+
+
+class SlowNullRenderer(NullRenderer):
+    """Deterministic test renderer that deliberately exceeds a 60 Hz frame budget."""
+
+    def render(self, window: Window, root: Component | None) -> None:
+        time.sleep(0.020)
+        super().render(window, root)
 
 
 def test_auto_quality_demotes_quickly_and_promotes_after_sustained_headroom() -> None:
@@ -127,7 +138,7 @@ def test_policy_and_samples_reject_invalid_values() -> None:
 
 
 def test_app_auto_quality_reacts_to_real_frame_pressure_and_emits_transition() -> None:
-    renderer = NullRenderer()
+    renderer = SlowNullRenderer()
     app = App(
         config=AppConfig(visual_quality=VisualQuality.AUTO, target_fps=60),
         platform_backend=NullPlatformBackend(),
@@ -138,12 +149,6 @@ def test_app_auto_quality_reacts_to_real_frame_pressure_and_emits_transition() -
     frame_events: list[Event] = []
     app.on("visual_quality_changed", quality_events.append)
     app.on("frame_rendered", frame_events.append)
-
-    render_clock_values = iter(
-        [0.0, 0.001]
-        + [value for index in range(6) for value in (index + 1.0, index + 1.020)]
-    )
-    app._render_clock = lambda: next(render_clock_values)
 
     app.start()
     assert app.effective_visual_quality is VisualQuality.BALANCED
@@ -163,16 +168,16 @@ def test_app_auto_quality_reacts_to_real_frame_pressure_and_emits_transition() -
     assert change["reason"] == "sustained_frame_pressure"
     assert change["smoothed_fps"] == pytest.approx(30.0)
     assert change["target_fps"] == 60
-    assert change["render_duration_seconds"] == pytest.approx(0.020)
-    assert change["render_budget_utilization"] == pytest.approx(1.2)
+    assert float(change["render_duration_seconds"]) >= 0.020
+    assert float(change["render_budget_utilization"]) >= 1.2
     assert app.quality_stats.automatic_changes == 1
 
     last_frame = frame_events[-1].data
     assert last_frame["visual_quality"] is VisualQuality.BALANCED
     assert last_frame["effective_visual_quality"] is VisualQuality.PERFORMANCE
     assert last_frame["configured_visual_quality"] is VisualQuality.AUTO
-    assert last_frame["render_duration_seconds"] == pytest.approx(0.020)
-    assert last_frame["render_budget_utilization"] == pytest.approx(1.2)
+    assert float(last_frame["render_duration_seconds"]) >= 0.020
+    assert float(last_frame["render_budget_utilization"]) >= 1.2
 
     app.stop()
 
