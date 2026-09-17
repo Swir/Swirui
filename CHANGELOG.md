@@ -75,6 +75,11 @@ The project uses semantic versioning where practical during pre-alpha developmen
 - GPU gradient demos for linear, radial and mesh gradients, plus real Win32/wgpu smoke coverage for each gradient family.
 - Retained `DropShadow` effects using normalized Gaussian-like rounded-rectangle layers that reuse the existing persistent native wgpu rectangle batch, HiDPI scaling and alpha compositing.
 - `examples/gpu_shadows_demo.py` plus a dedicated real Win32/wgpu shadow smoke gate.
+- Retained `Glow` and elevation-aware `DynamicShadow` effects with configurable light direction/altitude and deterministic Gaussian-like layer generation.
+- Visual-quality-aware retained effect budgets for `Performance`, `Balanced`, `Quality`, `Ultra`, `Cinematic` and `Auto` profiles without changing effect geometry, colors or extents.
+- `examples/gpu_dynamic_effects_demo.py` for live quality-aware glow and dynamic-shadow animation on a persistent GPU context.
+- Persistent sampleable offscreen scene targets in the native Win32/wgpu renderer, with one reusable fullscreen blitter for final swapchain presentation.
+- Native offscreen-target lifecycle telemetry and real Win32/wgpu smoke coverage proving reuse across frames, recreation on physical resize and no redundant same-size reallocation.
 
 ### Changed
 - The wgpu renderer now reports submitted rectangle, path, text and image counts independently.
@@ -97,6 +102,7 @@ The project uses semantic versioning where practical during pre-alpha developmen
 - macOS platform selection now chooses the direct Cocoa backend, and CI has a dedicated real-Cocoa Python 3.14 native-window gate alongside Linux X11 and Windows/wgpu gates.
 - Gradient stop interpolation and visual argument validation are shared across linear/radial gradient implementations, while mesh gradients preserve stable SceneGraph hit keys across generated cells.
 - Decorative SceneGraph nodes can opt out of direct pointer hit testing without disabling independently interactive descendants, so visual overflow such as shadows cannot steal input from nearby controls.
+- Native Win32/wgpu scene rendering now targets the persistent offscreen texture first and presents through a final fullscreen blit, establishing a real post-processing boundary for the 0.3 Visual Engine.
 
 ## [0.1.0a1] - 2026-09-16
 
