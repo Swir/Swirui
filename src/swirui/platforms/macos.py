@@ -453,7 +453,7 @@ class MacOSCocoaPlatformBackend:
             )
 
         if event_type in {_NSEventTypeKeyDown, _NSEventTypeKeyUp}:
-            modifiers = self._modifiers(event)
+            shift, ctrl, alt, meta = self._modifiers(event)
             key_code = int(self._send(event, "keyCode", ctypes.c_ushort) or 0)
             keyboard = PlatformEvent(
                 PlatformEventKind.KEY_DOWN
@@ -461,7 +461,10 @@ class MacOSCocoaPlatformBackend:
                 else PlatformEventKind.KEY_UP,
                 handle,
                 key_code=self._normalize_key_code(key_code),
-                **modifiers,
+                shift=shift,
+                ctrl=ctrl,
+                alt=alt,
+                meta=meta,
             )
             if event_type == _NSEventTypeKeyUp:
                 return (keyboard,)
@@ -474,7 +477,10 @@ class MacOSCocoaPlatformBackend:
                     PlatformEventKind.TEXT_INPUT,
                     handle,
                     text=text,
-                    **modifiers,
+                    shift=shift,
+                    ctrl=ctrl,
+                    alt=alt,
+                    meta=meta,
                 ),
             )
         return ()
@@ -527,14 +533,14 @@ class MacOSCocoaPlatformBackend:
         button_number = int(self._send(event, "buttonNumber", ctypes.c_long) or 0)
         return PointerButton.MIDDLE if button_number == 2 else None
 
-    def _modifiers(self, event: int) -> dict[str, bool]:
+    def _modifiers(self, event: int) -> tuple[bool, bool, bool, bool]:
         flags = int(self._send(event, "modifierFlags", ctypes.c_ulong) or 0)
-        return {
-            "shift": bool(flags & _NSEventModifierFlagShift),
-            "ctrl": bool(flags & _NSEventModifierFlagControl),
-            "alt": bool(flags & _NSEventModifierFlagOption),
-            "meta": bool(flags & _NSEventModifierFlagCommand),
-        }
+        return (
+            bool(flags & _NSEventModifierFlagShift),
+            bool(flags & _NSEventModifierFlagControl),
+            bool(flags & _NSEventModifierFlagOption),
+            bool(flags & _NSEventModifierFlagCommand),
+        )
 
     def _event_text(self, event: int) -> str | None:
         characters = int(self._send(event, "characters") or 0)
@@ -543,7 +549,8 @@ class MacOSCocoaPlatformBackend:
         raw = self._send(characters, "UTF8String", ctypes.c_char_p)
         if not raw:
             return None
-        text = raw.decode("utf-8", errors="ignore")
+        raw_bytes = bytes(raw)
+        text = raw_bytes.decode("utf-8", errors="ignore")
         if not text or not any(character.isprintable() for character in text):
             return None
         return text
@@ -587,13 +594,13 @@ class MacOSCocoaPlatformBackend:
         *args: Any,
     ) -> Any:
         receiver_value = (
-            int(receiver.value)
+            int(receiver.value or 0)
             if isinstance(receiver, ctypes.c_void_p)
             else int(receiver or 0)
         )
         if not receiver_value:
             return None if restype is ctypes.c_void_p else 0
-        address = ctypes.cast(self._objc.objc_msgSend, ctypes.c_void_p).value
+        address = int(ctypes.cast(self._objc.objc_msgSend, ctypes.c_void_p).value or 0)
         if not address:
             raise RuntimeError("objc_msgSend is unavailable.")
         prototype = ctypes.CFUNCTYPE(restype, ctypes.c_void_p, ctypes.c_void_p, *argtypes)
@@ -614,7 +621,9 @@ class MacOSCocoaPlatformBackend:
         selector_ptr = ctypes.c_void_p(self._selector(selector))
         if platform.machine().lower() in {"x86_64", "amd64"} and ctypes.sizeof(result_type) > 16:
             stret = self._objc.objc_msgSend_stret
-            address = ctypes.cast(stret, ctypes.c_void_p).value
+            address = int(ctypes.cast(stret, ctypes.c_void_p).value or 0)
+            if not address:
+                raise RuntimeError("objc_msgSend_stret is unavailable.")
             prototype = ctypes.CFUNCTYPE(
                 None,
                 ctypes.POINTER(result_type),
@@ -624,7 +633,9 @@ class MacOSCocoaPlatformBackend:
             result = result_type()
             prototype(address)(ctypes.byref(result), receiver_ptr, selector_ptr)
             return result
-        address = ctypes.cast(self._objc.objc_msgSend, ctypes.c_void_p).value
+        address = int(ctypes.cast(self._objc.objc_msgSend, ctypes.c_void_p).value or 0)
+        if not address:
+            raise RuntimeError("objc_msgSend is unavailable.")
         prototype = ctypes.CFUNCTYPE(result_type, ctypes.c_void_p, ctypes.c_void_p)
         return prototype(address)(receiver_ptr, selector_ptr)
 
