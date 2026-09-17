@@ -1,10 +1,21 @@
 """Public package API for SwirUI."""
 
 from .app import App
-from .core import AppConfig, Component, PresentationMode, State, VisualQuality
+from .core import (
+    AccessibilityNode,
+    AccessibilityRole,
+    AppConfig,
+    Component,
+    PresentationMode,
+    State,
+    VisualQuality,
+    build_accessibility_tree,
+)
 from .window import Window
 
 __all__ = [
+    "AccessibilityNode",
+    "AccessibilityRole",
     "App",
     "AppConfig",
     "Component",
@@ -12,5 +23,6 @@ __all__ = [
     "State",
     "VisualQuality",
     "Window",
+    "build_accessibility_tree",
 ]
 __version__ = "0.1.0a1"
