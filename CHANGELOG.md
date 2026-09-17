@@ -43,6 +43,10 @@ The project uses semantic versioning where practical during pre-alpha developmen
 - Focusable component contract with per-window logical keyboard focus.
 - Capture → target → bubble routing for focused `key_down`, `key_up` and `text_input` events with propagation cancellation.
 - Deterministic forward/reverse focus traversal across enabled, visible, focusable components.
+- Automatic Tab / Shift+Tab keyboard focus traversal with hidden/disabled ancestor pruning and stale-focus healing.
+- `Event.prevent_default()` for cancelling framework default actions without stopping capture/target/bubble propagation.
+- Backend-neutral Shift/Ctrl/Alt/Meta keyboard modifier metadata carried by `PlatformEvent`.
+- Real Win32 keyboard and system-key normalization smoke coverage.
 - Pointer-down focus handoff from a hit-tested SceneNode to the matching focusable Component.
 - Focus lifecycle events (`focus_gained`, `focus_lost`, `component_focus_changed`) and automatic focus clearing when the root is replaced or the window closes.
 - Automated focus-routing coverage for Unicode text input, propagation cancellation, traversal, pointer focus handoff and invalid focus targets.
@@ -69,6 +73,7 @@ The project uses semantic versioning where practical during pre-alpha developmen
 - Rounded-rectangle instances now carry clip bounds through Python → Rust → WGSL while the legacy 12-float direct native rectangle interface remains accepted for compatibility.
 - Image vertices are cropped before draw submission so clipping preserves the correct source UV region instead of stretching the visible portion.
 - Win32 smoke tests use process-unique native window classes to avoid stale process-wide WNDPROC callbacks when multiple backend instances are exercised in one pytest process.
+- Win32 now normalizes both ordinary `WM_KEYDOWN` / `WM_KEYUP` and system `WM_SYSKEYDOWN` / `WM_SYSKEYUP` messages through the same framework keyboard-event path.
 - Native event-loop idle sleeps now shorten to the nearest pending frame deadline instead of quantizing 120/144+ Hz targets to a fixed 4 ms polling cadence.
 - `AppConfig.target_fps` is now an application ceiling for native windows rather than an unconditional per-window target; headless rendering keeps the configured value unchanged.
 - `DisplayInfo` keeps its existing positional field ordering while adding refresh-rate metadata at the end of the public dataclass contract.
