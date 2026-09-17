@@ -1,6 +1,15 @@
 import pytest
 
-from swirui.rendering import BackdropBlur, Color, CornerRadius, Rect, Scene, SceneNode, SceneNodeKind
+from swirui.rendering import (
+    BackdropBlur,
+    Color,
+    CornerRadius,
+    Point,
+    Rect,
+    Scene,
+    SceneNode,
+    SceneNodeKind,
+)
 
 
 def test_backdrop_blur_builds_non_interactive_painter_boundary() -> None:
@@ -50,7 +59,7 @@ def test_backdrop_blur_children_follow_boundary_in_painter_order() -> None:
 
 def test_backdrop_blur_never_becomes_direct_hit_target() -> None:
     node = BackdropBlur(radius=12.0).to_scene_node("glass", Rect(20, 20, 200, 120))
-    assert node.hit_test_xy(40, 40) is None
+    assert node.hit_test(Point(40, 40)) is None
 
 
 def test_backdrop_blur_validates_radius_and_bounds() -> None:
