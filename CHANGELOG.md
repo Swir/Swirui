@@ -107,6 +107,12 @@ The project uses semantic versioning where practical during pre-alpha developmen
 - Frame telemetry for renderer duration, frame-budget utilization and configured/effective visual quality, plus `examples/adaptive_quality_demo.py` and focused pressure/headroom/idle regression tests.
 - Native retained effect-frame caching for unchanged backdrop/material scenes, keyed by stable prepared-scene generation tokens and renderer background while reusing each window's persistent offscreen wgpu target.
 - Native effect-cache hit/miss telemetry, explicit invalidation/reset hooks, deterministic Python token/invalidation coverage, `examples/gpu_native_effect_frame_cache_demo.py` and a real Win32/wgpu cache-hit smoke gate.
+- Retained Text/Label and Button/IconButton controls compiled from Python components into SceneGraph geometry and shaped GPU text with routed pointer/keyboard focus interaction.
+- Retained Input, PasswordInput and TextArea controls with native text-input routing, password masking, focus/caret behavior and accessibility semantics.
+- Retained Checkbox, RadioButton and Switch controls with pointer/keyboard interaction, checked semantics and real Win32/wgpu smoke coverage.
+- Retained Slider and RangeSlider controls with pointer dragging, keyboard adjustment, bounded stepping, focus visuals and numeric accessibility value/range semantics.
+- Retained ProgressBar and path-based ProgressRing controls with determinate value/range semantics and deterministic GPU geometry.
+- `examples/core_widgets_demo.py`, `examples/core_toggles_demo.py` and `examples/range_progress_demo.py`, plus expanded real Win32 widget interaction coverage inside the persistent wgpu context.
 
 ### Changed
 - The wgpu renderer now reports submitted rectangle, path, text and image counts independently.
