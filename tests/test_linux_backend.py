@@ -14,7 +14,9 @@ pytestmark = pytest.mark.skipif(
 )
 
 
-def test_linux_factory_selects_x11_when_display_is_available(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_linux_factory_selects_x11_when_display_is_available(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from swirui.platforms.factory import create_platform_backend
 
     monkeypatch.setenv("DISPLAY", os.environ.get("DISPLAY", ":99"))
