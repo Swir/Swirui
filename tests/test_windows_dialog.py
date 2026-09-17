@@ -57,6 +57,8 @@ def test_modal_dialog_traps_real_win32_focus_and_reuses_wgpu_context() -> None:
         key="background-action",
         bounds=Rect(28.0, 28.0, 190.0, 46.0),
     )
+    background_clicks: list[bool] = []
+    outside.on("click", lambda _event: background_clicks.append(True))
     dialog = Dialog(
         "Confirm action",
         key="native-dialog",
@@ -107,11 +109,14 @@ def test_modal_dialog_traps_real_win32_focus_and_reuses_wgpu_context() -> None:
         window.focus_component(outside)
         assert window.focused_component is cancel
 
+        # Click the modal scrim directly over the underlying background button.
+        # The dialog must dismiss while the covered button receives no click.
         scrim_x = max(1, round(40.0 * window.scale))
-        scrim_y = max(1, round(350.0 * window.scale))
+        scrim_y = max(1, round(50.0 * window.scale))
         _send_click(user32, hwnd, scrim_x, scrim_y)
         app.process_events()
 
+        assert background_clicks == []
         assert dialog.result is DialogResult.DISMISSED
         assert dialog.is_open is False
         assert window.focused_component is outside
