@@ -17,7 +17,7 @@
 
 [![CI](https://img.shields.io/github/actions/workflow/status/Swir/Swirui/ci.yml?branch=main&style=flat-square&label=CI&color=0088FF)](https://github.com/Swir/Swirui/actions/workflows/ci.yml)
 ![Status](https://img.shields.io/badge/status-pre--alpha-0088FF?style=flat-square)
-![Progress](https://img.shields.io/badge/project%20progress-41%25-0088FF?style=flat-square)
+![Progress](https://img.shields.io/badge/project%20progress-47%25-0088FF?style=flat-square)
 
 </div>
 
@@ -25,14 +25,14 @@
 
 ## Project Status
 
-**41% — 0.3 Alpha Visual Engine complete; 0.4 Core Widgets is next.**
+**47% — 0.4 Alpha Core Widgets underway; the first six widget groups are implemented and verified.**
 
-`[████████░░░░░░░░░░░░] 41%`
+`[█████████░░░░░░░░░░░] 47%`
 
 - `0.1 Alpha — Foundation` ✅
 - `0.2 Alpha — Native Window + First Renderer` ✅
 - `0.3 Alpha — Visual Engine` ✅
-- `0.4 Alpha — Core Widgets` ⏭️
+- `0.4 Alpha — Core Widgets` 🚧
 
 Progress increases only for implemented and verified roadmap work. Documentation-only changes, skeletons and unfinished experiments do not increase the percentage.
 
@@ -60,8 +60,9 @@ The Windows renderer uses a persistent per-window wgpu context and retained Scen
 | Materials | Native backdrop blur, `FrostedGlass` and `Acrylic` with deterministic grain |
 | Post-processing | Persistent scene blur, affine RGBA color filters and validated custom WGSL effects |
 | Custom shaders | Bounded Python `CustomShaderEffect` API, native Naga validation, persistent GPU pass and bounded pipeline reuse |
+| Core widgets | Retained Text/Label, Button/IconButton, text inputs, toggles, Slider/RangeSlider and determinate progress controls |
 | Performance | Adaptive visual-quality profiles plus retained effect and GPU resource caches |
-| Accessibility | Semantic roles/tree, keyboard focus routing and keyboard-only traversal foundation |
+| Accessibility | Semantic roles/tree, keyboard focus routing, keyboard-only traversal, checked state and numeric value/range semantics |
 
 ## Quick Start
 
@@ -80,6 +81,14 @@ Run the native-window demo:
 
 ```powershell
 python examples/native_window_demo.py
+```
+
+Try the retained core widgets:
+
+```powershell
+python examples/core_widgets_demo.py
+python examples/core_toggles_demo.py
+python examples/range_progress_demo.py
 ```
 
 ### Windows GPU development
@@ -170,6 +179,9 @@ Changing only the four parameters updates a small native uniform buffer. Changin
 ### GPU and runtime examples
 
 ```text
+examples/core_widgets_demo.py
+examples/core_toggles_demo.py
+examples/range_progress_demo.py
 examples/gpu_rectangles_demo.py
 examples/gpu_text_demo.py
 examples/gpu_image_demo.py
@@ -239,6 +251,7 @@ Every significant runtime change is expected to preserve the existing quality ga
 - real Win32 + wgpu smoke tests
 - integrated 0.2 native renderer/runtime gate
 - HiDPI, multi-monitor, presentation-policy, text, image, path, effects and cache coverage
+- retained widget interaction, accessibility and real Win32 input/rendering coverage
 - real custom-WGSL validation and persistent-runtime smoke coverage
 
 SwirUI does not claim performance superiority over other frameworks without reproducible measurements.
@@ -247,7 +260,7 @@ SwirUI does not claim performance superiority over other frameworks without repr
 
 The authoritative plan is **[ROADMAP.md](ROADMAP.md)**.
 
-The verified custom-shader runtime closes **0.3 Alpha — Visual Engine**. Development now moves into **0.4 Alpha — Core Widgets**, where retained rendering, routed input, focus/accessibility semantics and the Visual Engine can be composed into reusable application controls.
+**0.4 Alpha — Core Widgets** is underway. The verified retained control surface now includes Text/Label, Button/IconButton, Input/PasswordInput/TextArea, Checkbox/RadioButton/Switch, Slider/RangeSlider and ProgressBar/ProgressRing. Remaining 0.4 work continues with reusable surfaces, overlays and container controls.
 
 ## Releases
 
@@ -277,7 +290,7 @@ Swirui/
 
 ## 🔎 Search Keywords
 
-`python desktop gui` • `python gpu ui` • `native python ui framework` • `wgpu python renderer` • `rust pyo3 gui` • `win32 python gui` • `reactive desktop ui` • `high refresh rate ui` • `hidpi desktop ui` • `gpu text rendering` • `frosted glass ui` • `acrylic desktop ui` • `custom wgsl effects` • `multi monitor python ui`
+`python desktop gui` • `python gpu ui` • `native python ui framework` • `python retained widgets` • `wgpu python renderer` • `rust pyo3 gui` • `win32 python gui` • `reactive desktop ui` • `high refresh rate ui` • `hidpi desktop ui` • `gpu text rendering` • `frosted glass ui` • `acrylic desktop ui` • `custom wgsl effects` • `multi monitor python ui`
 
 <img width="100%" src="https://raw.githubusercontent.com/Swir/Swir/main/assets/power-divider-v4.svg" alt="SWIR electric divider" />
 

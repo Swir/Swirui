@@ -4,9 +4,9 @@
 
 ## Project progress
 
-**Overall completion: 41%**
+**Overall completion: 47%**
 
-`[████████░░░░░░░░░░░░] 41%`
+`[█████████░░░░░░░░░░░] 47%`
 
 Progress is based on implemented and verified roadmap work. Ideas, mockups and unfinished prototypes do not increase the percentage.
 
@@ -128,14 +128,14 @@ The Visual Engine gate is complete with verified retained effects/materials, per
 
 ## 0.4 Alpha — Core Widgets
 
-**Status:** Next ⏭️
+**Status:** Underway 🚧
 
-- [ ] Text / Label
-- [ ] Button / IconButton
-- [ ] Input / PasswordInput / TextArea
-- [ ] Checkbox / RadioButton / Switch
-- [ ] Slider / RangeSlider
-- [ ] ProgressBar / ProgressRing
+- [x] Text / Label
+- [x] Button / IconButton
+- [x] Input / PasswordInput / TextArea
+- [x] Checkbox / RadioButton / Switch
+- [x] Slider / RangeSlider
+- [x] ProgressBar / ProgressRing
 - [ ] Badge / Chip
 - [ ] Tooltip
 - [ ] Card / GlassCard
@@ -410,7 +410,7 @@ AI output must remain ordinary, editable SwirUI code.
 - [x] Mypy quality gate
 - [x] SceneGraph hit-test and pointer-targeting tests
 - [x] Routed component input propagation tests
-- [ ] Widget interaction tests
+- [x] Widget interaction tests
 - [ ] Screenshot tests
 - [ ] Visual regression tests
 - [x] Accessibility tests
@@ -517,22 +517,3 @@ The official showcase will be a real application rather than a Hello World scree
 - [ ] live performance monitor
 
 ---
-
-## Release strategy
-
-| Release | Goal |
-| --- | --- |
-| 0.1 Alpha | Foundation ✅ |
-| 0.2 Alpha | Native window + first visible renderer ✅ |
-| 0.3 Alpha | Visual Engine ✅ |
-| 0.4 Alpha | Core widgets |
-| 0.5 Alpha | Layout Engine |
-| 0.6 Alpha | Reactive runtime |
-| 0.7 Alpha | Animation Engine |
-| 0.8 Beta | Professional widgets |
-| 0.9 Beta | Integration, media, charts and developer tooling |
-| 1.0 | First production-ready release |
-
-### 1.0 gate
-
-SwirUI 1.0 requires a stable public API, tested GPU renderer, complete core widgets, responsive layout, reactive state, animation, accessibility baseline, internationalization, packaging, documentation, automated tests, benchmark suite and real-world applications.
