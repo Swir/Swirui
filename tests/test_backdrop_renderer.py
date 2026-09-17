@@ -170,6 +170,51 @@ def test_backdrop_payload_cache_invalidates_on_scene_touch_and_dpi_change() -> N
     assert renderer.backdrop_payload_cache_misses == 3
 
 
+def test_backdrop_payload_cache_invalidates_on_scene_replacement_and_image_rebind() -> None:
+    renderer = WgpuRenderer(native_module=FakeBackdropNative())
+    renderer.register_image_rgba("logo", 1, 1, bytes((0, 64, 255, 255)))
+    window = Window(width=640, height=360)
+
+    first_scene = _backdrop_scene()
+    first_scene.root.add(
+        SceneNode(
+            "logo",
+            SceneNodeKind.IMAGE,
+            Rect(460, 220, 64, 64),
+            resource_id="logo",
+            z_index=3,
+        )
+    )
+    window.set_scene(first_scene)
+    first = renderer._backdrop_payload(window)
+    assert first is not None
+    assert first[2][1][0][0] == "logo"
+
+    replacement = _backdrop_scene()
+    replacement.root.add(
+        SceneNode(
+            "logo",
+            SceneNodeKind.IMAGE,
+            Rect(460, 220, 64, 64),
+            resource_id="logo",
+            z_index=3,
+        )
+    )
+    window.set_scene(replacement)
+    replaced = renderer._backdrop_payload(window)
+    assert replaced is not None
+    assert replaced is not first
+
+    assert renderer._backdrop_payload(window) is replaced
+    renderer.register_image_rgba("logo", 1, 1, bytes((255, 32, 0, 255)))
+    rebound = renderer._backdrop_payload(window)
+    assert rebound is not None
+    assert rebound is not replaced
+    assert rebound[2][1][0][0] == "logo#1"
+    assert renderer.backdrop_payload_cache_hits == 1
+    assert renderer.backdrop_payload_cache_misses == 3
+
+
 def test_backdrop_payload_cache_remembers_scene_without_backdrop() -> None:
     renderer = WgpuRenderer(native_module=FakeBackdropNative())
     window = Window(width=320, height=180)
