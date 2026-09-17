@@ -4,9 +4,9 @@
 
 ## Project progress
 
-**Overall completion: 34%**
+**Overall completion: 36%**
 
-`[███████░░░░░░░░░░░░░] 34%`
+`[███████░░░░░░░░░░░░░] 36%`
 
 Progress is based on implemented and verified roadmap work. Ideas, mockups and unfinished prototypes do not increase the percentage.
 
@@ -111,9 +111,9 @@ Cross-platform native-window coverage now includes real Linux/X11 lifecycle/inpu
 - [x] Dynamic shadows
 - [x] Linear / radial / mesh gradients
 - [ ] Reflections
-- [ ] Depth and perspective
+- [x] Depth and perspective
 - [x] Adaptive lighting
-- [ ] Parallax
+- [x] Parallax
 - [ ] Color filters
 - [x] Noise / grain
 - [ ] Custom shader effects
@@ -386,6 +386,7 @@ AI output must remain ordinary, editable SwirUI code.
 - [x] Windows image-resource SceneGraph → Python → Rust/wgpu smoke test
 - [x] Windows filled Path2D SceneGraph → Python → Rust/wgpu smoke test
 - [x] Windows retained linear / radial / mesh gradient GPU smoke tests
+- [x] Windows retained depth / perspective / parallax GPU smoke test
 - [x] Windows retained adaptive-lighting / glow / bloom / noise GPU smoke test
 - [x] Windows retained backdrop/background-blur + glass/acrylic GPU smoke test
 - [x] Windows mixed-DPI logical-DIP → physical-GPU smoke test

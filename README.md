@@ -15,7 +15,7 @@
 ![macOS Native](https://img.shields.io/badge/macOS-Cocoa%20native-000000?logo=apple&logoColor=white)
 ![GPU](https://img.shields.io/badge/GPU-wgpu%2030-6E56CF)
 ![Status](https://img.shields.io/badge/status-pre--alpha-7C3AED)
-![Progress](https://img.shields.io/badge/project%20progress-34%25-00BFFF)
+![Progress](https://img.shields.io/badge/project%20progress-36%25-00BFFF)
 
 </div>
 
@@ -23,9 +23,9 @@
 
 ## Project progress
 
-**34% — 0.3 Alpha Visual Engine underway; adaptive lighting and retained noise/grain are verified**
+**36% — 0.3 Alpha Visual Engine underway; retained depth/perspective and live parallax are verified**
 
-`[███████░░░░░░░░░░░░░] 34%`
+`[███████░░░░░░░░░░░░░] 36%`
 
 **Completed:** `0.1 Alpha — Foundation` ✅ · `0.2 Alpha — Native Window + First Renderer` ✅  
 **Current milestone:** `0.3 Alpha — Visual Engine` 🚧
@@ -54,6 +54,8 @@ SwirUI is currently **pre-alpha**. APIs may change while the native renderer and
 - **backend-neutral `Path2D` polygon geometry with deterministic convex/concave tessellation**
 - **SceneNodeKind.PATH → Python WgpuRenderer → persistent Rust/wgpu triangle rendering**
 - path-aware hit testing, clipping, cumulative opacity and reusable native shape buffers
+- **retained `PerspectivePlane` projection that compiles logical-DIP 3D tilt/depth into ordinary clipped GPU `Path2D` geometry**
+- **bounded live-pointer `Parallax` that maps logical viewport input into deterministic perspective tilt while reusing the persistent path pipeline**
 - **immutable multi-stop linear and radial gradients compiled into retained clipped GPU path geometry**
 - **rectangular mesh gradients with bilinear color-lattice sampling and deterministic retained GPU cells**
 - **retained `DropShadow`, `Glow`, `DynamicShadow` and source-driven `Bloom` effects flowing through the persistent GPU rectangle batch**
@@ -144,6 +146,7 @@ SwirUI is currently **pre-alpha**. APIs may change while the native renderer and
 - real macOS Cocoa native-window + Retina logical-geometry smoke tests on Python 3.14
 - Windows native + rounded-GPU + path + shaped-text + image + clipping + mixed-DPI + presentation/display + keyboard/system-key smoke tests on Python 3.14
 - **real Win32/wgpu smoke coverage for retained linear, radial and mesh gradients**
+- **real Win32/wgpu smoke coverage for retained depth, perspective and pointer-driven parallax across persistent frames**
 - **real Win32/wgpu smoke coverage for adaptive lighting, glow, source-driven bloom and deterministic retained noise**
 - **real Win32/wgpu smoke coverage for painter-order background blur, frosted glass and acrylic across persistent frames**
 - Ruff, Mypy, coverage and Python 3.11–3.14 CI
@@ -180,6 +183,7 @@ python examples/gpu_paths_demo.py
 python examples/gpu_gradients_demo.py
 python examples/gpu_radial_gradients_demo.py
 python examples/gpu_mesh_gradients_demo.py
+python examples/gpu_depth_demo.py
 python examples/gpu_shadows_demo.py
 python examples/gpu_dynamic_effects_demo.py
 python examples/gpu_bloom_demo.py
@@ -191,7 +195,7 @@ python examples/gpu_glass_materials_demo.py
 python examples/high_refresh_demo.py
 ```
 
-The rectangle demo submits prepared SwirUI rectangles into the persistent Rust/wgpu backend. Filled rectangles are batched into one instanced draw call and per-corner radii are evaluated in the fragment shader with anti-aliased SDF edges. The path demo exercises deterministic convex/concave `Path2D` tessellation and the full `SceneGraph → Python → Rust/wgpu` filled-triangle path with clipping and alpha compositing. The gradient demos exercise multi-stop linear, radial and rectangular color-lattice mesh gradients through the retained path pipeline. The dynamic-effects, bloom, noise and adaptive-lighting demos exercise retained directional lighting, glow, explicit source-driven bloom and deterministic quality-aware grain while preserving the same persistent GPU context. The scene-blur demo exercises the persistent offscreen target and separable full-scene GPU postprocess. The backdrop-blur demo exercises rounded painter-order background-only blur, while the glass-materials demo composes that verified native boundary into frosted glass and acrylic with sharp foreground content. The text demo exercises Unicode shaping through glyphon/cosmic-text and a persistent glyph atlas. The image demo generates RGBA pixels in memory, registers them once and reuses cached native textures; byte-identical image registrations under different logical ids share one retained native texture. The high-refresh demo follows the active display refresh rate automatically. Scene geometry remains authored in logical DIPs while native Win32 input and persistent GPU surfaces operate in physical pixels.
+The rectangle demo submits prepared SwirUI rectangles into the persistent Rust/wgpu backend. Filled rectangles are batched into one instanced draw call and per-corner radii are evaluated in the fragment shader with anti-aliased SDF edges. The path demo exercises deterministic convex/concave `Path2D` tessellation and the full `SceneGraph → Python → Rust/wgpu` filled-triangle path with clipping and alpha compositing. The gradient demos exercise multi-stop linear, radial and rectangular color-lattice mesh gradients through the retained path pipeline. The depth demo exercises logical-DIP perspective projection, depth translation and live pointer-driven parallax while reusing the same clipped retained `Path2D` GPU path. The dynamic-effects, bloom, noise and adaptive-lighting demos exercise retained directional lighting, glow, explicit source-driven bloom and deterministic quality-aware grain while preserving the same persistent GPU context. The scene-blur demo exercises the persistent offscreen target and separable full-scene GPU postprocess. The backdrop-blur demo exercises rounded painter-order background-only blur, while the glass-materials demo composes that verified native boundary into frosted glass and acrylic with sharp foreground content. The text demo exercises Unicode shaping through glyphon/cosmic-text and a persistent glyph atlas. The image demo generates RGBA pixels in memory, registers them once and reuses cached native textures; byte-identical image registrations under different logical ids share one retained native texture. The high-refresh demo follows the active display refresh rate automatically. Scene geometry remains authored in logical DIPs while native Win32 input and persistent GPU surfaces operate in physical pixels.
 
 The Linux backend currently provides native X11 windows and normalized input/lifecycle events. The macOS backend provides native Cocoa/AppKit windows, display/Retina scaling and normalized input/lifecycle events. GPU/wgpu presentation on Linux and macOS, plus Wayland support, are not claimed yet.
 
@@ -247,6 +251,7 @@ SwirUI Runtime
         ├── Render Tree ✅
         ├── Scene Graph ✅
         ├── Path2D polygon geometry + tessellation ✅
+        ├── retained perspective + pointer parallax geometry ✅
         ├── z-aware + clip-aware + path-aware Scene hit testing ✅
         ├── SceneNode → Component mapping ✅
         ├── Render Surface lifecycle ✅
@@ -262,6 +267,7 @@ Renderer Layer
         ├── VSync / present-mode policy ✅ Windows
         ├── instanced anti-aliased rounded rectangles ✅
         ├── filled convex/concave Path2D triangles ✅
+        ├── retained depth / perspective / parallax paths ✅
         ├── retained linear / radial / mesh gradients ✅
         ├── retained shadows / glow / source bloom ✅
         ├── adaptive directional lighting + retained grain ✅
@@ -313,7 +319,7 @@ SwirUI Framework
 
 The 0.2 Alpha native/runtime gate is verified complete. Windows has the persistent wgpu renderer and integrated mixed-scene native gate; Linux has a real direct X11 native window/input path under Xvfb; macOS has a direct Cocoa/AppKit native window/input path with Retina logical-geometry verification. Cross-platform GPU presentation beyond Windows remains future work and is not implied by the native-window milestone.
 
-0.3 is now active. Retained **linear / radial / mesh gradients**, **dynamic shadows**, **adaptive directional lighting**, **glow**, explicit **source-driven bloom**, deterministic **noise / grain**, **painter-order background blur**, **frosted glass** and **acrylic-like materials** are implemented and verified through the clipped, HiDPI-aware persistent GPU scene pipeline, including real Win32/wgpu smoke coverage. Backdrop regions reuse persistent native blur/compositor resources, lighting and grain reuse retained rectangle batches, and material foreground content remains sharp above deterministic tint, border, luminosity and quality-aware grain layers. The next high-impact work is effect caching for unchanged backdrop/material regions so expensive intermediate blur work can be reused safely across high-refresh frames, followed by a reusable color-filter/custom-shader path. Native accessibility adapters, Wayland/Linux expansion, macOS GPU presentation and continued measured performance work remain important cross-cutting follow-ups without reopening the completed 0.2 gate.
+0.3 is now active. Retained **linear / radial / mesh gradients**, **depth and perspective**, **pointer-driven parallax**, **dynamic shadows**, **adaptive directional lighting**, **glow**, explicit **source-driven bloom**, deterministic **noise / grain**, **painter-order background blur**, **frosted glass** and **acrylic-like materials** are implemented and verified through the clipped, HiDPI-aware persistent GPU scene pipeline, including real Win32/wgpu smoke coverage. Perspective and parallax compile into ordinary retained `Path2D` geometry, so they inherit the existing clipping, compositing, hit-testing and mixed-DPI contracts without a parallel rendering backend. Backdrop regions reuse persistent native blur/compositor resources, lighting and grain reuse retained rectangle batches, and material foreground content remains sharp above deterministic tint, border, luminosity and quality-aware grain layers. The next high-impact work is effect caching for unchanged backdrop/material regions so expensive intermediate blur work can be reused safely across high-refresh frames, followed by a reusable color-filter/custom-shader path. Native accessibility adapters, Wayland/Linux expansion, macOS GPU presentation and continued measured performance work remain important cross-cutting follow-ups without reopening the completed 0.2 gate.
 
 See **[ROADMAP.md](ROADMAP.md)** for the full development plan.
 
@@ -344,6 +350,7 @@ Windows wgpu clear/present smoke test
 Windows persistent rounded-rectangle GPU draw smoke test
 Windows filled Path2D SceneGraph → Python → Rust/wgpu smoke test
 Windows retained linear / radial / mesh gradient GPU smoke tests
+Windows retained depth / perspective / parallax GPU smoke test
 Windows retained adaptive-lighting / glow / bloom / noise GPU smoke test
 Windows retained backdrop/background-blur + glass/acrylic GPU smoke test
 Windows shaped-text SceneGraph → Python → Rust/wgpu smoke test

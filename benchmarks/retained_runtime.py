@@ -20,7 +20,7 @@ from swirui.performance import (
     run_benchmark,
     write_report,
 )
-from swirui.rendering import Color, Point, Rect, Scene, SceneNode, SceneNodeKind
+from swirui.rendering import Color, Point, Rect, Reflection, Scene, SceneNode, SceneNodeKind
 
 BenchmarkWorkload = Callable[[], object]
 
@@ -79,12 +79,32 @@ def _hit_test_workload(scene: Scene) -> BenchmarkWorkload:
     return workload
 
 
+def _reflection_build_workload() -> BenchmarkWorkload:
+    reflection = Reflection(
+        color=Color(0.72, 0.9, 1.0, 0.28),
+        angle_degrees=24.0,
+        position=0.42,
+        width=0.18,
+        steps=96,
+    )
+    bounds = Rect(120.0, 80.0, 640.0, 360.0)
+
+    def workload() -> object:
+        node = reflection.to_scene_node("benchmark-reflection", bounds)
+        if not node.children:
+            raise RuntimeError("Reflection tessellation produced no retained path bands.")
+        return node
+
+    return workload
+
+
 def _run_suite(budget_path: Path) -> list[BenchmarkResult]:
     scene = _build_grid_scene()
     budgets = load_budgets(budget_path)
     scenarios: tuple[tuple[str, BenchmarkWorkload, int, int], ...] = (
         ("retained_scene_walk_1024", _scene_walk_workload(scene), 60, 10),
         ("scene_hit_testing_1024", _hit_test_workload(scene), 40, 8),
+        ("reflection_tessellation_96", _reflection_build_workload(), 40, 8),
     )
 
     results: list[BenchmarkResult] = []

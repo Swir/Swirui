@@ -4,6 +4,7 @@ from .backdrop import BackdropBlur
 from .backdrop_wgpu_renderer import WgpuRenderer
 from .base import NullRenderer, Renderer
 from .bloom import Bloom
+from .depth import Parallax, PerspectivePlane
 from .effects import (
     DropShadow,
     DynamicShadow,
@@ -17,6 +18,7 @@ from .gradients import GradientStop, LinearGradient, MeshGradient, RadialGradien
 from .lighting import AdaptiveLighting
 from .materials import Acrylic, FrostedGlass
 from .noise import Noise
+from .reflections import Reflection
 from .scene import Scene, SceneNode, SceneNodeKind
 from .scheduler import FrameScheduler, FrameStats
 from .surface import RenderSurface
@@ -42,10 +44,13 @@ __all__ = [
     "MeshGradient",
     "Noise",
     "NullRenderer",
+    "Parallax",
     "Path2D",
+    "PerspectivePlane",
     "Point",
     "RadialGradient",
     "Rect",
+    "Reflection",
     "RenderNode",
     "Renderer",
     "RenderSurface",
