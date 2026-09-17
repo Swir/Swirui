@@ -4,9 +4,9 @@
 
 ## Project progress
 
-**Overall completion: 22%**
+**Overall completion: 24%**
 
-`[████░░░░░░░░░░░░░░░░] 22%`
+`[█████░░░░░░░░░░░░░░░] 24%`
 
 Progress is based on implemented and verified roadmap work. Ideas, mockups and unfinished prototypes do not increase the percentage.
 
@@ -282,8 +282,8 @@ The current Windows integration gate verifies one real native session containing
 - [ ] Pen / pressure
 - [ ] Gamepad navigation
 - [ ] Screen readers
-- [ ] Keyboard-only navigation
-- [ ] Focus management
+- [x] Keyboard-only navigation
+- [x] Focus management
 - [ ] High contrast
 - [ ] Reduced motion
 - [ ] Font scaling
@@ -373,6 +373,7 @@ AI output must remain ordinary, editable SwirUI code.
 - [x] Windows integrated 0.2 mixed-scene + exact-client + routed-input gate
 - [x] Windows active-display / refresh-rate mapping smoke test
 - [x] Windows `WM_DISPLAYCHANGE` / `WM_DPICHANGED` normalization smoke tests
+- [x] Windows keyboard / system-key normalization smoke test
 - [x] Windows real-wgpu surface/present smoke test
 - [x] Windows real-wgpu instanced rectangle draw smoke test
 - [x] Windows persistent GPU context multi-frame + resize smoke test
