@@ -3,21 +3,53 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Iterable
 
 ColorMatrix = tuple[
-    float, float, float, float, float,
-    float, float, float, float, float,
-    float, float, float, float, float,
-    float, float, float, float, float,
+    float,
+    float,
+    float,
+    float,
+    float,
+    float,
+    float,
+    float,
+    float,
+    float,
+    float,
+    float,
+    float,
+    float,
+    float,
+    float,
+    float,
+    float,
+    float,
+    float,
 ]
 
 _IDENTITY: ColorMatrix = (
-    1.0, 0.0, 0.0, 0.0, 0.0,
-    0.0, 1.0, 0.0, 0.0, 0.0,
-    0.0, 0.0, 1.0, 0.0, 0.0,
-    0.0, 0.0, 0.0, 1.0, 0.0,
+    1.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+    0.0,
 )
 
 
@@ -72,10 +104,26 @@ class ColorFilter:
         value = _amount("brightness amount", amount, maximum=4.0)
         return cls(
             (
-                value, 0.0, 0.0, 0.0, 0.0,
-                0.0, value, 0.0, 0.0, 0.0,
-                0.0, 0.0, value, 0.0, 0.0,
-                0.0, 0.0, 0.0, 1.0, 0.0,
+                value,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                value,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                value,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0,
+                0.0,
             )
         )
 
@@ -87,10 +135,26 @@ class ColorFilter:
         offset = 0.5 * (1.0 - value)
         return cls(
             (
-                value, 0.0, 0.0, 0.0, offset,
-                0.0, value, 0.0, 0.0, offset,
-                0.0, 0.0, value, 0.0, offset,
-                0.0, 0.0, 0.0, 1.0, 0.0,
+                value,
+                0.0,
+                0.0,
+                0.0,
+                offset,
+                0.0,
+                value,
+                0.0,
+                0.0,
+                offset,
+                0.0,
+                0.0,
+                value,
+                0.0,
+                offset,
+                0.0,
+                0.0,
+                0.0,
+                1.0,
+                0.0,
             )
         )
 
@@ -103,10 +167,26 @@ class ColorFilter:
         inverse = 1.0 - value
         return cls(
             (
-                lr * inverse + value, lg * inverse, lb * inverse, 0.0, 0.0,
-                lr * inverse, lg * inverse + value, lb * inverse, 0.0, 0.0,
-                lr * inverse, lg * inverse, lb * inverse + value, 0.0, 0.0,
-                0.0, 0.0, 0.0, 1.0, 0.0,
+                lr * inverse + value,
+                lg * inverse,
+                lb * inverse,
+                0.0,
+                0.0,
+                lr * inverse,
+                lg * inverse + value,
+                lb * inverse,
+                0.0,
+                0.0,
+                lr * inverse,
+                lg * inverse,
+                lb * inverse + value,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0,
+                0.0,
             )
         )
 
@@ -125,10 +205,26 @@ class ColorFilter:
         scale = 1.0 - 2.0 * value
         return cls(
             (
-                scale, 0.0, 0.0, 0.0, value,
-                0.0, scale, 0.0, 0.0, value,
-                0.0, 0.0, scale, 0.0, value,
-                0.0, 0.0, 0.0, 1.0, 0.0,
+                scale,
+                0.0,
+                0.0,
+                0.0,
+                value,
+                0.0,
+                scale,
+                0.0,
+                0.0,
+                value,
+                0.0,
+                0.0,
+                scale,
+                0.0,
+                value,
+                0.0,
+                0.0,
+                0.0,
+                1.0,
+                0.0,
             )
         )
 
@@ -179,7 +275,11 @@ class ColorFilter:
                 0.072 + cosine * 0.928 + sine * 0.072,
                 0.0,
                 0.0,
-                0.0, 0.0, 0.0, 1.0, 0.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0,
+                0.0,
             )
         )
 
@@ -213,6 +313,8 @@ class ColorFilter:
         return tuple(value for row in rows for value in row) + tuple(offset)
 
     def _rows_and_offset(self) -> tuple[tuple[tuple[float, ...], ...], tuple[float, ...]]:
-        rows = tuple(tuple(self.matrix[row * 5 + column] for column in range(4)) for row in range(4))
+        rows = tuple(
+            tuple(self.matrix[row * 5 + column] for column in range(4)) for row in range(4)
+        )
         offset = tuple(self.matrix[row * 5 + 4] for row in range(4))
         return rows, offset
