@@ -130,9 +130,16 @@ def test_custom_shader_runs_in_real_persistent_wgpu_postprocess_chain() -> None:
         first_target_generation = context.custom_shader_generation
         first_pipeline_generation = context.custom_shader_pipeline_generation
 
+        # Drive the clock explicitly instead of relying on shader compilation taking
+        # longer than one frame interval. Cached pipeline switches can complete in a
+        # few milliseconds, so repeated ``monotonic() + 1`` samples are not guaranteed
+        # to advance beyond the scheduler deadline established by the previous sample.
+        frame_time = time.monotonic()
+
         renderer.set_custom_shader(initial.with_parameters(0.4, 0.0, 0.0, 0.0))
+        frame_time += 1.0
         app.invalidate(window)
-        assert app.render_pending(time.monotonic() + 1.0) == 1
+        assert app.render_pending(frame_time) == 1
         assert renderer._contexts[native_handle.value] is first_context
         assert context.custom_shader_generation == first_target_generation
         assert context.custom_shader_pipeline_generation == first_pipeline_generation
@@ -143,20 +150,23 @@ def test_custom_shader_runs_in_real_persistent_wgpu_postprocess_chain() -> None:
             label="scanline",
         )
         renderer.set_custom_shader(replacement)
+        frame_time += 1.0
         app.invalidate(window)
-        assert app.render_pending(time.monotonic() + 1.0) == 1
+        assert app.render_pending(frame_time) == 1
         assert context.custom_shader_generation == first_target_generation
         assert context.custom_shader_pipeline_generation == first_pipeline_generation + 1
 
         renderer.set_custom_shader(initial.with_parameters(0.8, 0.0, 0.0, 0.0))
+        frame_time += 1.0
         app.invalidate(window)
-        assert app.render_pending(time.monotonic() + 1.0) == 1
+        assert app.render_pending(frame_time) == 1
         assert context.custom_shader_generation == first_target_generation
         assert context.custom_shader_pipeline_generation == first_pipeline_generation + 1
 
         renderer.set_custom_shader(None)
+        frame_time += 1.0
         app.invalidate(window)
-        assert app.render_pending(time.monotonic() + 1.0) == 1
+        assert app.render_pending(frame_time) == 1
         assert context.custom_shader_enabled is False
         assert context.custom_shader_target_size == window.pixel_size
         assert context.custom_shader_generation == first_target_generation
