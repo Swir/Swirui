@@ -79,5 +79,6 @@ def test_color_filter_is_applied_to_each_persistent_window_context() -> None:
     assert len(native.contexts) == 2
     color_filter = ColorFilter.invert(0.4)
     renderer.set_color_filter(color_filter)
-    assert all(context.filter_updates == [color_filter.native_values()] for context in native.contexts)
+    expected = [color_filter.native_values()]
+    assert all(context.filter_updates == expected for context in native.contexts)
     app.stop()
