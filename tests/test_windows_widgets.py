@@ -89,7 +89,13 @@ def test_retained_text_inputs_route_real_win32_text_and_reuse_wgpu_context() -> 
             )
         app.process_events()
         assert username.value == "SwirUI"
+        assert runtime.generation > 1
 
+        # process_events() is allowed to consume an invalidated frame itself.
+        # Request one explicit follow-up frame so this smoke test verifies the
+        # prepared widget scene on the persistent GPU context without depending
+        # on host speed or whether the event pump happened to hit a frame deadline.
+        app.invalidate(window)
         rendered = app.render_pending(time.monotonic() + 1.0)
         assert rendered == 1
         assert renderer.persistent_context_count == initial_contexts
@@ -104,6 +110,5 @@ def test_retained_text_inputs_route_real_win32_text_and_reuse_wgpu_context() -> 
         assert username_text.text == "SwirUI"
         assert password_text.text == "••••••"
         assert password_text.text != password.value
-        assert runtime.generation > 1
     finally:
         app.stop()
