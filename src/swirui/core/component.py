@@ -22,6 +22,10 @@ class Component(EventEmitter):
         accessible_name: str | None = None,
         accessible_description: str | None = None,
         accessible_checked: bool | None = None,
+        accessible_value: float | None = None,
+        accessible_min_value: float | None = None,
+        accessible_max_value: float | None = None,
+        accessible_value_text: str | None = None,
     ) -> None:
         super().__init__()
         self.name = name or self.__class__.__name__
@@ -35,6 +39,10 @@ class Component(EventEmitter):
         self.accessible_name = accessible_name
         self.accessible_description = accessible_description
         self.accessible_checked = accessible_checked
+        self.accessible_value = accessible_value
+        self.accessible_min_value = accessible_min_value
+        self.accessible_max_value = accessible_max_value
+        self.accessible_value_text = accessible_value_text
 
     @property
     def enabled(self) -> bool:
@@ -103,14 +111,7 @@ class Component(EventEmitter):
             self.remove(child)
 
     def invalidate(self, *, reason: str = "changed", source: Component | None = None) -> None:
-        """Mark this retained component subtree as changed.
-
-        Invalidation bubbles through component parents while preserving the
-        component that originally changed. Rendering runtimes can therefore
-        subscribe once at the mounted root instead of attaching listeners to
-        every widget. The event is synchronous and deliberately carries no
-        renderer dependency, keeping the core tree backend-neutral.
-        """
+        """Mark this retained component subtree as changed."""
 
         origin = self if source is None else source
         self.emit("invalidated", component=origin, reason=reason)
