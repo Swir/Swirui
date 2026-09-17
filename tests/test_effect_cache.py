@@ -88,6 +88,23 @@ def test_effect_cache_uses_lru_eviction() -> None:
     assert stats.evictions == 2
 
 
+def test_effect_cache_can_invalidate_all_variants_of_one_effect() -> None:
+    cache = EffectCache()
+    glow = Glow(blur_radius=14.0, steps=6)
+    other = Glow(blur_radius=20.0, steps=6)
+
+    cache.render(glow, "small", Rect(0.0, 0.0, 80.0, 40.0))
+    cache.render(glow, "large", Rect(0.0, 0.0, 160.0, 80.0), opacity=0.8)
+    cache.render(other, "other", Rect(0.0, 0.0, 80.0, 40.0))
+
+    assert cache.invalidate(glow) == 2
+    assert cache.stats.entries == 1
+    assert cache.invalidate(glow) == 0
+
+    cache.render(other, "other-again", Rect(0.0, 0.0, 80.0, 40.0))
+    assert cache.stats.hits == 1
+
+
 def test_effect_cache_supports_composite_visual_engine_effects() -> None:
     cache = EffectCache()
     bounds = Rect(40.0, 60.0, 220.0, 120.0)

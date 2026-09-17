@@ -102,6 +102,29 @@ class EffectCache:
         with self._lock:
             self._entries.clear()
 
+    def invalidate(self, effect: RetainedEffect) -> int:
+        """Drop every cached variant for ``effect`` and return the removed count.
+
+        Bounds, radius, opacity and z-index are deliberately ignored so callers
+        can release all retained variants of one immutable effect in a single
+        operation without disturbing unrelated cache entries.
+        """
+
+        try:
+            hash(effect)
+        except TypeError as exc:
+            raise TypeError("Cached retained effects must be hashable and immutable.") from exc
+
+        with self._lock:
+            matching = [
+                cache_key
+                for cache_key in self._entries
+                if cache_key[0] is type(effect) and cache_key[1] == effect
+            ]
+            for cache_key in matching:
+                del self._entries[cache_key]
+            return len(matching)
+
     def reset_stats(self) -> None:
         """Reset hit/miss/eviction counters without invalidating cached templates."""
 
