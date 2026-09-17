@@ -113,6 +113,10 @@ The project uses semantic versioning where practical during pre-alpha developmen
 - Retained Slider and RangeSlider controls with pointer dragging, keyboard adjustment, bounded stepping, focus visuals and numeric accessibility value/range semantics.
 - Retained ProgressBar and path-based ProgressRing controls with determinate value/range semantics and deterministic GPU geometry.
 - `examples/core_widgets_demo.py`, `examples/core_toggles_demo.py` and `examples/range_progress_demo.py`, plus expanded real Win32 widget interaction coverage inside the persistent wgpu context.
+- Retained `ScrollView` with content-local child coordinates, clamped logical-DIP offsets, automatic content measurement, keyboard scrolling and accessibility value semantics.
+- `examples/core_scroll_view_demo.py` plus real Win32/wgpu coverage for clipped translated content, routed child interaction and persistent renderer-context reuse.
+- Retained `Expander` and `Accordion` controls with managed disclosure content, pointer/keyboard interaction, expanded/collapsed accessibility state, exclusive or multi-open coordination and optional require-one behavior.
+- `examples/expander_accordion_demo.py` plus real Win32/wgpu smoke coverage that switches accordion sections through native input while preserving the persistent renderer context.
 
 ### Changed
 - The wgpu renderer now reports submitted rectangle, path, text and image counts independently.
