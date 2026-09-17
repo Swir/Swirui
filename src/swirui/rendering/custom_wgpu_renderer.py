@@ -8,6 +8,7 @@ from swirui.core import Component, PresentationMode
 from swirui.window import Window
 
 from .backdrop_wgpu_renderer import WgpuRenderer as _BackdropWgpuRenderer
+from .color_filters import ColorFilter
 from .custom_shaders import CustomShaderEffect
 from .geometry import Color
 from .surface import RenderSurface
@@ -31,7 +32,7 @@ class WgpuRenderer(_BackdropWgpuRenderer):
         presentation_mode: PresentationMode = PresentationMode.AUTO_VSYNC,
         maximum_frame_latency: int = 1,
         scene_blur_radius: float = 0.0,
-        color_filter: Any | None = None,
+        color_filter: ColorFilter | None = None,
         custom_shader: CustomShaderEffect | None = None,
     ) -> None:
         super().__init__(
