@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from uuid import uuid4
 
+from .accessibility import AccessibilityRole
 from .events import EventEmitter
 
 
@@ -17,6 +18,9 @@ class Component(EventEmitter):
         *,
         key: str | None = None,
         focusable: bool = False,
+        accessibility_role: AccessibilityRole = AccessibilityRole.GENERIC,
+        accessible_name: str | None = None,
+        accessible_description: str | None = None,
     ) -> None:
         super().__init__()
         self.name = name or self.__class__.__name__
@@ -26,6 +30,9 @@ class Component(EventEmitter):
         self.enabled = True
         self.visible = True
         self.focusable = focusable
+        self.accessibility_role = accessibility_role
+        self.accessible_name = accessible_name
+        self.accessible_description = accessible_description
 
     def add(self, *children: Component) -> Component:
         for child in children:
