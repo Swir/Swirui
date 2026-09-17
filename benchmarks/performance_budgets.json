@@ -8,5 +8,10 @@
     "max_median_us": 30000,
     "max_p95_us": 45000,
     "max_worst_us": 100000
+  },
+  "reflection_tessellation_96": {
+    "max_median_us": 20000,
+    "max_p95_us": 40000,
+    "max_worst_us": 150000
   }
 }
