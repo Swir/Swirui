@@ -32,6 +32,7 @@ def test_effect_cache_reuses_geometry_across_logical_scene_keys() -> None:
     assert second.children[0].key.startswith("second:")
     assert [child.bounds for child in first.children] == [child.bounds for child in second.children]
     assert cache.stats.entries == 1
+    assert cache.stats.retained_nodes == len(tuple(first.walk()))
     assert cache.stats.hits == 1
     assert cache.stats.misses == 1
     assert cache.stats.hit_rate == 0.5
@@ -86,6 +87,7 @@ def test_effect_cache_uses_lru_eviction() -> None:
     assert stats.hits == 1
     assert stats.misses == 4
     assert stats.evictions == 2
+    assert stats.evicted_nodes > 0
 
 
 def test_effect_cache_can_invalidate_all_variants_of_one_effect() -> None:
@@ -96,9 +98,11 @@ def test_effect_cache_can_invalidate_all_variants_of_one_effect() -> None:
     cache.render(glow, "small", Rect(0.0, 0.0, 80.0, 40.0))
     cache.render(glow, "large", Rect(0.0, 0.0, 160.0, 80.0), opacity=0.8)
     cache.render(other, "other", Rect(0.0, 0.0, 80.0, 40.0))
+    before = cache.stats.retained_nodes
 
     assert cache.invalidate(glow) == 2
     assert cache.stats.entries == 1
+    assert 0 < cache.stats.retained_nodes < before
     assert cache.invalidate(glow) == 0
 
     cache.render(other, "other-again", Rect(0.0, 0.0, 80.0, 40.0))
@@ -131,9 +135,11 @@ def test_effect_cache_clear_and_reset_stats_are_independent() -> None:
 
     cache.render(effect, "one", bounds)
     cache.render(effect, "two", bounds)
+    assert cache.stats.retained_nodes > 0
     cache.clear()
 
     assert len(cache) == 0
+    assert cache.stats.retained_nodes == 0
     assert cache.stats.hits == 1
     assert cache.stats.misses == 1
 
@@ -141,15 +147,55 @@ def test_effect_cache_clear_and_reset_stats_are_independent() -> None:
     assert cache.stats.entries == 0
     assert cache.stats.requests == 0
     assert cache.stats.evictions == 0
+    assert cache.stats.evicted_nodes == 0
+    assert cache.stats.oversize_bypasses == 0
+
+
+def test_effect_cache_node_budget_evicts_lru_templates() -> None:
+    cache = EffectCache(max_entries=8, max_nodes=14)
+    effect = Glow(steps=6)
+
+    cache.render(effect, "one", Rect(0.0, 0.0, 80.0, 40.0))
+    cache.render(effect, "two", Rect(0.0, 0.0, 100.0, 50.0))
+    assert cache.stats.entries == 2
+    assert cache.stats.retained_nodes == 14
+
+    cache.render(effect, "three", Rect(0.0, 0.0, 120.0, 60.0))
+    stats = cache.stats
+    assert stats.entries == 2
+    assert stats.retained_nodes == 14
+    assert stats.evictions == 1
+    assert stats.evicted_nodes == 7
+
+
+def test_effect_cache_oversize_effect_bypasses_storage_without_evicting_hot_entry() -> None:
+    cache = EffectCache(max_entries=4, max_nodes=8)
+    hot = Glow(steps=4)
+    oversized = Glow(steps=12)
+    bounds = Rect(0.0, 0.0, 96.0, 48.0)
+
+    cache.render(hot, "hot", bounds)
+    hot_nodes = cache.stats.retained_nodes
+    cache.render(oversized, "large-one", bounds)
+    cache.render(oversized, "large-two", bounds)
+    cache.render(hot, "hot-again", bounds)
+
+    stats = cache.stats
+    assert stats.entries == 1
+    assert stats.retained_nodes == hot_nodes
+    assert stats.oversize_bypasses == 2
+    assert stats.evictions == 0
+    assert stats.hits == 1
 
 
 def test_effect_cache_rejects_non_positive_capacity_and_empty_keys() -> None:
-    try:
-        EffectCache(max_entries=0)
-    except ValueError as exc:
-        assert "positive" in str(exc)
-    else:  # pragma: no cover - defensive assertion path.
-        raise AssertionError("Expected invalid cache capacity to fail.")
+    for kwargs in ({"max_entries": 0}, {"max_nodes": 0}):
+        try:
+            EffectCache(**kwargs)
+        except ValueError as exc:
+            assert "positive" in str(exc)
+        else:  # pragma: no cover - defensive assertion path.
+            raise AssertionError("Expected invalid cache capacity to fail.")
 
     cache = EffectCache()
     try:

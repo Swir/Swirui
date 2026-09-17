@@ -58,7 +58,7 @@ def build_scene(cache: EffectCache, phase: float) -> Scene:
 
 
 def main() -> None:
-    cache = EffectCache(max_entries=32)
+    cache = EffectCache(max_entries=32, max_nodes=512)
     app = App(
         "SwirUI Effect Cache",
         config=AppConfig(target_fps=120, visual_quality=VisualQuality.ULTRA),
@@ -80,9 +80,12 @@ def main() -> None:
         stats = cache.stats
         print(
             "effect-cache",
-            f"entries={stats.entries}",
+            f"entries={stats.entries}/{cache.max_entries}",
+            f"retained_nodes={stats.retained_nodes}/{cache.max_nodes}",
             f"hits={stats.hits}",
             f"misses={stats.misses}",
+            f"evictions={stats.evictions}",
+            f"oversize_bypasses={stats.oversize_bypasses}",
             f"hit_rate={stats.hit_rate:.1%}",
         )
         app.stop()
