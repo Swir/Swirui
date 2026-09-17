@@ -4,9 +4,9 @@
 
 ## Project progress
 
-**Overall completion: 47%**
+**Overall completion: 51%**
 
-`[█████████░░░░░░░░░░░] 47%`
+`[██████████░░░░░░░░░░] 51%`
 
 Progress is based on implemented and verified roadmap work. Ideas, mockups and unfinished prototypes do not increase the percentage.
 
@@ -136,10 +136,10 @@ The Visual Engine gate is complete with verified retained effects/materials, per
 - [x] Checkbox / RadioButton / Switch
 - [x] Slider / RangeSlider
 - [x] ProgressBar / ProgressRing
-- [ ] Badge / Chip
-- [ ] Tooltip
-- [ ] Card / GlassCard
-- [ ] Panel / Frame
+- [x] Badge / Chip
+- [x] Tooltip
+- [x] Card / GlassCard
+- [x] Panel / Frame
 - [ ] ScrollView
 - [ ] Expander / Accordion
 - [ ] SplitView
