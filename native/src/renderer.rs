@@ -2,6 +2,8 @@ use crate::image::ImageInstance;
 #[cfg(target_os = "windows")]
 use crate::color_filter::{validate_color_matrix, ColorMatrixFilter};
 #[cfg(target_os = "windows")]
+use crate::custom_effect::{validate_custom_shader_parameters, CustomShaderPass};
+#[cfg(target_os = "windows")]
 use crate::image::ImageSystem;
 use crate::postprocess::validate_blur_radius;
 #[cfg(target_os = "windows")]
@@ -44,6 +46,9 @@ struct PersistentGpuContext {
     color_filter: Option<ColorMatrixFilter>,
     color_filter_enabled: bool,
     color_filter_uses_blur: bool,
+    custom_shader: Option<CustomShaderPass>,
+    custom_shader_enabled: bool,
+    custom_shader_source_dirty: bool,
     backdrop_compositor: Option<BackdropCompositor>,
     effect_cache_token: Option<u64>,
     effect_cache_background: Option<[f64; 4]>,
@@ -190,6 +195,9 @@ impl PersistentGpuContext {
             color_filter: None,
             color_filter_enabled: false,
             color_filter_uses_blur: false,
+            custom_shader: None,
+            custom_shader_enabled: false,
+            custom_shader_source_dirty: false,
             backdrop_compositor: None,
             effect_cache_token: None,
             effect_cache_background: None,
@@ -241,6 +249,16 @@ impl PersistentGpuContext {
                 );
                 self.color_filter_uses_blur = false;
             }
+            if let Some(effect) = &mut self.custom_shader {
+                effect.resize(
+                    &self.device,
+                    self.config.format,
+                    width,
+                    height,
+                    self.offscreen_target.view(),
+                );
+                self.custom_shader_source_dirty = true;
+            }
             self.invalidate_effect_cache();
         }
         let frame_uniforms = floats_to_bytes(&[width as f32, height as f32, 0.0, 0.0]);
@@ -268,6 +286,7 @@ impl PersistentGpuContext {
         }
         self.ensure_blur_pipeline();
         self.postprocess_blur_radius = radius_pixels;
+        self.custom_shader_source_dirty = true;
         Ok(())
     }
 
@@ -301,11 +320,48 @@ impl PersistentGpuContext {
         }
         self.color_filter_enabled = true;
         self.color_filter_uses_blur = false;
+        self.custom_shader_source_dirty = true;
         Ok(())
     }
 
     fn clear_color_filter(&mut self) {
-        self.color_filter_enabled = false;
+        if self.color_filter_enabled {
+            self.color_filter_enabled = false;
+            self.custom_shader_source_dirty = true;
+        }
+    }
+
+    fn set_custom_shader(&mut self, source: &str, parameters: &[f32]) -> PyResult<()> {
+        validate_custom_shader_parameters(parameters).map_err(PyValueError::new_err)?;
+        if let Some(effect) = &mut self.custom_shader {
+            effect
+                .set_shader(&self.device, self.config.format, source)
+                .map_err(PyValueError::new_err)?;
+            effect
+                .set_parameters(&self.queue, parameters)
+                .map_err(PyValueError::new_err)?;
+        } else {
+            self.custom_shader = Some(
+                CustomShaderPass::new(
+                    &self.device,
+                    &self.queue,
+                    self.config.format,
+                    self.config.width,
+                    self.config.height,
+                    self.offscreen_target.view(),
+                    source,
+                    parameters,
+                )
+                .map_err(PyValueError::new_err)?,
+            );
+        }
+        self.custom_shader_enabled = true;
+        self.custom_shader_source_dirty = true;
+        Ok(())
+    }
+
+    fn clear_custom_shader(&mut self) {
+        self.custom_shader_enabled = false;
     }
 
     fn register_image_rgba(
@@ -828,32 +884,35 @@ impl PersistentGpuContext {
 
     fn encode_postprocess(&mut self, encoder: &mut wgpu::CommandEncoder) -> wgpu::TextureView {
         let blur_enabled = self.postprocess_blur_radius > 0.0 && self.postprocess_blur.is_some();
-        if blur_enabled {
-            let blurred_view = self
-                .postprocess_blur
+        let mut source = if blur_enabled {
+            self.postprocess_blur
                 .as_ref()
                 .expect("blur pipeline must exist")
-                .encode(&self.queue, encoder, self.postprocess_blur_radius);
-            if self.color_filter_enabled {
-                let filter = self.color_filter.as_mut().expect("color filter must exist");
-                if !self.color_filter_uses_blur {
-                    filter.rebind_source(&self.device, blurred_view);
-                    self.color_filter_uses_blur = true;
-                }
-                return filter.encode(encoder).clone();
-            }
-            return blurred_view.clone();
-        }
+                .encode(&self.queue, encoder, self.postprocess_blur_radius)
+                .clone()
+        } else {
+            self.offscreen_target.view().clone()
+        };
 
         if self.color_filter_enabled {
             let filter = self.color_filter.as_mut().expect("color filter must exist");
-            if self.color_filter_uses_blur {
-                filter.rebind_source(&self.device, self.offscreen_target.view());
-                self.color_filter_uses_blur = false;
+            if self.color_filter_uses_blur != blur_enabled {
+                filter.rebind_source(&self.device, &source);
+                self.color_filter_uses_blur = blur_enabled;
             }
-            return filter.encode(encoder).clone();
+            source = filter.encode(encoder).clone();
         }
-        self.offscreen_target.view().clone()
+
+        if self.custom_shader_enabled {
+            let effect = self.custom_shader.as_mut().expect("custom shader must exist");
+            if self.custom_shader_source_dirty {
+                effect.rebind_source(&self.device, &source);
+                self.custom_shader_source_dirty = false;
+            }
+            source = effect.encode(encoder).clone();
+        }
+
+        source
     }
 
     fn ensure_rectangle_capacity(&mut self, required: usize) -> PyResult<()> {
@@ -1010,6 +1069,35 @@ impl PyWin32GpuRenderer {
     }
 
     #[getter]
+    fn custom_shader_enabled(&self) -> bool {
+        self.context.custom_shader_enabled
+    }
+
+    #[getter]
+    fn custom_shader_target_size(&self) -> Option<(u32, u32)> {
+        self.context
+            .custom_shader
+            .as_ref()
+            .map(CustomShaderPass::size)
+    }
+
+    #[getter]
+    fn custom_shader_generation(&self) -> Option<u64> {
+        self.context
+            .custom_shader
+            .as_ref()
+            .map(CustomShaderPass::generation)
+    }
+
+    #[getter]
+    fn custom_shader_pipeline_generation(&self) -> Option<u64> {
+        self.context
+            .custom_shader
+            .as_ref()
+            .map(CustomShaderPass::pipeline_generation)
+    }
+
+    #[getter]
     fn backdrop_pipeline_ready(&self) -> bool {
         self.context.backdrop_compositor.is_some()
     }
@@ -1056,6 +1144,14 @@ impl PyWin32GpuRenderer {
 
     fn clear_color_filter(&mut self) {
         self.context.clear_color_filter();
+    }
+
+    fn set_custom_shader(&mut self, source: &str, parameters: Vec<f32>) -> PyResult<()> {
+        self.context.set_custom_shader(source, &parameters)
+    }
+
+    fn clear_custom_shader(&mut self) {
+        self.context.clear_custom_shader();
     }
 
     fn clear_effect_cache(&mut self) {
