@@ -79,6 +79,40 @@ def test_cocoa_creates_shows_resizes_and_destroys_real_window() -> None:
         backend.shutdown()
 
 
+def test_cocoa_app_preserves_logical_geometry_on_scaled_display() -> None:
+    from swirui import App, Window
+    from swirui.platforms.macos import MacOSCocoaPlatformBackend
+
+    backend = MacOSCocoaPlatformBackend()
+    app = App(name="Cocoa geometry smoke", platform_backend=backend)
+    window = Window(title="Retina logical geometry", width=640, height=480)
+    app.add_window(window)
+    app.start()
+    try:
+        assert window.native_handle is not None
+        assert window.scale == pytest.approx(backend.window_scale(window.native_handle))
+        assert window.width == 640
+        assert window.height == 480
+        assert window.pixel_width == round(640 * window.scale)
+        assert window.pixel_height == round(480 * window.scale)
+
+        backend.resize_window(
+            window.native_handle,
+            round(720 * window.scale),
+            round(510 * window.scale),
+        )
+        deadline = time.monotonic() + 3.0
+        while time.monotonic() < deadline and (window.width, window.height) != (720, 510):
+            app.process_events()
+            time.sleep(0.01)
+
+        assert (window.width, window.height) == (720, 510)
+        assert window.pixel_width == round(720 * window.scale)
+        assert window.pixel_height == round(510 * window.scale)
+    finally:
+        app.stop()
+
+
 def test_cocoa_pointer_button_mapping() -> None:
     from swirui.platforms.macos import (
         MacOSCocoaPlatformBackend,
