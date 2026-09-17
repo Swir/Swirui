@@ -252,7 +252,6 @@ class ScrollView(Widget):
             return
 
         key_code = platform_event.key_code
-        page_x = max(self.line_step, self.bounds.width - self._page_overlap)
         page_y = max(self.line_step, self.bounds.height - self._page_overlap)
         changed = False
         if key_code == _VK_LEFT:
