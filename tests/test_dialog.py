@@ -30,7 +30,7 @@ def _window_with_dialog(*, accept_on_enter: bool = False) -> tuple[Window, Compo
     confirm = Button("Delete", key="confirm", bounds=Rect(170.0, 116.0, 120.0, 42.0))
     dialog.add(cancel, confirm)
     root.add(outside, dialog)
-    window = Window("Dialog test", width=640, height=360)
+    window = Window(title="Dialog test", width=640, height=360)
     window.set_root(root)
     return window, root, outside, dialog, cancel, confirm
 
