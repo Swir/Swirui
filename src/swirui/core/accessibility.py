@@ -21,6 +21,7 @@ class AccessibilityRole(StrEnum):
     GROUP = "group"
     BUTTON = "button"
     CHECKBOX = "checkbox"
+    CHIP = "chip"
     IMAGE = "image"
     LINK = "link"
     LIST = "list"
@@ -34,6 +35,7 @@ class AccessibilityRole(StrEnum):
     SWITCH = "switch"
     TEXT = "text"
     TEXT_BOX = "text_box"
+    TOOLTIP = "tooltip"
 
 
 @dataclass(frozen=True, slots=True)

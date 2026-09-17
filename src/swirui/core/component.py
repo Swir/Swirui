@@ -90,8 +90,10 @@ class Component(EventEmitter):
                 continue
             if child.parent is not None:
                 child.parent.remove(child)
+            old_parent = child.parent
             child.parent = self
             self.children.append(child)
+            child.emit("parent_changed", old_parent=old_parent, new_parent=self)
             self.emit("child_added", child=child)
             self.invalidate(reason="child_added", source=child)
         return self
@@ -102,6 +104,7 @@ class Component(EventEmitter):
         except ValueError as exc:
             raise ValueError("Component is not a child of this parent.") from exc
         child.parent = None
+        child.emit("parent_changed", old_parent=self, new_parent=None)
         self.emit("child_removed", child=child)
         self.invalidate(reason="child_removed", source=child)
         return child
