@@ -93,6 +93,9 @@ The project uses semantic versioning where practical during pre-alpha developmen
 - Public retained `Noise` / grain effect with deterministic seeded geometry, quality-aware sample budgets and shared grain sampling used by acrylic materials.
 - Public retained `AdaptiveLighting` effect with elevation-, direction- and altitude-aware shadow/highlight lobes, deterministic quality scaling and non-interactive retained composition.
 - `examples/gpu_noise_demo.py` and `examples/gpu_adaptive_lighting_demo.py`, plus real Win32/wgpu smoke coverage proving noise and changing directional lighting render across the same persistent native GPU context.
+- Public retained `PerspectivePlane` projection with bounded logical-DIP X/Y rotation, camera distance, depth translation and normalized transform origin.
+- Public pointer-driven `Parallax` mapping that clamps viewport input and compiles directly into the existing clipped, HiDPI-aware retained `Path2D` GPU pipeline.
+- `examples/gpu_depth_demo.py` plus real Win32/wgpu smoke coverage proving changing perspective/parallax geometry renders across the same persistent native GPU context.
 
 ### Changed
 - The wgpu renderer now reports submitted rectangle, path, text and image counts independently.
