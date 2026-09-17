@@ -6,6 +6,7 @@ from .base import NullRenderer, Renderer
 from .bloom import Bloom
 from .color_filters import ColorFilter
 from .depth import Parallax, PerspectivePlane
+from .effect_cache import EffectCache, EffectCacheStats, RetainedEffect
 from .effects import (
     DropShadow,
     DynamicShadow,
@@ -36,6 +37,8 @@ __all__ = [
     "CornerRadius",
     "DropShadow",
     "DynamicShadow",
+    "EffectCache",
+    "EffectCacheStats",
     "EffectQualityProfile",
     "FrameScheduler",
     "FrameStats",
@@ -57,6 +60,7 @@ __all__ = [
     "Renderer",
     "RenderSurface",
     "RenderTree",
+    "RetainedEffect",
     "Scene",
     "SceneNode",
     "SceneNodeKind",
