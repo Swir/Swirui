@@ -29,7 +29,7 @@ _EFFECT_SIGNATURE = re.compile(
     r"\bfn\s+swirui_effect\s*\(\s*"
     r"color\s*:\s*vec4\s*<\s*f32\s*>\s*,\s*"
     r"uv\s*:\s*vec2\s*<\s*f32\s*>\s*,\s*"
-    r"params\s*:\s*vec4\s*<\s*f32\s*>\s*"
+    r"params\s*:\s*vec4\s*<\s*f32\s*>\s*,?\s*"
     r"\)\s*->\s*vec4\s*<\s*f32\s*>",
     re.MULTILINE,
 )
