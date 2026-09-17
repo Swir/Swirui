@@ -4,6 +4,8 @@
 //! in dedicated modules so the native core can grow without turning this file
 //! into a monolithic backend.
 
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+mod color_filter;
 mod image;
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 mod postprocess;
