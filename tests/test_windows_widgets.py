@@ -11,6 +11,8 @@ from swirui import (
     Component,
     Input,
     PasswordInput,
+    ProgressBar,
+    ProgressRing,
     Switch,
     TextArea,
     Window,
@@ -89,7 +91,7 @@ def test_retained_text_inputs_route_real_win32_text_and_reuse_wgpu_context() -> 
         y = max(1, round(50.0 * window.scale))
         _user32().SendMessageW(
             ctypes.c_void_p(window.native_handle.value),
-            0x0201,  # WM_LBUTTONDOWN
+            0x0201,
             0,
             _lparam(x, y),
         )
@@ -99,7 +101,7 @@ def test_retained_text_inputs_route_real_win32_text_and_reuse_wgpu_context() -> 
         for character in "SwirUI":
             _user32().SendMessageW(
                 ctypes.c_void_p(window.native_handle.value),
-                0x0102,  # WM_CHAR
+                0x0102,
                 ord(character),
                 0,
             )
@@ -176,8 +178,8 @@ def test_retained_toggles_route_real_win32_input_and_reuse_wgpu_context() -> Non
         assert window.focused_component is switch
         assert switch.checked is True
 
-        user32.SendMessageW(ctypes.c_void_p(hwnd), 0x0100, 0x20, 0)  # WM_KEYDOWN / Space
-        user32.SendMessageW(ctypes.c_void_p(hwnd), 0x0101, 0x20, 0)  # WM_KEYUP / Space
+        user32.SendMessageW(ctypes.c_void_p(hwnd), 0x0100, 0x20, 0)
+        user32.SendMessageW(ctypes.c_void_p(hwnd), 0x0101, 0x20, 0)
         app.process_events()
         assert switch.checked is False
         assert runtime.generation > 1
@@ -194,5 +196,57 @@ def test_retained_toggles_route_real_win32_input_and_reuse_wgpu_context() -> Non
         )
         assert checkbox_mark.kind is SceneNodeKind.TEXT
         assert switch_knob.kind is SceneNodeKind.RECTANGLE
+    finally:
+        app.stop()
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="retained widget smoke requires Windows")
+def test_retained_progress_updates_real_wgpu_paths_without_recreating_context() -> None:
+    renderer = WgpuRenderer()
+    backend = _isolated_backend()
+    app = App("SwirUI progress smoke", platform_backend=backend, renderer=renderer)
+    window = app.add_window(Window(title="SwirUI retained progress", width=620, height=320))
+    root = Component("root")
+    bar = ProgressBar(
+        key="native-progress-bar",
+        bounds=Rect(28.0, 38.0, 360.0, 20.0),
+        value=22.0,
+        accessible_name="Build progress",
+    )
+    ring = ProgressRing(
+        key="native-progress-ring",
+        bounds=Rect(28.0, 96.0, 128.0, 128.0),
+        value=35.0,
+        thickness=10.0,
+        accessible_name="Sync progress",
+    )
+    root.add(bar, ring)
+    runtime = mount(window, root)
+
+    try:
+        app.start()
+        assert renderer.frames_rendered == 1
+        assert renderer.persistent_context_count == 1
+        initial_contexts = renderer.persistent_context_count
+        initial_generation = runtime.generation
+
+        bar.value = 76.0
+        ring.value = 82.0
+        assert runtime.generation > initial_generation
+        app.invalidate(window)
+        assert app.render_pending(time.monotonic() + 1.0) == 1
+
+        assert renderer.persistent_context_count == initial_contexts
+        assert window.scene is not None
+        bar_fill = next(
+            node for node in window.scene.walk() if node.key == "native-progress-bar:fill"
+        )
+        ring_fill = next(
+            node for node in window.scene.walk() if node.key == "native-progress-ring:fill"
+        )
+        assert bar_fill.kind is SceneNodeKind.RECTANGLE
+        assert ring_fill.kind is SceneNodeKind.PATH
+        assert ring_fill.path is not None
+        assert ring_fill.path.triangle_count > 0
     finally:
         app.stop()
