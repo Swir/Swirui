@@ -2,6 +2,8 @@ struct BackdropParams {
     viewport: vec2<f32>,
     origin: vec2<f32>,
     size: vec2<f32>,
+    opacity: f32,
+    padding: f32,
     radii: vec4<f32>,
 };
 
@@ -71,5 +73,5 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
     }
 
     let blurred = textureSample(source_texture, source_sampler, input.uv);
-    return vec4<f32>(blurred.rgb, coverage);
+    return vec4<f32>(blurred.rgb, coverage * params.opacity);
 }
