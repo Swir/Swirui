@@ -4,7 +4,6 @@ import pytest
 
 from swirui.rendering import CustomShaderEffect
 
-
 VALID_SOURCE = """
 fn swirui_effect(
     color: vec4<f32>,
