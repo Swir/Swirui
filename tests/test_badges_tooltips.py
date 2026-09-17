@@ -112,6 +112,26 @@ def test_tooltip_tracks_hover_and_focus_without_stealing_hits() -> None:
     assert tooltip.visible is False
 
 
+def test_tooltip_hides_when_target_becomes_disabled_or_hidden() -> None:
+    chip = Chip("Target", bounds=Rect(0.0, 0.0, 100.0, 32.0))
+    tooltip = Tooltip(
+        "Target tooltip",
+        target=chip,
+        bounds=Rect(0.0, 40.0, 160.0, 32.0),
+    )
+
+    chip.emit("pointer_enter")
+    assert tooltip.visible is True
+    chip.enabled = False
+    assert tooltip.visible is False
+
+    chip.enabled = True
+    chip.emit("focus_gained")
+    assert tooltip.visible is True
+    chip.visible = False
+    assert tooltip.visible is False
+
+
 def test_tooltip_detach_stops_target_tracking() -> None:
     chip = Chip("Detached", bounds=Rect(0.0, 0.0, 100.0, 32.0))
     tooltip = Tooltip(
