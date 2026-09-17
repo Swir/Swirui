@@ -80,6 +80,9 @@ The project uses semantic versioning where practical during pre-alpha developmen
 - `examples/gpu_dynamic_effects_demo.py` for live quality-aware glow and dynamic-shadow animation on a persistent GPU context.
 - Persistent sampleable offscreen scene targets in the native Win32/wgpu renderer, with one reusable fullscreen blitter for final swapchain presentation.
 - Native offscreen-target lifecycle telemetry and real Win32/wgpu smoke coverage proving reuse across frames, recreation on physical resize and no redundant same-size reallocation.
+- Persistent two-pass separable Gaussian GPU blur with retained ping/output render targets and pipeline state that survive ordinary frames and are recreated only on real physical resize.
+- DPI-aware `WgpuRenderer(scene_blur_radius=...)` and `set_scene_blur_radius()` APIs that keep the public blur radius in logical DIPs while executing post-processing in physical GPU pixels.
+- `examples/gpu_scene_blur_demo.py` plus real Win32/wgpu smoke coverage for blur enable/disable, repeated-frame reuse and resize lifecycle.
 
 ### Changed
 - The wgpu renderer now reports submitted rectangle, path, text and image counts independently.
@@ -103,6 +106,7 @@ The project uses semantic versioning where practical during pre-alpha developmen
 - Gradient stop interpolation and visual argument validation are shared across linear/radial gradient implementations, while mesh gradients preserve stable SceneGraph hit keys across generated cells.
 - Decorative SceneGraph nodes can opt out of direct pointer hit testing without disabling independently interactive descendants, so visual overflow such as shadows cannot steal input from nearby controls.
 - Native Win32/wgpu scene rendering now targets the persistent offscreen texture first and presents through a final fullscreen blit, establishing a real post-processing boundary for the 0.3 Visual Engine.
+- Final Win32/wgpu presentation can now select the retained separable-blur output without reallocating the blur pipeline or render targets on every frame.
 
 ## [0.1.0a1] - 2026-09-16
 

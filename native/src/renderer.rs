@@ -1,6 +1,6 @@
 use crate::image::{ImageInstance, ImageSystem};
 #[cfg(target_os = "windows")]
-use crate::postprocess::OffscreenRenderTarget;
+use crate::postprocess::{validate_blur_radius, OffscreenRenderTarget, SeparableBlur};
 use crate::shape::{ShapeSystem, ShapeVertex};
 use crate::text::{TextInstance, TextSystem};
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
@@ -27,6 +27,8 @@ struct PersistentGpuContext {
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
     offscreen_target: OffscreenRenderTarget,
+    postprocess_blur: Option<SeparableBlur>,
+    postprocess_blur_radius: f32,
     present_blitter: wgpu::util::TextureBlitter,
     frame_buffer: wgpu::Buffer,
     bind_group_layout: wgpu::BindGroupLayout,
@@ -162,6 +164,8 @@ impl PersistentGpuContext {
             queue,
             config,
             offscreen_target,
+            postprocess_blur: None,
+            postprocess_blur_radius: 0.0,
             present_blitter,
             frame_buffer,
             bind_group_layout,
@@ -182,8 +186,20 @@ impl PersistentGpuContext {
         self.config.width = width;
         self.config.height = height;
         self.surface.configure(&self.device, &self.config);
-        self.offscreen_target
-            .resize(&self.device, self.config.format, width, height);
+        let offscreen_resized =
+            self.offscreen_target
+                .resize(&self.device, self.config.format, width, height);
+        if offscreen_resized {
+            if let Some(blur) = &mut self.postprocess_blur {
+                blur.resize(
+                    &self.device,
+                    self.config.format,
+                    width,
+                    height,
+                    self.offscreen_target.view(),
+                );
+            }
+        }
         let frame_uniforms = floats_to_bytes(&[width as f32, height as f32, 0.0, 0.0]);
         self.queue.write_buffer(&self.frame_buffer, 0, &frame_uniforms);
         self.text_system.resize(&self.queue, width, height);
@@ -199,6 +215,24 @@ impl PersistentGpuContext {
         self.config.present_mode = parse_present_mode(presentation_mode)?;
         self.config.desired_maximum_frame_latency = maximum_frame_latency;
         self.surface.configure(&self.device, &self.config);
+        Ok(())
+    }
+
+    fn set_postprocess_blur_radius(&mut self, radius_pixels: f32) -> PyResult<()> {
+        validate_blur_radius(radius_pixels).map_err(PyValueError::new_err)?;
+        if self.postprocess_blur_radius == radius_pixels {
+            return Ok(());
+        }
+        if radius_pixels > 0.0 && self.postprocess_blur.is_none() {
+            self.postprocess_blur = Some(SeparableBlur::new(
+                &self.device,
+                self.config.format,
+                self.config.width,
+                self.config.height,
+                self.offscreen_target.view(),
+            ));
+        }
+        self.postprocess_blur_radius = radius_pixels;
         Ok(())
     }
 
@@ -251,12 +285,9 @@ impl PersistentGpuContext {
                 multiview_mask: None,
             });
         }
-        self.present_blitter.copy(
-            &self.device,
-            &mut encoder,
-            self.offscreen_target.view(),
-            &view,
-        );
+        let presentation_source = self.encode_postprocess(&mut encoder);
+        self.present_blitter
+            .copy(&self.device, &mut encoder, presentation_source, &view);
         self.queue.submit([encoder.finish()]);
         self.queue.present(frame);
         Ok(())
@@ -401,18 +432,27 @@ impl PersistentGpuContext {
             }
         }
 
-        self.present_blitter.copy(
-            &self.device,
-            &mut encoder,
-            self.offscreen_target.view(),
-            &view,
-        );
+        let presentation_source = self.encode_postprocess(&mut encoder);
+        self.present_blitter
+            .copy(&self.device, &mut encoder, presentation_source, &view);
         self.queue.submit([encoder.finish()]);
         self.queue.present(frame);
         if !texts.is_empty() {
             self.text_system.trim();
         }
         Ok((rectangles.len(), texts.len(), images.len(), shapes.len() / 3))
+    }
+
+    fn encode_postprocess<'a>(
+        &'a self,
+        encoder: &mut wgpu::CommandEncoder,
+    ) -> &'a wgpu::TextureView {
+        if self.postprocess_blur_radius > 0.0 {
+            if let Some(blur) = &self.postprocess_blur {
+                return blur.encode(&self.queue, encoder, self.postprocess_blur_radius);
+            }
+        }
+        self.offscreen_target.view()
     }
 
     fn ensure_rectangle_capacity(&mut self, required: usize) -> PyResult<()> {
@@ -529,6 +569,24 @@ impl PyWin32GpuRenderer {
         self.context.offscreen_target.generation()
     }
 
+    #[getter]
+    fn postprocess_blur_radius(&self) -> f32 {
+        self.context.postprocess_blur_radius
+    }
+
+    #[getter]
+    fn blur_target_size(&self) -> Option<(u32, u32)> {
+        self.context.postprocess_blur.as_ref().map(SeparableBlur::size)
+    }
+
+    #[getter]
+    fn blur_generation(&self) -> Option<u64> {
+        self.context
+            .postprocess_blur
+            .as_ref()
+            .map(SeparableBlur::generation)
+    }
+
     fn image_resource_size(&self, resource_id: &str) -> Option<(u32, u32)> {
         self.context.image_system.resource_size(resource_id)
     }
@@ -544,6 +602,10 @@ impl PyWin32GpuRenderer {
     ) -> PyResult<()> {
         self.context
             .configure_presentation(presentation_mode, maximum_frame_latency)
+    }
+
+    fn set_postprocess_blur_radius(&mut self, radius_pixels: f32) -> PyResult<()> {
+        self.context.set_postprocess_blur_radius(radius_pixels)
     }
 
     fn register_image_rgba(

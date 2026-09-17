@@ -5,7 +5,7 @@
 //! into a monolithic backend.
 
 mod image;
-#[cfg(target_os = "windows")]
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 mod postprocess;
 mod renderer;
 mod shape;

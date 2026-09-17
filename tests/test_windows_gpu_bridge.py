@@ -121,6 +121,9 @@ def test_persistent_wgpu_renderer_draws_text_images_clips_and_survives_resize() 
         assert renderer.width == 640
         assert renderer.height == 420
         assert renderer.offscreen_size == (640, 420)
+        assert renderer.postprocess_blur_radius == 0.0
+        assert renderer.blur_target_size is None
+        assert renderer.blur_generation is None
         initial_offscreen_generation = renderer.offscreen_generation
         assert initial_offscreen_generation >= 1
         initial_rectangle_capacity = renderer.rectangle_capacity
@@ -218,6 +221,16 @@ def test_persistent_wgpu_renderer_draws_text_images_clips_and_survives_resize() 
         assert renderer.rectangle_capacity == initial_rectangle_capacity
         assert renderer.image_vertex_capacity == initial_image_capacity
 
+        renderer.set_postprocess_blur_radius(12.0)
+        assert renderer.postprocess_blur_radius == 12.0
+        assert renderer.blur_target_size == (640, 420)
+        initial_blur_generation = renderer.blur_generation
+        assert initial_blur_generation is not None
+        assert initial_blur_generation >= 1
+        assert renderer.draw_scene(rectangles, texts, images) == (2, 2, 1)
+        assert renderer.draw_scene(rectangles, texts, images) == (2, 2, 1)
+        assert renderer.blur_generation == initial_blur_generation
+
         many_rectangles = rectangles * (initial_rectangle_capacity // len(rectangles) + 2)
         assert len(many_rectangles) > initial_rectangle_capacity
         assert renderer.draw_scene(many_rectangles, texts, images) == (
@@ -242,6 +255,7 @@ def test_persistent_wgpu_renderer_draws_text_images_clips_and_survives_resize() 
 
         assert renderer.draw_scene(rectangles, texts, images) == (2, 2, 1)
         assert renderer.offscreen_generation == initial_offscreen_generation
+        assert renderer.blur_generation == initial_blur_generation
         assert renderer.rectangle_capacity == grown_rectangle_capacity
         assert renderer.image_vertex_capacity == grown_image_capacity
 
@@ -251,14 +265,24 @@ def test_persistent_wgpu_renderer_draws_text_images_clips_and_survives_resize() 
         assert renderer.width == 720
         assert renderer.height == 460
         assert renderer.offscreen_size == (720, 460)
+        assert renderer.blur_target_size == (720, 460)
         assert renderer.offscreen_generation == initial_offscreen_generation + 1
+        assert renderer.blur_generation == initial_blur_generation + 1
         resized_offscreen_generation = renderer.offscreen_generation
+        resized_blur_generation = renderer.blur_generation
         assert renderer.draw_scene(rectangles, texts, images) == (2, 2, 1)
         assert renderer.rectangle_capacity == grown_rectangle_capacity
         assert renderer.image_vertex_capacity == grown_image_capacity
 
         renderer.resize(720, 460)
         assert renderer.offscreen_generation == resized_offscreen_generation
+        assert renderer.blur_generation == resized_blur_generation
+        assert renderer.draw_scene(rectangles, texts, images) == (2, 2, 1)
+
+        renderer.set_postprocess_blur_radius(0.0)
+        assert renderer.postprocess_blur_radius == 0.0
+        assert renderer.blur_target_size == (720, 460)
+        assert renderer.blur_generation == resized_blur_generation
         assert renderer.draw_scene(rectangles, texts, images) == (2, 2, 1)
 
         assert renderer.unregister_image("checker") is True
@@ -312,7 +336,7 @@ def test_scenegraph_clipped_text_and_image_reach_real_wgpu_renderer() -> None:
     )
     root.add(panel)
 
-    renderer = WgpuRenderer()
+    renderer = WgpuRenderer(scene_blur_radius=8.0)
     renderer.register_image_rgba("checker", 2, 2, _checker_rgba())
     backend = _isolated_backend("scenegraph")
     app = App("SwirUI GPU Scene Integration", platform_backend=backend, renderer=renderer)

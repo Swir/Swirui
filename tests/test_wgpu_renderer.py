@@ -49,6 +49,12 @@ class FakePersistentContext:
         self.draw_calls: list[tuple[object, ...]] = []
         self.clear_calls: list[tuple[object, ...]] = []
         self.resize_calls: list[tuple[int, int]] = []
+        self.blur_radius_calls: list[float] = []
+        self.postprocess_blur_radius = 0.0
+
+    def set_postprocess_blur_radius(self, radius: float) -> None:
+        self.postprocess_blur_radius = radius
+        self.blur_radius_calls.append(radius)
 
     def register_image_rgba(
         self, resource_id: str, width: int, height: int, rgba: bytes
@@ -485,3 +491,39 @@ def test_wgpu_renderer_reuses_persistent_context_and_resizes_it() -> None:
 
     app.stop()
     assert renderer.persistent_context_count == 0
+
+
+def test_wgpu_renderer_validates_scene_blur_radius() -> None:
+    for invalid in (-0.01, 64.01, float("nan"), float("inf")):
+        try:
+            WgpuRenderer(native_module=FakePersistentNative(), scene_blur_radius=invalid)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError(f"Invalid scene blur radius should fail: {invalid!r}")
+
+
+def test_wgpu_renderer_configures_and_updates_persistent_scene_blur() -> None:
+    native = FakePersistentNative()
+    renderer = WgpuRenderer(native_module=native, scene_blur_radius=12.0)
+    app = App(platform_backend=NullPlatformBackend(), renderer=renderer)
+    window = Window(title="Blurred GPU", width=800, height=500)
+    window.set_scene(_mixed_scene())
+    app.add_window(window)
+
+    app.start()
+
+    context = native.contexts[0]
+    assert context.postprocess_blur_radius == 12.0
+    assert context.blur_radius_calls[0] == 12.0
+
+    renderer.set_scene_blur_radius(20.0)
+    assert renderer.scene_blur_radius == 20.0
+    assert context.postprocess_blur_radius == 20.0
+    assert context.blur_radius_calls[-1] == 20.0
+
+    renderer.set_scene_blur_radius(0.0)
+    assert context.postprocess_blur_radius == 0.0
+    assert context.blur_radius_calls[-1] == 0.0
+
+    app.stop()
