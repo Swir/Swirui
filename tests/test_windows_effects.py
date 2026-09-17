@@ -93,7 +93,8 @@ def test_dynamic_shadow_and_glow_reach_real_persistent_wgpu_batch() -> None:
 
         native_handle = window.native_handle
         assert native_handle is not None
-        first_context = renderer._contexts[native_handle]
+        handle = native_handle.value
+        first_context = renderer._contexts[handle]
 
         window.set_scene(_dynamic_effect_scene(180.0))
         app.invalidate(window)
@@ -102,6 +103,6 @@ def test_dynamic_shadow_and_glow_reach_real_persistent_wgpu_batch() -> None:
         assert renderer.frames_rendered == 2
         assert renderer.last_rectangle_count == 17
         assert renderer.persistent_context_count == 1
-        assert renderer._contexts[native_handle] is first_context
+        assert renderer._contexts[handle] is first_context
     finally:
         app.stop()
