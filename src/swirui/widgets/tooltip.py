@@ -66,6 +66,7 @@ class Tooltip(Widget):
             target.on("pointer_leave", self._on_pointer_leave),
             target.on("focus_gained", self._on_focus_gained),
             target.on("focus_lost", self._on_focus_lost),
+            target.on("invalidated", self._on_target_invalidated),
         ]
 
     @property
@@ -96,7 +97,7 @@ class Tooltip(Widget):
         if normalized == self._show_on_focus:
             return
         self._show_on_focus = normalized
-        self._sync_visibility("show_on_focus")
+        self._sync_visibility()
 
     def show(self) -> None:
         if not self.visible:
@@ -151,23 +152,37 @@ class Tooltip(Widget):
         return root
 
     def _on_pointer_enter(self, _event: Event) -> None:
-        self._target_hovered = True
-        self._sync_visibility("target_pointer_enter")
+        if self._target.enabled and self._target.visible:
+            self._target_hovered = True
+        self._sync_visibility()
 
     def _on_pointer_leave(self, _event: Event) -> None:
         self._target_hovered = False
-        self._sync_visibility("target_pointer_leave")
+        self._sync_visibility()
 
     def _on_focus_gained(self, _event: Event) -> None:
-        self._target_focused = True
-        self._sync_visibility("target_focus_gained")
+        if self._target.enabled and self._target.visible:
+            self._target_focused = True
+        self._sync_visibility()
 
     def _on_focus_lost(self, _event: Event) -> None:
         self._target_focused = False
-        self._sync_visibility("target_focus_lost")
+        self._sync_visibility()
 
-    def _sync_visibility(self, _reason: str) -> None:
-        should_show = self._target_hovered or (self._show_on_focus and self._target_focused)
+    def _on_target_invalidated(self, event: Event) -> None:
+        if event.data.get("reason") not in {"enabled", "visible"}:
+            return
+        if not self._target.enabled or not self._target.visible:
+            self._target_hovered = False
+            self._target_focused = False
+        self._sync_visibility()
+
+    def _sync_visibility(self) -> None:
+        should_show = (
+            self._target.enabled
+            and self._target.visible
+            and (self._target_hovered or (self._show_on_focus and self._target_focused))
+        )
         if should_show != self.visible:
             self.visible = should_show
 
