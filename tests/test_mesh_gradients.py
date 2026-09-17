@@ -125,7 +125,13 @@ def test_mesh_gradient_flows_into_existing_wgpu_path_preparation() -> None:
         kind=SceneNodeKind.GROUP,
         bounds=Rect(0.0, 0.0, 520.0, 340.0),
     )
-    root.add(_four_corner_mesh().to_scene_node("gpu-mesh", Rect(40.0, 50.0, 440.0, 240.0), subdivisions=5))
+    root.add(
+        _four_corner_mesh().to_scene_node(
+            "gpu-mesh",
+            Rect(40.0, 50.0, 440.0, 240.0),
+            subdivisions=5,
+        )
+    )
 
     window = Window(width=520, height=340)
     window.set_scene(Scene(520.0, 340.0, root))
