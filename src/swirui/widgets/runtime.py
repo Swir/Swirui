@@ -28,6 +28,13 @@ class SceneChildPreparer(Protocol):
     ) -> tuple[SceneNode, ...]: ...
 
 
+@runtime_checkable
+class WindowBindable(Protocol):
+    """Optional hook for retained components that need their mounted Window."""
+
+    def bind_window(self, window: Window | None) -> None: ...
+
+
 def compile_component_scene(
     root: Component | None,
     *,
@@ -112,6 +119,7 @@ class WidgetRuntime:
         self.root: Component | None = None
         self.generation = 0
         self._unsubscribers: list[Callable[[], None]] = []
+        self._window_bound: list[WindowBindable] = []
 
     @property
     def mounted(self) -> bool:
@@ -136,6 +144,7 @@ class WidgetRuntime:
         root = self.root
         if root is None:
             return None
+        self._sync_window_bindings()
         self.generation += 1
         scene = compile_component_scene(
             root,
@@ -163,7 +172,24 @@ class WidgetRuntime:
             self.window.set_root(None)
         self.window.set_scene(None)
 
+    def _sync_window_bindings(self) -> None:
+        root = self.root
+        current = (
+            [component for component in root.walk() if isinstance(component, WindowBindable)]
+            if root is not None
+            else []
+        )
+        for bound in tuple(self._window_bound):
+            if not any(bound is item for item in current):
+                bound.bind_window(None)
+        for bindable in current:
+            bindable.bind_window(self.window)
+        self._window_bound = current
+
     def _detach(self) -> None:
+        for bound in tuple(self._window_bound):
+            bound.bind_window(None)
+        self._window_bound.clear()
         for unsubscribe in self._unsubscribers:
             unsubscribe()
         self._unsubscribers.clear()

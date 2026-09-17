@@ -5,11 +5,13 @@ from .base import Widget
 from .button import Button, IconButton
 from .expander import Accordion, Expander
 from .input import Input, PasswordInput, TextArea
+from .modal import Dialog, Modal
 from .progress import ProgressBar, ProgressRing
 from .runtime import (
     SceneChildPreparer,
     SceneRenderable,
     WidgetRuntime,
+    WindowBindable,
     compile_component_scene,
     mount,
 )
@@ -28,12 +30,14 @@ __all__ = [
     "Card",
     "Checkbox",
     "Chip",
+    "Dialog",
     "Expander",
     "Frame",
     "GlassCard",
     "IconButton",
     "Input",
     "Label",
+    "Modal",
     "Panel",
     "PasswordInput",
     "ProgressBar",
@@ -51,6 +55,7 @@ __all__ = [
     "Tooltip",
     "Widget",
     "WidgetRuntime",
+    "WindowBindable",
     "compile_component_scene",
     "mount",
 ]
