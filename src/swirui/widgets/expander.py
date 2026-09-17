@@ -453,7 +453,7 @@ class Accordion(Component):
             super().add(expander)
             self._subscriptions[id(expander)] = expander.on(
                 "expanded_changed",
-                lambda event, item=expander: self._on_expander_changed(item, event),
+                self._on_expander_changed,
             )
             if not self._allow_multiple and expander.expanded:
                 self._collapse_others(expander)
@@ -474,7 +474,10 @@ class Accordion(Component):
         for item in self.items:
             self.remove(item)
 
-    def _on_expander_changed(self, item: Expander, event: Event) -> None:
+    def _on_expander_changed(self, event: Event) -> None:
+        item = event.source
+        if not isinstance(item, Expander) or item.parent is not self:
+            return
         if self._coordinating:
             return
         expanded = bool(event.data.get("expanded"))
