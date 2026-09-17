@@ -3,19 +3,18 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Callable
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
 from swirui.core import AccessibilityRole, Component, Event
 from swirui.platforms import PlatformEvent, PlatformEventKind, PointerButton
-from swirui.rendering.geometry import Color, CornerRadius, Rect
+from swirui.rendering.geometry import Color, CornerRadius, Point, Rect
 from swirui.rendering.scene import SceneNode, SceneNodeKind
 
 from .base import Widget
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
-
     from swirui.window import Window
 
 _VK_RETURN = 0x0D
@@ -167,6 +166,12 @@ class Dialog(Widget):
             raise ValueError("Dialog must belong to the target window root before opening.")
         if self._window is not None and self._window is not window:
             raise RuntimeError("Dialog is already open in another window.")
+        self._validate_open_ancestry()
+        if initial_focus is not None:
+            if not self._belongs_to(self, initial_focus):
+                raise ValueError("initial_focus must belong to the dialog subtree.")
+            if not self._is_focus_candidate_for_open(initial_focus):
+                raise ValueError("initial_focus must be enabled, visible and focusable.")
 
         if self._window is None:
             self._window = window
@@ -321,7 +326,9 @@ class Dialog(Widget):
             or platform_event.y is None
         ):
             return
-        outside_panel = not self.panel_bounds.contains_xy(platform_event.x, platform_event.y)
+        outside_panel = not self.panel_bounds.contains(
+            Point(platform_event.x, platform_event.y)
+        )
         self._scrim_pressed = outside_panel
         if outside_panel:
             event.prevent_default()
@@ -336,7 +343,9 @@ class Dialog(Widget):
         ):
             self._scrim_pressed = False
             return
-        outside_panel = not self.panel_bounds.contains_xy(platform_event.x, platform_event.y)
+        outside_panel = not self.panel_bounds.contains(
+            Point(platform_event.x, platform_event.y)
+        )
         dismiss = self._scrim_pressed and outside_panel and self._dismiss_on_scrim
         self._scrim_pressed = False
         if outside_panel:
@@ -434,6 +443,25 @@ class Dialog(Widget):
             width,
             line_height,
         )
+
+    def _validate_open_ancestry(self) -> None:
+        if not self.enabled:
+            raise ValueError("Dialog must be enabled before opening.")
+        current = self.parent
+        while current is not None:
+            if not current.enabled or not current.visible:
+                raise ValueError("Dialog ancestors must be enabled and visible before opening.")
+            current = current.parent
+
+    def _is_focus_candidate_for_open(self, component: Component) -> bool:
+        if not component.focusable:
+            return False
+        current: Component | None = component
+        while current is not None and current is not self:
+            if not current.enabled or not current.visible:
+                return False
+            current = current.parent
+        return current is self and self.enabled
 
     @staticmethod
     def _translate_subtree(node: SceneNode, *, dx: float, dy: float) -> None:
