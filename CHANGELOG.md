@@ -101,6 +101,10 @@ The project uses semantic versioning where practical during pre-alpha developmen
 - Immutable, composable `ColorFilter` transforms for affine RGBA post-processing, including brightness, contrast, saturation, grayscale, sepia, invert, opacity and hue rotation.
 - Persistent native Rust/wgpu color-filter post-processing with reusable output texture, pipeline, bind group and uniform state after scene/backdrop blur composition.
 - `examples/gpu_color_filters_demo.py` plus real Win32/wgpu color-filter smoke coverage across repeated frames and persistent context reuse.
+- Public `AdaptiveQualityController` resolving `VisualQuality.AUTO` into concrete Performance/Balanced/Quality/Ultra/Cinematic profiles from smoothed cadence and measured renderer cost.
+- Hysteresis, fast sustained-pressure demotion, conservative sustained-headroom promotion and cooldown protection for stable automatic quality without idle-window false positives.
+- Runtime `App.set_visual_quality()`, `effective_visual_quality`, quality diagnostics and `visual_quality_changed` events without native-window recreation.
+- Frame telemetry for renderer duration, frame-budget utilization and configured/effective visual quality, plus `examples/adaptive_quality_demo.py` and focused pressure/headroom/idle regression tests.
 
 ### Changed
 - The wgpu renderer now reports submitted rectangle, path, text and image counts independently.
@@ -127,6 +131,7 @@ The project uses semantic versioning where practical during pre-alpha developmen
 - Final Win32/wgpu presentation can now select the retained separable-blur output without reallocating the blur pipeline or render targets on every frame.
 - Backdrop boundaries now reuse the persistent offscreen scene target and blur pipeline in painter order, and material decoration uses reserved negative z-indices so default-z child content remains sharp, visible and interactive above frosted/acrylic layers.
 - Native color filters run after scene/backdrop blur so one composable affine transform applies consistently to the final rendered scene without rebuilding retained geometry.
+- `VisualQuality.AUTO` now changes quality only when both cadence and measured renderer cost indicate sustained pressure/headroom; fixed profiles remain fixed and direct config changes synchronize at frame boundaries.
 
 ## [0.1.0a1] - 2026-09-16
 
