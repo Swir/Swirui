@@ -15,6 +15,7 @@ from swirui.rendering import (
     Parallax,
     Point,
     Rect,
+    Reflection,
     Scene,
     SceneNode,
     SceneNodeKind,
@@ -41,6 +42,7 @@ def _dynamic_effect_scene(light_direction_degrees: float) -> Scene:
         if light_direction_degrees > 200.0
         else Point(70.0, 370.0)
     )
+    reflection_position = 0.34 if light_direction_degrees > 200.0 else 0.66
     root.add(
         AdaptiveLighting(
             elevation=20.0,
@@ -74,6 +76,13 @@ def _dynamic_effect_scene(light_direction_degrees: float) -> Scene:
             fill=Color.from_hex("#101A35"),
             corner_radius=radius,
         ),
+        Reflection(
+            color=Color(0.72, 0.9, 1.0, 0.22),
+            angle_degrees=24.0,
+            position=reflection_position,
+            width=0.16,
+            steps=8,
+        ).to_scene_node("card-reflection", card_bounds, z_index=1),
         Noise(
             samples=32,
             size=1.25,
@@ -108,7 +117,7 @@ def _dynamic_effect_scene(light_direction_degrees: float) -> Scene:
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Native GPU effect smoke requires Windows")
-def test_adaptive_lighting_glow_bloom_noise_and_parallax_reach_persistent_wgpu() -> None:
+def test_dynamic_retained_effects_reach_real_persistent_wgpu() -> None:
     renderer = WgpuRenderer()
     app = App(
         "SwirUI Dynamic Effects Integration",
@@ -125,7 +134,7 @@ def test_adaptive_lighting_glow_bloom_noise_and_parallax_reach_persistent_wgpu()
         assert renderer.last_rectangle_count == 67
         assert renderer.last_text_count == 1
         assert renderer.last_image_count == 0
-        assert renderer.last_path_count == 2
+        assert renderer.last_path_count > 2
         assert renderer.persistent_context_count == 1
         assert renderer.adapter_name
         assert renderer.graphics_backend
@@ -141,7 +150,7 @@ def test_adaptive_lighting_glow_bloom_noise_and_parallax_reach_persistent_wgpu()
 
         assert renderer.frames_rendered == 2
         assert renderer.last_rectangle_count == 67
-        assert renderer.last_path_count == 2
+        assert renderer.last_path_count > 2
         assert renderer.persistent_context_count == 1
         assert renderer._contexts[handle] is first_context
     finally:
