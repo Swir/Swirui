@@ -36,6 +36,7 @@ def test_frosted_glass_builds_backdrop_border_and_tint_layers() -> None:
     assert border.corner_radius == CornerRadius.uniform(20.0)
     assert border.fill == material.border_color
     assert border.hit_testable is False
+    assert border.z_index < tint.z_index < 0
 
     assert tint.bounds == Rect(22.0, 32.0, 296.0, 176.0)
     assert tint.corner_radius == CornerRadius.uniform(18.0)
@@ -43,7 +44,7 @@ def test_frosted_glass_builds_backdrop_border_and_tint_layers() -> None:
     assert tint.hit_testable is False
 
 
-def test_frosted_glass_decorations_do_not_steal_hits_from_controls() -> None:
+def test_frosted_glass_decorations_stay_behind_default_interactive_children() -> None:
     root = SceneNode("root", SceneNodeKind.GROUP, Rect(0.0, 0.0, 480.0, 320.0))
     glass = FrostedGlass().to_scene_node("glass", Rect(80.0, 60.0, 300.0, 180.0))
     button = SceneNode(
@@ -52,12 +53,18 @@ def test_frosted_glass_decorations_do_not_steal_hits_from_controls() -> None:
         Rect(150.0, 135.0, 140.0, 52.0),
         fill=Color.from_hex("#168DFF"),
         corner_radius=CornerRadius.uniform(12.0),
-        z_index=10,
     )
     glass.add(button)
     root.add(glass)
     scene = Scene(480.0, 320.0, root)
 
+    assert [node.key for node in scene.walk()] == [
+        "root",
+        "glass",
+        "glass:border",
+        "glass:tint",
+        "button",
+    ]
     assert scene.hit_test(Point(180.0, 155.0)) is button
 
 
@@ -92,6 +99,10 @@ def test_acrylic_builds_deterministic_luminosity_and_micro_grain() -> None:
         "acrylic:luminosity",
         "acrylic:grain",
     ]
+    assert [child.z_index for child in first.children] == sorted(
+        child.z_index for child in first.children
+    )
+    assert first.children[-1].z_index < 0
     grain = first.children[-1]
     other_grain = second.children[-1]
     assert grain.kind is SceneNodeKind.GROUP
