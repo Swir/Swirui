@@ -15,6 +15,7 @@ from swirui.core import VisualQuality
 
 from .backdrop import BackdropBlur
 from .geometry import Color, CornerRadius, Rect
+from .noise import _noise_rect
 from .scene import SceneNode, SceneNodeKind
 
 _MAX_MATERIAL_BORDER_WIDTH = 16.0
@@ -118,25 +119,6 @@ def _add_base_material_layers(
         )
     )
     return inner_bounds
-
-
-def _grain_rect(
-    bounds: Rect,
-    *,
-    size: float,
-    sample_index: int,
-    state: int,
-) -> tuple[Rect, int]:
-    state = (1_664_525 * state + 1_013_904_223) & 0xFFFF_FFFF
-    x_unit = state / 4_294_967_296.0
-    state = (1_664_525 * state + 1_013_904_223 + sample_index) & 0xFFFF_FFFF
-    y_unit = state / 4_294_967_296.0
-    travel_x = max(0.0, bounds.width - size)
-    travel_y = max(0.0, bounds.height - size)
-    return (
-        Rect(bounds.x + x_unit * travel_x, bounds.y + y_unit * travel_y, size, size),
-        state,
-    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -279,7 +261,7 @@ class Acrylic:
         state = self.grain_seed & 0xFFFF_FFFF
         dot_radius = CornerRadius.uniform(self.grain_size * 0.5)
         for index in range(self.grain_samples):
-            grain_rect, state = _grain_rect(
+            grain_rect, state = _noise_rect(
                 grain_bounds,
                 size=self.grain_size,
                 sample_index=index,
