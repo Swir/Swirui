@@ -13,6 +13,7 @@ import sys
 from collections.abc import Callable
 from pathlib import Path
 
+from swirui import Window
 from swirui.performance import (
     BenchmarkResult,
     evaluate_budget,
@@ -21,6 +22,7 @@ from swirui.performance import (
     write_report,
 )
 from swirui.rendering import (
+    BackdropBlur,
     Color,
     CornerRadius,
     EffectCache,
@@ -31,6 +33,7 @@ from swirui.rendering import (
     Scene,
     SceneNode,
     SceneNodeKind,
+    WgpuRenderer,
 )
 
 BenchmarkWorkload = Callable[[], object]
@@ -140,6 +143,58 @@ def _cached_effect_build_workload() -> BenchmarkWorkload:
     return workload
 
 
+def _cached_backdrop_payload_workload() -> BenchmarkWorkload:
+    """Guard the unchanged-scene hot path for backdrop/material preparation."""
+
+    width = 1024.0
+    height = 640.0
+    root = SceneNode("root", SceneNodeKind.GROUP, Rect(0.0, 0.0, width, height))
+    fill = Color.from_hex("#163A66")
+    cells = [
+        SceneNode(
+            key=f"backdrop-cell-{index}",
+            kind=SceneNodeKind.RECTANGLE,
+            bounds=Rect(
+                float((index % 16) * 64),
+                float((index // 16) * 36),
+                60.0,
+                32.0,
+            ),
+            fill=fill,
+        )
+        for index in range(256)
+    ]
+    glass = BackdropBlur(radius=24.0).to_scene_node(
+        "benchmark-glass",
+        Rect(192.0, 128.0, 640.0, 360.0),
+        corner_radius=CornerRadius.uniform(28.0),
+        z_index=2,
+    )
+    glass.add(
+        SceneNode(
+            "benchmark-glass-tint",
+            SceneNodeKind.RECTANGLE,
+            Rect(192.0, 128.0, 640.0, 360.0),
+            fill=Color(0.15, 0.55, 1.0, 0.16),
+        )
+    )
+    root.add(*cells, glass)
+    window = Window(width=int(width), height=int(height))
+    window.set_scene(Scene(width, height, root))
+    renderer = WgpuRenderer(native_module=object())
+    expected = renderer._backdrop_payload(window)
+    if expected is None:
+        raise RuntimeError("Backdrop benchmark scene produced no segmented payload.")
+
+    def workload() -> object:
+        payload = renderer._backdrop_payload(window)
+        if payload is not expected:
+            raise RuntimeError("Unchanged backdrop scene missed the prepared-payload cache.")
+        return payload
+
+    return workload
+
+
 def _run_suite(budget_path: Path) -> list[BenchmarkResult]:
     scene = _build_grid_scene()
     budgets = load_budgets(budget_path)
@@ -148,6 +203,7 @@ def _run_suite(budget_path: Path) -> list[BenchmarkResult]:
         ("scene_hit_testing_1024", _hit_test_workload(scene), 40, 8),
         ("reflection_tessellation_96", _reflection_build_workload(), 40, 8),
         ("cached_effect_clone_64", _cached_effect_build_workload(), 80, 12),
+        ("cached_backdrop_payload_256", _cached_backdrop_payload_workload(), 100, 16),
     )
 
     results: list[BenchmarkResult] = []
