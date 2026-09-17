@@ -1,5 +1,6 @@
 """Core building blocks exposed by SwirUI."""
 
+from .accessibility import AccessibilityNode, AccessibilityRole, build_accessibility_tree
 from .component import Component
 from .config import AppConfig, PresentationMode, VisualQuality
 from .events import Event, EventEmitter, EventPhase
@@ -7,6 +8,8 @@ from .logging import configure_logging, get_logger
 from .state import State
 
 __all__ = [
+    "AccessibilityNode",
+    "AccessibilityRole",
     "AppConfig",
     "Component",
     "Event",
@@ -15,6 +18,7 @@ __all__ = [
     "PresentationMode",
     "State",
     "VisualQuality",
+    "build_accessibility_tree",
     "configure_logging",
     "get_logger",
 ]
