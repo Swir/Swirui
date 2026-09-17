@@ -28,6 +28,7 @@ from .widgets import (
     Expander,
     Frame,
     GlassCard,
+    Grid,
     IconButton,
     Input,
     Insets,
@@ -46,6 +47,7 @@ from .widgets import (
     ScrollView,
     Slider,
     SplitView,
+    Stack,
     Switch,
     Text,
     TextArea,
@@ -53,6 +55,7 @@ from .widgets import (
     Tooltip,
     Widget,
     WidgetRuntime,
+    Wrap,
     mount,
 )
 from .window import Window
@@ -79,6 +82,7 @@ __all__ = [
     "Expander",
     "Frame",
     "GlassCard",
+    "Grid",
     "IconButton",
     "Input",
     "Insets",
@@ -98,6 +102,7 @@ __all__ = [
     "ScrollView",
     "Slider",
     "SplitView",
+    "Stack",
     "State",
     "Switch",
     "Text",
@@ -108,6 +113,7 @@ __all__ = [
     "Widget",
     "WidgetRuntime",
     "Window",
+    "Wrap",
     "build_accessibility_tree",
     "mount",
 ]

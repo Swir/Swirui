@@ -12,6 +12,7 @@ from .layout import (
     MainAxisAlignment,
     Row,
 )
+from .layout_panels import Grid, Stack, Wrap
 from .overlays import Dialog, Modal, Notification, Toast
 from .progress import ProgressBar, ProgressRing
 from .runtime import (
@@ -43,6 +44,7 @@ __all__ = [
     "Expander",
     "Frame",
     "GlassCard",
+    "Grid",
     "IconButton",
     "Input",
     "Insets",
@@ -64,6 +66,7 @@ __all__ = [
     "ScrollView",
     "Slider",
     "SplitView",
+    "Stack",
     "Switch",
     "Text",
     "TextArea",
@@ -71,6 +74,7 @@ __all__ = [
     "Tooltip",
     "Widget",
     "WidgetRuntime",
+    "Wrap",
     "compile_component_scene",
     "mount",
 ]

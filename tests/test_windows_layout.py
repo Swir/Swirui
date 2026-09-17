@@ -9,9 +9,11 @@ from swirui import (
     App,
     Button,
     CrossAxisAlignment,
+    Grid,
     Insets,
     Row,
     Window,
+    Wrap,
     mount,
 )
 from swirui.core import Event
@@ -105,5 +107,60 @@ def test_row_layout_routes_arranged_input_in_real_win32_wgpu_session() -> None:
         assert app.render_pending(time.monotonic() + 1.0) == 1
         assert renderer.persistent_context_count == initial_contexts
         assert renderer.frames_rendered >= 2
+    finally:
+        app.stop()
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Layout native smoke requires Windows")
+def test_grid_and_wrap_compile_in_real_win32_wgpu_session() -> None:
+    renderer = WgpuRenderer()
+    backend = _isolated_backend()
+    app = App("SwirUI panel layout smoke", platform_backend=backend, renderer=renderer)
+    window = app.add_window(Window(title="SwirUI Grid + Wrap", width=760, height=420))
+
+    wrapped = Wrap(
+        key="native-wrap",
+        bounds=Rect(0.0, 0.0, 1.0, 1.0),
+        spacing=8.0,
+        run_spacing=6.0,
+    )
+    wrapped.add(
+        Button("One", key="wrap-one", bounds=Rect(0.0, 0.0, 120.0, 40.0)),
+        Button("Two", key="wrap-two", bounds=Rect(0.0, 0.0, 120.0, 40.0)),
+        Button("Three", key="wrap-three", bounds=Rect(0.0, 0.0, 120.0, 40.0)),
+    )
+    grid = Grid(
+        key="native-grid",
+        bounds=Rect(0.0, 0.0, 1.0, 1.0),
+        fill_viewport=True,
+        columns=2,
+        column_weights=(1.0, 2.0),
+        column_spacing=18.0,
+        padding=24.0,
+    )
+    grid.add(
+        Button("Sidebar", key="grid-side", bounds=Rect(0.0, 0.0, 120.0, 48.0)),
+        wrapped,
+    )
+    mount(window, grid)
+
+    try:
+        app.start()
+        assert renderer.frames_rendered == 1
+        assert renderer.persistent_context_count == 1
+        assert window.scene is not None
+
+        nodes = {node.key: node for node in window.scene.walk()}
+        assert nodes["native-grid"].bounds == Rect(0.0, 0.0, 760.0, 420.0)
+        assert nodes["grid-side"].bounds.x == pytest.approx(24.0)
+        assert nodes["native-wrap"].bounds.x > nodes["grid-side"].bounds.right
+        assert nodes["wrap-one"].bounds.x == pytest.approx(nodes["native-wrap"].bounds.x)
+        assert nodes["wrap-three"].bounds.y >= nodes["wrap-one"].bounds.y
+
+        initial_contexts = renderer.persistent_context_count
+        grid.column_weights = (2.0, 1.0)
+        app.invalidate(window)
+        assert app.render_pending(time.monotonic() + 1.0) == 1
+        assert renderer.persistent_context_count == initial_contexts
     finally:
         app.stop()
