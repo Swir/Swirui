@@ -120,6 +120,9 @@ def test_persistent_wgpu_renderer_draws_text_images_clips_and_survives_resize() 
         assert renderer.graphics_backend
         assert renderer.width == 640
         assert renderer.height == 420
+        assert renderer.offscreen_size == (640, 420)
+        initial_offscreen_generation = renderer.offscreen_generation
+        assert initial_offscreen_generation >= 1
         initial_rectangle_capacity = renderer.rectangle_capacity
         initial_image_capacity = renderer.image_vertex_capacity
         assert initial_rectangle_capacity >= 2
@@ -211,6 +214,7 @@ def test_persistent_wgpu_renderer_draws_text_images_clips_and_survives_resize() 
 
         assert renderer.draw_scene(rectangles, texts, images) == (2, 2, 1)
         assert renderer.draw_scene(rectangles, texts, images) == (2, 2, 1)
+        assert renderer.offscreen_generation == initial_offscreen_generation
         assert renderer.rectangle_capacity == initial_rectangle_capacity
         assert renderer.image_vertex_capacity == initial_image_capacity
 
@@ -237,6 +241,7 @@ def test_persistent_wgpu_renderer_draws_text_images_clips_and_survives_resize() 
         assert grown_image_capacity > initial_image_capacity
 
         assert renderer.draw_scene(rectangles, texts, images) == (2, 2, 1)
+        assert renderer.offscreen_generation == initial_offscreen_generation
         assert renderer.rectangle_capacity == grown_rectangle_capacity
         assert renderer.image_vertex_capacity == grown_image_capacity
 
@@ -245,9 +250,16 @@ def test_persistent_wgpu_renderer_draws_text_images_clips_and_survives_resize() 
         renderer.resize(720, 460)
         assert renderer.width == 720
         assert renderer.height == 460
+        assert renderer.offscreen_size == (720, 460)
+        assert renderer.offscreen_generation == initial_offscreen_generation + 1
+        resized_offscreen_generation = renderer.offscreen_generation
         assert renderer.draw_scene(rectangles, texts, images) == (2, 2, 1)
         assert renderer.rectangle_capacity == grown_rectangle_capacity
         assert renderer.image_vertex_capacity == grown_image_capacity
+
+        renderer.resize(720, 460)
+        assert renderer.offscreen_generation == resized_offscreen_generation
+        assert renderer.draw_scene(rectangles, texts, images) == (2, 2, 1)
 
         assert renderer.unregister_image("checker") is True
         assert renderer.image_resource_count == 0
