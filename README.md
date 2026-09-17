@@ -15,7 +15,7 @@
 ![macOS Native](https://img.shields.io/badge/macOS-Cocoa%20native-000000?logo=apple&logoColor=white)
 ![GPU](https://img.shields.io/badge/GPU-wgpu%2030-6E56CF)
 ![Status](https://img.shields.io/badge/status-pre--alpha-7C3AED)
-![Progress](https://img.shields.io/badge/project%20progress-27%25-00BFFF)
+![Progress](https://img.shields.io/badge/project%20progress-29%25-00BFFF)
 
 </div>
 
@@ -23,9 +23,9 @@
 
 ## Project progress
 
-**27% — 0.3 Alpha Visual Engine underway; retained GPU gradients verified**
+**29% — 0.3 Alpha Visual Engine underway; gradients, dynamic shadows, glow and retained bloom verified**
 
-`[█████░░░░░░░░░░░░░░░] 27%`
+`[██████░░░░░░░░░░░░░░] 29%`
 
 **Completed:** `0.1 Alpha — Foundation` ✅ · `0.2 Alpha — Native Window + First Renderer` ✅  
 **Current milestone:** `0.3 Alpha — Visual Engine` 🚧
@@ -56,6 +56,9 @@ SwirUI is currently **pre-alpha**. APIs may change while the native renderer and
 - path-aware hit testing, clipping, cumulative opacity and reusable native shape buffers
 - **immutable multi-stop linear and radial gradients compiled into retained clipped GPU path geometry**
 - **rectangular mesh gradients with bilinear color-lattice sampling and deterministic retained GPU cells**
+- **retained `DropShadow`, `Glow`, `DynamicShadow` and source-driven `Bloom` effects flowing through the persistent GPU rectangle batch**
+- **quality-aware effect budgets spanning Performance / Balanced / Quality / Ultra / Cinematic profiles**
+- **persistent offscreen scene target plus separable GPU scene-blur postprocess on Windows**
 - invalidation-driven `FrameScheduler`
 - backend-neutral `RenderSurface` lifecycle
 - render scheduling connected to `AppConfig.target_fps`
@@ -136,6 +139,7 @@ SwirUI is currently **pre-alpha**. APIs may change while the native renderer and
 - real macOS Cocoa native-window + Retina logical-geometry smoke tests on Python 3.14
 - Windows native + rounded-GPU + path + shaped-text + image + clipping + mixed-DPI + presentation/display + keyboard/system-key smoke tests on Python 3.14
 - **real Win32/wgpu smoke coverage for retained linear, radial and mesh gradients**
+- **real Win32/wgpu smoke coverage for persistent dynamic shadows, glow and source-driven bloom**
 - Ruff, Mypy, coverage and Python 3.11–3.14 CI
 
 ## Native and GPU demos
@@ -170,10 +174,14 @@ python examples/gpu_paths_demo.py
 python examples/gpu_gradients_demo.py
 python examples/gpu_radial_gradients_demo.py
 python examples/gpu_mesh_gradients_demo.py
+python examples/gpu_shadows_demo.py
+python examples/gpu_dynamic_effects_demo.py
+python examples/gpu_bloom_demo.py
+python examples/gpu_scene_blur_demo.py
 python examples/high_refresh_demo.py
 ```
 
-The rectangle demo submits prepared SwirUI rectangles into the persistent Rust/wgpu backend. Filled rectangles are batched into one instanced draw call and per-corner radii are evaluated in the fragment shader with anti-aliased SDF edges. The path demo exercises deterministic convex/concave `Path2D` tessellation and the full `SceneGraph → Python → Rust/wgpu` filled-triangle path with clipping and alpha compositing. The gradient demos exercise multi-stop linear, radial and rectangular color-lattice mesh gradients through the retained path pipeline. The text demo exercises Unicode shaping through glyphon/cosmic-text and a persistent glyph atlas. The image demo generates RGBA pixels in memory, registers them once and reuses cached native textures; byte-identical image registrations under different logical ids share one retained native texture. The high-refresh demo follows the active display refresh rate automatically. Scene geometry remains authored in logical DIPs while native Win32 input and persistent GPU surfaces operate in physical pixels.
+The rectangle demo submits prepared SwirUI rectangles into the persistent Rust/wgpu backend. Filled rectangles are batched into one instanced draw call and per-corner radii are evaluated in the fragment shader with anti-aliased SDF edges. The path demo exercises deterministic convex/concave `Path2D` tessellation and the full `SceneGraph → Python → Rust/wgpu` filled-triangle path with clipping and alpha compositing. The gradient demos exercise multi-stop linear, radial and rectangular color-lattice mesh gradients through the retained path pipeline. The dynamic-effects and bloom demos exercise retained shadows, glow and explicit source-driven bloom with quality-aware layer budgets. The scene-blur demo exercises the persistent offscreen target and separable full-scene GPU postprocess; backdrop-only/background blur remains a separate open roadmap item. The text demo exercises Unicode shaping through glyphon/cosmic-text and a persistent glyph atlas. The image demo generates RGBA pixels in memory, registers them once and reuses cached native textures; byte-identical image registrations under different logical ids share one retained native texture. The high-refresh demo follows the active display refresh rate automatically. Scene geometry remains authored in logical DIPs while native Win32 input and persistent GPU surfaces operate in physical pixels.
 
 The Linux backend currently provides native X11 windows and normalized input/lifecycle events. The macOS backend provides native Cocoa/AppKit windows, display/Retina scaling and normalized input/lifecycle events. GPU/wgpu presentation on Linux and macOS, plus Wayland support, are not claimed yet.
 
@@ -245,10 +253,12 @@ Renderer Layer
         ├── instanced anti-aliased rounded rectangles ✅
         ├── filled convex/concave Path2D triangles ✅
         ├── retained linear / radial / mesh gradients ✅
+        ├── retained shadows / glow / source bloom ✅
+        ├── persistent offscreen target + separable scene blur ✅ Windows
         ├── shaped text + persistent glyph atlas ✅
         ├── persistent content-addressed RGBA image cache ✅
         ├── hierarchical clipping / opacity compositing ✅
-        └── effects / shaders
+        └── advanced materials / custom shaders 🚧
         │
 Native Core
         │
@@ -290,7 +300,7 @@ SwirUI Framework
 
 The 0.2 Alpha native/runtime gate is verified complete. Windows has the persistent wgpu renderer and integrated mixed-scene native gate; Linux has a real direct X11 native window/input path under Xvfb; macOS has a direct Cocoa/AppKit native window/input path with Retina logical-geometry verification. Cross-platform GPU presentation beyond Windows remains future work and is not implied by the native-window milestone.
 
-0.3 is now active. Its first completed visual-engine family is retained **linear / radial / mesh gradients**, all flowing through the clipped, HiDPI-aware native GPU path pipeline and protected by deterministic tests plus real Win32/wgpu smoke coverage. The next high-impact work is reusable effect infrastructure for shadows, glass, blur, glow and quality-aware effect caching. Native accessibility adapters, Wayland/Linux expansion, macOS GPU presentation and continued measured performance work remain important cross-cutting follow-ups without reopening the completed 0.2 gate.
+0.3 is now active. Retained **linear / radial / mesh gradients**, **dynamic shadows**, **glow** and explicit **source-driven bloom** are implemented and verified through the clipped, HiDPI-aware persistent GPU scene pipeline, including real Win32/wgpu smoke coverage. A persistent offscreen target and separable full-scene blur postprocess are also online as infrastructure, but backdrop-only/background blur is not claimed complete yet. The next high-impact work is a backdrop-aware material/effect composition path for background blur, glass and acrylic, followed by quality-aware effect caching. Native accessibility adapters, Wayland/Linux expansion, macOS GPU presentation and continued measured performance work remain important cross-cutting follow-ups without reopening the completed 0.2 gate.
 
 See **[ROADMAP.md](ROADMAP.md)** for the full development plan.
 
@@ -321,6 +331,7 @@ Windows wgpu clear/present smoke test
 Windows persistent rounded-rectangle GPU draw smoke test
 Windows filled Path2D SceneGraph → Python → Rust/wgpu smoke test
 Windows retained linear / radial / mesh gradient GPU smoke tests
+Windows retained dynamic-shadow / glow / bloom GPU smoke test
 Windows shaped-text SceneGraph → Python → Rust/wgpu smoke test
 Windows image-resource SceneGraph → Python → Rust/wgpu smoke test
 Windows clipped mixed-scene GPU smoke test
