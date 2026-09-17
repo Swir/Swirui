@@ -262,7 +262,7 @@ def test_retained_ranges_and_progress_render_in_persistent_wgpu_context() -> Non
         _send_click(
             user32,
             hwnd,
-            max(1, round(300.0 * window.scale)),
+            max(1, round(291.0 * window.scale)),
             max(1, round(126.0 * window.scale)),
         )
         app.process_events()
