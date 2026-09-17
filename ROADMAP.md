@@ -4,9 +4,9 @@
 
 ## Project progress
 
-**Overall completion: 52%**
+**Overall completion: 53%**
 
-`[██████████░░░░░░░░░░] 52%`
+`[███████████░░░░░░░░░] 53%`
 
 Progress is based on implemented and verified roadmap work. Ideas, mockups and unfinished prototypes do not increase the percentage.
 
@@ -141,7 +141,7 @@ The Visual Engine gate is complete with verified retained effects/materials, per
 - [x] Card / GlassCard
 - [x] Panel / Frame
 - [x] ScrollView
-- [ ] Expander / Accordion
+- [x] Expander / Accordion
 - [ ] SplitView
 - [ ] Modal / Dialog
 - [ ] Toast / Notification surface
@@ -412,6 +412,7 @@ AI output must remain ordinary, editable SwirUI code.
 - [x] Routed component input propagation tests
 - [x] Widget interaction tests
 - [x] Windows retained ScrollView + persistent wgpu smoke test
+- [x] Windows retained Expander / Accordion + persistent wgpu smoke test
 - [ ] Screenshot tests
 - [ ] Visual regression tests
 - [x] Accessibility tests
