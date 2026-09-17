@@ -29,6 +29,7 @@ class AccessibilityRole(StrEnum):
     MENU = "menu"
     MENU_ITEM = "menu_item"
     PASSWORD_BOX = "password_box"
+    PROGRESS_BAR = "progress_bar"
     RADIO = "radio"
     SLIDER = "slider"
     SWITCH = "switch"
@@ -48,6 +49,7 @@ class AccessibilityNode:
     focusable: bool
     focused: bool
     checked: bool | None = None
+    value: str | None = None
     children: tuple[AccessibilityNode, ...] = ()
 
     def find(self, key: str) -> AccessibilityNode | None:
@@ -90,5 +92,6 @@ def build_accessibility_tree(
         focusable=root.focusable,
         focused=root is focused,
         checked=root.accessible_checked,
+        value=root.accessible_value,
         children=children,
     )
