@@ -16,7 +16,10 @@ from swirui.rendering import Rect
 from swirui.widgets import compile_component_scene
 
 
-def _window_with_dialog(*, accept_on_enter: bool = False) -> tuple[Window, Component, Button, Dialog, Button, Button]:
+def _window_with_dialog(
+    *,
+    accept_on_enter: bool = False,
+) -> tuple[Window, Component, Button, Dialog, Button, Button]:
     root = Component("root", key="root")
     outside = Button("Outside", key="outside", bounds=Rect(20.0, 20.0, 120.0, 40.0))
     dialog = Dialog(
