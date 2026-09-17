@@ -12,9 +12,10 @@
 ![Python](https://img.shields.io/badge/Python-3.11%20%7C%203.12%20%7C%203.13%20%7C%203.14-3776AB?logo=python&logoColor=white)
 ![Windows Native](https://img.shields.io/badge/Windows-Win32%20native-0078D4?logo=windows11&logoColor=white)
 ![Linux Native](https://img.shields.io/badge/Linux-X11%20native-FCC624?logo=linux&logoColor=black)
+![macOS Native](https://img.shields.io/badge/macOS-Cocoa%20native-000000?logo=apple&logoColor=white)
 ![GPU](https://img.shields.io/badge/GPU-wgpu%2030-6E56CF)
 ![Status](https://img.shields.io/badge/status-pre--alpha-7C3AED)
-![Progress](https://img.shields.io/badge/project%20progress-25%25-00BFFF)
+![Progress](https://img.shields.io/badge/project%20progress-26%25-00BFFF)
 
 </div>
 
@@ -22,12 +23,12 @@
 
 ## Project progress
 
-**25% — 0.2 Alpha: Native Window + First Renderer in progress**
+**26% — 0.2 Alpha verified complete; 0.3 Alpha Visual Engine is next**
 
-`[█████░░░░░░░░░░░░░░░] 25%`
+`[█████░░░░░░░░░░░░░░░] 26%`
 
-**Completed:** `0.1 Alpha — Foundation` ✅  
-**Current milestone:** `0.2 Alpha — Native Window + First Renderer` 🚧
+**Completed:** `0.1 Alpha — Foundation` ✅ · `0.2 Alpha — Native Window + First Renderer` ✅  
+**Current milestone:** `0.3 Alpha — Visual Engine` 🚧
 
 Progress only increases for implemented and verified roadmap work. Ideas, mockups and unfinished experiments do not count.
 
@@ -69,6 +70,12 @@ SwirUI is currently **pre-alpha**. APIs may change while the native renderer and
 - normalized X11 resize, focus, pointer, keyboard, text-input and WM_DELETE_WINDOW close events
 - Linux automatically selects X11 when `DISPLAY` is available and retains the headless backend otherwise
 - X11 Tab / Shift+Tab key normalization compatible with SwirUI's keyboard-focus traversal
+- **direct native macOS Cocoa/AppKit backend via Python `ctypes` + Objective-C runtime**
+- real NSWindow create/show/title/resize/hide/destroy lifecycle verified on macOS CI
+- CoreGraphics display discovery with primary-display, backing-scale and refresh-rate metadata
+- normalized Cocoa pointer, keyboard, text-input, focus, resize and close events
+- Retina-safe physical-pixel ↔ Cocoa-point conversion that preserves public logical-DIP geometry
+- Cocoa display/scale transitions normalized into the same backend-neutral display and DPI event contract
 - **DPI-aware decorated-window sizing that preserves the requested renderable client area exactly**
 - **exact physical client-area dimensions across creation and programmatic resize**
 - **logical client geometry preserved across Win32 DPI transitions**
@@ -124,6 +131,7 @@ SwirUI is currently **pre-alpha**. APIs may change while the native renderer and
 - **integrated real-Windows 0.2 gate covering mixed GPU shapes/text/images/paths, exact client resize, persistent context reuse and routed native pointer/focus input**
 - ABI3 native wheel build for Python 3.11+
 - real Linux X11 native-window smoke tests on Python 3.14
+- real macOS Cocoa native-window + Retina logical-geometry smoke tests on Python 3.14
 - Windows native + rounded-GPU + path + shaped-text + image + clipping + mixed-DPI + presentation/display + keyboard/system-key smoke tests on Python 3.14
 - Ruff, Mypy, coverage and Python 3.11–3.14 CI
 
@@ -161,7 +169,7 @@ python examples/high_refresh_demo.py
 
 The rectangle demo submits prepared SwirUI rectangles into the persistent Rust/wgpu backend. Filled rectangles are batched into one instanced draw call and per-corner radii are evaluated in the fragment shader with anti-aliased SDF edges. The path demo exercises deterministic convex/concave `Path2D` tessellation and the full `SceneGraph → Python → Rust/wgpu` filled-triangle path with clipping and alpha compositing. The text demo exercises Unicode shaping through glyphon/cosmic-text and a persistent glyph atlas. The image demo generates RGBA pixels in memory, registers them once and reuses cached native textures; byte-identical image registrations under different logical ids share one retained native texture. The high-refresh demo follows the active display refresh rate automatically. Scene geometry remains authored in logical DIPs while native Win32 input and persistent GPU surfaces operate in physical pixels.
 
-The Linux backend currently provides native X11 windows and normalized input/lifecycle events. GPU/wgpu presentation on Linux and Wayland support are not claimed yet.
+The Linux backend currently provides native X11 windows and normalized input/lifecycle events. The macOS backend provides native Cocoa/AppKit windows, display/Retina scaling and normalized input/lifecycle events. GPU/wgpu presentation on Linux and macOS, plus Wayland support, are not claimed yet.
 
 ## Foundation API
 
@@ -190,7 +198,7 @@ counter.set(1)
 app.run()
 ```
 
-When the native GPU extension is installed on Windows, `App()` selects the wgpu renderer automatically. Explicit renderer injection remains available for tests and custom backends.
+When the native GPU extension is installed on Windows, `App()` selects the wgpu renderer automatically. Explicit renderer injection remains available for tests and custom backends. Linux/X11 and macOS/Cocoa currently provide native window/input backends while retaining the headless renderer until their wgpu presentation paths are implemented and verified.
 
 ## Architecture
 
@@ -207,7 +215,8 @@ SwirUI Runtime
         │
         ├── Native Platform Backends
         │     ├── Win32 backend ✅
-        │     └── Linux X11 backend ✅ window/input
+        │     ├── Linux X11 backend ✅ window/input
+        │     └── macOS Cocoa backend ✅ window/input/Retina
         ├── exact DPI-aware Win32 client geometry ✅
         ├── logical-DIP ↔ physical-pixel boundary ✅
         ├── per-window active display + scale + refresh tracking ✅
@@ -270,13 +279,11 @@ SwirUI Framework
 └── SwirUI Marketplace
 ```
 
-## Current 0.2 Alpha focus
+## Current milestone: 0.3 Alpha — Visual Engine
 
-The native Windows foundation, exact DPI-aware client geometry, persistent wgpu renderer, rounded and general filled GPU shapes, shaped GPU text, persistent content-addressed GPU images, hierarchical clipping/compositing, routed pointer/keyboard input, keyboard-only Tab traversal, focus healing, explicit present-mode policy, robust logical-DIP/physical-pixel HiDPI handling, multi-monitor discovery and display-aware high-refresh pacing are verified. A real Windows integration gate exercises the mixed GPU scene, exact resize behavior, persistent context reuse and native routed input together. Retained-runtime performance budgets and the first backend-neutral accessibility semantic contract are also verified. Cross-platform native-window expansion has started with a direct X11 backend whose real window lifecycle and normalized input path are exercised under Xvfb. The largest remaining 0.2 hardening work is:
+The 0.2 Alpha native/runtime gate is now verified complete. Windows has the persistent wgpu renderer and integrated mixed-scene native gate; Linux has a real direct X11 native window/input path under Xvfb; macOS has a direct Cocoa/AppKit native window/input path with Retina logical-geometry verification. Cross-platform GPU presentation beyond Windows remains future work and is not implied by the native-window milestone.
 
-1. native accessibility adapters / screen-reader integration
-2. macOS native backend and continued Linux platform expansion beyond X11 window/input
-3. continued measured retained-runtime/input optimization under CI budgets
+The next milestone is the Visual Engine. Its first high-impact work will build reusable GPU visual-effect primitives on top of the now-verified renderer foundation, beginning with gradients/material composition and the effect infrastructure needed for glass, blur, glow, shadows and quality profiles. Native accessibility adapters, Wayland/Linux expansion, macOS GPU presentation and continued measured performance work remain important cross-cutting follow-ups without reopening the completed 0.2 gate.
 
 See **[ROADMAP.md](ROADMAP.md)** for the full development plan.
 
@@ -297,6 +304,7 @@ accessibility semantic-tree tests
 cargo check
 cargo test
 Linux real-X11 native-window smoke test under Xvfb
+macOS real-Cocoa native-window + Retina logical-geometry smoke test
 Windows native smoke test
 Windows integrated 0.2 mixed-scene + exact-client + routed-input gate
 Windows active-display / refresh-rate mapping smoke test
