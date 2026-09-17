@@ -13,7 +13,7 @@
 ![Windows Native](https://img.shields.io/badge/Windows-Win32%20native-0078D4?logo=windows11&logoColor=white)
 ![GPU](https://img.shields.io/badge/GPU-wgpu%2030-6E56CF)
 ![Status](https://img.shields.io/badge/status-pre--alpha-7C3AED)
-![Progress](https://img.shields.io/badge/project%20progress-22%25-00BFFF)
+![Progress](https://img.shields.io/badge/project%20progress-24%25-00BFFF)
 
 </div>
 
@@ -21,9 +21,9 @@
 
 ## Project progress
 
-**22% — 0.2 Alpha: Native Window + First Renderer in progress**
+**24% — 0.2 Alpha: Native Window + First Renderer in progress**
 
-`[████░░░░░░░░░░░░░░░░] 22%`
+`[█████░░░░░░░░░░░░░░░] 24%`
 
 **Completed:** `0.1 Alpha — Foundation` ✅  
 **Current milestone:** `0.2 Alpha — Native Window + First Renderer` 🚧
@@ -69,6 +69,7 @@ SwirUI is currently **pre-alpha**. APIs may change while the native renderer and
 - **DPI-aware native minimum-track sizing through `WM_GETMINMAXINFO`**
 - native Windows event pump
 - normalized close, resize, focus, mouse, keyboard and text-input events
+- **normalized Win32 ordinary and system-key messages with Shift/Ctrl/Alt/Meta state captured at dispatch time**
 - **Win32 multi-monitor enumeration with virtual-desktop geometry, work areas, per-display scale and refresh rate**
 - **per-window active-display mapping plus normalized movement/display-change transitions**
 - **logical-DIP public window and SceneGraph geometry with explicit logical ↔ physical conversion helpers**
@@ -106,6 +107,8 @@ SwirUI is currently **pre-alpha**. APIs may change while the native renderer and
 - routed pointer input through **capture → target → bubble** phases
 - pointer target/path enrichment plus `pointer_enter` / `pointer_leave` transitions
 - **focusable component contract with pointer-down focus handoff and deterministic focus traversal**
+- **Tab / Shift+Tab keyboard-only traversal with hidden/disabled ancestry pruning and stale-focus healing**
+- **preventable framework default actions through `Event.prevent_default()` without stopping propagation**
 - **routed keyboard and text-input events through the focused component path**
 - **backend-neutral accessibility roles and immutable semantic-tree snapshots**
 - accessible names/descriptions plus enabled, focusable and focused semantic state with hidden-subtree pruning
@@ -114,7 +117,7 @@ SwirUI is currently **pre-alpha**. APIs may change while the native renderer and
 - median / p95 / worst-case / throughput benchmark reporting with machine-readable CI artifacts
 - **integrated real-Windows 0.2 gate covering mixed GPU shapes/text/images/paths, exact client resize, persistent context reuse and routed native pointer/focus input**
 - ABI3 native wheel build for Python 3.11+
-- Windows native + rounded-GPU + path + shaped-text + image + clipping + mixed-DPI + presentation/display smoke tests on Python 3.14
+- Windows native + rounded-GPU + path + shaped-text + image + clipping + mixed-DPI + presentation/display + keyboard/system-key smoke tests on Python 3.14
 - Ruff, Mypy, coverage and Python 3.11–3.14 CI
 
 ## Native and GPU demos
@@ -206,7 +209,7 @@ SwirUI Runtime
         ├── Render Surface lifecycle ✅
         ├── display-aware deadline Frame Scheduler ✅
         ├── pointer capture / target / bubble routing ✅
-        └── focused keyboard / text-input routing ✅
+        └── focused keyboard / text-input routing + Tab traversal ✅
         │
 Renderer Layer
         │
@@ -259,9 +262,9 @@ SwirUI Framework
 
 ## Current 0.2 Alpha focus
 
-The native Windows foundation, exact DPI-aware client geometry, persistent wgpu renderer, rounded and general filled GPU shapes, shaped GPU text, persistent content-addressed GPU images, hierarchical clipping/compositing, routed pointer/keyboard input, explicit present-mode policy, robust logical-DIP/physical-pixel HiDPI handling, multi-monitor discovery and display-aware high-refresh pacing are verified. A real Windows integration gate now exercises the mixed GPU scene, exact resize behavior, persistent context reuse and native routed input together. Retained-runtime performance budgets and the first backend-neutral accessibility semantic contract are also verified. The largest remaining 0.2 hardening work is:
+The native Windows foundation, exact DPI-aware client geometry, persistent wgpu renderer, rounded and general filled GPU shapes, shaped GPU text, persistent content-addressed GPU images, hierarchical clipping/compositing, routed pointer/keyboard input, keyboard-only Tab traversal, focus healing, explicit present-mode policy, robust logical-DIP/physical-pixel HiDPI handling, multi-monitor discovery and display-aware high-refresh pacing are verified. A real Windows integration gate now exercises the mixed GPU scene, exact resize behavior, persistent context reuse and native routed input together. Retained-runtime performance budgets and the first backend-neutral accessibility semantic contract are also verified. The largest remaining 0.2 hardening work is:
 
-1. deeper focus management, keyboard-only navigation and native accessibility adapters
+1. native accessibility adapters / screen-reader integration
 2. continued measured retained-runtime/input optimization under CI budgets
 3. cross-platform native backend expansion after the Windows gate is hardened
 
@@ -287,6 +290,7 @@ Windows native smoke test
 Windows integrated 0.2 mixed-scene + exact-client + routed-input gate
 Windows active-display / refresh-rate mapping smoke test
 Windows WM_DISPLAYCHANGE / WM_DPICHANGED normalization smoke tests
+Windows keyboard / system-key normalization smoke test
 Windows wgpu clear/present smoke test
 Windows persistent rounded-rectangle GPU draw smoke test
 Windows filled Path2D SceneGraph → Python → Rust/wgpu smoke test
@@ -296,7 +300,7 @@ Windows clipped mixed-scene GPU smoke test
 Windows mixed-DPI logical-DIP → physical-GPU smoke test
 Windows presentation-policy reconfiguration smoke test
 Display-aware high-refresh runtime pacing tests
-Routed keyboard focus / text-input tests
+Routed keyboard focus / text-input / preventable Tab traversal tests
 ```
 
 SwirUI will not claim to outperform another framework without reproducible measurements. The first CI guardrails cover retained SceneGraph traversal and pointer hit testing over a 1024-node scene. Planned expansion includes startup time, RAM, CPU/GPU usage, frame time, input latency, component creation, large lists and animation performance.
