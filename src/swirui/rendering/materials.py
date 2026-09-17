@@ -34,7 +34,8 @@ def _validate_material_geometry(*, border_width: float, grain_size: float | None
         raise ValueError("Material border_width must be finite.")
     if not 0.0 <= border_width <= _MAX_MATERIAL_BORDER_WIDTH:
         raise ValueError(
-            f"Material border_width must be between 0 and {_MAX_MATERIAL_BORDER_WIDTH} logical DIPs."
+            "Material border_width must be between 0 and "
+            f"{_MAX_MATERIAL_BORDER_WIDTH} logical DIPs."
         )
     if grain_size is not None:
         if not math.isfinite(grain_size):
@@ -250,7 +251,11 @@ class Acrylic:
             inner_radius.bottom_left,
         )
         grain_bounds = inner_bounds
-        if edge_guard > 0.0 and inner_bounds.width > edge_guard * 2.0 and inner_bounds.height > edge_guard * 2.0:
+        if (
+            edge_guard > 0.0
+            and inner_bounds.width > edge_guard * 2.0
+            and inner_bounds.height > edge_guard * 2.0
+        ):
             grain_bounds = Rect(
                 inner_bounds.x + edge_guard,
                 inner_bounds.y + edge_guard,
