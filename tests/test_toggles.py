@@ -107,7 +107,8 @@ def test_switch_keyboard_activation_updates_knob_and_semantics() -> None:
     )
     root.add(switch)
     mount(window, root)
-    assert window.focus_component(switch) is True
+    window.focus_component(switch)
+    assert window.focused_component is switch
     assert window.scene is not None
     before = _node(window.scene, "refresh:knob").bounds.x
 
