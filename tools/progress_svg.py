@@ -1,8 +1,9 @@
 """Generate and verify SwirUI progress SVGs from the authoritative ROADMAP.md.
 
-The established weighted model is preserved: verified work through 0.3 contributes the
-41% baseline recorded before 0.4 began, then each verified 0.4 widget group contributes
-one percentage point. Release readiness is intentionally not inferred from project progress.
+The established weighted model is preserved across milestone boundaries: verified work
+through 0.4 contributes the 56% baseline recorded when Core Widgets completed, then each
+verified 0.5 layout group contributes one percentage point. Release readiness is intentionally
+not inferred from project progress.
 """
 
 from __future__ import annotations
@@ -24,11 +25,11 @@ MINI_PATH = ROOT / "assets" / "readme" / "progress-mini.svg"
 TEMPLATE_PATH = ROOT / "assets" / "readme" / "progress-template.svg"
 
 PROJECT = "SwirUI"
-CURRENT_SCOPE = "0.4 Alpha — Core Widgets"
-BASE_PROJECT_PERCENT = Decimal("41")
+CURRENT_SCOPE = "0.5 Alpha — Layout Engine"
+BASE_PROJECT_PERCENT = Decimal("56")
 VERIFIED_GROUP_WEIGHT = Decimal("1")
-EXPECTED_GROUPS = 15
-COUNTER_LABEL = "widget groups verified"
+EXPECTED_GROUPS = 12
+COUNTER_LABEL = "layout groups verified"
 
 OVERALL_RE = re.compile(r"\*\*Overall completion: (?P<percent>\d+(?:\.\d+)?)%\*\*")
 CHECKBOX_RE = re.compile(r"^- \[(?P<state>[ xX])\] ", re.MULTILINE)

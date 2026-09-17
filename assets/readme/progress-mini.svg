@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="900" height="72" viewBox="0 0 900 72" role="img" aria-labelledby="title desc">
-  <title id="title">SwirUI roadmap progress — 56.0%</title>
-  <desc id="desc">SwirUI 0.4 Alpha — Core Widgets: 56.0%, COMPLETE, 15 / 15 widget groups verified.</desc>
+  <title id="title">SwirUI roadmap progress — 59.0%</title>
+  <desc id="desc">SwirUI 0.5 Alpha — Layout Engine: 59.0%, IN PROGRESS, 3 / 12 layout groups verified.</desc>
   <defs>
     <linearGradient id="progressGradient" x1="0" y1="0" x2="1" y2="0">
       <stop offset="0" stop-color="#0088FF"/>
@@ -13,9 +13,9 @@
     </style>
   </defs>
   <rect x="1" y="1" width="898" height="70" rx="14" fill="#02050A" stroke="#164D6B" stroke-width="2"/>
-<text x="18" y="24" class="scope">0.4 Alpha — Core Widgets</text>
-  <text x="882" y="24" text-anchor="end" class="percent">56.0%</text>
-  <text x="882" y="60" text-anchor="end" class="meta">COMPLETE • 15 / 15 widget groups verified</text>
+<text x="18" y="24" class="scope">0.5 Alpha — Layout Engine</text>
+  <text x="882" y="24" text-anchor="end" class="percent">59.0%</text>
+  <text x="882" y="60" text-anchor="end" class="meta">IN PROGRESS • 3 / 12 layout groups verified</text>
   <rect data-role="progress-track" x="170" y="42" width="700" height="10" rx="5" fill="#07111C" stroke="#164D6B" stroke-width="1"/>
-  <rect data-role="progress-fill" x="170" y="42" width="392" height="10" rx="5" fill="url(#progressGradient)"/>
+  <rect data-role="progress-fill" x="170" y="42" width="413" height="10" rx="5" fill="url(#progressGradient)"/>
 </svg>
