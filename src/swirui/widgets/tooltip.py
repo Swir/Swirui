@@ -112,7 +112,12 @@ class Tooltip(Widget):
                     target.on("focus_lost", self._on_target_focus_lost),
                 )
             )
-        self._target_unsubscribers.append(target.on("invalidated", self._on_target_invalidated))
+        component: Component | None = target
+        while component is not None:
+            self._target_unsubscribers.append(
+                component.on("invalidated", self._on_target_availability_invalidated)
+            )
+            component = component.parent
         return self
 
     def detach(self) -> None:
@@ -197,7 +202,7 @@ class Tooltip(Widget):
         self._focus_open = False
         self._sync_target_visibility()
 
-    def _on_target_invalidated(self, event: Event) -> None:
+    def _on_target_availability_invalidated(self, event: Event) -> None:
         if event.data.get("reason") not in {"enabled", "visible"}:
             return
         if not self._target_available():
