@@ -6,10 +6,10 @@ import pytest
 from swirui import App, Window
 from swirui.platforms.windows import Win32PlatformBackend
 from swirui.rendering import (
+    AdaptiveLighting,
     Bloom,
     Color,
     CornerRadius,
-    DynamicShadow,
     Glow,
     Noise,
     Rect,
@@ -35,15 +35,18 @@ def _dynamic_effect_scene(light_direction_degrees: float) -> Scene:
     )
     radius = CornerRadius.uniform(28.0)
     root.add(
-        DynamicShadow(
+        AdaptiveLighting(
             elevation=20.0,
-            color=Color(0.02, 0.12, 0.28, 0.38),
             light_direction_degrees=light_direction_degrees,
             light_altitude_degrees=48.0,
-            softness=1.5,
+            shadow_color=Color(0.02, 0.12, 0.28, 0.38),
+            highlight_color=Color(0.48, 0.84, 1.0, 0.18),
+            shadow_softness=1.5,
+            highlight_softness=0.65,
+            highlight_offset_ratio=0.30,
             spread=2.0,
             steps=10,
-        ).to_scene_node("card-shadow", card_bounds, corner_radius=radius),
+        ).to_scene_node("card-lighting", card_bounds, corner_radius=radius),
         Glow(
             color=Color(0.0, 0.58, 1.0, 0.26),
             blur_radius=18.0,
@@ -84,7 +87,7 @@ def _dynamic_effect_scene(light_direction_degrees: float) -> Scene:
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Native GPU effect smoke requires Windows")
-def test_dynamic_shadow_glow_bloom_and_noise_reach_real_persistent_wgpu_batch() -> None:
+def test_adaptive_lighting_glow_bloom_and_noise_reach_real_persistent_wgpu_batch() -> None:
     renderer = WgpuRenderer()
     app = App(
         "SwirUI Dynamic Effects Integration",
@@ -98,7 +101,7 @@ def test_dynamic_shadow_glow_bloom_and_noise_reach_real_persistent_wgpu_batch() 
     try:
         app.start()
         assert renderer.frames_rendered == 1
-        assert renderer.last_rectangle_count == 57
+        assert renderer.last_rectangle_count == 67
         assert renderer.last_text_count == 1
         assert renderer.last_image_count == 0
         assert renderer.last_path_count == 0
@@ -116,7 +119,7 @@ def test_dynamic_shadow_glow_bloom_and_noise_reach_real_persistent_wgpu_batch() 
         assert app.render_pending(time.monotonic() + 1.0) == 1
 
         assert renderer.frames_rendered == 2
-        assert renderer.last_rectangle_count == 57
+        assert renderer.last_rectangle_count == 67
         assert renderer.persistent_context_count == 1
         assert renderer._contexts[handle] is first_context
     finally:
