@@ -46,7 +46,6 @@ class BackdropBlur:
         key: str,
         bounds: Rect,
         *,
-        opacity: float = 1.0,
         z_index: int = 0,
         clip_children: bool = True,
     ) -> SceneNode:
@@ -56,13 +55,10 @@ class BackdropBlur:
             raise ValueError("Backdrop blur scene keys cannot be empty.")
         if bounds.width <= 0.0 or bounds.height <= 0.0:
             raise ValueError("Backdrop blur bounds must have positive dimensions.")
-        if not 0.0 <= opacity <= 1.0:
-            raise ValueError("Backdrop blur opacity must be between 0.0 and 1.0.")
         return SceneNode(
             key=key,
             kind=SceneNodeKind.BACKDROP_BLUR,
             bounds=bounds,
-            opacity=opacity,
             z_index=z_index,
             corner_radius=self.corner_radius,
             blur_radius=self.radius,
