@@ -47,6 +47,7 @@ class AccessibilityNode:
     enabled: bool
     focusable: bool
     focused: bool
+    checked: bool | None = None
     children: tuple[AccessibilityNode, ...] = ()
 
     def find(self, key: str) -> AccessibilityNode | None:
@@ -88,5 +89,6 @@ def build_accessibility_tree(
         enabled=root.enabled,
         focusable=root.focusable,
         focused=root is focused,
+        checked=root.accessible_checked,
         children=children,
     )
