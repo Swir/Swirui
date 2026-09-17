@@ -14,16 +14,18 @@ import ctypes
 from typing import Any
 
 from ._windows_legacy import (
-    Win32PlatformBackend as _LegacyWin32PlatformBackend,
     _CW_USEDEFAULT,
-    _Point,
-    _Rect,
     _SWP_NOACTIVATE,
     _SWP_NOMOVE,
     _SWP_NOZORDER,
     _WM_DPICHANGED,
     _WM_SIZE,
     _WS_OVERLAPPEDWINDOW,
+    _Point,
+    _Rect,
+)
+from ._windows_legacy import (
+    Win32PlatformBackend as _LegacyWin32PlatformBackend,
 )
 from .base import NativeWindowSpec
 from .events import NativeWindowHandle, PlatformEvent, PlatformEventKind
