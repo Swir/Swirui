@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
 from swirui.core import Component, PresentationMode
@@ -9,7 +10,7 @@ from swirui.window import Window
 
 from .color_filters import ColorFilter
 from .geometry import Color, Rect
-from .scene import SceneNode, SceneNodeKind
+from .scene import Scene, SceneNode, SceneNodeKind
 from .surface import RenderSurface
 from .wgpu_renderer import ImageInstance, RectangleInstance, ShapeVertex, TextInstance
 from .wgpu_renderer import WgpuRenderer as _BaseWgpuRenderer
@@ -26,6 +27,15 @@ BackdropPayload = tuple[
 _DEFAULT_TEXT_COLOR = Color(1.0, 1.0, 1.0, 1.0)
 
 
+@dataclass(slots=True)
+class _BackdropPayloadCacheEntry:
+    scene: Scene
+    generation: int
+    scale: float
+    image_aliases: tuple[tuple[str, str], ...]
+    payload: BackdropPayload | None
+
+
 class WgpuRenderer(_BaseWgpuRenderer):
     """Persistent GPU renderer with backdrop blur and final color filtering.
 
@@ -34,6 +44,13 @@ class WgpuRenderer(_BaseWgpuRenderer):
     backdrop is blurred and composited into the requested rounded region, and
     later segments are then drawn sharp on top. Scenes without backdrop nodes
     stay on the existing fast path without extra segmentation or GPU passes.
+
+    Prepared backdrop payloads are cached once per window. Re-rendering an
+    unchanged retained ``Scene`` therefore reuses the already-scaled rectangle,
+    text, image and tessellated path segments instead of rebuilding them on every
+    high-refresh frame. ``Scene.touch()`` is the explicit invalidation boundary
+    for in-place scene mutations; replacing the scene, changing DPI scale or
+    rebinding image aliases also invalidates the prepared payload automatically.
 
     ``color_filter`` is an optional affine RGBA transform applied by one retained
     native post-process pass after scene blur/backdrop composition and before the
@@ -60,6 +77,47 @@ class WgpuRenderer(_BaseWgpuRenderer):
         )
         self.color_filter = color_filter
         self.last_backdrop_count = 0
+        self._backdrop_payload_cache: dict[int, _BackdropPayloadCacheEntry] = {}
+        self._backdrop_payload_cache_hits = 0
+        self._backdrop_payload_cache_misses = 0
+
+    @property
+    def backdrop_payload_cache_hits(self) -> int:
+        """Return prepared backdrop payload requests served without rebuilding."""
+
+        return self._backdrop_payload_cache_hits
+
+    @property
+    def backdrop_payload_cache_misses(self) -> int:
+        """Return prepared backdrop payload requests that required rebuilding."""
+
+        return self._backdrop_payload_cache_misses
+
+    @property
+    def backdrop_payload_cache_entries(self) -> int:
+        """Return the number of retained per-window prepared payload entries."""
+
+        return len(self._backdrop_payload_cache)
+
+    def clear_backdrop_payload_cache(self, window: Window | None = None) -> None:
+        """Drop prepared backdrop payloads globally or for one window.
+
+        Applications normally do not need this method: replacing ``Window.scene``
+        or calling ``Scene.touch()`` after an in-place mutation invalidates the
+        cached payload automatically. This hook is useful for diagnostics and
+        explicit resource-pressure handling.
+        """
+
+        if window is None:
+            self._backdrop_payload_cache.clear()
+            return
+        self._backdrop_payload_cache.pop(self._backdrop_cache_key(window), None)
+
+    def reset_backdrop_payload_cache_stats(self) -> None:
+        """Reset hit/miss telemetry without discarding retained payloads."""
+
+        self._backdrop_payload_cache_hits = 0
+        self._backdrop_payload_cache_misses = 0
 
     def set_color_filter(self, color_filter: ColorFilter | None) -> None:
         """Update the final GPU color transform for current and future windows."""
@@ -75,6 +133,14 @@ class WgpuRenderer(_BaseWgpuRenderer):
             if context is not None:
                 self._configure_color_filter(context)
         return surface
+
+    def destroy_surface(self, window: Window) -> None:
+        self.clear_backdrop_payload_cache(window)
+        super().destroy_surface(window)
+
+    def shutdown(self) -> None:
+        self._backdrop_payload_cache.clear()
+        super().shutdown()
 
     def render(self, window: Window, root: Component | None) -> None:
         payload = self._backdrop_payload(window)
@@ -155,8 +221,30 @@ class WgpuRenderer(_BaseWgpuRenderer):
         scene = window.scene
         if scene is None:
             return None
+
+        cache_key = self._backdrop_cache_key(window)
+        image_aliases = tuple(sorted(self._image_aliases.items()))
+        cached = self._backdrop_payload_cache.get(cache_key)
+        if (
+            cached is not None
+            and cached.scene is scene
+            and cached.generation == scene.generation
+            and cached.scale == window.scale
+            and cached.image_aliases == image_aliases
+        ):
+            self._backdrop_payload_cache_hits += 1
+            return cached.payload
+
+        self._backdrop_payload_cache_misses += 1
         records = list(scene.walk_composited())
         if not any(node.kind is SceneNodeKind.BACKDROP_BLUR for node, _, _ in records):
+            self._backdrop_payload_cache[cache_key] = _BackdropPayloadCacheEntry(
+                scene=scene,
+                generation=scene.generation,
+                scale=window.scale,
+                image_aliases=image_aliases,
+                payload=None,
+            )
             return None
 
         rectangle_segments: list[list[RectangleInstance]] = [[]]
@@ -194,15 +282,29 @@ class WgpuRenderer(_BaseWgpuRenderer):
                 path_segments[-1],
             )
 
+        payload: BackdropPayload | None
         if not backdrops:
-            return None
-        return (
-            rectangle_segments,
-            text_segments,
-            image_segments,
-            path_segments,
-            backdrops,
+            payload = None
+        else:
+            payload = (
+                rectangle_segments,
+                text_segments,
+                image_segments,
+                path_segments,
+                backdrops,
+            )
+        self._backdrop_payload_cache[cache_key] = _BackdropPayloadCacheEntry(
+            scene=scene,
+            generation=scene.generation,
+            scale=window.scale,
+            image_aliases=image_aliases,
+            payload=payload,
         )
+        return payload
+
+    @staticmethod
+    def _backdrop_cache_key(window: Window) -> int:
+        return id(window)
 
     def _append_node(
         self,

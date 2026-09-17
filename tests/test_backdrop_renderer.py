@@ -118,12 +118,135 @@ def test_backdrop_payload_splits_painter_order_and_scales_to_physical_pixels() -
     assert texts[1][0][11] == (160.0, 120.0, 800.0, 480.0)
 
 
+def test_backdrop_payload_cache_reuses_unchanged_scene_and_tracks_stats() -> None:
+    renderer = WgpuRenderer(native_module=FakeBackdropNative())
+    window = Window(width=640, height=360)
+    window.set_scene(_backdrop_scene())
+
+    first = renderer._backdrop_payload(window)
+    second = renderer._backdrop_payload(window)
+
+    assert first is not None
+    assert second is first
+    assert renderer.backdrop_payload_cache_hits == 1
+    assert renderer.backdrop_payload_cache_misses == 1
+    assert renderer.backdrop_payload_cache_entries == 1
+
+    renderer.reset_backdrop_payload_cache_stats()
+    assert renderer.backdrop_payload_cache_hits == 0
+    assert renderer.backdrop_payload_cache_misses == 0
+    assert renderer.backdrop_payload_cache_entries == 1
+
+
+def test_backdrop_payload_cache_invalidates_on_scene_touch_and_dpi_change() -> None:
+    renderer = WgpuRenderer(native_module=FakeBackdropNative())
+    window = Window(width=640, height=360)
+    scene = _backdrop_scene()
+    window.set_scene(scene)
+
+    first = renderer._backdrop_payload(window)
+    assert first is not None
+
+    background = scene.root.children[0]
+    new_fill = Color.from_hex("#112233")
+    background.fill = new_fill
+    scene.touch()
+    touched = renderer._backdrop_payload(window)
+    assert touched is not None
+    assert touched is not first
+    assert touched[0][0][0][4:8] == (
+        new_fill.r,
+        new_fill.g,
+        new_fill.b,
+        new_fill.a,
+    )
+
+    window.scale = 1.5
+    scaled = renderer._backdrop_payload(window)
+    assert scaled is not None
+    assert scaled is not touched
+    assert scaled[4][0][:5] == (120.0, 90.0, 480.0, 270.0, 24.0)
+    assert renderer.backdrop_payload_cache_hits == 0
+    assert renderer.backdrop_payload_cache_misses == 3
+
+
+def test_backdrop_payload_cache_invalidates_on_scene_replacement_and_image_rebind() -> None:
+    renderer = WgpuRenderer(native_module=FakeBackdropNative())
+    renderer.register_image_rgba("logo", 1, 1, bytes((0, 64, 255, 255)))
+    window = Window(width=640, height=360)
+
+    first_scene = _backdrop_scene()
+    first_scene.root.add(
+        SceneNode(
+            "logo",
+            SceneNodeKind.IMAGE,
+            Rect(460, 220, 64, 64),
+            resource_id="logo",
+            z_index=3,
+        )
+    )
+    window.set_scene(first_scene)
+    first = renderer._backdrop_payload(window)
+    assert first is not None
+    assert first[2][1][0][0] == "logo"
+
+    replacement = _backdrop_scene()
+    replacement.root.add(
+        SceneNode(
+            "logo",
+            SceneNodeKind.IMAGE,
+            Rect(460, 220, 64, 64),
+            resource_id="logo",
+            z_index=3,
+        )
+    )
+    window.set_scene(replacement)
+    replaced = renderer._backdrop_payload(window)
+    assert replaced is not None
+    assert replaced is not first
+
+    assert renderer._backdrop_payload(window) is replaced
+    renderer.register_image_rgba("logo", 1, 1, bytes((255, 32, 0, 255)))
+    rebound = renderer._backdrop_payload(window)
+    assert rebound is not None
+    assert rebound is not replaced
+    assert rebound[2][1][0][0] == "logo#1"
+    assert renderer.backdrop_payload_cache_hits == 1
+    assert renderer.backdrop_payload_cache_misses == 3
+
+
+def test_backdrop_payload_cache_remembers_scene_without_backdrop() -> None:
+    renderer = WgpuRenderer(native_module=FakeBackdropNative())
+    window = Window(width=320, height=180)
+    window.set_scene(
+        Scene(
+            320,
+            180,
+            SceneNode(
+                "root",
+                SceneNodeKind.RECTANGLE,
+                Rect(0, 0, 320, 180),
+                fill=Color.from_hex("#101820"),
+            ),
+        )
+    )
+
+    assert renderer._backdrop_payload(window) is None
+    assert renderer._backdrop_payload(window) is None
+    assert renderer.backdrop_payload_cache_hits == 1
+    assert renderer.backdrop_payload_cache_misses == 1
+
+    renderer.clear_backdrop_payload_cache(window)
+    assert renderer.backdrop_payload_cache_entries == 0
+
+
 def test_backdrop_scene_uses_persistent_native_segmented_path() -> None:
     native = FakeBackdropNative()
     renderer = WgpuRenderer(native_module=native)
     app = App(platform_backend=NullPlatformBackend(), renderer=renderer)
     window = Window(width=640, height=360)
-    window.set_scene(_backdrop_scene())
+    scene = _backdrop_scene()
+    window.set_scene(scene)
     app.add_window(window)
 
     app.start()
@@ -141,5 +264,16 @@ def test_backdrop_scene_uses_persistent_native_segmented_path() -> None:
     assert renderer.last_backdrop_count == 1
     assert renderer.frames_rendered == 1
     assert renderer.adapter_name == "Backdrop Fake GPU"
+    assert renderer.backdrop_payload_cache_misses == 1
+
+    renderer.render(window, window.root)
+    assert len(context.calls) == 2
+    assert renderer.backdrop_payload_cache_hits == 1
+
+    scene.touch()
+    renderer.render(window, window.root)
+    assert len(context.calls) == 3
+    assert renderer.backdrop_payload_cache_misses == 2
 
     app.stop()
+    assert renderer.backdrop_payload_cache_entries == 0
