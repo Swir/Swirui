@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import math
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 from enum import StrEnum
 
 from .geometry import Color, CornerRadius, Path2D, Point, Rect
+
+_MAX_BACKDROP_BLUR_RADIUS = 64.0
 
 
 class SceneNodeKind(StrEnum):
@@ -15,6 +18,7 @@ class SceneNodeKind(StrEnum):
     PATH = "path"
     TEXT = "text"
     IMAGE = "image"
+    BACKDROP_BLUR = "backdrop_blur"
 
 
 @dataclass(slots=True)
@@ -36,6 +40,7 @@ class SceneNode:
     children: list[SceneNode] = field(default_factory=list)
     clip_to_bounds: bool = False
     hit_testable: bool = True
+    blur_radius: float = 0.0
 
     def __post_init__(self) -> None:
         if not 0.0 <= self.opacity <= 1.0:
@@ -54,6 +59,15 @@ class SceneNode:
                 raise ValueError("Text scene nodes require a font_family.")
         if self.kind is SceneNodeKind.IMAGE and self.resource_id is None:
             raise ValueError("Image scene nodes require a resource_id.")
+        if self.kind is SceneNodeKind.BACKDROP_BLUR:
+            if not math.isfinite(self.blur_radius):
+                raise ValueError("Backdrop blur radius must be finite.")
+            if not 0.0 < self.blur_radius <= _MAX_BACKDROP_BLUR_RADIUS:
+                raise ValueError(
+                    f"Backdrop blur radius must be in the range (0, {_MAX_BACKDROP_BLUR_RADIUS}]."
+                )
+            if self.bounds.width <= 0.0 or self.bounds.height <= 0.0:
+                raise ValueError("Backdrop blur bounds must have positive dimensions.")
 
     def add(self, *children: SceneNode) -> SceneNode:
         for child in children:
@@ -172,7 +186,7 @@ class SceneNode:
     def _contains_visual_point(self, point: Point) -> bool:
         if not self.hit_testable or not self.bounds.contains(point):
             return False
-        if self.kind is SceneNodeKind.GROUP:
+        if self.kind in (SceneNodeKind.GROUP, SceneNodeKind.BACKDROP_BLUR):
             return self.fill is not None
         if self.kind is SceneNodeKind.PATH:
             path = self.path

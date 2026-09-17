@@ -1,8 +1,15 @@
-use crate::image::{ImageInstance, ImageSystem};
+use crate::image::ImageInstance;
 #[cfg(target_os = "windows")]
-use crate::postprocess::{validate_blur_radius, OffscreenRenderTarget, SeparableBlur};
-use crate::shape::{ShapeSystem, ShapeVertex};
-use crate::text::{TextInstance, TextSystem};
+use crate::image::ImageSystem;
+use crate::postprocess::validate_blur_radius;
+#[cfg(target_os = "windows")]
+use crate::postprocess::{BackdropCompositor, OffscreenRenderTarget, SeparableBlur};
+use crate::shape::ShapeVertex;
+#[cfg(target_os = "windows")]
+use crate::shape::ShapeSystem;
+use crate::text::TextInstance;
+#[cfg(target_os = "windows")]
+use crate::text::TextSystem;
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 
@@ -14,8 +21,10 @@ use std::num::NonZeroIsize;
 use wgpu::util::DeviceExt;
 
 type RectangleInstance = Vec<f32>;
+type BackdropRegion = Vec<f32>;
 const LEGACY_RECTANGLE_INSTANCE_FLOATS: usize = 12;
 const RECTANGLE_INSTANCE_FLOATS: usize = 16;
+const BACKDROP_REGION_FLOATS: usize = 9;
 const INITIAL_RECTANGLE_CAPACITY: usize = 16;
 const UNBOUNDED_CLIP: [f32; 4] = [-1.0e9, -1.0e9, 1.0e9, 1.0e9];
 
@@ -29,6 +38,7 @@ struct PersistentGpuContext {
     offscreen_target: OffscreenRenderTarget,
     postprocess_blur: Option<SeparableBlur>,
     postprocess_blur_radius: f32,
+    backdrop_compositor: Option<BackdropCompositor>,
     present_blitter: wgpu::util::TextureBlitter,
     frame_buffer: wgpu::Buffer,
     bind_group_layout: wgpu::BindGroupLayout,
@@ -166,6 +176,7 @@ impl PersistentGpuContext {
             offscreen_target,
             postprocess_blur: None,
             postprocess_blur_radius: 0.0,
+            backdrop_compositor: None,
             present_blitter,
             frame_buffer,
             bind_group_layout,
@@ -191,13 +202,15 @@ impl PersistentGpuContext {
                 .resize(&self.device, self.config.format, width, height);
         if offscreen_resized {
             if let Some(blur) = &mut self.postprocess_blur {
-                blur.resize(
+                if blur.resize(
                     &self.device,
                     self.config.format,
                     width,
                     height,
                     self.offscreen_target.view(),
-                );
+                ) {
+                    self.backdrop_compositor = None;
+                }
             }
         }
         let frame_uniforms = floats_to_bytes(&[width as f32, height as f32, 0.0, 0.0]);
@@ -223,7 +236,13 @@ impl PersistentGpuContext {
         if self.postprocess_blur_radius == radius_pixels {
             return Ok(());
         }
-        if radius_pixels > 0.0 && self.postprocess_blur.is_none() {
+        self.ensure_blur_pipeline();
+        self.postprocess_blur_radius = radius_pixels;
+        Ok(())
+    }
+
+    fn ensure_blur_pipeline(&mut self) {
+        if self.postprocess_blur.is_none() {
             self.postprocess_blur = Some(SeparableBlur::new(
                 &self.device,
                 self.config.format,
@@ -232,8 +251,6 @@ impl PersistentGpuContext {
                 self.offscreen_target.view(),
             ));
         }
-        self.postprocess_blur_radius = radius_pixels;
-        Ok(())
     }
 
     fn register_image_rgba(
@@ -443,6 +460,198 @@ impl PersistentGpuContext {
         Ok((rectangles.len(), texts.len(), images.len(), shapes.len() / 3))
     }
 
+    fn draw_scene_with_backdrops(
+        &mut self,
+        rectangle_segments: &[Vec<RectangleInstance>],
+        text_segments: &[Vec<TextInstance>],
+        image_segments: &[Vec<ImageInstance>],
+        shape_segments: &[Vec<ShapeVertex>],
+        backdrops: &[BackdropRegion],
+        background_red: f64,
+        background_green: f64,
+        background_blue: f64,
+        background_alpha: f64,
+    ) -> PyResult<(usize, usize, usize, usize, usize)> {
+        validate_color(
+            background_red,
+            background_green,
+            background_blue,
+            background_alpha,
+        )?;
+        validate_backdrop_segments(
+            rectangle_segments,
+            text_segments,
+            image_segments,
+            shape_segments,
+            backdrops,
+        )?;
+
+        let frame = acquire_surface_texture(&self.surface)?;
+        let view = frame
+            .texture
+            .create_view(&wgpu::TextureViewDescriptor::default());
+        let clear_color = wgpu::Color {
+            r: background_red,
+            g: background_green,
+            b: background_blue,
+            a: background_alpha,
+        };
+        let mut rectangle_count = 0;
+        let mut text_count = 0;
+        let mut image_count = 0;
+        let mut shape_count = 0;
+
+        for segment_index in 0..rectangle_segments.len() {
+            let counts = self.draw_segment_to_offscreen(
+                &rectangle_segments[segment_index],
+                &text_segments[segment_index],
+                &image_segments[segment_index],
+                &shape_segments[segment_index],
+                (segment_index == 0).then_some(clear_color),
+            )?;
+            rectangle_count += counts.0;
+            text_count += counts.1;
+            image_count += counts.2;
+            shape_count += counts.3;
+
+            if let Some(backdrop) = backdrops.get(segment_index) {
+                self.composite_backdrop(backdrop)?;
+            }
+        }
+
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("SwirUI backdrop presentation encoder"),
+            });
+        let presentation_source = self.encode_postprocess(&mut encoder);
+        self.present_blitter
+            .copy(&self.device, &mut encoder, presentation_source, &view);
+        self.queue.submit([encoder.finish()]);
+        self.queue.present(frame);
+
+        Ok((
+            rectangle_count,
+            text_count,
+            image_count,
+            shape_count,
+            backdrops.len(),
+        ))
+    }
+
+    fn draw_segment_to_offscreen(
+        &mut self,
+        rectangles: &[RectangleInstance],
+        texts: &[TextInstance],
+        images: &[ImageInstance],
+        shapes: &[ShapeVertex],
+        clear_color: Option<wgpu::Color>,
+    ) -> PyResult<(usize, usize, usize, usize)> {
+        if !rectangles.is_empty() {
+            validate_rectangles(rectangles)?;
+            self.ensure_rectangle_capacity(rectangles.len())?;
+            self.queue
+                .write_buffer(&self.rectangle_buffer, 0, &rectangle_bytes(rectangles));
+        }
+        if !texts.is_empty() {
+            self.text_system.prepare(&self.device, &self.queue, texts)?;
+        }
+        let images_prepared = self.image_system.prepare_vertices(
+            &self.device,
+            &self.queue,
+            images,
+            self.config.width,
+            self.config.height,
+        )?;
+        let shapes_prepared =
+            self.shape_system
+                .prepare_vertices(&self.device, &self.queue, shapes)?;
+
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("SwirUI backdrop scene segment encoder"),
+            });
+        {
+            let load = match clear_color {
+                Some(color) => wgpu::LoadOp::Clear(color),
+                None => wgpu::LoadOp::Load,
+            };
+            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("SwirUI backdrop scene segment pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: self.offscreen_target.view(),
+                    depth_slice: None,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load,
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+                multiview_mask: None,
+            });
+
+            if !rectangles.is_empty() {
+                render_pass.set_pipeline(&self.pipeline);
+                render_pass.set_bind_group(0, &self.rectangle_bind_group, &[]);
+                render_pass.draw(0..6, 0..rectangles.len() as u32);
+            }
+            if shapes_prepared {
+                self.shape_system.render(&mut render_pass, shapes.len())?;
+            }
+            if images_prepared {
+                self.image_system.render(&mut render_pass, images)?;
+            }
+            if !texts.is_empty() {
+                self.text_system.render(&mut render_pass)?;
+            }
+        }
+        self.queue.submit([encoder.finish()]);
+        if !texts.is_empty() {
+            self.text_system.trim();
+        }
+        Ok((rectangles.len(), texts.len(), images.len(), shapes.len() / 3))
+    }
+
+    fn composite_backdrop(&mut self, backdrop: &BackdropRegion) -> PyResult<()> {
+        validate_backdrop_region(backdrop)?;
+        self.ensure_blur_pipeline();
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("SwirUI backdrop blur encoder"),
+            });
+        let blurred_view = self
+            .postprocess_blur
+            .as_ref()
+            .expect("blur pipeline must exist")
+            .encode(&self.queue, &mut encoder, backdrop[4]);
+        if self.backdrop_compositor.is_none() {
+            self.backdrop_compositor = Some(BackdropCompositor::new(
+                &self.device,
+                self.config.format,
+                blurred_view,
+            ));
+        }
+        self.backdrop_compositor
+            .as_ref()
+            .expect("backdrop compositor must exist")
+            .encode(
+                &self.queue,
+                &mut encoder,
+                self.offscreen_target.view(),
+                (self.config.width, self.config.height),
+                (backdrop[0], backdrop[1]),
+                (backdrop[2], backdrop[3]),
+                [backdrop[5], backdrop[6], backdrop[7], backdrop[8]],
+            );
+        self.queue.submit([encoder.finish()]);
+        Ok(())
+    }
+
     fn encode_postprocess<'a>(
         &'a self,
         encoder: &mut wgpu::CommandEncoder,
@@ -587,6 +796,11 @@ impl PyWin32GpuRenderer {
             .map(SeparableBlur::generation)
     }
 
+    #[getter]
+    fn backdrop_pipeline_ready(&self) -> bool {
+        self.context.backdrop_compositor.is_some()
+    }
+
     fn image_resource_size(&self, resource_id: &str) -> Option<(u32, u32)> {
         self.context.image_system.resource_size(resource_id)
     }
@@ -708,6 +922,42 @@ impl PyWin32GpuRenderer {
             &texts,
             &images,
             &shapes,
+            background_red,
+            background_green,
+            background_blue,
+            background_alpha,
+        )
+    }
+
+    #[pyo3(signature = (
+        rectangle_segments,
+        text_segments,
+        image_segments,
+        shape_segments,
+        backdrops,
+        background_red=0.027,
+        background_green=0.043,
+        background_blue=0.078,
+        background_alpha=1.0
+    ))]
+    fn draw_scene_with_backdrops(
+        &mut self,
+        rectangle_segments: Vec<Vec<RectangleInstance>>,
+        text_segments: Vec<Vec<TextInstance>>,
+        image_segments: Vec<Vec<ImageInstance>>,
+        shape_segments: Vec<Vec<ShapeVertex>>,
+        backdrops: Vec<BackdropRegion>,
+        background_red: f64,
+        background_green: f64,
+        background_blue: f64,
+        background_alpha: f64,
+    ) -> PyResult<(usize, usize, usize, usize, usize)> {
+        self.context.draw_scene_with_backdrops(
+            &rectangle_segments,
+            &text_segments,
+            &image_segments,
+            &shape_segments,
+            &backdrops,
             background_red,
             background_green,
             background_blue,
@@ -922,6 +1172,68 @@ fn validate_rectangles(rectangles: &[RectangleInstance]) -> PyResult<()> {
     Ok(())
 }
 
+fn validate_backdrop_region(backdrop: &BackdropRegion) -> PyResult<()> {
+    if backdrop.len() != BACKDROP_REGION_FLOATS {
+        return Err(PyValueError::new_err(format!(
+            "Backdrop regions require exactly {BACKDROP_REGION_FLOATS} floats."
+        )));
+    }
+    if !backdrop.iter().copied().all(f32::is_finite) {
+        return Err(PyValueError::new_err(
+            "Backdrop bounds, blur radius and corner radii must be finite.",
+        ));
+    }
+    if backdrop[2] <= 0.0 || backdrop[3] <= 0.0 {
+        return Err(PyValueError::new_err(
+            "Backdrop width and height must be greater than zero.",
+        ));
+    }
+    if backdrop[4] <= 0.0 {
+        return Err(PyValueError::new_err(
+            "Backdrop blur radius must be greater than zero.",
+        ));
+    }
+    validate_blur_radius(backdrop[4]).map_err(PyValueError::new_err)?;
+    if backdrop[5..9].iter().any(|radius| *radius < 0.0) {
+        return Err(PyValueError::new_err(
+            "Backdrop corner radii cannot be negative.",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_backdrop_segments(
+    rectangle_segments: &[Vec<RectangleInstance>],
+    text_segments: &[Vec<TextInstance>],
+    image_segments: &[Vec<ImageInstance>],
+    shape_segments: &[Vec<ShapeVertex>],
+    backdrops: &[BackdropRegion],
+) -> PyResult<()> {
+    let segment_count = rectangle_segments.len();
+    if segment_count == 0 {
+        return Err(PyValueError::new_err(
+            "Backdrop rendering requires at least one scene segment.",
+        ));
+    }
+    if text_segments.len() != segment_count
+        || image_segments.len() != segment_count
+        || shape_segments.len() != segment_count
+    {
+        return Err(PyValueError::new_err(
+            "All backdrop primitive segment lists must have identical lengths.",
+        ));
+    }
+    if segment_count != backdrops.len() + 1 {
+        return Err(PyValueError::new_err(
+            "Backdrop rendering requires exactly one more scene segment than backdrop boundary.",
+        ));
+    }
+    for backdrop in backdrops {
+        validate_backdrop_region(backdrop)?;
+    }
+    Ok(())
+}
+
 fn next_rectangle_capacity(current: usize, required: usize) -> PyResult<usize> {
     if required <= current {
         return Ok(current);
@@ -1075,6 +1387,10 @@ mod tests {
         ]
     }
 
+    fn valid_backdrop() -> BackdropRegion {
+        vec![80.0, 60.0, 320.0, 180.0, 18.0, 16.0, 16.0, 16.0, 16.0]
+    }
+
     #[test]
     fn rejects_zero_surface_size() {
         assert!(validate_dimensions(0, 100).is_err());
@@ -1129,6 +1445,35 @@ mod tests {
         let mut invalid_clip = clipped_rectangle();
         invalid_clip[14] = invalid_clip[12];
         assert!(validate_rectangles(&[invalid_clip]).is_err());
+    }
+
+    #[test]
+    fn validates_backdrop_segment_contract() {
+        let rectangles = vec![vec![valid_rectangle()], Vec::new()];
+        let texts: Vec<Vec<TextInstance>> = vec![Vec::new(), Vec::new()];
+        let images: Vec<Vec<ImageInstance>> = vec![Vec::new(), Vec::new()];
+        let shapes: Vec<Vec<ShapeVertex>> = vec![Vec::new(), Vec::new()];
+        assert!(validate_backdrop_segments(
+            &rectangles,
+            &texts,
+            &images,
+            &shapes,
+            &[valid_backdrop()]
+        )
+        .is_ok());
+        assert!(validate_backdrop_segments(
+            &rectangles,
+            &texts[..1],
+            &images,
+            &shapes,
+            &[valid_backdrop()]
+        )
+        .is_err());
+        assert!(validate_backdrop_segments(&rectangles, &texts, &images, &shapes, &[]).is_err());
+
+        let mut invalid = valid_backdrop();
+        invalid[4] = 0.0;
+        assert!(validate_backdrop_region(&invalid).is_err());
     }
 
     #[test]

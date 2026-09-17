@@ -200,6 +200,9 @@ jobs:
       - name: Verify retained GPU shadows
         run: pytest tests/test_windows_effects.py -q
 
+      - name: Verify retained GPU backdrop blur
+        run: pytest tests/test_windows_backdrop_blur.py -q
+
       - name: Verify GPU resource cache
         run: pytest tests/test_windows_resource_cache.py -q
 
