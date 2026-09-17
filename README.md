@@ -15,7 +15,7 @@
 ![macOS Native](https://img.shields.io/badge/macOS-Cocoa%20native-000000?logo=apple&logoColor=white)
 ![GPU](https://img.shields.io/badge/GPU-wgpu%2030-6E56CF)
 ![Status](https://img.shields.io/badge/status-pre--alpha-7C3AED)
-![Progress](https://img.shields.io/badge/project%20progress-38%25-00BFFF)
+![Progress](https://img.shields.io/badge/project%20progress-39%25-00BFFF)
 
 </div>
 
@@ -23,9 +23,9 @@
 
 ## Project progress
 
-**38% — 0.3 Alpha Visual Engine underway; native GPU color filters are now verified**
+**39% — 0.3 Alpha Visual Engine underway; automatic runtime visual-quality adaptation is verified**
 
-`[████████░░░░░░░░░░░░] 38%`
+`[████████░░░░░░░░░░░░] 39%`
 
 **Completed:** `0.1 Alpha — Foundation` ✅ · `0.2 Alpha — Native Window + First Renderer` ✅  
 **Current milestone:** `0.3 Alpha — Visual Engine` 🚧
@@ -52,6 +52,8 @@ SwirUI is currently **pre-alpha**. APIs may change while the renderer, component
 - runtime target-FPS retargeting and frame-time telemetry
 - display-aware frame pacing capped to the active monitor refresh rate
 - automatic scheduler retargeting across display changes
+- automatic `VisualQuality.AUTO` adaptation from measured render cost and smoothed frame cadence, with hysteresis and cooldown protection
+- runtime `App.set_visual_quality()` switching between fixed profiles and automatic quality without recreating windows
 - direct Win32 backend via Python `ctypes`
 - direct Linux/X11 backend via Python `ctypes` + system libX11
 - direct macOS Cocoa/AppKit backend via Python `ctypes` + Objective-C runtime
@@ -93,7 +95,9 @@ SwirUI is currently **pre-alpha**. APIs may change while the renderer, component
 - **immutable composable `ColorFilter` affine RGBA transforms**
 - **persistent native Rust/wgpu color-filter postprocess after scene/backdrop blur**
 - presets/composition for brightness, contrast, saturation, grayscale, sepia, invert, opacity and hue rotation
-- visual-quality budgets spanning Performance / Balanced / Quality / Ultra / Cinematic for implemented retained effects
+- concrete visual-quality budgets spanning Performance / Balanced / Quality / Ultra / Cinematic for implemented retained effects
+- **automatic `AUTO` profile resolution that steps between concrete quality budgets only after sustained measured pressure or headroom**
+- frame telemetry exposing render duration, frame-budget utilization and configured/effective visual quality
 
 The Windows renderer currently owns the verified wgpu presentation path. Linux/X11 and macOS/Cocoa provide real native window/input backends; GPU presentation on those platforms and Wayland remain future work and are not claimed yet.
 
@@ -140,10 +144,11 @@ python examples/gpu_scene_blur_demo.py
 python examples/gpu_backdrop_blur_demo.py
 python examples/gpu_glass_materials_demo.py
 python examples/gpu_color_filters_demo.py
+python examples/adaptive_quality_demo.py
 python examples/high_refresh_demo.py
 ```
 
-The demos exercise the same retained scene contracts used by applications. Geometry remains authored in logical DIPs while native surfaces and GPU submission operate in physical pixels. The color-filter demo exercises the persistent affine RGBA postprocess after scene/backdrop composition without recreating the per-window wgpu context.
+The demos exercise the same retained scene contracts used by applications. Geometry remains authored in logical DIPs while native surfaces and GPU submission operate in physical pixels. The color-filter demo exercises the persistent affine RGBA postprocess after scene/backdrop composition without recreating the per-window wgpu context. The adaptive-quality demo drives quality-aware retained effects from the runtime's concrete `effective_visual_quality` while `AUTO` evaluates real renderer cost and frame pacing.
 
 ## Foundation API
 
@@ -183,7 +188,7 @@ Python Application API
         ├── Components / Routed Events ✅
         ├── Accessibility semantics ✅
         ├── Reactive State
-        └── Runtime configuration
+        └── Runtime configuration / adaptive visual quality ✅
         │
 SwirUI Runtime
         │
@@ -198,6 +203,7 @@ SwirUI Runtime
         ├── retained depth / parallax / reflection geometry ✅
         ├── z/clip/path-aware hit testing ✅
         ├── SceneNode → Component mapping ✅
+        ├── render-cost + pacing quality feedback ✅
         └── display-aware frame scheduling ✅
         │
 Renderer Layer
@@ -207,6 +213,7 @@ Renderer Layer
         ├── rounded rectangles / paths / shaped text / images ✅
         ├── gradients / depth / reflections ✅
         ├── shadows / glow / source bloom / lighting / grain ✅
+        ├── quality-aware retained effect budgets ✅
         ├── offscreen target + separable scene blur ✅ Windows
         ├── painter-order backdrop blur ✅ Windows
         ├── frosted glass + acrylic ✅ Windows
@@ -250,11 +257,11 @@ SwirUI Framework
 
 ## Current milestone: 0.3 Alpha — Visual Engine
 
-The 0.2 Alpha native/runtime gate is verified complete. 0.3 is active and now includes verified gradients, depth/perspective, parallax, reflections, dynamic shadows, adaptive lighting, glow, source-driven bloom, deterministic grain, background blur, frosted glass, acrylic-like materials and native GPU color filters.
+The 0.2 Alpha native/runtime gate is verified complete. 0.3 is active and now includes verified gradients, depth/perspective, parallax, reflections, dynamic shadows, adaptive lighting, glow, source-driven bloom, deterministic grain, background blur, frosted glass, acrylic-like materials, native GPU color filters and automatic runtime visual-quality adaptation.
 
-The native color-filter path uses one composable affine RGBA transform over the final retained scene, runs after scene/backdrop blur, and reuses persistent per-window postprocess resources. It has Python API tests, renderer lifecycle coverage and a real Win32/wgpu smoke gate.
+`VisualQuality.AUTO` now resolves to concrete Performance / Balanced / Quality / Ultra / Cinematic budgets from two independent runtime signals: smoothed frame cadence and measured renderer-call cost. Fast sustained-pressure demotion, conservative sustained-headroom promotion, a neutral hysteresis band and a post-transition cooldown prevent idle invalidation-driven windows and brief spikes from causing profile thrashing. Fixed profiles remain fixed, and applications can inspect `effective_visual_quality`, quality telemetry or `visual_quality_changed` events without recreating native windows.
 
-The next high-impact work is safe effect caching for unchanged retained/material/backdrop work across high-refresh frames, followed by reusable custom-shader effects. Adaptive quality must become framework-wide and automatic before its roadmap item is considered complete. Native accessibility adapters, Wayland/Linux expansion, macOS GPU presentation and continued measured performance work remain important cross-cutting follow-ups without reopening the completed 0.2 gate.
+The next high-impact 0.3 work is broader native effect caching for unchanged material/backdrop/postprocess work across high-refresh frames, followed by reusable custom-shader effects. Native accessibility adapters, Wayland/Linux expansion, macOS GPU presentation and continued measured performance work remain important cross-cutting follow-ups without reopening the completed 0.2 gate.
 
 See **[ROADMAP.md](ROADMAP.md)** for the full development plan.
 
@@ -272,6 +279,7 @@ Python 3.13
 Python 3.14
 retained-runtime performance budgets + JSON report artifact
 accessibility semantic-tree tests
+adaptive visual-quality pressure/headroom/idle-regression tests
 cargo check
 cargo test
 Maturin / PyO3 native build

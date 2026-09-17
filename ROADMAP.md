@@ -4,9 +4,9 @@
 
 ## Project progress
 
-**Overall completion: 38%**
+**Overall completion: 39%**
 
-`[████████░░░░░░░░░░░░] 38%`
+`[████████░░░░░░░░░░░░] 39%`
 
 Progress is based on implemented and verified roadmap work. Ideas, mockups and unfinished prototypes do not increase the percentage.
 
@@ -118,7 +118,7 @@ Cross-platform native-window coverage now includes real Linux/X11 lifecycle/inpu
 - [x] Noise / grain
 - [ ] Custom shader effects
 - [ ] Effect caching
-- [ ] Adaptive quality profiles: Performance / Balanced / Quality / Ultra / Cinematic
+- [x] Adaptive quality profiles: Performance / Balanced / Quality / Ultra / Cinematic
 
 ## 0.4 Alpha — Core Widgets
 
