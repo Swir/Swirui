@@ -52,6 +52,7 @@ class Tooltip(Widget):
         self._focus_open = False
         self._target: Component | None = None
         self._target_unsubscribers: list[Callable[[], None]] = []
+        self._availability_unsubscribers: list[Callable[[], None]] = []
         self._auto_accessible_name = accessible_name is None
         super().__init__(
             bounds=bounds,
@@ -112,12 +113,10 @@ class Tooltip(Widget):
                     target.on("focus_lost", self._on_target_focus_lost),
                 )
             )
-        component: Component | None = target
-        while component is not None:
-            self._target_unsubscribers.append(
-                component.on("invalidated", self._on_target_availability_invalidated)
-            )
-            component = component.parent
+        self._target_unsubscribers.append(
+            target.on("parent_changed", self._on_target_parent_changed)
+        )
+        self._refresh_availability_subscriptions()
         return self
 
     def detach(self) -> None:
@@ -126,6 +125,7 @@ class Tooltip(Widget):
         for unsubscribe in self._target_unsubscribers:
             unsubscribe()
         self._target_unsubscribers.clear()
+        self._clear_availability_subscriptions()
         self._target = None
         self._hover_open = False
         self._focus_open = False
@@ -183,6 +183,20 @@ class Tooltip(Widget):
             component = component.parent
         return True
 
+    def _clear_availability_subscriptions(self) -> None:
+        for unsubscribe in self._availability_unsubscribers:
+            unsubscribe()
+        self._availability_unsubscribers.clear()
+
+    def _refresh_availability_subscriptions(self) -> None:
+        self._clear_availability_subscriptions()
+        component = self._target
+        while component is not None:
+            self._availability_unsubscribers.append(
+                component.on("invalidated", self._on_target_availability_invalidated)
+            )
+            component = component.parent
+
     def _sync_target_visibility(self) -> None:
         self.visible = self._target_available() and (self._hover_open or self._focus_open)
 
@@ -200,6 +214,10 @@ class Tooltip(Widget):
 
     def _on_target_focus_lost(self, _event: Event) -> None:
         self._focus_open = False
+        self._sync_target_visibility()
+
+    def _on_target_parent_changed(self, _event: Event) -> None:
+        self._refresh_availability_subscriptions()
         self._sync_target_visibility()
 
     def _on_target_availability_invalidated(self, event: Event) -> None:
