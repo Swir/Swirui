@@ -4,8 +4,8 @@
 //! same six-float matrix convention inside the Rust core so future GPU submission
 //! can consume retained transforms without inventing a second ordering contract.
 
-const DETERMINANT_EPSILON: f32 = 1.0e-6;
-const AXIS_ALIGNMENT_EPSILON: f32 = 1.0e-6;
+const DETERMINANT_EPSILON: f32 = 1.0e-12;
+const AXIS_ALIGNMENT_EPSILON: f32 = 1.0e-12;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct Affine2D {
@@ -148,6 +148,13 @@ mod tests {
             Affine2D::try_from_slice(&[1.0, 2.0, 2.0, 4.0, 0.0, 0.0]),
             Err("Affine2D must be invertible.")
         );
+    }
+
+    #[test]
+    fn accepts_small_but_python_valid_determinant() {
+        let transform = Affine2D::try_from_slice(&[1.0e-8, 0.0, 0.0, 1.0, 0.0, 0.0])
+            .expect("native validation must preserve the Python invertibility threshold");
+        assert_close(transform.determinant(), 1.0e-8);
     }
 
     #[test]
