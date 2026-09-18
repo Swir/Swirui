@@ -160,6 +160,7 @@ def test_real_win32_magnetic_offset_tracks_hit_testing_and_reuses_wgpu_context()
         x = max(1, round(315.0 * window.scale))
         y = max(1, round(110.0 * window.scale))
 
+        previous_frames = renderer.frames_rendered
         user32.SendMessageW(ctypes.c_void_p(hwnd), 0x0200, 0, _lparam(x, y))
         _pump_until(app, lambda: magnetic.offset.x > 0.0)
         assert button.bounds == authored_bounds
@@ -169,7 +170,6 @@ def test_real_win32_magnetic_offset_tracks_hit_testing_and_reuses_wgpu_context()
         assert attracted.bounds.y < authored_bounds.y
         assert window.scene.hit_test_xy(315.0, 110.0) is not None
 
-        previous_frames = renderer.frames_rendered
         _render_after_invalidation(app, renderer, previous_frames)
         assert renderer.persistent_context_count == initial_contexts
         assert runtime.generation > 1
@@ -183,13 +183,13 @@ def test_real_win32_magnetic_offset_tracks_hit_testing_and_reuses_wgpu_context()
             _lparam(outside_x, outside_y),
         )
         _pump_until(app, lambda: magnetic.active)
+        previous_frames = renderer.frames_rendered
         controller.tick(2.0)
         assert magnetic.active is False
         assert magnetic.offset.x == pytest.approx(0.0)
         assert magnetic.offset.y == pytest.approx(0.0)
         assert button.bounds == authored_bounds
 
-        previous_frames = renderer.frames_rendered
         _render_after_invalidation(app, renderer, previous_frames)
         assert renderer.persistent_context_count == initial_contexts
     finally:
