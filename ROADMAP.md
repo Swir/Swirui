@@ -198,24 +198,26 @@ Layout spacing and padding remain authored in logical DIPs across monitor-scale 
 
 ## 0.7 Alpha — Animation Engine
 
-**Status:** Underway 🚧 — 4 / 12 groups verified
+**Status:** Underway 🚧 — 8 / 12 groups verified
 
 - [ ] Fade / slide / scale / rotate
-- [ ] Blur / glow transitions
+- [x] Blur / glow transitions
 - [ ] Morph / flip / reveal
 - [x] Spring / elastic / bounce
 - [x] Physics animations
 - [ ] Page transitions
 - [ ] Shared-element transitions
-- [ ] Hover / press / focus animations
-- [ ] Magnetic interactions
-- [ ] Particle effects
+- [x] Hover / press / focus animations
+- [x] Magnetic interactions
+- [x] Particle effects
 - [x] Frame-rate-independent timing
 - [x] Animation cancellation / chaining
 
 ### Verified 0.7 slice
 
-`Tween` and the window-scoped `AnimationController` advance from elapsed rendered-frame time rather than frame counts, with exact completion, unused-frame-tail carry-over and deterministic cancellation/chaining. Easing includes cubic, bounce and elastic curves. Analytical `SpringAnimation` solves underdamped, critically damped and overdamped motion from absolute elapsed time, while `DecayAnimation` provides exponential inertial motion for momentum/fling behavior. `AnimationParallel` composes multiple playables against one frame clock and interoperates with serial `AnimationSequence`; spring, decay and tween helpers publish samples through reactive `State`. Deterministic tests verify frame-partition independence, physical-parameter validation, completion/cancellation and mixed composition. The implementation passed Python 3.11–3.14, strict Ruff/Mypy, native Rust/wgpu/PyO3 and real Win32/wgpu CI before these four groups were credited.
+`Tween` and the window-scoped `AnimationController` advance from elapsed rendered-frame time rather than frame counts, with exact completion, unused-frame-tail carry-over and deterministic cancellation/chaining. Easing includes cubic, bounce and elastic curves. Analytical `SpringAnimation` solves underdamped, critically damped and overdamped motion from absolute elapsed time, while `DecayAnimation` provides exponential inertial motion for momentum/fling behavior. `AnimationParallel` composes multiple playables against one frame clock and interoperates with serial `AnimationSequence`; spring, decay and tween helpers publish samples through reactive `State`.
+
+Retained interaction helpers now cover hover/press/focus opacity transitions, animated blur/glow effect transitions, particle effects and spring-driven magnetic interaction. Magnetic motion uses a visual-only logical-DIP widget offset, retargets from the currently presented sample, leaves layout measurement/arrangement unchanged and translates the compiled subtree so painting, clipping and hit testing stay aligned. Deterministic tests cover clamping, retargeting, idle restoration and finite parameter validation, while the real Win32+wGPU smoke gate verifies routed pointer motion, retained SceneGraph translation and persistent per-window GPU-context reuse. The exact implementation head passed Python 3.11–3.14, strict Ruff/Mypy, retained performance budgets, native Rust/wgpu/PyO3 and real Win32+wGPU CI before these eight groups were credited.
 
 ## 0.8 Beta — Professional Widgets
 
@@ -446,6 +448,7 @@ AI output must remain ordinary, editable SwirUI code.
 - [x] Windows responsive breakpoints + dynamic typography + persistent wgpu smoke test
 - [x] Windows adaptive navigation + persistent wgpu smoke test
 - [x] Windows advanced Dock / Flow / Overlay / ConstraintLayout + persistent wgpu smoke test
+- [x] Windows spring-driven magnetic interaction + persistent wgpu smoke test
 - [x] DPI-aware logical spacing / padding conversion coverage
 - [x] Retained layout invalidation optimization coverage
 - [x] Reactive runtime computed state / bindings / observable collections / transaction coverage
