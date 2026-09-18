@@ -1,9 +1,12 @@
+use crate::affine::Affine2D;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
 pub(crate) type ShapeVertex = Vec<f32>;
 
-const SHAPE_VERTEX_FLOATS: usize = 10;
+const LEGACY_SHAPE_VERTEX_FLOATS: usize = 10;
+const AFFINE_SHAPE_VERTEX_FLOATS: usize = 16;
+const SHAPE_GPU_VERTEX_FLOATS: usize = AFFINE_SHAPE_VERTEX_FLOATS;
 const INITIAL_SHAPE_VERTEX_CAPACITY: usize = 96;
 
 #[cfg(not(target_os = "windows"))]
@@ -62,7 +65,7 @@ impl ShapeSystem {
                 entry_point: Some("vs_main"),
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
                 buffers: &[Some(wgpu::VertexBufferLayout {
-                    array_stride: (SHAPE_VERTEX_FLOATS * std::mem::size_of::<f32>()) as u64,
+                    array_stride: (SHAPE_GPU_VERTEX_FLOATS * std::mem::size_of::<f32>()) as u64,
                     step_mode: wgpu::VertexStepMode::Vertex,
                     attributes: &[
                         wgpu::VertexAttribute {
@@ -79,6 +82,16 @@ impl ShapeSystem {
                             format: wgpu::VertexFormat::Float32x4,
                             offset: 6 * 4,
                             shader_location: 2,
+                        },
+                        wgpu::VertexAttribute {
+                            format: wgpu::VertexFormat::Float32x4,
+                            offset: 10 * 4,
+                            shader_location: 3,
+                        },
+                        wgpu::VertexAttribute {
+                            format: wgpu::VertexFormat::Float32x2,
+                            offset: 14 * 4,
+                            shader_location: 4,
                         },
                     ],
                 })],
@@ -127,9 +140,12 @@ impl ShapeSystem {
             return Ok(false);
         }
         self.ensure_vertex_capacity(device, vertices.len())?;
-        let mut values = Vec::with_capacity(vertices.len() * SHAPE_VERTEX_FLOATS);
+        let mut values = Vec::with_capacity(vertices.len() * SHAPE_GPU_VERTEX_FLOATS);
         for vertex in vertices {
             values.extend_from_slice(vertex);
+            if vertex.len() == LEGACY_SHAPE_VERTEX_FLOATS {
+                values.extend_from_slice(&Affine2D::IDENTITY.to_gpu_array());
+            }
         }
         queue.write_buffer(&self.vertex_buffer, 0, &floats_to_bytes(&values));
         Ok(true)
@@ -166,14 +182,16 @@ pub(crate) fn validate_shape_vertices(vertices: &[ShapeVertex]) -> PyResult<()> 
         ));
     }
     for vertex in vertices {
-        if vertex.len() != SHAPE_VERTEX_FLOATS {
+        if vertex.len() != LEGACY_SHAPE_VERTEX_FLOATS
+            && vertex.len() != AFFINE_SHAPE_VERTEX_FLOATS
+        {
             return Err(PyValueError::new_err(format!(
-                "Shape vertices require exactly {SHAPE_VERTEX_FLOATS} floats."
+                "Shape vertices require exactly {LEGACY_SHAPE_VERTEX_FLOATS} legacy floats or {AFFINE_SHAPE_VERTEX_FLOATS} affine floats."
             )));
         }
         if !vertex.iter().copied().all(f32::is_finite) {
             return Err(PyValueError::new_err(
-                "Shape position, color and clip bounds must be finite.",
+                "Shape position, color, clip bounds and transform values must be finite.",
             ));
         }
         if vertex[2..6]
@@ -188,6 +206,9 @@ pub(crate) fn validate_shape_vertices(vertices: &[ShapeVertex]) -> PyResult<()> 
             return Err(PyValueError::new_err(
                 "Shape clip bounds must have positive width and height.",
             ));
+        }
+        if vertex.len() == AFFINE_SHAPE_VERTEX_FLOATS {
+            Affine2D::try_from_slice(&vertex[10..16]).map_err(PyValueError::new_err)?;
         }
     }
     Ok(())
@@ -205,7 +226,7 @@ fn next_shape_vertex_capacity(current: usize, required: usize) -> PyResult<usize
 #[cfg(target_os = "windows")]
 fn create_vertex_buffer(device: &wgpu::Device, capacity: usize) -> wgpu::Buffer {
     let size = capacity
-        .saturating_mul(SHAPE_VERTEX_FLOATS)
+        .saturating_mul(SHAPE_GPU_VERTEX_FLOATS)
         .saturating_mul(std::mem::size_of::<f32>())
         .max(std::mem::size_of::<f32>()) as u64;
     device.create_buffer(&wgpu::BufferDescriptor {
@@ -233,26 +254,71 @@ mod tests {
         vec![x, y, 0.1, 0.5, 1.0, 0.8, 0.0, 0.0, 640.0, 480.0]
     }
 
+    fn affine_vertex(x: f32, y: f32) -> ShapeVertex {
+        let mut result = vertex(x, y);
+        result.extend_from_slice(&[0.8, -0.6, 0.6, 0.8, 12.0, -4.0]);
+        result
+    }
+
     #[test]
-    fn validates_triangle_vertices() {
-        assert!(validate_shape_vertices(&[vertex(0.0, 0.0), vertex(20.0, 0.0), vertex(10.0, 20.0)]).is_ok());
+    fn validates_legacy_and_affine_triangle_vertices() {
+        assert!(validate_shape_vertices(&[
+            vertex(0.0, 0.0),
+            vertex(20.0, 0.0),
+            vertex(10.0, 20.0),
+        ])
+        .is_ok());
+        assert!(validate_shape_vertices(&[
+            affine_vertex(0.0, 0.0),
+            affine_vertex(20.0, 0.0),
+            affine_vertex(10.0, 20.0),
+        ])
+        .is_ok());
         assert!(validate_shape_vertices(&[]).is_ok());
         assert!(validate_shape_vertices(&[vertex(0.0, 0.0)]).is_err());
 
         let mut invalid_color = vertex(0.0, 0.0);
         invalid_color[4] = 1.2;
-        assert!(validate_shape_vertices(&[invalid_color, vertex(20.0, 0.0), vertex(10.0, 20.0)]).is_err());
+        assert!(validate_shape_vertices(&[
+            invalid_color,
+            vertex(20.0, 0.0),
+            vertex(10.0, 20.0),
+        ])
+        .is_err());
 
         let mut invalid_clip = vertex(0.0, 0.0);
         invalid_clip[8] = invalid_clip[6];
-        assert!(validate_shape_vertices(&[invalid_clip, vertex(20.0, 0.0), vertex(10.0, 20.0)]).is_err());
+        assert!(validate_shape_vertices(&[
+            invalid_clip,
+            vertex(20.0, 0.0),
+            vertex(10.0, 20.0),
+        ])
+        .is_err());
+
+        let mut singular = affine_vertex(0.0, 0.0);
+        singular[10..16].copy_from_slice(&[1.0, 2.0, 2.0, 4.0, 0.0, 0.0]);
+        assert!(validate_shape_vertices(&[
+            singular,
+            affine_vertex(20.0, 0.0),
+            affine_vertex(10.0, 20.0),
+        ])
+        .is_err());
     }
 
     #[test]
     fn shape_vertex_capacity_grows_geometrically_and_never_shrinks() {
-        assert_eq!(next_shape_vertex_capacity(INITIAL_SHAPE_VERTEX_CAPACITY, 1).unwrap(), 96);
-        assert_eq!(next_shape_vertex_capacity(INITIAL_SHAPE_VERTEX_CAPACITY, 96).unwrap(), 96);
-        assert_eq!(next_shape_vertex_capacity(INITIAL_SHAPE_VERTEX_CAPACITY, 97).unwrap(), 128);
+        assert_eq!(
+            next_shape_vertex_capacity(INITIAL_SHAPE_VERTEX_CAPACITY, 1).unwrap(),
+            96
+        );
+        assert_eq!(
+            next_shape_vertex_capacity(INITIAL_SHAPE_VERTEX_CAPACITY, 96).unwrap(),
+            96
+        );
+        assert_eq!(
+            next_shape_vertex_capacity(INITIAL_SHAPE_VERTEX_CAPACITY, 97).unwrap(),
+            128
+        );
         assert_eq!(next_shape_vertex_capacity(128, 129).unwrap(), 256);
         assert_eq!(next_shape_vertex_capacity(256, 12).unwrap(), 256);
     }
