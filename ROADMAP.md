@@ -8,7 +8,7 @@
 
 **Overall completion: 68%**
 
-Progress is based on implemented and verified roadmap work. Ideas, mockups and unfinished prototypes do not increase the percentage. The current weighted model preserves the verified 56% baseline through completed 0.4 Core Widgets, then adds one percentage point for each verified 0.5 Layout Engine group. Release readiness is tracked separately from project completion.
+Progress is based on implemented and verified roadmap work. Ideas, mockups and unfinished prototypes do not increase the percentage. The current weighted model preserves the verified 56% baseline through completed 0.4 Core Widgets, then adds one percentage point for each verified 0.5 Layout Engine group. Release readiness is tracked separately from project completion. The 0.6 checklist records newly verified reactive-runtime scope without inventing a new weighting rule or double-counting the foundational `State` work already represented earlier in the roadmap.
 
 ---
 
@@ -175,18 +175,24 @@ Layout spacing and padding remain authored in logical DIPs across monitor-scale 
 
 ## 0.6 Alpha — Reactive Runtime
 
+**Status:** Underway 🚧 — 8 / 12 groups verified
+
 - [x] Basic thread-safe `State`
-- [ ] Computed state
-- [ ] Reactive properties
-- [ ] Data binding
-- [ ] Two-way binding
-- [ ] Observable collections
-- [ ] Dependency tracking
+- [x] Computed state
+- [x] Reactive properties
+- [x] Data binding
+- [x] Two-way binding
+- [x] Observable collections
+- [x] Dependency tracking
 - [ ] Async state
 - [ ] Persistent state
 - [ ] Component lifecycle hooks
 - [ ] Minimal-update scheduling
-- [ ] Batched state transactions
+- [x] Batched state transactions
+
+### Verified 0.6 slice
+
+`ComputedState` is read-only and discovers dependencies dynamically from reactive reads. Nested `state_transaction()` scopes coalesce notifications and recompute computed chains in dependency order at the outer boundary. `ReactiveProperty`, disposable one-way/two-way bindings, `ObservableList` and `ObservableDict` are public Python APIs with deterministic coverage for dependency switching, batching, disposal, observable snapshots and exception flushing. The merged implementation passed the full repository CI gate before these checklist items were credited. Async state, persistent state, component lifecycle integration and minimal-update scheduling remain open.
 
 ## 0.7 Alpha — Animation Engine
 
@@ -434,6 +440,7 @@ AI output must remain ordinary, editable SwirUI code.
 - [x] Windows advanced Dock / Flow / Overlay / ConstraintLayout + persistent wgpu smoke test
 - [x] DPI-aware logical spacing / padding conversion coverage
 - [x] Retained layout invalidation optimization coverage
+- [x] Reactive runtime computed state / bindings / observable collections / transaction coverage
 - [ ] Screenshot tests
 - [ ] Visual regression tests
 - [x] Accessibility tests
