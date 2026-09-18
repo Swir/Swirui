@@ -42,7 +42,9 @@ class Widget(Component):
 
     ``layout_constraints`` and ``layout_grow`` are intentionally backend-neutral.
     Layout containers may arrange ``bounds`` during scene preparation without
-    emitting a second invalidation from inside the same retained rebuild.
+    emitting a second invalidation from inside the same retained rebuild. The
+    authored size is retained separately so arrangement never destroys the
+    widget's intrinsic measurement for a later reflow.
     """
 
     def __init__(
@@ -68,6 +70,7 @@ class Widget(Component):
             accessible_description=accessible_description,
         )
         self._bounds = bounds
+        self._preferred_size = bounds.size
         self._opacity = self._validate_opacity(opacity)
         self._z_index = int(z_index)
         self._clip_to_bounds = bool(clip_to_bounds)
@@ -80,10 +83,19 @@ class Widget(Component):
 
     @bounds.setter
     def bounds(self, value: Rect) -> None:
-        if value == self._bounds:
+        geometry_changed = value != self._bounds
+        preferred_changed = value.size != self._preferred_size
+        if not geometry_changed and not preferred_changed:
             return
         self._bounds = value
+        self._preferred_size = value.size
         self.invalidate(reason="bounds")
+
+    @property
+    def preferred_size(self) -> Size:
+        """Return the authored logical-DIP size retained across arrangement."""
+
+        return self._preferred_size
 
     @property
     def opacity(self) -> float:
@@ -91,7 +103,7 @@ class Widget(Component):
 
     @opacity.setter
     def opacity(self, value: float) -> None:
-        normalized = self._validate_opacity(value)
+        normalized = self._validate_opacity(opacity := value)
         if normalized == self._opacity:
             return
         self._opacity = normalized
@@ -166,10 +178,21 @@ class Widget(Component):
         self.layout_grow = grow
         return self
 
-    def measure(self, available: Size | None = None) -> Size:
-        """Return this widget's preferred constrained logical-DIP size."""
+    def intrinsic_size(self, available: Size | None = None) -> Size:
+        """Return this widget's natural size before parent layout constraints.
 
-        preferred = self.layout_constraints.constrain(self.bounds.size)
+        Subclasses can override this hook for content-driven measurement. The
+        default contract returns the last explicitly authored size, not the most
+        recent bounds produced by a parent layout pass.
+        """
+
+        _ = available
+        return self.preferred_size
+
+    def measure(self, available: Size | None = None) -> Size:
+        """Return this widget's intrinsic constrained logical-DIP size."""
+
+        preferred = self.layout_constraints.constrain(self.intrinsic_size(available))
         if available is None:
             return preferred
         available_width = max(0.0, float(available.width))
@@ -191,7 +214,7 @@ class Widget(Component):
         raise NotImplementedError
 
     def _set_layout_bounds(self, value: Rect) -> None:
-        """Apply bounds inside an active layout pass without recursive invalidation."""
+        """Apply arranged bounds without changing this widget's intrinsic size."""
 
         self._bounds = value
 
