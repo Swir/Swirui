@@ -198,11 +198,11 @@ Layout spacing and padding remain authored in logical DIPs across monitor-scale 
 
 ## 0.7 Alpha — Animation Engine
 
-**Status:** Underway 🚧 — 10 / 12 groups verified
+**Status:** Underway 🚧 — 11 / 12 groups verified
 
 - [ ] Fade / slide / scale / rotate
 - [x] Blur / glow transitions
-- [ ] Morph / flip / reveal
+- [x] Morph / flip / reveal
 - [x] Spring / elastic / bounce
 - [x] Physics animations
 - [x] Page transitions
@@ -219,7 +219,9 @@ Layout spacing and padding remain authored in logical DIPs across monitor-scale 
 
 Retained interaction helpers cover hover/press/focus opacity transitions, animated blur/glow effect transitions, particle effects and spring-driven magnetic interaction. Magnetic motion uses a visual-only logical-DIP widget offset, retargets from the currently presented sample, leaves layout measurement/arrangement unchanged and translates the compiled subtree so painting, clipping and hit testing stay aligned. Deterministic tests cover clamping, retargeting, idle restoration and finite parameter validation, while real Win32+wGPU smoke coverage verifies routed pointer motion, retained SceneGraph translation and persistent per-window GPU-context reuse.
 
-`PageTransition` now performs retained slide-and-cross-fade navigation without mutating authored layout bounds, while `SharedElementTransition` aligns two retained representations by their visual centers, cross-fades them along one logical path and preserves their pre-existing visual offsets. Both are driven by the same elapsed-time animation clock and compile through the retained SceneGraph, so clipping and hit testing track the sampled visual position without recreating the native window or persistent wgpu context. Deterministic unit coverage protects frame-partition independence, cancellation, restoration and boundary cases, and dedicated real Win32+wGPU smoke gates verify persistent-context reuse. The exact implementation heads passed Python 3.11–3.14, strict Ruff/Mypy, retained performance budgets, native Rust/wgpu/PyO3 and real Win32+wGPU CI before these ten groups were credited.
+`PageTransition` now performs retained slide-and-cross-fade navigation without mutating authored layout bounds, while `SharedElementTransition` aligns two retained representations by their visual centers, cross-fades them along one logical path and preserves their pre-existing visual offsets. Both are driven by the same elapsed-time animation clock and compile through the retained SceneGraph, so clipping and hit testing track the sampled visual position without recreating the native window or persistent wgpu context. Deterministic unit coverage protects frame-partition independence, cancellation, restoration and boundary cases, and dedicated real Win32+wGPU smoke gates verify persistent-context reuse.
+
+`MorphTransition` aligns positive, matching-aspect retained source/target elements by visual center, interpolates their verified uniform visual scales and cross-fades them without mutating authored layout. `FlipTransition` provides a deterministic center-collapse flip with a single midpoint content-swap hook, while `RevealTransition` combines retained scale and opacity from a configurable hidden state back to the captured authored visual state. Exact-head CI #697 verified these APIs across Python 3.11–3.14, strict Ruff/Mypy, performance budgets, Rust cargo check/test, Maturin/PyO3, Linux/X11, macOS/Cocoa and the real Win32+wGPU persistent-context smoke gate before this eleventh 0.7 group was credited.
 
 ## 0.8 Beta — Professional Widgets
 
@@ -453,6 +455,7 @@ AI output must remain ordinary, editable SwirUI code.
 - [x] Windows spring-driven magnetic interaction + persistent wgpu smoke test
 - [x] Windows retained page transitions + persistent wgpu smoke test
 - [x] Windows retained shared-element transitions + persistent wgpu smoke test
+- [x] Windows retained morph / flip / reveal + persistent wgpu smoke test
 - [x] DPI-aware logical spacing / padding conversion coverage
 - [x] Retained layout invalidation optimization coverage
 - [x] Reactive runtime computed state / bindings / observable collections / transaction coverage

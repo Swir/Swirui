@@ -203,6 +203,9 @@ jobs:
       - name: Verify visual scale animation on retained GPU path
         run: pytest tests/test_windows_scale_animation.py -q
 
+      - name: Verify morph flip and reveal on retained GPU path
+        run: pytest tests/test_windows_advanced_transform.py -q
+
       - name: Verify blur and glow transitions on retained GPU path
         run: pytest tests/test_windows_effect_animation.py -q
 

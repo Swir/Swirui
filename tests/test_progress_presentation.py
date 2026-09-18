@@ -22,12 +22,15 @@ def test_active_animation_status_stays_synchronized_with_verified_roadmap() -> N
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     roadmap = (ROOT / "ROADMAP.md").read_text(encoding="utf-8")
 
-    assert "0.7 Alpha Animation Engine is underway with 10 / 12 groups verified" in readme
-    assert "**Status:** Underway 🚧 — 10 / 12 groups verified" in roadmap
+    assert "0.7 Alpha Animation Engine is underway with 11 / 12 groups verified" in readme
+    assert "**Status:** Underway 🚧 — 11 / 12 groups verified" in roadmap
     assert "- [x] Page transitions" in roadmap
     assert "- [x] Shared-element transitions" in roadmap
-    assert "0.7 Alpha Animation Engine is underway with 4 / 12 groups verified" not in readme
-    assert "**Status:** Underway 🚧 — 8 / 12 groups verified" not in roadmap
+    assert "- [x] Morph / flip / reveal" in roadmap
+    assert "- [ ] Fade / slide / scale / rotate" in roadmap
+    assert "Rotation remains the unverified capability" in readme
+    assert "0.7 Alpha Animation Engine is underway with 10 / 12 groups verified" not in readme
+    assert "**Status:** Underway 🚧 — 10 / 12 groups verified" not in roadmap
 
 
 def test_generated_progress_svgs_are_valid_and_match_completed_layout_scope() -> None:
