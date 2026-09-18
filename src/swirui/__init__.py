@@ -45,6 +45,7 @@ from .core import (
     computed,
     state_transaction,
 )
+from .interaction_animation import InteractionAnimationSpec, InteractionAnimator, InteractionPhase
 from .widgets import (
     Accordion,
     AdaptiveNavigation,
@@ -155,6 +156,9 @@ __all__ = [
     "IconButton",
     "Input",
     "Insets",
+    "InteractionAnimationSpec",
+    "InteractionAnimator",
+    "InteractionPhase",
     "Label",
     "LayoutConstraints",
     "LayoutDirection",
