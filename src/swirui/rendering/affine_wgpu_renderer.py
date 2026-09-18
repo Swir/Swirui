@@ -190,7 +190,9 @@ class WgpuRenderer(_CustomWgpuRenderer):
                 if clip is None or node.bounds.intersection(clip) is None:
                     continue
                 resource_id = node.resource_id
-                native_id = self._image_aliases.get(resource_id) if resource_id is not None else None
+                native_id = (
+                    self._image_aliases.get(resource_id) if resource_id is not None else None
+                )
                 if native_id is None:
                     raise RuntimeError(
                         f"Scene image resource {resource_id!r} is not registered with WgpuRenderer."
@@ -260,7 +262,8 @@ class WgpuRenderer(_CustomWgpuRenderer):
         for transform, bounds in clips:
             if not transform.is_axis_aligned:
                 raise RuntimeError(
-                    "Rotated or sheared SceneNode clipping requires the native transform compositor."
+                    "Rotated or sheared SceneNode clipping requires the native "
+                    "transform compositor."
                 )
             transformed = transform.transform_rect_bounds(bounds)
             clip = transformed if clip is None else clip.intersection(transformed)
