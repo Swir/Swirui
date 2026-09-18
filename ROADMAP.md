@@ -198,7 +198,7 @@ Layout spacing and padding remain authored in logical DIPs across monitor-scale 
 
 ## 0.7 Alpha — Animation Engine
 
-**Status:** Underway 🚧 — 4 / 12 groups verified
+**Status:** Underway 🚧 — 6 / 12 groups verified
 
 - [ ] Fade / slide / scale / rotate
 - [ ] Blur / glow transitions
@@ -207,15 +207,17 @@ Layout spacing and padding remain authored in logical DIPs across monitor-scale 
 - [x] Physics animations
 - [ ] Page transitions
 - [ ] Shared-element transitions
-- [ ] Hover / press / focus animations
+- [x] Hover / press / focus animations
 - [ ] Magnetic interactions
-- [ ] Particle effects
+- [x] Particle effects
 - [x] Frame-rate-independent timing
 - [x] Animation cancellation / chaining
 
 ### Verified 0.7 slice
 
-`Tween` and the window-scoped `AnimationController` advance from elapsed rendered-frame time rather than frame counts, with exact completion, unused-frame-tail carry-over and deterministic cancellation/chaining. Easing includes cubic, bounce and elastic curves. Analytical `SpringAnimation` solves underdamped, critically damped and overdamped motion from absolute elapsed time, while `DecayAnimation` provides exponential inertial motion for momentum/fling behavior. `AnimationParallel` composes multiple playables against one frame clock and interoperates with serial `AnimationSequence`; spring, decay and tween helpers publish samples through reactive `State`. Deterministic tests verify frame-partition independence, physical-parameter validation, completion/cancellation and mixed composition. The implementation passed Python 3.11–3.14, strict Ruff/Mypy, native Rust/wgpu/PyO3 and real Win32/wgpu CI before these four groups were credited.
+`Tween` and the window-scoped `AnimationController` advance from elapsed rendered-frame time rather than frame counts, with exact completion, unused-frame-tail carry-over and deterministic cancellation/chaining. Easing includes cubic, bounce and elastic curves. Analytical `SpringAnimation` solves underdamped, critically damped and overdamped motion from absolute elapsed time, while `DecayAnimation` provides exponential inertial motion for momentum/fling behavior. `AnimationParallel` composes multiple playables against one frame clock and interoperates with serial `AnimationSequence`; spring, decay and tween helpers publish samples through reactive `State`. Deterministic tests verify frame-partition independence, physical-parameter validation, completion/cancellation and mixed composition.
+
+`InteractionAnimator` subscribes to retained pointer/focus events and resolves pressed > hovered > focused > idle priority while retargeting superseded tweens from the currently presented opacity. Disable/disposal paths return safely to the authored idle state, and an explicit Win32 test sends real mouse messages through the native backend, renders the resulting opacity through the persistent wgpu SceneGraph path and verifies GPU-context reuse. `ParticleField` adds deterministic seeded particle motion with absolute-time sampling, bounded retained GPU batching and repeatable frame-partition-independent results. Both groups passed the full Python 3.11–3.14, strict Ruff/Mypy, native Rust/wgpu/PyO3 and real Win32/wgpu CI gate before being credited. Completion remains limited to these six verified 0.7 groups and does not imply alpha release readiness.
 
 ## 0.8 Beta — Professional Widgets
 
@@ -451,6 +453,8 @@ AI output must remain ordinary, editable SwirUI code.
 - [x] Reactive runtime computed state / bindings / observable collections / transaction coverage
 - [x] Async/persistent reactive state + component lifecycle/minimal-update coverage
 - [x] Animation timing / analytical physics / composition coverage
+- [x] Deterministic retained particle animation coverage
+- [x] Windows retained hover / press / focus animation + persistent wgpu smoke test
 - [ ] Screenshot tests
 - [ ] Visual regression tests
 - [x] Accessibility tests
