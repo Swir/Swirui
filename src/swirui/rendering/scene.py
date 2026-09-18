@@ -246,11 +246,29 @@ class SceneNode:
                 return ()
             effective_clips = (*inherited_clips, (world_transform, self.bounds))
 
-        candidates = (
-            (index, child)
-            for index, child in enumerate(self.children)
-            if child._subtree_may_hit(point, world_transform)
-        )
+        if world_transform.is_identity:
+            candidates: list[tuple[int, SceneNode]] = []
+            point_x = point.x
+            point_y = point.y
+            for index, child in enumerate(self.children):
+                if child.opacity <= 0.0:
+                    continue
+                if child.transform.is_identity:
+                    bounds = child.bounds
+                    inside = (
+                        bounds.x <= point_x <= bounds.x + bounds.width
+                        and bounds.y <= point_y <= bounds.y + bounds.height
+                    )
+                    if inside or (child.children and not child.clip_to_bounds):
+                        candidates.append((index, child))
+                elif child._subtree_may_hit(point, world_transform):
+                    candidates.append((index, child))
+        else:
+            candidates = [
+                (index, child)
+                for index, child in enumerate(self.children)
+                if child._subtree_may_hit(point, world_transform)
+            ]
         ordered_children = sorted(
             candidates,
             key=lambda item: (item[1].z_index, item[0]),
