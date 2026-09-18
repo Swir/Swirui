@@ -4,8 +4,18 @@ import math
 
 import pytest
 
-from swirui import AnimationParallel, Button, FadeTransition, SlideTransition, linear
+from swirui import (
+    AnimationParallel,
+    Button,
+    Card,
+    FadeTransition,
+    Label,
+    ScaleTransition,
+    SlideTransition,
+    linear,
+)
 from swirui.rendering import Point, Rect
+from swirui.widgets.runtime import compile_component_scene
 
 
 def _button() -> Button:
@@ -57,7 +67,38 @@ def test_slide_transition_uses_relative_visual_offsets_without_layout_changes() 
     assert button.visual_offset == Point(3.0, 5.0)
 
 
-def test_fade_and_slide_are_frame_partition_independent_and_composable() -> None:
+def test_scale_transition_transforms_compiled_subtree_without_layout_changes() -> None:
+    card = Card(key="scale-card", bounds=Rect(100.0, 100.0, 200.0, 100.0))
+    label = Label("Scale", key="scale-label", bounds=Rect(120.0, 120.0, 100.0, 30.0))
+    card.add(label)
+    authored_card_bounds = card.bounds
+    authored_label_bounds = label.bounds
+    authored_font_size = label.font_size
+    transition = ScaleTransition(
+        card,
+        from_scale=0.5,
+        duration=1.0,
+        easing=linear,
+    ).start()
+
+    scene = compile_component_scene(card, width=500.0, height=400.0)
+    assert scene is not None
+    card_node = next(node for node in scene.walk() if node.key == "scale-card")
+    label_node = next(node for node in scene.walk() if node.key == "scale-label")
+    assert card_node.bounds == Rect(150.0, 125.0, 100.0, 50.0)
+    assert label_node.bounds == Rect(160.0, 135.0, 50.0, 15.0)
+    assert label_node.font_size == pytest.approx(authored_font_size * 0.5)
+    assert card.bounds == authored_card_bounds
+    assert label.bounds == authored_label_bounds
+
+    transition.advance(0.5)
+    assert card.visual_scale == pytest.approx(0.75)
+    transition.restore()
+    assert card.visual_scale == pytest.approx(1.0)
+    assert card.bounds == authored_card_bounds
+
+
+def test_fade_slide_and_scale_are_frame_partition_independent_and_composable() -> None:
     direct = _button()
     partitioned = _button()
     direct_group = AnimationParallel(
@@ -68,6 +109,7 @@ def test_fade_and_slide_are_frame_partition_independent_and_composable() -> None
             duration=1.0,
             easing=linear,
         ),
+        ScaleTransition(direct, from_scale=0.8, duration=1.0, easing=linear),
     ).start()
     partitioned_group = AnimationParallel(
         FadeTransition(partitioned, from_opacity=0.0, duration=1.0, easing=linear),
@@ -77,6 +119,7 @@ def test_fade_and_slide_are_frame_partition_independent_and_composable() -> None
             duration=1.0,
             easing=linear,
         ),
+        ScaleTransition(partitioned, from_scale=0.8, duration=1.0, easing=linear),
     ).start()
 
     direct_group.advance(0.625)
@@ -85,6 +128,7 @@ def test_fade_and_slide_are_frame_partition_independent_and_composable() -> None
 
     assert direct.opacity == pytest.approx(partitioned.opacity)
     assert direct.visual_offset == partitioned.visual_offset
+    assert direct.visual_scale == pytest.approx(partitioned.visual_scale)
     assert direct.bounds == partitioned.bounds
 
 
@@ -115,3 +159,9 @@ def test_visual_transitions_validate_endpoints() -> None:
         SlideTransition(button, from_offset=Point(math.inf, 0.0))
     with pytest.raises(ValueError, match="to_offset"):
         SlideTransition(button, to_offset=Point(0.0, math.nan))
+    with pytest.raises(ValueError, match="from_scale"):
+        ScaleTransition(button, from_scale=0.0)
+    with pytest.raises(ValueError, match="to_scale"):
+        ScaleTransition(button, to_scale=math.inf)
+    with pytest.raises(ValueError, match="visual_scale"):
+        button.visual_scale = -1.0
