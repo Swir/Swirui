@@ -103,7 +103,7 @@ class Widget(Component):
 
     @opacity.setter
     def opacity(self, value: float) -> None:
-        normalized = self._validate_opacity(opacity := value)
+        normalized = self._validate_opacity(value)
         if normalized == self._opacity:
             return
         self._opacity = normalized
