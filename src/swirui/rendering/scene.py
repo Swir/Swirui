@@ -15,6 +15,16 @@ _IDENTITY_TRANSFORM = Affine2D()
 ClipRegion = tuple[Affine2D, Rect]
 
 
+def _compose_transform(local: Affine2D, parent: Affine2D) -> Affine2D:
+    """Compose retained transforms without allocating on the identity hot path."""
+
+    if local.is_identity:
+        return parent
+    if parent.is_identity:
+        return local
+    return local.then(parent)
+
+
 class SceneNodeKind(StrEnum):
     GROUP = "group"
     RECTANGLE = "rectangle"
@@ -191,7 +201,7 @@ class SceneNode:
         if not self._point_within_clips(point, inherited_clips):
             return ()
 
-        world_transform = self.transform.then(parent_transform)
+        world_transform = _compose_transform(self.transform, parent_transform)
         effective_clips = inherited_clips
         if self.clip_to_bounds:
             if not self._transformed_bounds_contains(point, world_transform):
@@ -234,7 +244,7 @@ class SceneNode:
 
         if self.opacity <= 0.0 or not self._point_within_clips(point, inherited_clips):
             return False
-        world_transform = self.transform.then(parent_transform)
+        world_transform = _compose_transform(self.transform, parent_transform)
         if self._transformed_bounds_contains(point, world_transform):
             return True
         if self.clip_to_bounds:
@@ -270,10 +280,15 @@ class SceneNode:
 
     @staticmethod
     def _point_within_clips(point: Point, clips: tuple[ClipRegion, ...]) -> bool:
-        return all(
-            bounds.contains(transform.inverse().transform_point(point))
-            for transform, bounds in clips
-        )
+        for transform, bounds in clips:
+            authored = (
+                point
+                if transform.is_identity
+                else transform.inverse().transform_point(point)
+            )
+            if not bounds.contains(authored):
+                return False
+        return True
 
     @staticmethod
     def _authored_point(point: Point, world_transform: Affine2D) -> Point:
