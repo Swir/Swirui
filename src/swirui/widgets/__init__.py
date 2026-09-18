@@ -49,6 +49,7 @@ from .surfaces import Card, Frame, GlassCard, Panel
 from .text import Label, Text
 from .toggle import Checkbox, RadioButton, Switch
 from .tooltip import Tooltip
+from .typography import DynamicTypography
 
 __all__ = [
     "Accordion",
@@ -66,6 +67,7 @@ __all__ = [
     "Dialog",
     "Dock",
     "DockPanel",
+    "DynamicTypography",
     "Expander",
     "Flow",
     "FlowDirection",
