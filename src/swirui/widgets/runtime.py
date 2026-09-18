@@ -137,6 +137,12 @@ class WidgetRuntime:
     uses the application's existing scene invalidation/scheduler path. Native GPU
     contexts, text shaping, HiDPI conversion and presentation therefore remain in
     the established renderer rather than being reimplemented by widgets.
+
+    Mounting also owns the retained component lifecycle. Parent-first ``on_mount``
+    hooks run before the initial scene build; child-first ``on_unmount`` hooks run
+    when the runtime is detached, the root is replaced, or the hosting Window closes.
+    Components inserted into or removed from a mounted subtree inherit that lifecycle
+    automatically through :class:`~swirui.core.Component`.
     """
 
     def __init__(self, window: Window) -> None:
@@ -152,16 +158,27 @@ class WidgetRuntime:
     def mount(self, root: Component) -> WidgetRuntime:
         if self.root is root and self.window.root is root:
             return self
+        if root.mounted:
+            raise ValueError("Component tree is already mounted by another runtime.")
+
         self._detach()
         self.root = root
         self.window.set_root(root)
-        self._unsubscribers = [
-            root.on("invalidated", self._on_root_invalidated),
-            self.window.on("resized", self._on_window_resized),
-            self.window.on("root_changed", self._on_window_root_changed),
-            self.window.on("closed", self._on_window_closed),
-        ]
-        self.rebuild()
+        try:
+            root._mount(self.window)
+            self._unsubscribers = [
+                root.on("invalidated", self._on_root_invalidated),
+                self.window.on("resized", self._on_window_resized),
+                self.window.on("root_changed", self._on_window_root_changed),
+                self.window.on("closed", self._on_window_closed),
+            ]
+            self.rebuild()
+        except BaseException:
+            self._detach()
+            if self.window.root is root:
+                self.window.set_root(None)
+            self.window.set_scene(None)
+            raise
         return self
 
     def rebuild(self) -> Scene | None:
@@ -196,10 +213,13 @@ class WidgetRuntime:
         self.window.set_scene(None)
 
     def _detach(self) -> None:
+        root = self.root
         for unsubscribe in self._unsubscribers:
             unsubscribe()
         self._unsubscribers.clear()
         self.root = None
+        if root is not None and root.mounted_window is self.window:
+            root._unmount()
 
     def _on_root_invalidated(self, _event: Event) -> None:
         self.rebuild()
