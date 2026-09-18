@@ -44,7 +44,14 @@ class Affine2D:
 
     @property
     def is_identity(self) -> bool:
-        return self == Affine2D()
+        return (
+            self.m11 == 1.0
+            and self.m12 == 0.0
+            and self.m21 == 0.0
+            and self.m22 == 1.0
+            and self.tx == 0.0
+            and self.ty == 0.0
+        )
 
     @classmethod
     def rotation(cls, radians: float, *, origin: Point = Point()) -> Affine2D:
