@@ -1,6 +1,19 @@
 import pytest
 
-from swirui import Button, Column, Input, Label, PasswordInput, Row, TextArea
+from swirui import (
+    Button,
+    Column,
+    ConstraintLayout,
+    ConstraintSpec,
+    Flow,
+    Grid,
+    Input,
+    Label,
+    PasswordInput,
+    Row,
+    Stack,
+    TextArea,
+)
 from swirui.rendering import Rect, Size
 from swirui.widgets.measurement import measure_text_block
 
@@ -136,6 +149,54 @@ def test_nested_column_measurement_propagates_content_driven_child_size() -> Non
     assert measured.width > 100.0
     assert measured.height > 40.0
     assert measured.width >= action.measure(Size(500.0, 500.0)).width + 20.0
+
+
+def test_panel_and_advanced_layout_measurement_propagate_intrinsic_children() -> None:
+    label = Label(
+        "Content-driven child measurement must propagate through retained containers.",
+        bounds=Rect(0.0, 0.0, 20.0, 16.0),
+        font_size=16.0,
+    )
+    stack = Stack(bounds=Rect(0.0, 0.0, 1.0, 1.0), padding=12.0)
+    stack.add(label)
+    stack_size = stack.measure(Size(500.0, 500.0))
+
+    assert stack_size.width >= label.measure(Size(500.0, 500.0)).width + 24.0
+    assert stack_size.height >= label.measure(Size(500.0, 500.0)).height + 24.0
+
+    grid = Grid(
+        bounds=Rect(0.0, 0.0, 1.0, 1.0),
+        columns=2,
+        column_spacing=10.0,
+        padding=8.0,
+    )
+    grid.add(
+        Label("A much wider first cell", bounds=Rect(0.0, 0.0, 10.0, 12.0)),
+        Button("Measured action", bounds=Rect(0.0, 0.0, 20.0, 18.0)),
+    )
+    grid_size = grid.measure(Size(600.0, 400.0))
+    assert grid_size.width > 100.0
+    assert grid_size.height > 30.0
+
+    flow = Flow(bounds=Rect(0.0, 0.0, 1.0, 1.0), spacing=8.0, line_spacing=6.0)
+    flow.add(
+        Label("First flowing item", bounds=Rect(0.0, 0.0, 10.0, 12.0)),
+        Label("Second flowing item", bounds=Rect(0.0, 0.0, 10.0, 12.0)),
+    )
+    flow_size = flow.measure(Size(150.0, 300.0))
+    assert flow_size.width <= 150.0
+    assert flow_size.height > 20.0
+
+    constrained_child = Label(
+        "Constraint child content",
+        bounds=Rect(0.0, 0.0, 10.0, 12.0),
+    )
+    constraint = ConstraintLayout(bounds=Rect(0.0, 0.0, 1.0, 1.0), padding=5.0)
+    constraint.add(constrained_child)
+    constraint.set_constraints(constrained_child, ConstraintSpec(left=12.0, top=7.0))
+    constraint_size = constraint.measure(Size(500.0, 500.0))
+    assert constraint_size.width >= constrained_child.measure().width + 22.0
+    assert constraint_size.height >= constrained_child.measure().height + 17.0
 
 
 def test_arrangement_still_preserves_explicit_preferred_size_baseline() -> None:
