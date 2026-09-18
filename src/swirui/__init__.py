@@ -55,7 +55,14 @@ from .interaction_animation import (
 )
 from .page_transition import PageTransition, PageTransitionDirection
 from .shared_element_transition import SharedElementTransition
-from .transform_animation import FadeTransition, ScaleTransition, SlideTransition
+from .transform_animation import (
+    FadeTransition,
+    FlipTransition,
+    MorphTransition,
+    RevealTransition,
+    ScaleTransition,
+    SlideTransition,
+)
 from .widgets import (
     Accordion,
     AdaptiveNavigation,
@@ -160,6 +167,7 @@ __all__ = [
     "DynamicTypography",
     "Expander",
     "FadeTransition",
+    "FlipTransition",
     "Flow",
     "FlowDirection",
     "Frame",
@@ -179,6 +187,7 @@ __all__ = [
     "MagneticInteractionSpec",
     "MainAxisAlignment",
     "Modal",
+    "MorphTransition",
     "NavigationMode",
     "Notification",
     "ObservableDict",
@@ -202,6 +211,7 @@ __all__ = [
     "ResponsiveLayout",
     "ResponsiveLayoutSpec",
     "ResponsiveValue",
+    "RevealTransition",
     "Row",
     "ScaleTransition",
     "ScrollView",
