@@ -82,8 +82,8 @@ class DynamicTypography(Widget):
         self._fill_viewport = bool(fill_viewport)
         self._current_variant = ViewportClass.COMPACT
         self._current_scale = self._scales.compact
-        self._font_baselines: dict[Component, float] = {}
-        self._last_applied: dict[Component, float] = {}
+        self._font_baselines: dict[_TypographyTarget, float] = {}
+        self._last_applied: dict[_TypographyTarget, float] = {}
         self.add(content)
 
     @property
@@ -181,7 +181,7 @@ class DynamicTypography(Widget):
         self._apply_scale(scale)
 
     def _apply_scale(self, scale: float) -> None:
-        active: set[Component] = set()
+        active: set[_TypographyTarget] = set()
         for target in self._typography_targets(self.content):
             active.add(target)
             current = float(target._font_size)
