@@ -184,7 +184,7 @@ def test_retained_layout_spacing_remains_logical_across_dpi_scales() -> None:
     backend = ForcedScaleWin32Backend(1.5)
     renderer = WgpuRenderer()
     app = App("SwirUI HiDPI Layout Smoke", platform_backend=backend, renderer=renderer)
-    window = app.add_window(Window(title="SwirUI HiDPI Layout Smoke", width=480, height=220))
+    window = app.add_window(Window(title="SwirUI HiDPI Layout Smoke", width=480, height=260))
     first = Button("One", key="dpi-one", bounds=Rect(0.0, 0.0, 96.0, 44.0))
     second = Button("Two", key="dpi-two", bounds=Rect(0.0, 0.0, 96.0, 44.0))
     row = Row(
@@ -205,14 +205,14 @@ def test_retained_layout_spacing_remains_logical_across_dpi_scales() -> None:
         initial_contexts = renderer.persistent_context_count
 
         assert window.scale == pytest.approx(1.5)
-        assert window.pixel_size == (720, 330)
+        assert window.pixel_size == (720, 390)
         assert second.bounds.x - first.bounds.right == pytest.approx(20.0)
         assert first.bounds.x == pytest.approx(24.0)
         assert second.bounds.right <= row.bounds.right - 24.0 + 1e-6
 
         backend.forced_scale = 2.0
         backend.post_test_event(
-            PlatformEvent(PlatformEventKind.RESIZE, handle, width=960, height=440)
+            PlatformEvent(PlatformEventKind.RESIZE, handle, width=960, height=520)
         )
         backend.post_test_event(
             PlatformEvent(PlatformEventKind.DPI_CHANGED, handle, scale=2.0)
@@ -221,10 +221,10 @@ def test_retained_layout_spacing_remains_logical_across_dpi_scales() -> None:
         app.process_events()
 
         assert window.scale == pytest.approx(2.0)
-        assert (window.width, window.height) == (480, 220)
-        assert window.pixel_size == (960, 440)
-        assert (surface.width, surface.height) == (960, 440)
-        assert row.bounds == Rect(0.0, 0.0, 480.0, 220.0)
+        assert (window.width, window.height) == (480, 260)
+        assert window.pixel_size == (960, 520)
+        assert (surface.width, surface.height) == (960, 520)
+        assert row.bounds == Rect(0.0, 0.0, 480.0, 260.0)
         assert first.bounds.x == pytest.approx(24.0)
         assert second.bounds.x - first.bounds.right == pytest.approx(20.0)
         assert renderer.persistent_context_count == initial_contexts
