@@ -7,10 +7,11 @@ from typing import Any
 
 from swirui.core import AccessibilityRole, Event
 from swirui.platforms import PlatformEvent, PlatformEventKind, PointerButton
-from swirui.rendering.geometry import Color, CornerRadius, Rect
+from swirui.rendering.geometry import Color, CornerRadius, Rect, Size
 from swirui.rendering.scene import SceneNode, SceneNodeKind
 
 from .base import Widget
+from .measurement import measure_text_block
 
 _VK_BACK = 0x08
 _VK_RETURN = 0x0D
@@ -172,6 +173,29 @@ class _TextInputBase(Widget):
     @property
     def focused(self) -> bool:
         return self._focused
+
+    def intrinsic_size(self, available: Size | None = None) -> Size:
+        """Measure rendered value/placeholder while preserving authored geometry."""
+
+        rendered = self._display_value() if self._value else self._placeholder
+        content_limit: float | None = None
+        if self._multiline and available is not None:
+            content_limit = max(0.0, available.width - (2.0 * self._padding))
+        measured = measure_text_block(
+            rendered,
+            font_size=self._font_size,
+            available_width=content_limit,
+            line_height_factor=1.3,
+            wrap=self._multiline,
+        )
+        natural = Size(
+            measured.width + (2.0 * self._padding),
+            measured.height + (2.0 * self._padding),
+        )
+        return Size(
+            max(self.preferred_size.width, natural.width),
+            max(self.preferred_size.height, natural.height),
+        )
 
     def select(self, start: int, end: int) -> None:
         length = len(self._value)
