@@ -9,6 +9,7 @@ from swirui import (
     AnimationHandle,
     AnimationSequence,
     AnimationStatus,
+    App,
     Button,
     Tween,
     animate_bounds,
@@ -115,6 +116,27 @@ def test_controller_runs_independent_sequences_and_prunes_finished_handles() -> 
     assert controller.active is False
     assert controller.handles == ()
     assert right[-1] == pytest.approx(20.0)
+
+
+def test_controller_can_follow_app_frame_timestamps_and_detach() -> None:
+    app = App(name="Animation clock test")
+    values: list[float] = []
+    controller = AnimationController()
+    detach = controller.attach(app)
+    handle = controller.play(Tween(0.0, 1.0, 1.0, values.append), start_time=30.0)
+
+    app.emit("frame_rendered", frame_time=30.25)
+    assert handle.running is True
+    assert values[-1] == pytest.approx(0.25)
+
+    app.emit("frame_rendered", frame_time=31.0)
+    assert handle.completed is True
+    assert values[-1] == pytest.approx(1.0)
+
+    detach()
+    before_detached_event = tuple(values)
+    app.emit("frame_rendered", frame_time=32.0)
+    assert tuple(values) == before_detached_event
 
 
 def test_widget_opacity_and_bounds_helpers_use_retained_properties() -> None:
