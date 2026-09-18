@@ -235,15 +235,18 @@ class SceneNode:
         """Reject a subtree only when it is impossible for it to hit ``point``.
 
         The caller has already verified every inherited clip for this pointer, so
-        the broad phase only evaluates this subtree's composed visual bounds. Leaf
-        visuals can be rejected immediately; unclipped containers with descendants
-        remain eligible outside their own bounds because descendants may overflow.
+        the broad phase only evaluates this subtree's composed visual bounds. The
+        identity path stays allocation-free because it covers ordinary retained UI.
         """
 
         if self.opacity <= 0.0:
             return False
-        world_transform = _compose_transform(self.transform, parent_transform)
-        if self._transformed_bounds_contains(point, world_transform):
+        if parent_transform.is_identity and self.transform.is_identity:
+            contains_point = self.bounds.contains(point)
+        else:
+            world_transform = _compose_transform(self.transform, parent_transform)
+            contains_point = self._transformed_bounds_contains(point, world_transform)
+        if contains_point:
             return True
         if self.clip_to_bounds:
             return False
