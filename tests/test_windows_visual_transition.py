@@ -12,6 +12,8 @@ from swirui import (
     Card,
     Component,
     FadeTransition,
+    Label,
+    ScaleTransition,
     SlideTransition,
     Window,
     linear,
@@ -44,13 +46,19 @@ def _render_after_invalidation(
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="visual transition smoke requires Windows")
-def test_fade_slide_transition_reuses_persistent_wgpu_context() -> None:
+def test_fade_slide_scale_transition_reuses_persistent_wgpu_context() -> None:
     renderer = WgpuRenderer()
     backend = _isolated_backend()
     app = App("SwirUI visual transition smoke", platform_backend=backend, renderer=renderer)
     window = app.add_window(Window(title="SwirUI visual transition", width=640, height=360))
     root = Component("visual-transition-root")
     card = Card(key="transition-card", bounds=Rect(90.0, 70.0, 460.0, 220.0), opacity=0.8)
+    label = Label(
+        "GPU retained scale",
+        key="transition-label",
+        bounds=Rect(200.0, 140.0, 200.0, 40.0),
+    )
+    card.add(label)
     root.add(card)
     runtime = mount(window, root)
     controller = AnimationController(app, window)
@@ -61,7 +69,8 @@ def test_fade_slide_transition_reuses_persistent_wgpu_context() -> None:
         duration=0.30,
         easing=linear,
     )
-    transition = AnimationParallel(fade, slide)
+    scale = ScaleTransition(card, from_scale=0.8, duration=0.30, easing=linear)
+    transition = AnimationParallel(fade, slide, scale)
 
     try:
         app.start()
@@ -74,6 +83,7 @@ def test_fade_slide_transition_reuses_persistent_wgpu_context() -> None:
         controller.tick(0.15)
         assert card.opacity == pytest.approx(0.4)
         assert card.visual_offset.x == pytest.approx(30.0)
+        assert card.visual_scale == pytest.approx(0.9)
         assert transition.cancel() is True
 
         previous_frames = renderer.frames_rendered
@@ -83,19 +93,24 @@ def test_fade_slide_transition_reuses_persistent_wgpu_context() -> None:
         assert runtime.generation > 1
         assert window.scene is not None
         card_node = next(node for node in window.scene.walk() if node.key == "transition-card")
-        assert card_node.bounds.x == pytest.approx(120.0)
+        label_node = next(node for node in window.scene.walk() if node.key == "transition-label")
+        assert card_node.bounds == Rect(143.0, 81.0, 414.0, 198.0)
         assert card_node.opacity == pytest.approx(0.4)
+        assert label_node.bounds == Rect(242.0, 144.0, 180.0, 36.0)
+        assert label_node.font_size == pytest.approx(label.font_size * 0.9)
 
         fade.restore()
         slide.restore()
+        scale.restore()
         assert card.opacity == pytest.approx(0.8)
         assert card.visual_offset == Point()
+        assert card.visual_scale == pytest.approx(1.0)
         previous_frames = renderer.frames_rendered
         _render_after_invalidation(app, renderer, previous_frames)
         assert renderer.persistent_context_count == initial_contexts
         assert window.scene is not None
         card_node = next(node for node in window.scene.walk() if node.key == "transition-card")
-        assert card_node.bounds.x == pytest.approx(90.0)
+        assert card_node.bounds == Rect(90.0, 70.0, 460.0, 220.0)
         assert card_node.opacity == pytest.approx(0.8)
     finally:
         controller.dispose()
