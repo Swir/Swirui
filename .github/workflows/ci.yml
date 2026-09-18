@@ -191,6 +191,9 @@ jobs:
       - name: Verify interaction animation on retained GPU path
         run: pytest tests/test_windows_interaction_animation.py -q
 
+      - name: Verify magnetic interaction on retained GPU path
+        run: pytest tests/test_windows_magnetic_interaction.py -q
+
       - name: Verify blur and glow transitions on retained GPU path
         run: pytest tests/test_windows_effect_animation.py -q
 
