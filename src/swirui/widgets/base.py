@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
-from swirui.core import AccessibilityRole
+from swirui.core.accessibility import AccessibilityRole
 from swirui.core.component import Component
 from swirui.rendering.geometry import Rect, Size
 from swirui.rendering.scene import SceneNode
