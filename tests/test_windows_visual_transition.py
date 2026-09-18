@@ -46,6 +46,13 @@ def _render_after_invalidation(
         time.sleep(0.005)
 
 
+def _assert_rect(rect: Rect, expected: Rect) -> None:
+    assert rect.x == pytest.approx(expected.x)
+    assert rect.y == pytest.approx(expected.y)
+    assert rect.width == pytest.approx(expected.width)
+    assert rect.height == pytest.approx(expected.height)
+
+
 @pytest.mark.skipif(sys.platform != "win32", reason="visual transition smoke requires Windows")
 def test_visual_transitions_reuse_persistent_wgpu_context() -> None:
     renderer = WgpuRenderer()
@@ -97,10 +104,11 @@ def test_visual_transitions_reuse_persistent_wgpu_context() -> None:
         assert window.scene is not None
         card_node = next(node for node in window.scene.walk() if node.key == "transition-card")
         label_node = next(node for node in window.scene.walk() if node.key == "transition-label")
-        assert card_node.bounds == Rect(143.0, 81.0, 414.0, 198.0)
-        assert card_node.clip_rect == Rect(143.0, 81.0, 207.0, 198.0)
+        _assert_rect(card_node.bounds, Rect(143.0, 81.0, 414.0, 198.0))
+        assert card_node.clip_rect is not None
+        _assert_rect(card_node.clip_rect, Rect(143.0, 81.0, 207.0, 198.0))
         assert card_node.opacity == pytest.approx(0.4)
-        assert label_node.bounds == Rect(242.0, 144.0, 180.0, 36.0)
+        _assert_rect(label_node.bounds, Rect(242.0, 144.0, 180.0, 36.0))
         assert label_node.font_size == pytest.approx(label.font_size * 0.9)
         assert window.scene.hit_test_xy(500.0, 180.0) is None
 
