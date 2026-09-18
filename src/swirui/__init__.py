@@ -46,6 +46,7 @@ from .core import (
     state_transaction,
 )
 from .effect_animation import BackdropBlurTransition, GlowTransition
+from .keyframes import Keyframe, KeyframeAnimation
 from .interaction_animation import (
     InteractionAnimationSpec,
     InteractionAnimator,
@@ -180,6 +181,8 @@ __all__ = [
     "InteractionAnimationSpec",
     "InteractionAnimator",
     "InteractionPhase",
+    "Keyframe",
+    "KeyframeAnimation",
     "Label",
     "LayoutConstraints",
     "LayoutDirection",
