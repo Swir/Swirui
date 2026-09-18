@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 from collections.abc import Callable
 from enum import StrEnum
-from typing import TYPE_CHECKING, TypeAlias
+from typing import TYPE_CHECKING, Protocol, TypeAlias
 
 from .core import Event, State
 
@@ -23,6 +23,22 @@ class AnimationStatus(StrEnum):
     RUNNING = "running"
     COMPLETED = "completed"
     CANCELLED = "cancelled"
+
+
+class AnimationPlayable(Protocol):
+    """Structural contract consumed by animation groups and controllers."""
+
+    @property
+    def status(self) -> AnimationStatus: ...
+
+    def start(self) -> AnimationPlayable: ...
+
+    def advance(self, delta_seconds: float) -> float: ...
+
+    def cancel(self) -> bool: ...
+
+
+Animation: TypeAlias = AnimationPlayable
 
 
 def linear(progress: float) -> float:
@@ -155,8 +171,8 @@ class Tween:
         self._status = AnimationStatus.CANCELLED
         return True
 
-    def then(self, *animations: Tween) -> AnimationSequence:
-        """Build a sequence beginning with this tween."""
+    def then(self, *animations: AnimationPlayable) -> AnimationSequence:
+        """Build a sequence beginning with this animation."""
 
         return AnimationSequence(self, *animations)
 
@@ -168,12 +184,294 @@ class Tween:
             self.on_complete()
 
 
-class AnimationSequence:
-    """Play tweens serially with deterministic cross-frame carry-over."""
+class SpringAnimation:
+    """Analytical damped-spring animation with frame-partition-independent sampling.
 
-    def __init__(self, *animations: Tween, on_complete: Callable[[], None] | None = None) -> None:
+    The spring solves the second-order mass/stiffness/damping system directly at
+    absolute elapsed time instead of numerically integrating frame deltas. Values
+    sampled at the same elapsed time therefore match at 60, 120, 144 Hz or under
+    irregular frame pacing. The animation settles when both displacement and
+    velocity are within explicit tolerances, with ``max_duration`` as a hard bound.
+    """
+
+    def __init__(
+        self,
+        from_value: float,
+        to_value: float,
+        update: Callable[[float], None],
+        *,
+        mass: float = 1.0,
+        stiffness: float = 170.0,
+        damping: float = 26.0,
+        initial_velocity: float = 0.0,
+        position_threshold: float = 0.001,
+        velocity_threshold: float = 0.001,
+        max_duration: float = 10.0,
+        on_complete: Callable[[], None] | None = None,
+    ) -> None:
+        self.from_value = _finite_float("from_value", from_value)
+        self.to_value = _finite_float("to_value", to_value)
+        self.update = update
+        self.mass = _positive_float("mass", mass)
+        self.stiffness = _positive_float("stiffness", stiffness)
+        self.damping = _non_negative_float("damping", damping)
+        self.initial_velocity = _finite_float("initial_velocity", initial_velocity)
+        self.position_threshold = _positive_float("position_threshold", position_threshold)
+        self.velocity_threshold = _positive_float("velocity_threshold", velocity_threshold)
+        self.max_duration = _positive_float("max_duration", max_duration)
+        self.on_complete = on_complete
+        self._elapsed = 0.0
+        self._position = self.from_value
+        self._velocity = self.initial_velocity
+        self._status = AnimationStatus.IDLE
+
+    @property
+    def status(self) -> AnimationStatus:
+        return self._status
+
+    @property
+    def elapsed(self) -> float:
+        return self._elapsed
+
+    @property
+    def position(self) -> float:
+        return self._position
+
+    @property
+    def velocity(self) -> float:
+        return self._velocity
+
+    @property
+    def progress(self) -> float:
+        if self._status is AnimationStatus.COMPLETED:
+            return 1.0
+        return min(1.0, self._elapsed / self.max_duration)
+
+    def start(self) -> SpringAnimation:
+        """Start or restart from the authored position and initial velocity."""
+
+        self._elapsed = 0.0
+        self._position = self.from_value
+        self._velocity = self.initial_velocity
+        self._status = AnimationStatus.RUNNING
+        self.update(self._position)
+        if self._is_settled():
+            self._finish()
+        return self
+
+    def advance(self, delta_seconds: float) -> float:
+        """Advance the analytical spring and return any hard-bound frame tail."""
+
+        delta = _finite_float("delta_seconds", delta_seconds)
+        if delta < 0.0:
+            raise ValueError("delta_seconds must be non-negative.")
+        if self._status is not AnimationStatus.RUNNING:
+            return delta
+
+        remaining_duration = max(0.0, self.max_duration - self._elapsed)
+        consumed = min(delta, remaining_duration)
+        self._elapsed += consumed
+        self._position, self._velocity = self._sample(self._elapsed)
+        self.update(self._position)
+
+        if self._is_settled() or self._elapsed >= self.max_duration:
+            self._finish()
+            return max(0.0, delta - consumed)
+        return max(0.0, delta - consumed)
+
+    def cancel(self) -> bool:
+        """Cancel without snapping to the target or firing completion."""
+
+        if self._status in {AnimationStatus.CANCELLED, AnimationStatus.COMPLETED}:
+            return False
+        self._status = AnimationStatus.CANCELLED
+        return True
+
+    def then(self, *animations: AnimationPlayable) -> AnimationSequence:
+        """Build a serial sequence beginning with this spring."""
+
+        return AnimationSequence(self, *animations)
+
+    def _sample(self, elapsed: float) -> tuple[float, float]:
+        displacement = self.from_value - self.to_value
+        omega = math.sqrt(self.stiffness / self.mass)
+        damping_ratio = self.damping / (2.0 * math.sqrt(self.stiffness * self.mass))
+
+        if damping_ratio < 1.0 - 1e-9:
+            damped_omega = omega * math.sqrt(1.0 - damping_ratio * damping_ratio)
+            a = displacement
+            b = (self.initial_velocity + damping_ratio * omega * displacement) / damped_omega
+            envelope = math.exp(-damping_ratio * omega * elapsed)
+            cos_term = math.cos(damped_omega * elapsed)
+            sin_term = math.sin(damped_omega * elapsed)
+            local = a * cos_term + b * sin_term
+            local_velocity = (
+                -damping_ratio * omega * local
+                + (-a * damped_omega * sin_term + b * damped_omega * cos_term)
+            )
+            return self.to_value + envelope * local, envelope * local_velocity
+
+        if damping_ratio <= 1.0 + 1e-9:
+            a = displacement
+            b = self.initial_velocity + omega * displacement
+            envelope = math.exp(-omega * elapsed)
+            local = a + b * elapsed
+            local_velocity = b - omega * local
+            return self.to_value + envelope * local, envelope * local_velocity
+
+        root = math.sqrt(damping_ratio * damping_ratio - 1.0)
+        r1 = -omega * (damping_ratio - root)
+        r2 = -omega * (damping_ratio + root)
+        c1 = (self.initial_velocity - r2 * displacement) / (r1 - r2)
+        c2 = displacement - c1
+        exp1 = math.exp(r1 * elapsed)
+        exp2 = math.exp(r2 * elapsed)
+        local = c1 * exp1 + c2 * exp2
+        local_velocity = c1 * r1 * exp1 + c2 * r2 * exp2
+        return self.to_value + local, local_velocity
+
+    def _is_settled(self) -> bool:
+        return (
+            abs(self._position - self.to_value) <= self.position_threshold
+            and abs(self._velocity) <= self.velocity_threshold
+        )
+
+    def _finish(self) -> None:
+        self._position = self.to_value
+        self._velocity = 0.0
+        self.update(self.to_value)
+        self._status = AnimationStatus.COMPLETED
+        if self.on_complete is not None:
+            self.on_complete()
+
+
+class DecayAnimation:
+    """Analytical inertial decay useful for fling, momentum and kinetic motion."""
+
+    def __init__(
+        self,
+        from_value: float,
+        initial_velocity: float,
+        update: Callable[[float], None],
+        *,
+        friction: float = 6.0,
+        velocity_threshold: float = 1.0,
+        on_complete: Callable[[], None] | None = None,
+    ) -> None:
+        self.from_value = _finite_float("from_value", from_value)
+        self.initial_velocity = _finite_float("initial_velocity", initial_velocity)
+        self.update = update
+        self.friction = _positive_float("friction", friction)
+        self.velocity_threshold = _positive_float("velocity_threshold", velocity_threshold)
+        self.on_complete = on_complete
+        speed = abs(self.initial_velocity)
+        self.duration = (
+            0.0
+            if speed <= self.velocity_threshold
+            else math.log(speed / self.velocity_threshold) / self.friction
+        )
+        self._elapsed = 0.0
+        self._position = self.from_value
+        self._velocity = self.initial_velocity
+        self._status = AnimationStatus.IDLE
+
+    @property
+    def status(self) -> AnimationStatus:
+        return self._status
+
+    @property
+    def elapsed(self) -> float:
+        return self._elapsed
+
+    @property
+    def position(self) -> float:
+        return self._position
+
+    @property
+    def velocity(self) -> float:
+        return self._velocity
+
+    @property
+    def progress(self) -> float:
+        if self.duration == 0.0:
+            return 1.0 if self._status is AnimationStatus.COMPLETED else 0.0
+        return min(1.0, self._elapsed / self.duration)
+
+    @property
+    def final_position(self) -> float:
+        return self._sample_position(self.duration)
+
+    def start(self) -> DecayAnimation:
+        """Start or restart the decay from its authored position and velocity."""
+
+        self._elapsed = 0.0
+        self._position = self.from_value
+        self._velocity = self.initial_velocity
+        self._status = AnimationStatus.RUNNING
+        self.update(self._position)
+        if self.duration == 0.0:
+            self._finish()
+        return self
+
+    def advance(self, delta_seconds: float) -> float:
+        """Advance the closed-form decay and return unused tail after completion."""
+
+        delta = _finite_float("delta_seconds", delta_seconds)
+        if delta < 0.0:
+            raise ValueError("delta_seconds must be non-negative.")
+        if self._status is not AnimationStatus.RUNNING:
+            return delta
+
+        remaining_duration = max(0.0, self.duration - self._elapsed)
+        consumed = min(delta, remaining_duration)
+        self._elapsed += consumed
+        self._position = self._sample_position(self._elapsed)
+        self._velocity = self.initial_velocity * math.exp(-self.friction * self._elapsed)
+        self.update(self._position)
+
+        if self._elapsed >= self.duration:
+            self._finish()
+        return max(0.0, delta - consumed)
+
+    def cancel(self) -> bool:
+        """Cancel without changing the current sample or firing completion."""
+
+        if self._status in {AnimationStatus.CANCELLED, AnimationStatus.COMPLETED}:
+            return False
+        self._status = AnimationStatus.CANCELLED
+        return True
+
+    def then(self, *animations: AnimationPlayable) -> AnimationSequence:
+        """Build a serial sequence beginning with this inertial decay."""
+
+        return AnimationSequence(self, *animations)
+
+    def _sample_position(self, elapsed: float) -> float:
+        displacement = (
+            self.initial_velocity * (1.0 - math.exp(-self.friction * elapsed)) / self.friction
+        )
+        return self.from_value + displacement
+
+    def _finish(self) -> None:
+        self._elapsed = self.duration
+        self._position = self.final_position
+        self._velocity = 0.0
+        self.update(self._position)
+        self._status = AnimationStatus.COMPLETED
+        if self.on_complete is not None:
+            self.on_complete()
+
+
+class AnimationSequence:
+    """Play animations serially with deterministic cross-frame carry-over."""
+
+    def __init__(
+        self,
+        *animations: AnimationPlayable,
+        on_complete: Callable[[], None] | None = None,
+    ) -> None:
         if not animations:
-            raise ValueError("AnimationSequence requires at least one tween.")
+            raise ValueError("AnimationSequence requires at least one animation.")
         self.animations = tuple(animations)
         self.on_complete = on_complete
         self._index = 0
@@ -188,16 +486,16 @@ class AnimationSequence:
         return self._index
 
     def start(self) -> AnimationSequence:
-        """Start or restart the sequence from its first tween."""
+        """Start or restart the sequence from its first animation."""
 
         self._index = 0
         self._status = AnimationStatus.RUNNING
         self.animations[0].start()
-        self._skip_completed_zero_duration_tweens()
+        self._skip_completed_zero_duration_animations()
         return self
 
     def advance(self, delta_seconds: float) -> float:
-        """Advance the active tween and carry leftover time into later tweens."""
+        """Advance the active animation and carry leftover time into later work."""
 
         remaining = _finite_float("delta_seconds", delta_seconds)
         if remaining < 0.0:
@@ -220,7 +518,7 @@ class AnimationSequence:
         return remaining
 
     def cancel(self) -> bool:
-        """Cancel the active tween and the sequence as one operation."""
+        """Cancel the active animation and the sequence as one operation."""
 
         if self._status in {AnimationStatus.CANCELLED, AnimationStatus.COMPLETED}:
             return False
@@ -229,8 +527,8 @@ class AnimationSequence:
         self._status = AnimationStatus.CANCELLED
         return True
 
-    def then(self, *animations: Tween) -> AnimationSequence:
-        """Return a new sequence with additional tweens appended."""
+    def then(self, *animations: AnimationPlayable) -> AnimationSequence:
+        """Return a new sequence with additional animations appended."""
 
         return AnimationSequence(*self.animations, *animations, on_complete=self.on_complete)
 
@@ -240,10 +538,10 @@ class AnimationSequence:
             self._complete()
             return False
         self.animations[self._index].start()
-        self._skip_completed_zero_duration_tweens()
+        self._skip_completed_zero_duration_animations()
         return self._status is AnimationStatus.RUNNING
 
-    def _skip_completed_zero_duration_tweens(self) -> None:
+    def _skip_completed_zero_duration_animations(self) -> None:
         while (
             self._status is AnimationStatus.RUNNING
             and self.animations[self._index].status is AnimationStatus.COMPLETED
@@ -258,7 +556,76 @@ class AnimationSequence:
             self.on_complete()
 
 
-Animation: TypeAlias = Tween | AnimationSequence
+class AnimationParallel:
+    """Advance multiple animations against the same frame clock."""
+
+    def __init__(
+        self,
+        *animations: AnimationPlayable,
+        on_complete: Callable[[], None] | None = None,
+    ) -> None:
+        if not animations:
+            raise ValueError("AnimationParallel requires at least one animation.")
+        self.animations = tuple(animations)
+        self.on_complete = on_complete
+        self._status = AnimationStatus.IDLE
+
+    @property
+    def status(self) -> AnimationStatus:
+        return self._status
+
+    def start(self) -> AnimationParallel:
+        """Start or restart all child animations together."""
+
+        self._status = AnimationStatus.RUNNING
+        for animation in self.animations:
+            animation.start()
+        if all(animation.status is AnimationStatus.COMPLETED for animation in self.animations):
+            self._complete()
+        return self
+
+    def advance(self, delta_seconds: float) -> float:
+        """Advance every active child using the same elapsed frame delta."""
+
+        delta = _finite_float("delta_seconds", delta_seconds)
+        if delta < 0.0:
+            raise ValueError("delta_seconds must be non-negative.")
+        if self._status is not AnimationStatus.RUNNING:
+            return delta
+
+        if any(animation.status is AnimationStatus.CANCELLED for animation in self.animations):
+            self.cancel()
+            return delta
+
+        leftovers = [animation.advance(delta) for animation in self.animations]
+        if any(animation.status is AnimationStatus.CANCELLED for animation in self.animations):
+            self.cancel()
+            return 0.0
+        if all(animation.status is AnimationStatus.COMPLETED for animation in self.animations):
+            self._complete()
+            return min(leftovers)
+        return 0.0
+
+    def cancel(self) -> bool:
+        """Cancel every unfinished child animation."""
+
+        if self._status in {AnimationStatus.CANCELLED, AnimationStatus.COMPLETED}:
+            return False
+        for animation in self.animations:
+            if animation.status is not AnimationStatus.COMPLETED:
+                animation.cancel()
+        self._status = AnimationStatus.CANCELLED
+        return True
+
+    def then(self, *animations: AnimationPlayable) -> AnimationSequence:
+        """Build a serial sequence beginning with this parallel group."""
+
+        return AnimationSequence(self, *animations)
+
+    def _complete(self) -> None:
+        self._status = AnimationStatus.COMPLETED
+        if self.on_complete is not None:
+            self.on_complete()
 
 
 class AnimationController:
@@ -273,7 +640,7 @@ class AnimationController:
     def __init__(self, app: App, window: Window) -> None:
         self.app = app
         self.window = window
-        self._animations: list[Animation] = []
+        self._animations: list[AnimationPlayable] = []
         self._unsubscribe = app.on("frame_rendered", self._on_frame_rendered)
         self._disposed = False
 
@@ -281,7 +648,7 @@ class AnimationController:
     def active_count(self) -> int:
         return len(self._animations)
 
-    def play(self, animation: Animation) -> Animation:
+    def play(self, animation: AnimationPlayable) -> AnimationPlayable:
         """Start one animation and schedule its first presentation frame."""
 
         if self._disposed:
@@ -369,8 +736,78 @@ def tween_state(
     )
 
 
+def spring_state(
+    state: State[float],
+    to_value: float,
+    *,
+    mass: float = 1.0,
+    stiffness: float = 170.0,
+    damping: float = 26.0,
+    initial_velocity: float = 0.0,
+    position_threshold: float = 0.001,
+    velocity_threshold: float = 0.001,
+    max_duration: float = 10.0,
+    on_complete: Callable[[], None] | None = None,
+) -> SpringAnimation:
+    """Create an analytical spring that writes samples into reactive State."""
+
+    def update(value: float) -> None:
+        state.set(value)
+
+    return SpringAnimation(
+        float(state.value),
+        to_value,
+        update,
+        mass=mass,
+        stiffness=stiffness,
+        damping=damping,
+        initial_velocity=initial_velocity,
+        position_threshold=position_threshold,
+        velocity_threshold=velocity_threshold,
+        max_duration=max_duration,
+        on_complete=on_complete,
+    )
+
+
+def decay_state(
+    state: State[float],
+    initial_velocity: float,
+    *,
+    friction: float = 6.0,
+    velocity_threshold: float = 1.0,
+    on_complete: Callable[[], None] | None = None,
+) -> DecayAnimation:
+    """Create an inertial decay that writes samples into reactive State."""
+
+    def update(value: float) -> None:
+        state.set(value)
+
+    return DecayAnimation(
+        float(state.value),
+        initial_velocity,
+        update,
+        friction=friction,
+        velocity_threshold=velocity_threshold,
+        on_complete=on_complete,
+    )
+
+
 def _finite_float(name: str, value: float) -> float:
     normalized = float(value)
     if not math.isfinite(normalized):
         raise ValueError(f"{name} must be finite.")
+    return normalized
+
+
+def _positive_float(name: str, value: float) -> float:
+    normalized = _finite_float(name, value)
+    if normalized <= 0.0:
+        raise ValueError(f"{name} must be positive.")
+    return normalized
+
+
+def _non_negative_float(name: str, value: float) -> float:
+    normalized = _finite_float(name, value)
+    if normalized < 0.0:
+        raise ValueError(f"{name} must be non-negative.")
     return normalized
