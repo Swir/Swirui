@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from typing import Generic, TypeVar
 
 from .state import State
@@ -13,7 +13,7 @@ from .state import State
 T = TypeVar("T")
 
 
-class AsyncStatus(str, Enum):
+class AsyncStatus(StrEnum):
     """Lifecycle state for one :class:`AsyncState` operation."""
 
     IDLE = "idle"
