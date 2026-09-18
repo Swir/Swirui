@@ -61,7 +61,7 @@ class KeyframeAnimation:
             raise ValueError("The last keyframe offset must be 1.0.")
         if any(
             current.offset >= following.offset
-            for current, following in zip(frames, frames[1:])
+            for current, following in zip(frames, frames[1:], strict=False)
         ):
             raise ValueError("Keyframe offsets must increase strictly.")
 

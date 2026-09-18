@@ -46,7 +46,6 @@ from .core import (
     state_transaction,
 )
 from .effect_animation import BackdropBlurTransition, GlowTransition
-from .keyframes import Keyframe, KeyframeAnimation
 from .interaction_animation import (
     InteractionAnimationSpec,
     InteractionAnimator,
@@ -54,6 +53,7 @@ from .interaction_animation import (
     MagneticInteraction,
     MagneticInteractionSpec,
 )
+from .keyframes import Keyframe, KeyframeAnimation
 from .page_transition import PageTransition, PageTransitionDirection
 from .shared_element_transition import SharedElementTransition
 from .transform_animation import (
