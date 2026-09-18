@@ -27,7 +27,7 @@
 
 <img width="100%" src="assets/readme/progress-card.svg" alt="SwirUI project progress: 68.0% — 0.5 Alpha Layout Engine complete; 12 of 12 layout groups verified">
 
-**68% authoritative weighted project progress — 0.6 Alpha Reactive Runtime is complete; 0.7 Alpha Animation Engine is underway with 4 / 12 groups verified.**
+**68% authoritative weighted project progress — 0.6 Alpha Reactive Runtime is complete; 0.7 Alpha Animation Engine is underway with 6 / 12 groups verified.**
 
 - `0.1 Alpha — Foundation` ✅
 - `0.2 Alpha — Native Window + First Renderer` ✅
@@ -35,7 +35,7 @@
 - `0.4 Alpha — Core Widgets` ✅
 - `0.5 Alpha — Layout Engine` ✅
 - `0.6 Alpha — Reactive Runtime` ✅
-- `0.7 Alpha — Animation Engine` 🚧 `4 / 12`
+- `0.7 Alpha — Animation Engine` 🚧 `6 / 12`
 
 The published 68% value preserves the verified weighting documented in `ROADMAP.md` through completed 0.5. Completed 0.6 and verified 0.7 functionality are tracked by their milestone checklists until an explicit project-weighting extension is documented; later work is never double-counted or used to invent release readiness.
 
@@ -47,7 +47,7 @@ SwirUI is being built as a complete Python desktop application framework rather 
 
 The Windows renderer uses a persistent per-window wgpu context and retained SceneGraph. Linux/X11 and macOS/Cocoa already provide real native window and input backends. GPU presentation on Linux/macOS and Wayland support remain future work and are not claimed as complete.
 
-The completed 0.5 layout layer provides content-aware intrinsic measurement, min/max constraints, responsive compact/desktop/ultrawide policies, adaptive navigation, dynamic typography, DPI-stable logical spacing and revision-aware layout caching. The completed 0.6 runtime adds computed state, async/persistent state, dynamic dependency tracking, batched transactions, reactive properties, bindings, observable collections, retained component lifecycle hooks and transaction-scoped minimal-update scheduling. The active 0.7 animation layer now includes elapsed-time tweens, analytical spring motion, inertial decay, serial/parallel composition, cancellation/chaining and window-scoped frame driving.
+The completed 0.5 layout layer provides content-aware intrinsic measurement, min/max constraints, responsive compact/desktop/ultrawide policies, adaptive navigation, dynamic typography, DPI-stable logical spacing and revision-aware layout caching. The completed 0.6 runtime adds computed state, async/persistent state, dynamic dependency tracking, batched transactions, reactive properties, bindings, observable collections, retained component lifecycle hooks and transaction-scoped minimal-update scheduling. The active 0.7 animation layer now includes elapsed-time tweens, analytical spring motion, inertial decay, serial/parallel composition, cancellation/chaining, retained hover/press/focus animation and deterministic retained particle effects.
 
 ## Highlights
 
@@ -69,7 +69,7 @@ The completed 0.5 layout layer provides content-aware intrinsic measurement, min
 | Layout engine | Row/Column, Stack/Grid/Wrap, DockPanel/Flow/Overlay, ConstraintLayout, intrinsic sizing, min/max constraints and optimized retained reflow |
 | Responsive UI | Logical-DIP breakpoints, compact/desktop/ultrawide variants, adaptive navigation and `DynamicTypography` |
 | Reactive runtime | `State`, `ComputedState`, `AsyncState`, `PersistentState`, dependency tracking, transactions, bindings, observable collections and retained lifecycle hooks |
-| Animation runtime | Elapsed-time `Tween`, analytical `SpringAnimation`, inertial `DecayAnimation`, serial/parallel composition, cancellation/chaining and reactive-state helpers |
+| Animation runtime | Elapsed-time `Tween`, analytical `SpringAnimation`, inertial `DecayAnimation`, serial/parallel composition, cancellation/chaining, event-driven interaction animation and deterministic retained particles |
 | Performance | Adaptive visual-quality profiles plus retained effect/GPU caches and layout-preparation revision caching |
 | Accessibility | Semantic roles/tree, keyboard focus routing, keyboard-only traversal, checked state, numeric value/range and dialog/alert semantics |
 
@@ -106,6 +106,8 @@ python examples/async_persistent_state_demo.py
 python examples/component_lifecycle_demo.py
 python examples/animation_timing_demo.py
 python examples/physics_animation_demo.py
+python examples/interaction_animation_demo.py
+python examples/particle_animation_demo.py
 ```
 
 ### Windows GPU development
@@ -244,6 +246,8 @@ examples/async_persistent_state_demo.py
 examples/component_lifecycle_demo.py
 examples/animation_timing_demo.py
 examples/physics_animation_demo.py
+examples/interaction_animation_demo.py
+examples/particle_animation_demo.py
 examples/core_widgets_demo.py
 examples/core_toggles_demo.py
 examples/range_progress_demo.py
@@ -299,6 +303,7 @@ SwirUI Runtime
         ├── reactive dependency tracking + batched transactions
         ├── intrinsic measure → arrange + min/max constraints
         ├── animation sequencing / parallel composition / frame controller
+        ├── event-driven interaction animation + retained particles
         ├── compact / desktop / ultrawide logical-DIP policies
         ├── revision-aware retained layout invalidation cache
         ├── Win32 / X11 / Cocoa native backends
@@ -337,7 +342,8 @@ Every significant runtime change is expected to preserve the existing quality ga
 - retained widget interaction, accessibility and real Win32 input/rendering coverage
 - intrinsic measurement, responsive reflow, adaptive navigation, dynamic typography and DPI-aware spacing coverage
 - reactive-runtime tests for dependencies, batching, computed chains, bindings, observable collections, async/persistent state, lifecycle and minimal-update scheduling
-- animation tests for frame-partition-independent timing, analytical spring/decay, cancellation and serial/parallel composition
+- animation tests for frame-partition-independent timing, analytical spring/decay, cancellation, serial/parallel composition, event-driven interaction states and deterministic particles
+- real Win32 interaction-animation + persistent-wgpu smoke coverage
 - real custom-WGSL validation and persistent-runtime smoke coverage
 
 SwirUI does not claim performance superiority over other frameworks without reproducible measurements.
@@ -346,7 +352,7 @@ SwirUI does not claim performance superiority over other frameworks without repr
 
 The authoritative plan and its single roadmap progress graphic are in **[ROADMAP.md](ROADMAP.md)**.
 
-**0.6 Alpha — Reactive Runtime is complete. 0.7 Alpha — Animation Engine is underway with 4 / 12 groups verified.** Verified animation scope currently covers spring/elastic/bounce behavior, physics animation, frame-rate-independent timing and cancellation/chaining. The project-wide weighted percentage intentionally remains 68% until the documented weighting model is explicitly extended. This does not imply beta or release readiness.
+**0.6 Alpha — Reactive Runtime is complete. 0.7 Alpha — Animation Engine is underway with 6 / 12 groups verified.** Verified animation scope currently covers spring/elastic/bounce behavior, physics animation, frame-rate-independent timing, cancellation/chaining, hover/press/focus interaction animation and deterministic retained particle effects. The project-wide weighted percentage intentionally remains 68% until the documented weighting model is explicitly extended. This does not imply beta or release readiness.
 
 ## Releases
 
