@@ -55,7 +55,7 @@ from .interaction_animation import (
 )
 from .page_transition import PageTransition, PageTransitionDirection
 from .shared_element_transition import SharedElementTransition
-from .visual_transition import FadeTransition, SlideTransition
+from .visual_transition import FadeTransition, ScaleTransition, SlideTransition
 from .widgets import (
     Accordion,
     AdaptiveNavigation,
@@ -203,6 +203,7 @@ __all__ = [
     "ResponsiveLayoutSpec",
     "ResponsiveValue",
     "Row",
+    "ScaleTransition",
     "ScrollView",
     "SharedElementTransition",
     "SlideTransition",
