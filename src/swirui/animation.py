@@ -1,9 +1,9 @@
 """Frame-rate-independent animation primitives for SwirUI.
 
-The animation layer is deliberately renderer-agnostic. It advances from absolute monotonic
-time rather than frame counts, so dropped or high-refresh frames do not change animation
-duration. Widget helpers simply mutate existing retained properties; their ordinary
-invalidation path keeps SceneGraph and native GPU presentation synchronized.
+The animation layer is renderer-agnostic. It advances from absolute monotonic time rather
+than frame counts, so dropped or high-refresh frames do not change animation duration.
+Widget helpers mutate existing retained properties; their ordinary invalidation path keeps
+SceneGraph and native GPU presentation synchronized.
 """
 
 from __future__ import annotations
@@ -13,9 +13,13 @@ import time
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Protocol, TypeAlias
+from typing import TYPE_CHECKING, Protocol, TypeAlias
 
+from .core.events import Event
 from .rendering.geometry import Rect
+
+if TYPE_CHECKING:
+    from .app import App
 
 EasingFunction: TypeAlias = Callable[[float], float]
 ValueUpdate: TypeAlias = Callable[[float], None]
@@ -240,10 +244,18 @@ class AnimationHandle:
 
 
 class AnimationController:
-    """Own and advance independent SwirUI animation sequences."""
+    """Own and advance independent SwirUI animation sequences.
+
+    Controllers can be ticked explicitly for deterministic simulations and tests or attached
+    to an :class:`~swirui.app.App`. An attached controller advances from the application's
+    measured ``frame_time`` and invalidates the next frame while work remains, so one
+    animation timeline naturally follows the existing display-aware frame scheduler.
+    """
 
     def __init__(self) -> None:
         self._handles: list[AnimationHandle] = []
+        self._frame_unsubscribe: Callable[[], None] | None = None
+        self._request_frame: Callable[[], None] | None = None
 
     @property
     def active(self) -> bool:
@@ -261,9 +273,14 @@ class AnimationController:
     ) -> AnimationHandle:
         """Start one tween or sequence and return its cancellation/status handle."""
 
-        sequence = animation if isinstance(animation, AnimationSequence) else AnimationSequence((animation,))
+        if isinstance(animation, AnimationSequence):
+            sequence = animation
+        else:
+            sequence = AnimationSequence((animation,))
         handle = AnimationHandle(sequence).start(start_time)
         self._handles.append(handle)
+        if self._request_frame is not None:
+            self._request_frame()
         return handle
 
     def tick(self, now: float | None = None) -> bool:
@@ -285,7 +302,44 @@ class AnimationController:
         for handle in self._handles:
             cancelled += int(handle.cancel(apply_final_value=apply_final_value))
         self._handles.clear()
+        if cancelled and self._request_frame is not None:
+            self._request_frame()
         return cancelled
+
+    def attach(self, app: App) -> Callable[[], None]:
+        """Drive this controller from ``App.frame_rendered`` events.
+
+        The first ``play()`` requests a frame. Each rendered frame advances the absolute
+        timeline and requests another frame when values changed or work remains. Calling the
+        returned function detaches the controller without cancelling its animation handles.
+        """
+
+        self.detach()
+
+        def request_frame() -> None:
+            app.invalidate()
+
+        def on_frame(event: Event) -> None:
+            raw_frame_time = event.data.get("frame_time")
+            if not isinstance(raw_frame_time, int | float):
+                return
+            changed = self.tick(float(raw_frame_time))
+            if changed or self.active:
+                app.invalidate()
+
+        self._request_frame = request_frame
+        self._frame_unsubscribe = app.on("frame_rendered", on_frame)
+        if self.active:
+            app.invalidate()
+        return self.detach
+
+    def detach(self) -> None:
+        """Stop application-driven ticking while preserving current handles."""
+
+        if self._frame_unsubscribe is not None:
+            self._frame_unsubscribe()
+        self._frame_unsubscribe = None
+        self._request_frame = None
 
 
 class _OpacityTarget(Protocol):
