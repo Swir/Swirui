@@ -35,6 +35,7 @@ class Component(EventEmitter):
         self._enabled = True
         self._visible = True
         self._focusable = bool(focusable)
+        self._runtime: object | None = None
         self.accessibility_role = accessibility_role
         self.accessible_name = accessible_name
         self.accessible_description = accessible_description
@@ -79,6 +80,66 @@ class Component(EventEmitter):
             return
         self._focusable = normalized
         self.invalidate(reason="focusable")
+
+    @property
+    def mounted(self) -> bool:
+        """Whether this component currently belongs to a mounted widget runtime."""
+
+        return self._runtime is not None
+
+    @property
+    def runtime(self) -> object | None:
+        """The owning runtime while mounted, otherwise ``None``.
+
+        The base component deliberately exposes this as ``object`` so the core
+        package does not depend on the higher-level widget runtime module.
+        """
+
+        return self._runtime
+
+    def on_mount(self, runtime: object) -> None:
+        """Lifecycle hook called once after the component enters a mounted tree.
+
+        Subclasses may override this method to acquire runtime-bound resources or
+        subscriptions. Parent components mount before their descendants.
+        """
+
+    def on_unmount(self, runtime: object) -> None:
+        """Lifecycle hook called once before the component leaves a mounted tree.
+
+        Descendants unmount before their parents so child resources can safely
+        detach while their containing hierarchy is still mounted.
+        """
+
+    def _mount(self, runtime: object) -> bool:
+        """Attach to ``runtime`` and dispatch the public lifecycle hook exactly once."""
+
+        if self._runtime is runtime:
+            return False
+        if self._runtime is not None:
+            raise RuntimeError("Component is already mounted in another runtime.")
+        self._runtime = runtime
+        try:
+            self.on_mount(runtime)
+            self.emit("mounted", runtime=runtime)
+        except BaseException:
+            self._runtime = None
+            raise
+        return True
+
+    def _unmount(self, runtime: object) -> bool:
+        """Detach from ``runtime`` and dispatch the public lifecycle hook exactly once."""
+
+        if self._runtime is None:
+            return False
+        if self._runtime is not runtime:
+            raise RuntimeError("Component is mounted in a different runtime.")
+        try:
+            self.on_unmount(runtime)
+            self.emit("unmounted", runtime=runtime)
+        finally:
+            self._runtime = None
+        return True
 
     def add(self, *children: Component) -> Component:
         for child in children:
