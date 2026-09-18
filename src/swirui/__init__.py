@@ -17,6 +17,7 @@ from .animation import (
     spring_state,
     tween_state,
 )
+from .animation_timeline import DelayAnimation, RepeatAnimation
 from .app import App
 from .core import (
     AccessibilityNode,
@@ -162,6 +163,7 @@ __all__ = [
     "ConstraintSpec",
     "CrossAxisAlignment",
     "DecayAnimation",
+    "DelayAnimation",
     "Dialog",
     "Dock",
     "DockPanel",
@@ -210,6 +212,7 @@ __all__ = [
     "RadioButton",
     "RangeSlider",
     "ReactiveProperty",
+    "RepeatAnimation",
     "ResponsiveBreakpoints",
     "ResponsiveLayout",
     "ResponsiveLayoutSpec",
