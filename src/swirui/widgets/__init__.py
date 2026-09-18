@@ -25,6 +25,7 @@ from .layout_advanced import (
 from .layout_panels import Grid, Stack, Wrap
 from .navigation import AdaptiveNavigation, AdaptiveNavigationSpec, NavigationMode
 from .overlays import Dialog, Modal, Notification, Toast
+from .particles import ParticleField, ParticleSample
 from .progress import ProgressBar, ProgressRing
 from .responsive import (
     LayoutDirection,
@@ -87,6 +88,8 @@ __all__ = [
     "Overlay",
     "OverlayPlacement",
     "Panel",
+    "ParticleField",
+    "ParticleSample",
     "PasswordInput",
     "ProgressBar",
     "ProgressRing",

@@ -5,9 +5,9 @@ from typing import Any
 
 import pytest
 
-from swirui import App, Button, Component, Modal, Toast, Window, mount
+from swirui import App, Button, Component, Modal, ParticleField, Toast, Window, mount
 from swirui.platforms.windows import Win32PlatformBackend
-from swirui.rendering import Rect, SceneNodeKind, WgpuRenderer
+from swirui.rendering import Color, Rect, SceneNodeKind, WgpuRenderer
 
 
 def _isolated_backend() -> Win32PlatformBackend:
@@ -104,5 +104,55 @@ def test_modal_and_toast_share_persistent_win32_wgpu_context() -> None:
             for node in window.scene.walk()
         )
         assert not any(node.key == "native-toast" for node in window.scene.walk())
+    finally:
+        app.stop()
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Particle native smoke requires Windows")
+def test_particle_field_animates_on_persistent_win32_wgpu_context() -> None:
+    renderer = WgpuRenderer()
+    backend = _isolated_backend()
+    app = App("SwirUI particle smoke", platform_backend=backend, renderer=renderer)
+    window = app.add_window(Window(title="SwirUI particles", width=720, height=420))
+    field = ParticleField(
+        key="native-particles",
+        bounds=Rect(24.0, 24.0, 672.0, 372.0),
+        particle_count=48,
+        seed=2026,
+        colors=(Color.from_hex("#0088FF"), Color.from_hex("#62E5FF")),
+        loop=False,
+        duration=1.0,
+    )
+    runtime = mount(window, field)
+
+    try:
+        app.start()
+        assert window.native_handle is not None
+        assert renderer.persistent_context_count == 1
+        persistent_contexts = renderer.persistent_context_count
+        initial_generation = runtime.generation
+
+        field.start()
+        field.advance(1.0 / 60.0)
+        assert runtime.generation > initial_generation
+
+        frame_time = time.monotonic() + 1.0
+        app.invalidate(window)
+        assert app.render_pending(frame_time) == 1
+        assert renderer.persistent_context_count == persistent_contexts
+        assert renderer.last_rectangle_count > 0
+        assert window.scene is not None
+        assert any(
+            node.kind is SceneNodeKind.RECTANGLE
+            and node.key.startswith("native-particles:particle:")
+            for node in window.scene.walk()
+        )
+
+        field.advance(0.25)
+        frame_time += 0.25
+        app.invalidate(window)
+        assert app.render_pending(frame_time) == 1
+        assert renderer.persistent_context_count == persistent_contexts
+        assert renderer.last_rectangle_count > 0
     finally:
         app.stop()
