@@ -78,9 +78,9 @@ def _compile_component(
 
     effective_enabled = ancestors_enabled and component.enabled
     if isinstance(component, SceneLayoutPreparer):
-        prepare_layout = True
-        if isinstance(component, Widget):
-            prepare_layout = component._layout_preparation_needed(viewport)
+        prepare_layout = not isinstance(component, Widget) or component._layout_preparation_needed(
+            viewport
+        )
         if prepare_layout:
             component.prepare_layout(viewport)
             if isinstance(component, Widget):
