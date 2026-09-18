@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from .geometry import Point, Rect
 
 _DETERMINANT_EPSILON = 1.0e-12
+_ORIGIN = Point()
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,7 +55,7 @@ class Affine2D:
         )
 
     @classmethod
-    def rotation(cls, radians: float, *, origin: Point = Point()) -> Affine2D:
+    def rotation(cls, radians: float, *, origin: Point = _ORIGIN) -> Affine2D:
         """Create a counter-clockwise rotation around ``origin``."""
 
         angle = float(radians)
@@ -80,7 +81,7 @@ class Affine2D:
         return cls(tx=float(dx), ty=float(dy))
 
     @classmethod
-    def uniform_scale(cls, scale: float, *, origin: Point = Point()) -> Affine2D:
+    def uniform_scale(cls, scale: float, *, origin: Point = _ORIGIN) -> Affine2D:
         """Create a positive uniform scale around ``origin``."""
 
         normalized = float(scale)
