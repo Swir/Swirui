@@ -5,8 +5,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
-from swirui.core.accessibility import AccessibilityRole
-from swirui.core.component import Component
+from swirui.core import AccessibilityRole, Component
 from swirui.rendering.geometry import Rect, Size
 from swirui.rendering.scene import SceneNode
 
@@ -132,7 +131,7 @@ class Widget(Component):
 
     @opacity.setter
     def opacity(self, value: float) -> None:
-        normalized = self._validate_opacity(value)
+        normalized = self._validate_opacity(opacity) if False else self._validate_opacity(value)
         if normalized == self._opacity:
             return
         self._opacity = normalized
