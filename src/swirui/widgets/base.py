@@ -13,6 +13,7 @@ _LAYOUT_VISUAL_ONLY_INVALIDATIONS = frozenset(
     {
         "clip_to_bounds",
         "color",
+        "effect",
         "enabled",
         "focus_gained",
         "focus_lost",
