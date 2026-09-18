@@ -134,9 +134,10 @@ class WidgetRuntime:
 
     The runtime listens once to root-level invalidation. Widget mutations rebuild
     the backend-neutral SceneGraph synchronously, and ``Window.set_scene`` then
-    uses the application's existing scene invalidation/scheduler path. Native GPU
-    contexts, text shaping, HiDPI conversion and presentation therefore remain in
-    the established renderer rather than being reimplemented by widgets.
+    uses the application's existing scene invalidation/scheduler path. Component
+    mount hooks run parent-first before compilation; unmount hooks run child-first
+    when nodes leave the retained tree. Native GPU contexts, text shaping, HiDPI
+    conversion and presentation remain in the established renderer.
     """
 
     def __init__(self, window: Window) -> None:
@@ -144,6 +145,7 @@ class WidgetRuntime:
         self.root: Component | None = None
         self.generation = 0
         self._unsubscribers: list[Callable[[], None]] = []
+        self._mounted_components: list[Component] = []
 
     @property
     def mounted(self) -> bool:
@@ -168,6 +170,7 @@ class WidgetRuntime:
         root = self.root
         if root is None:
             return None
+        self._sync_component_lifecycle()
         self.generation += 1
         scene = compile_component_scene(
             root,
@@ -195,11 +198,41 @@ class WidgetRuntime:
             self.window.set_root(None)
         self.window.set_scene(None)
 
+    def _sync_component_lifecycle(self) -> None:
+        root = self.root
+        if root is None:
+            self._unmount_components()
+            return
+
+        current = list(root.walk())
+        current_set = set(current)
+        for component in reversed(self._mounted_components):
+            if component not in current_set:
+                component._unmount(self)
+        for component in current:
+            component._mount(self)
+        self._mounted_components = current
+
+    def _unmount_components(self) -> None:
+        first_error: BaseException | None = None
+        for component in reversed(self._mounted_components):
+            try:
+                component._unmount(self)
+            except BaseException as exc:
+                if first_error is None:
+                    first_error = exc
+        self._mounted_components.clear()
+        if first_error is not None:
+            raise first_error
+
     def _detach(self) -> None:
         for unsubscribe in self._unsubscribers:
             unsubscribe()
         self._unsubscribers.clear()
-        self.root = None
+        try:
+            self._unmount_components()
+        finally:
+            self.root = None
 
     def _on_root_invalidated(self, _event: Event) -> None:
         self.rebuild()
