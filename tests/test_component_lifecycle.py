@@ -109,8 +109,8 @@ def test_external_window_root_replacement_detaches_lifecycle() -> None:
 def test_mount_and_unmount_events_are_observable() -> None:
     root = Component("root")
     events: list[tuple[str, object]] = []
-    root.on("mounted", lambda event: events.append((event.kind, event.data["runtime"])))
-    root.on("unmounted", lambda event: events.append((event.kind, event.data["runtime"])))
+    root.on("mounted", lambda event: events.append((event.type, event.data["runtime"])))
+    root.on("unmounted", lambda event: events.append((event.type, event.data["runtime"])))
     runtime = WidgetRuntime(Window()).mount(root)
 
     runtime.unmount()
