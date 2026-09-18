@@ -1,8 +1,9 @@
-"""Native retained-affine Path2D demo for the SwirUI Rust/wgpu renderer.
+"""Native retained-affine geometry demo for the SwirUI Rust/wgpu renderer.
 
 Build and install the native module from ``native/`` before running this example.
-The transformed path is rendered on the GPU; rectangle, text and image raster
-transforms intentionally remain gated until their native affine pipelines land.
+The transformed Path2D and rounded rectangle render through the GPU affine shape
+pipeline. Shaped-text/image transforms and rotated clips intentionally remain
+gated until those native compositor slices land.
 """
 
 from __future__ import annotations
@@ -12,6 +13,7 @@ import math
 from swirui import App, AppConfig, Window
 from swirui.rendering import (
     Color,
+    CornerRadius,
     Path2D,
     Point,
     Rect,
@@ -37,7 +39,7 @@ root.add(
         "title",
         SceneNodeKind.TEXT,
         Rect(70, 54, 960, 64),
-        text="SwirUI — retained affine Path2D",
+        text="SwirUI — retained affine GPU geometry",
         fill=Color.from_hex("#EAF7FF"),
         font_size=40,
         hit_testable=False,
@@ -56,7 +58,7 @@ root.add(
 clip_layer = SceneNode(
     "translated-clip",
     SceneNodeKind.GROUP,
-    Rect(170, 205, 760, 390),
+    Rect(110, 205, 900, 390),
     clip_to_bounds=True,
     hit_testable=False,
     transform=Affine2D.translation(10.0, 8.0),
@@ -65,30 +67,42 @@ clip_layer.add(
     SceneNode(
         "rotated-concave-path",
         SceneNodeKind.PATH,
-        Rect(315, 265, 470, 270),
+        Rect(185, 285, 370, 220),
         fill=Color.from_hex("#0088FF"),
         opacity=0.92,
         path=Path2D.polygon(
             Point(0, 0),
-            Point(470, 0),
-            Point(470, 90),
-            Point(210, 90),
-            Point(210, 270),
-            Point(0, 270),
+            Point(370, 0),
+            Point(370, 72),
+            Point(165, 72),
+            Point(165, 220),
+            Point(0, 220),
         ),
         transform=Affine2D.rotation(
             math.radians(18.0),
-            origin=Point(550.0, 400.0),
+            origin=Point(370.0, 395.0),
         ),
-    )
+    ),
+    SceneNode(
+        "rotated-rounded-rectangle",
+        SceneNodeKind.RECTANGLE,
+        Rect(650, 290, 230, 160),
+        fill=Color.from_hex("#62E5FF"),
+        opacity=0.92,
+        corner_radius=CornerRadius(42.0, 28.0, 18.0, 8.0),
+        transform=Affine2D.rotation(
+            math.radians(-16.0),
+            origin=Point(765.0, 370.0),
+        ),
+    ),
 )
 root.add(clip_layer)
 
-window = Window(title="SwirUI — Affine GPU Path", width=WIDTH, height=HEIGHT)
+window = Window(title="SwirUI — Affine GPU Geometry", width=WIDTH, height=HEIGHT)
 window.set_scene(Scene(WIDTH, HEIGHT, root))
 
 app = App(
-    "SwirUI Affine GPU Path Demo",
+    "SwirUI Affine GPU Geometry Demo",
     config=AppConfig(target_fps=120),
     renderer=WgpuRenderer(),
 )
