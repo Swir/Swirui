@@ -17,7 +17,7 @@
 
 [![CI](https://img.shields.io/github/actions/workflow/status/Swir/Swirui/ci.yml?branch=main&style=flat-square&label=CI&color=0088FF)](https://github.com/Swir/Swirui/actions/workflows/ci.yml)
 ![Status](https://img.shields.io/badge/status-pre--alpha-0088FF?style=flat-square)
-![Progress](https://img.shields.io/badge/project%20progress-61%25-0088FF?style=flat-square)
+![Progress](https://img.shields.io/badge/project%20progress-68%25-0088FF?style=flat-square)
 
 </div>
 
@@ -25,21 +25,20 @@
 
 ## Project Status
 
-<img width="100%" src="assets/readme/progress-card.svg" alt="SwirUI project progress: 61.0% — 0.5 Alpha Layout Engine in progress; 5 of 12 layout groups verified">
+<img width="100%" src="assets/readme/progress-card.svg" alt="SwirUI project progress: 68.0% — 0.5 Alpha Layout Engine complete; 12 of 12 layout groups verified">
 
-**61% — 0.5 Alpha Layout Engine underway; Row/Column, Stack/Grid/Wrap, DockPanel/Flow/Overlay, ConstraintLayout and min/max constraints are implemented and verified.**
-
-`[████████████░░░░░░░░] 61%`
+**68% project progress — 0.5 Alpha Layout Engine is complete with all 12 named layout groups implemented and verified.**
 
 - `0.1 Alpha — Foundation` ✅
 - `0.2 Alpha — Native Window + First Renderer` ✅
 - `0.3 Alpha — Visual Engine` ✅
 - `0.4 Alpha — Core Widgets` ✅
-- `0.5 Alpha — Layout Engine` 🚧
+- `0.5 Alpha — Layout Engine` ✅
+- `0.6 Alpha — Reactive Runtime` is the next active milestone
 
-Progress increases only for implemented and verified roadmap work. Documentation-only changes, skeletons and unfinished experiments do not increase the percentage.
+Progress increases only for implemented and verified roadmap work. Documentation-only changes, skeletons and unfinished experiments do not increase the percentage. Release readiness is separate from project completion.
 
-SwirUI remains **pre-alpha**. Public APIs may still change while the layout, reactive and animation layers are developed. There is no public GitHub Release yet.
+SwirUI remains **pre-alpha**. Public APIs may still change while the reactive, animation and professional-widget layers are developed. There is no public GitHub Release yet.
 
 ## Overview
 
@@ -47,7 +46,7 @@ SwirUI is being built as a complete Python desktop application framework rather 
 
 The Windows renderer uses a persistent per-window wgpu context and retained SceneGraph. Linux/X11 and macOS/Cocoa already provide real native window and input backends. GPU presentation on Linux/macOS and Wayland support remain future work and are not claimed as complete.
 
-The active layout layer now prepares retained widget geometry before descendant SceneGraph compilation. It includes linear, stacked, grid, wrapping, docking, flow, overlay and parent-relative constraint containers while keeping authored preferred sizes separate from arranged bounds across reflow. This keeps layout policy in the Python public/runtime layer while reusing the same native GPU renderer, HiDPI boundary, routed input and persistent per-window wgpu context.
+The completed 0.5 layout layer prepares retained widget geometry before descendant SceneGraph compilation. It combines content-aware intrinsic measurement, min/max constraints, responsive compact/desktop/ultrawide policies, adaptive navigation, dynamic typography, DPI-stable logical spacing and revision-aware layout caching while preserving component identity, focus state and the existing native GPU renderer.
 
 ## Highlights
 
@@ -66,8 +65,10 @@ The active layout layer now prepares retained widget geometry before descendant 
 | Post-processing | Persistent scene blur, affine RGBA color filters and validated custom WGSL effects |
 | Custom shaders | Bounded Python `CustomShaderEffect` API, native Naga validation, persistent GPU pass and bounded pipeline reuse |
 | Core widgets | Retained Text/Label, Button/IconButton, text inputs, toggles, Slider/RangeSlider, determinate progress, Badge/Chip, Tooltip, Panel/Frame, Card/GlassCard, ScrollView, Expander/Accordion, SplitView, Modal/Dialog and Toast/Notification |
-| Layout engine | Retained Row/Column, Stack, weighted Grid, Wrap, DockPanel, bidirectional Flow, independently aligned Overlay and parent-relative ConstraintLayout with logical-DIP spacing/alignment, viewport reflow and min/max constraints |
-| Performance | Adaptive visual-quality profiles plus retained effect and GPU resource caches |
+| Layout engine | Row/Column, Stack/Grid/Wrap, DockPanel/Flow/Overlay, ConstraintLayout, content-aware intrinsic sizing, min/max constraints and optimized retained reflow |
+| Responsive UI | Logical-DIP breakpoints, compact/desktop/ultrawide variants, adaptive navigation and `DynamicTypography` without replacing retained component trees |
+| DPI-aware layout | Spacing/padding remain stable in logical DIPs across monitor scale changes and convert at the native/GPU physical-pixel boundary |
+| Performance | Adaptive visual-quality profiles plus retained effect/GPU caches and layout-preparation revision caching |
 | Accessibility | Semantic roles/tree, keyboard focus routing, keyboard-only traversal, checked state, numeric value/range and dialog/alert semantics |
 
 ## Quick Start
@@ -89,7 +90,7 @@ Run the native-window demo:
 python examples/native_window_demo.py
 ```
 
-Try the retained core widgets and verified layout containers:
+Try the retained core widgets and completed layout engine:
 
 ```powershell
 python examples/core_widgets_demo.py
@@ -103,6 +104,9 @@ python examples/core_overlays_demo.py
 python examples/layout_row_column_demo.py
 python examples/layout_panels_demo.py
 python examples/layout_advanced_demo.py
+python examples/responsive_layout_demo.py
+python examples/adaptive_navigation_demo.py
+python examples/dynamic_typography_demo.py
 ```
 
 ### Windows GPU development
@@ -187,7 +191,47 @@ row.add(primary, secondary)
 mount(window, row)
 ```
 
-Layout geometry remains in logical DIPs. The retained layout pass runs before child SceneGraph compilation, so the arranged bounds are used by rendering and hit testing without recreating the native GPU context. Parent arrangement also preserves each widget's explicitly authored preferred size, avoiding cumulative measurement drift across later reflows.
+Layout geometry remains in logical DIPs. The retained layout pass runs before child SceneGraph compilation, so arranged bounds are used by rendering and hit testing without recreating the native GPU context. Parent arrangement preserves each widget's authored preferred size, while content-aware measurement can grow text-bearing controls and containers when their content requires more space.
+
+### Responsive retained layout
+
+```python
+from swirui import (
+    Button,
+    CrossAxisAlignment,
+    LayoutDirection,
+    ResponsiveLayout,
+    ResponsiveLayoutSpec,
+    Window,
+    mount,
+)
+from swirui.rendering import Rect
+
+window = Window(title="Responsive", width=960, height=520)
+layout = ResponsiveLayout(
+    bounds=Rect(0, 0, 1, 1),
+    fill_viewport=True,
+    compact=ResponsiveLayoutSpec(
+        direction=LayoutDirection.COLUMN,
+        spacing=12,
+        padding=24,
+        cross_alignment=CrossAxisAlignment.STRETCH,
+    ),
+    desktop=ResponsiveLayoutSpec(
+        direction=LayoutDirection.ROW,
+        spacing=20,
+        padding=32,
+        cross_alignment=CrossAxisAlignment.CENTER,
+    ),
+)
+layout.add(
+    Button("Primary", bounds=Rect(0, 0, 160, 48)),
+    Button("Secondary", bounds=Rect(0, 0, 180, 48)),
+)
+mount(window, layout)
+```
+
+The same retained children survive breakpoint changes, so focus/input state is not discarded when the window moves between compact, desktop and ultrawide arrangements. Spacing and padding stay in logical DIPs; `Window.scale` maps them to physical pixels at the native/GPU boundary.
 
 ### Bounded custom WGSL effect
 
@@ -227,6 +271,9 @@ examples/core_overlays_demo.py
 examples/layout_row_column_demo.py
 examples/layout_panels_demo.py
 examples/layout_advanced_demo.py
+examples/responsive_layout_demo.py
+examples/adaptive_navigation_demo.py
+examples/dynamic_typography_demo.py
 examples/gpu_rectangles_demo.py
 examples/gpu_text_demo.py
 examples/gpu_image_demo.py
@@ -257,14 +304,16 @@ These examples exercise the same retained contracts used by applications. Public
 Python Application API
         │
         ├── App / Window / Component / State
-        ├── retained widgets + Row / Column / Stack / Grid / Wrap
-        ├── DockPanel / Flow / Overlay / ConstraintLayout
+        ├── retained widgets + complete 0.5 layout API
+        ├── responsive layout / adaptive navigation / dynamic typography
         ├── routed input + accessibility semantics
         └── runtime configuration + adaptive visual quality
         │
 SwirUI Runtime
         │
-        ├── retained layout preparation + min/max constraints + stable preferred sizing
+        ├── intrinsic measure → arrange + min/max constraints
+        ├── compact / desktop / ultrawide logical-DIP policies
+        ├── revision-aware retained layout invalidation cache
         ├── Win32 / X11 / Cocoa native backends
         ├── logical DIP ↔ physical pixel boundary
         ├── retained RenderTree / SceneGraph
@@ -301,19 +350,21 @@ Every significant runtime change is expected to preserve the existing quality ga
 - integrated 0.2 native renderer/runtime gate
 - HiDPI, multi-monitor, presentation-policy, text, image, path, effects and cache coverage
 - retained widget interaction, accessibility and real Win32 input/rendering coverage
-- retained layout measurement/reflow, arranged hit testing and persistent Win32/wgpu-context coverage
-- advanced Dock/Flow/Overlay/ConstraintLayout arrangement and persistent Win32/wgpu-context coverage
+- intrinsic measurement, min/max constraints and retained responsive reflow coverage
+- real Win32 responsive layout, adaptive navigation and dynamic typography coverage on the persistent wgpu context
+- DPI-aware logical spacing/padding checks tied to the same logical-DIP → physical-pixel boundary used by rendering
+- layout-invalidation tests proving paint/input-only rebuilds can skip redundant measure/arrange work
 - real custom-WGSL validation and persistent-runtime smoke coverage
 
 SwirUI does not claim performance superiority over other frameworks without reproducible measurements.
 
 ## Roadmap
 
-<img width="100%" src="assets/readme/progress-mini.svg" alt="SwirUI roadmap progress: 61.0% — 5 of 12 Layout Engine groups verified">
+<img width="100%" src="assets/readme/progress-mini.svg" alt="SwirUI roadmap progress: 68.0% — 12 of 12 Layout Engine groups verified">
 
 The authoritative plan is **[ROADMAP.md](ROADMAP.md)**.
 
-**0.5 Alpha — Layout Engine** is underway. The verified foundation now includes Row/Column, Stack/weighted Grid/Wrap, DockPanel/Flow/Overlay, parent-relative ConstraintLayout and shared min/max constraints with weighted grow/shrink sizing, nested layout preparation and viewport reflow. Parent arrangement preserves authored preferred sizes across reflow, but the broader intrinsic-sizing group remains open. The remaining layout groups begin with intrinsic sizing and responsive breakpoints; this milestone is not complete and does not imply release readiness.
+**0.5 Alpha — Layout Engine is complete.** All 12 named groups are implemented and verified: core and advanced containers, content-aware intrinsic sizing, min/max constraints, responsive breakpoints, adaptive navigation, dynamic typography, compact/desktop/ultrawide variants, DPI-aware logical spacing and optimized retained layout invalidation. The next milestone is **0.6 Alpha — Reactive Runtime**. Completing 0.5 does not imply beta or release readiness.
 
 ## Releases
 
@@ -344,7 +395,7 @@ Swirui/
 
 ## 🔎 Search Keywords
 
-`python desktop gui` • `python gpu ui` • `native python ui framework` • `python retained widgets` • `python layout engine` • `python row column grid layout` • `python scrollview widget` • `python accordion widget` • `python split view widget` • `python modal dialog ui` • `wgpu python renderer` • `rust pyo3 gui` • `win32 python gui` • `reactive desktop ui` • `high refresh rate ui` • `hidpi desktop ui` • `gpu text rendering` • `frosted glass ui` • `custom wgsl effects` • `multi monitor python ui`
+`python desktop gui` • `python gpu ui` • `native python ui framework` • `python retained widgets` • `python layout engine` • `python responsive layout` • `python dynamic typography` • `python adaptive navigation` • `python row column grid layout` • `python scrollview widget` • `wgpu python renderer` • `rust pyo3 gui` • `win32 python gui` • `reactive desktop ui` • `high refresh rate ui` • `hidpi desktop ui` • `gpu text rendering` • `frosted glass ui` • `custom wgsl effects` • `multi monitor python ui`
 
 <img width="100%" src="https://raw.githubusercontent.com/Swir/Swir/main/assets/power-divider-v4.svg" alt="SWIR electric divider" />
 

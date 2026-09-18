@@ -4,11 +4,11 @@
 
 ## Project progress
 
-**Overall completion: 61%**
+<img width="100%" src="assets/readme/progress-mini.svg" alt="SwirUI roadmap progress: 68.0% — 12 of 12 Layout Engine groups verified">
 
-`[████████████░░░░░░░░] 61%`
+**Overall completion: 68%**
 
-Progress is based on implemented and verified roadmap work. Ideas, mockups and unfinished prototypes do not increase the percentage.
+Progress is based on implemented and verified roadmap work. Ideas, mockups and unfinished prototypes do not increase the percentage. The current weighted model preserves the verified 56% baseline through completed 0.4 Core Widgets, then adds one percentage point for each verified 0.5 Layout Engine group. Release readiness is tracked separately from project completion.
 
 ---
 
@@ -152,24 +152,26 @@ The Core Widgets gate is complete with all 15 retained widget groups implemented
 
 ## 0.5 Alpha — Layout Engine
 
-**Status:** Underway 🚧
+**Status:** Complete ✅
 
 - [x] Row / Column
 - [x] Stack / Grid / Wrap
 - [x] Dock / Flow / Overlay
 - [x] Constraint layout
-- [ ] Intrinsic sizing
+- [x] Intrinsic sizing
 - [x] Min / max constraints
-- [ ] Responsive breakpoints
-- [ ] Adaptive navigation
-- [ ] Dynamic typography
-- [ ] Compact / desktop / ultrawide variants
-- [ ] DPI-aware spacing
-- [ ] Layout invalidation optimization
+- [x] Responsive breakpoints
+- [x] Adaptive navigation
+- [x] Dynamic typography
+- [x] Compact / desktop / ultrawide variants
+- [x] DPI-aware spacing
+- [x] Layout invalidation optimization
 
-### 0.5 verified foundation
+### 0.5 gate
 
-The verified layout foundation provides retained `Row`, `Column`, `Stack`, weighted `Grid`, `Wrap`, `DockPanel`, bidirectional `Flow`, independently aligned `Overlay` and parent-relative `ConstraintLayout` containers with logical-DIP padding, spacing, alignment and viewport reflow. Widget-level min/max constraints plus weighted grow/shrink sizing are applied before descendant SceneGraph compilation, including nested layouts, without recursively invalidating the tree from inside the same layout pass. Parent arrangement now preserves explicitly authored preferred sizes separately from arranged bounds so repeated reflow does not destroy a widget's measurement baseline; this is groundwork for the still-open broader intrinsic-sizing group rather than completion of it. Deterministic component tests and real Win32/wgpu smoke coverage verify routed pointer input through arranged bounds and persistent per-window GPU-context reuse. The remaining 0.5 groups are still open and the milestone is not complete.
+The Layout Engine gate is complete with all 12 named groups implemented and verified. Retained `Row`, `Column`, `Stack`, weighted `Grid`, `Wrap`, `DockPanel`, bidirectional `Flow`, independently aligned `Overlay` and parent-relative `ConstraintLayout` containers support content-aware intrinsic measurement, shared min/max constraints and stable authored preferred sizes across reflow. Responsive layout policies keep one retained tree across compact, desktop and ultrawide logical-DIP widths, with adaptive navigation and `DynamicTypography` preserving component identity, focus state and shaped-text rendering.
+
+Layout spacing and padding remain authored in logical DIPs across monitor-scale changes and are converted only at the native/GPU boundary, preventing spacing drift while physical pixels follow the active display scale. Layout preparation is cached by geometry-relevant revision plus logical viewport, so paint/input-only invalidations avoid redundant measure/arrange work while content, layout and resize changes still force correct reflow. Deterministic Python coverage, real Win32+wGPU responsive/layout smoke tests and the existing mixed-DPI GPU gate protect the completed milestone while preserving one persistent per-window GPU context. Completion applies only to 0.5 and does not imply release readiness.
 
 ## 0.6 Alpha — Reactive Runtime
 
@@ -426,7 +428,12 @@ AI output must remain ordinary, editable SwirUI code.
 - [x] Windows retained SplitView + persistent wgpu smoke test
 - [x] Windows retained Modal / Dialog + Toast / Notification + persistent wgpu smoke test
 - [x] Windows retained layout engine + persistent wgpu smoke test
+- [x] Windows content-aware intrinsic sizing + persistent wgpu smoke test
+- [x] Windows responsive breakpoints + dynamic typography + persistent wgpu smoke test
+- [x] Windows adaptive navigation + persistent wgpu smoke test
 - [x] Windows advanced Dock / Flow / Overlay / ConstraintLayout + persistent wgpu smoke test
+- [x] DPI-aware logical spacing / padding conversion coverage
+- [x] Retained layout invalidation optimization coverage
 - [ ] Screenshot tests
 - [ ] Visual regression tests
 - [x] Accessibility tests
