@@ -1,7 +1,10 @@
+import math
+
 from swirui import App, Component, Window
 from swirui.core import Event, EventPhase
 from swirui.platforms import NullPlatformBackend, PlatformEvent, PlatformEventKind, PointerButton
-from swirui.rendering import Color, NullRenderer, Rect, Scene, SceneNode, SceneNodeKind
+from swirui.rendering import Color, NullRenderer, Point, Rect, Scene, SceneNode, SceneNodeKind
+from swirui.rendering.affine import Affine2D
 
 
 def _scene() -> tuple[Scene, SceneNode, SceneNode]:
@@ -167,6 +170,56 @@ def test_pointer_event_routes_capture_target_and_bubble_through_components() -> 
     assert window_events[0].data["target"] is front_scene
     assert window_events[0].data["component_target"] is front
     assert window_events[0].data["component_path"] == (root, front)
+
+    app.stop()
+
+
+def test_rotated_ancestor_routes_pointer_to_visual_child_position() -> None:
+    backend = NullPlatformBackend()
+    app = App(platform_backend=backend, renderer=NullRenderer())
+    window = Window(width=240, height=220)
+    rotation = Affine2D.rotation(math.pi / 2.0, origin=Point(100.0, 100.0))
+    scene_root = SceneNode(
+        "root",
+        SceneNodeKind.GROUP,
+        Rect(0.0, 0.0, 220.0, 200.0),
+        hit_testable=False,
+        transform=rotation,
+    )
+    scene_child = SceneNode(
+        "front",
+        SceneNodeKind.RECTANGLE,
+        Rect(120.0, 90.0, 40.0, 20.0),
+        fill=Color.from_hex("#00A8FF"),
+    )
+    scene_root.add(scene_child)
+    scene = Scene(240.0, 220.0, scene_root)
+
+    root = Component("root", key="root")
+    front = Component("front", key="front")
+    root.add(front)
+    window.set_root(root)
+    window.set_scene(scene)
+    app.add_window(window)
+    app.start()
+    assert window.native_handle is not None
+
+    received: list[tuple[EventPhase, object]] = []
+    front.on("pointer_down", lambda event: received.append((event.phase, event.source)))
+    visual_target = rotation.transform_point(Point(140.0, 100.0))
+    backend.post_event(
+        PlatformEvent(
+            PlatformEventKind.POINTER_DOWN,
+            window.native_handle,
+            x=visual_target.x,
+            y=visual_target.y,
+            button=PointerButton.LEFT,
+        )
+    )
+
+    assert app.process_events() == 1
+    assert received == [(EventPhase.TARGET, front)]
+    assert scene.hit_test(visual_target) is scene_child
 
     app.stop()
 
