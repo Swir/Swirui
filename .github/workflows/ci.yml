@@ -200,6 +200,9 @@ jobs:
       - name: Verify shared-element transitions on retained GPU path
         run: pytest tests/test_windows_shared_element_transition.py -q
 
+      - name: Verify fade and slide transitions on retained GPU path
+        run: pytest tests/test_windows_visual_transition.py -q
+
       - name: Verify blur and glow transitions on retained GPU path
         run: pytest tests/test_windows_effect_animation.py -q
 
