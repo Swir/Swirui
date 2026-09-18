@@ -6,6 +6,7 @@ from collections.abc import Callable
 from typing import Protocol, runtime_checkable
 
 from swirui.core import Component, Event
+from swirui.core.state import schedule_reactive_update
 from swirui.rendering.geometry import Rect
 from swirui.rendering.scene import Scene, SceneNode, SceneNodeKind
 from swirui.window import Window
@@ -133,10 +134,11 @@ class WidgetRuntime:
     """Mount a retained widget tree into one framework Window.
 
     The runtime listens once to root-level invalidation. Widget mutations rebuild
-    the backend-neutral SceneGraph synchronously, and ``Window.set_scene`` then
-    uses the application's existing scene invalidation/scheduler path. Native GPU
-    contexts, text shaping, HiDPI conversion and presentation therefore remain in
-    the established renderer rather than being reimplemented by widgets.
+    the backend-neutral SceneGraph synchronously outside reactive transactions.
+    During ``state_transaction()`` flushes, repeated invalidations for the same
+    runtime are coalesced and exactly one rebuild runs after state notifications
+    and computed dependencies settle. ``Window.set_scene`` then uses the
+    application's existing scene invalidation/frame-scheduler path.
 
     Mounting also owns the retained component lifecycle. Parent-first ``on_mount``
     hooks run before the initial scene build; child-first ``on_unmount`` hooks run
@@ -222,7 +224,7 @@ class WidgetRuntime:
             root._unmount()
 
     def _on_root_invalidated(self, _event: Event) -> None:
-        self.rebuild()
+        schedule_reactive_update(self, self.rebuild)
 
     def _on_window_resized(self, _event: Event) -> None:
         self.rebuild()
