@@ -2,7 +2,6 @@
 
 from swirui import State, computed, state_transaction
 
-
 price = State(12.0)
 quantity = State(2)
 discount = State(0.0)
