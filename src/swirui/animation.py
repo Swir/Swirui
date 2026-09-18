@@ -68,7 +68,7 @@ def ease_out_elastic(progress: float) -> float:
     if progress == 0.0 or progress == 1.0:
         return progress
     period = (2.0 * math.pi) / 3.0
-    return (2.0 ** (-10.0 * progress)) * math.sin((progress * 10.0 - 0.75) * period) + 1.0
+    return math.pow(2.0, -10.0 * progress) * math.sin((progress * 10.0 - 0.75) * period) + 1.0
 
 
 class Tween:
