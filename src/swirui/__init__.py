@@ -10,10 +10,13 @@ from .core import (
     AdaptiveQualityStats,
     AppConfig,
     Component,
+    ComputedState,
     PresentationMode,
     State,
     VisualQuality,
     build_accessibility_tree,
+    computed,
+    state_transaction,
 )
 from .widgets import (
     Accordion,
@@ -97,6 +100,7 @@ __all__ = [
     "Chip",
     "Column",
     "Component",
+    "ComputedState",
     "ConstraintLayout",
     "ConstraintSpec",
     "CrossAxisAlignment",
@@ -151,6 +155,8 @@ __all__ = [
     "Window",
     "Wrap",
     "build_accessibility_tree",
+    "computed",
     "mount",
+    "state_transaction",
 ]
 __version__ = "0.1.0a1"

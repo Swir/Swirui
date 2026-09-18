@@ -11,7 +11,7 @@ from .quality import (
     AdaptiveQualityPolicy,
     AdaptiveQualityStats,
 )
-from .state import State
+from .state import ComputedState, State, computed, state_transaction
 
 __all__ = [
     "AccessibilityNode",
@@ -22,6 +22,7 @@ __all__ = [
     "AdaptiveQualityStats",
     "AppConfig",
     "Component",
+    "ComputedState",
     "Event",
     "EventEmitter",
     "EventPhase",
@@ -29,6 +30,8 @@ __all__ = [
     "State",
     "VisualQuality",
     "build_accessibility_tree",
+    "computed",
     "configure_logging",
     "get_logger",
+    "state_transaction",
 ]
