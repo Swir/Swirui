@@ -54,6 +54,7 @@ from .interaction_animation import (
     MagneticInteractionSpec,
 )
 from .page_transition import PageTransition, PageTransitionDirection
+from .shared_element_transition import SharedElementTransition
 from .widgets import (
     Accordion,
     AdaptiveNavigation,
@@ -201,6 +202,7 @@ __all__ = [
     "ResponsiveValue",
     "Row",
     "ScrollView",
+    "SharedElementTransition",
     "Slider",
     "SplitView",
     "SpringAnimation",
