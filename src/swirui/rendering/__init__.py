@@ -1,5 +1,6 @@
 """Rendering contracts and backend-neutral primitives."""
 
+from .affine import Affine2D
 from .affine_wgpu_renderer import WgpuRenderer
 from .backdrop import BackdropBlur
 from .base import NullRenderer, Renderer
@@ -31,6 +32,7 @@ from .windows_gdi import Win32PreviewRenderer
 __all__ = [
     "Acrylic",
     "AdaptiveLighting",
+    "Affine2D",
     "BackdropBlur",
     "Bloom",
     "Color",
