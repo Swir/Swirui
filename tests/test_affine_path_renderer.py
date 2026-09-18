@@ -8,6 +8,7 @@ from swirui import App, Window
 from swirui.platforms import NullPlatformBackend
 from swirui.rendering import (
     Color,
+    CornerRadius,
     Path2D,
     Point,
     Rect,
@@ -166,7 +167,59 @@ def test_affine_path_renderer_rejects_rotated_clip_instead_of_approximating_it()
         app.stop()
 
 
-def test_affine_path_renderer_keeps_non_path_raster_transforms_gated() -> None:
+def test_affine_path_renderer_tessellates_rotated_rounded_rectangle() -> None:
+    native = _FakeAffineNative()
+    renderer = WgpuRenderer(native_module=native)
+    root = SceneNode(
+        key="root",
+        kind=SceneNodeKind.GROUP,
+        bounds=Rect(0.0, 0.0, 360.0, 240.0),
+        hit_testable=False,
+    )
+    rectangle = SceneNode(
+        key="rotated-rounded-rectangle",
+        kind=SceneNodeKind.RECTANGLE,
+        bounds=Rect(80.0, 70.0, 140.0, 80.0),
+        fill=Color.from_hex("#0088FF"),
+        corner_radius=CornerRadius(24.0, 18.0, 10.0, 4.0),
+        transform=Affine2D.rotation(math.radians(12.0), origin=Point(150.0, 110.0)),
+    )
+    root.add(rectangle)
+    app = App(platform_backend=NullPlatformBackend(), renderer=renderer)
+    window = Window(width=360, height=240)
+    window.set_scene(Scene(360.0, 240.0, root))
+    app.add_window(window)
+
+    try:
+        app.start()
+        context = native.contexts[0]
+        rectangles, texts, images, paths = context.path_calls[0][:4]
+        assert rectangles == []
+        assert texts == []
+        assert images == []
+        assert isinstance(paths, list)
+        assert len(paths) % 3 == 0
+        assert len(paths) // 3 > 2
+        assert renderer.last_rectangle_count == 0
+        assert renderer.last_path_count == len(paths) // 3
+
+        expected_transform = (
+            rectangle.transform.m11,
+            rectangle.transform.m12,
+            rectangle.transform.m21,
+            rectangle.transform.m22,
+            rectangle.transform.tx,
+            rectangle.transform.ty,
+        )
+        for vertex in paths:
+            assert len(vertex) == 16
+            assert vertex[6:10] == (0.0, 0.0, 360.0, 240.0)
+            assert vertex[10:16] == pytest.approx(expected_transform)
+    finally:
+        app.stop()
+
+
+def test_affine_path_renderer_keeps_transformed_text_gated() -> None:
     native = _FakeAffineNative()
     renderer = WgpuRenderer(native_module=native)
     root = SceneNode(
@@ -177,10 +230,11 @@ def test_affine_path_renderer_keeps_non_path_raster_transforms_gated() -> None:
     )
     root.add(
         SceneNode(
-            key="rotated-rectangle",
-            kind=SceneNodeKind.RECTANGLE,
+            key="rotated-text",
+            kind=SceneNodeKind.TEXT,
             bounds=Rect(80.0, 70.0, 140.0, 80.0),
-            fill=Color.from_hex("#0088FF"),
+            text="Still gated",
+            fill=Color.from_hex("#EAF7FF"),
             transform=Affine2D.rotation(math.radians(12.0), origin=Point(150.0, 110.0)),
         )
     )
@@ -190,7 +244,7 @@ def test_affine_path_renderer_keeps_non_path_raster_transforms_gated() -> None:
     app.add_window(window)
 
     try:
-        with pytest.raises(RuntimeError, match="rectangle nodes require"):
+        with pytest.raises(RuntimeError, match="text nodes require"):
             app.start()
     finally:
         app.stop()
