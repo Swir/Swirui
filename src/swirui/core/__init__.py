@@ -1,12 +1,14 @@
 """Core building blocks exposed by SwirUI."""
 
 from .accessibility import AccessibilityNode, AccessibilityRole, build_accessibility_tree
+from .async_state import AsyncSnapshot, AsyncState, AsyncStatus
 from .binding import Binding, ReactiveProperty, bind, bind_bidirectional
 from .collections import ObservableDict, ObservableList
 from .component import Component
 from .config import AppConfig, PresentationMode, VisualQuality
 from .events import Event, EventEmitter, EventPhase
 from .logging import configure_logging, get_logger
+from .persistent_state import PersistentState
 from .quality import (
     AdaptiveQualityController,
     AdaptiveQualityDecision,
@@ -23,6 +25,9 @@ __all__ = [
     "AdaptiveQualityPolicy",
     "AdaptiveQualityStats",
     "AppConfig",
+    "AsyncSnapshot",
+    "AsyncState",
+    "AsyncStatus",
     "Binding",
     "Component",
     "ComputedState",
@@ -31,6 +36,7 @@ __all__ = [
     "EventPhase",
     "ObservableDict",
     "ObservableList",
+    "PersistentState",
     "PresentationMode",
     "ReactiveProperty",
     "State",
