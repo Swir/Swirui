@@ -11,6 +11,7 @@ from swirui import (
     CrossAxisAlignment,
     Grid,
     Insets,
+    Label,
     Row,
     Window,
     Wrap,
@@ -162,5 +163,54 @@ def test_grid_and_wrap_compile_in_real_win32_wgpu_session() -> None:
         app.invalidate(window)
         assert app.render_pending(time.monotonic() + 1.0) == 1
         assert renderer.persistent_context_count == initial_contexts
+    finally:
+        app.stop()
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Layout native smoke requires Windows")
+def test_intrinsic_text_reflow_renders_across_persistent_win32_wgpu_frames() -> None:
+    renderer = WgpuRenderer()
+    backend = _isolated_backend()
+    app = App("SwirUI intrinsic sizing smoke", platform_backend=backend, renderer=renderer)
+    window = app.add_window(Window(title="SwirUI intrinsic layout", width=420, height=260))
+    first = Label(
+        "Intrinsic sizing keeps this retained label readable when the row becomes narrow.",
+        key="intrinsic-first",
+        bounds=Rect(0.0, 0.0, 24.0, 20.0),
+        font_size=18.0,
+    )
+    second = Label(
+        "Unicode shaping stays on the GPU path: Zażółć gęślą jaźń.",
+        key="intrinsic-second",
+        bounds=Rect(0.0, 0.0, 24.0, 20.0),
+        font_size=18.0,
+    )
+    row = Row(
+        key="intrinsic-row",
+        bounds=Rect(20.0, 20.0, 380.0, 210.0),
+        spacing=12.0,
+        clip_to_bounds=True,
+    )
+    row.add(first, second)
+    runtime = mount(window, row)
+
+    try:
+        app.start()
+        assert renderer.frames_rendered == 1
+        assert renderer.persistent_context_count == 1
+        assert first.bounds.height > 20.0
+        assert second.bounds.height > 20.0
+        initial_contexts = renderer.persistent_context_count
+        initial_generation = runtime.generation
+
+        first.text = "Short label"
+        assert runtime.generation > initial_generation
+        app.invalidate(window)
+        assert app.render_pending(time.monotonic() + 1.0) == 1
+        assert renderer.persistent_context_count == initial_contexts
+        assert renderer.frames_rendered >= 2
+        assert window.scene is not None
+        keys = {node.key for node in window.scene.walk()}
+        assert {"intrinsic-first", "intrinsic-second"}.issubset(keys)
     finally:
         app.stop()
