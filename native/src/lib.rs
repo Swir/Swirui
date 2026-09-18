@@ -54,6 +54,13 @@ fn validate_custom_shader_wgsl(source: &str) -> PyResult<()> {
     shader_validation::validate_custom_shader_wgsl(source).map_err(PyValueError::new_err)
 }
 
+#[pyfunction]
+fn validate_affine_transform(values: Vec<f32>) -> PyResult<()> {
+    affine::Affine2D::try_from_slice(&values)
+        .map(|_| ())
+        .map_err(PyValueError::new_err)
+}
+
 fn backend_names(backends: wgpu::Backends) -> Vec<&'static str> {
     let candidates = [
         (wgpu::Backends::DX12, "dx12"),
@@ -75,6 +82,7 @@ fn _swirui_native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(enabled_backends, module)?)?;
     module.add_function(wrap_pyfunction!(probe_adapter, module)?)?;
     module.add_function(wrap_pyfunction!(validate_custom_shader_wgsl, module)?)?;
+    module.add_function(wrap_pyfunction!(validate_affine_transform, module)?)?;
     module.add_function(wrap_pyfunction!(clear_win32_surface, module)?)?;
     module.add_function(wrap_pyfunction!(draw_rectangles_win32_surface, module)?)?;
     #[cfg(target_os = "windows")]
