@@ -126,10 +126,9 @@ def test_transaction_exception_flushes_applied_writes() -> None:
     values: list[int] = []
     state.subscribe(values.append)
 
-    with pytest.raises(RuntimeError, match="boom"):
-        with state_transaction():
-            state.set(1)
-            raise RuntimeError("boom")
+    with pytest.raises(RuntimeError, match="boom"), state_transaction():
+        state.set(1)
+        raise RuntimeError("boom")
 
     assert state.value == 1
     assert values == [1]
