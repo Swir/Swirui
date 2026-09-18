@@ -53,6 +53,7 @@ from .interaction_animation import (
     MagneticInteraction,
     MagneticInteractionSpec,
 )
+from .page_transition import PageTransition, PageTransitionDirection
 from .widgets import (
     Accordion,
     AdaptiveNavigation,
@@ -181,6 +182,8 @@ __all__ = [
     "ObservableList",
     "Overlay",
     "OverlayPlacement",
+    "PageTransition",
+    "PageTransitionDirection",
     "Panel",
     "ParticleField",
     "ParticleSample",
