@@ -1,11 +1,12 @@
 """Rendering contracts and backend-neutral primitives."""
 
+from .affine import Affine2D
+from .affine_wgpu_renderer import WgpuRenderer
 from .backdrop import BackdropBlur
 from .base import NullRenderer, Renderer
 from .bloom import Bloom
 from .color_filters import ColorFilter
 from .custom_shaders import CustomShaderEffect, ShaderParameters
-from .custom_wgpu_renderer import WgpuRenderer
 from .depth import Parallax, PerspectivePlane
 from .effect_cache import EffectCache, EffectCacheStats, RetainedEffect
 from .effects import (
@@ -31,6 +32,7 @@ from .windows_gdi import Win32PreviewRenderer
 __all__ = [
     "Acrylic",
     "AdaptiveLighting",
+    "Affine2D",
     "BackdropBlur",
     "Bloom",
     "Color",

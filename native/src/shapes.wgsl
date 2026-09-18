@@ -10,6 +10,8 @@ struct VertexInput {
     @location(0) position: vec2<f32>,
     @location(1) color: vec4<f32>,
     @location(2) clip: vec4<f32>,
+    @location(3) transform_linear: vec4<f32>,
+    @location(4) transform_translation: vec2<f32>,
 }
 
 struct VertexOutput {
@@ -22,14 +24,22 @@ struct VertexOutput {
 @vertex
 fn vs_main(input: VertexInput) -> VertexOutput {
     var output: VertexOutput;
+    let transformed_position = vec2<f32>(
+        input.transform_linear.x * input.position.x +
+            input.transform_linear.y * input.position.y +
+            input.transform_translation.x,
+        input.transform_linear.z * input.position.x +
+            input.transform_linear.w * input.position.y +
+            input.transform_translation.y,
+    );
     let safe_size = max(frame.size, vec2<f32>(1.0, 1.0));
     let ndc = vec2<f32>(
-        input.position.x / safe_size.x * 2.0 - 1.0,
-        1.0 - input.position.y / safe_size.y * 2.0,
+        transformed_position.x / safe_size.x * 2.0 - 1.0,
+        1.0 - transformed_position.y / safe_size.y * 2.0,
     );
     output.clip_position = vec4<f32>(ndc, 0.0, 1.0);
     output.color = input.color;
-    output.pixel_position = input.position;
+    output.pixel_position = transformed_position;
     output.clip = input.clip;
     return output;
 }
