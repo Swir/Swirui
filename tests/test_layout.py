@@ -217,8 +217,8 @@ def test_visual_only_invalidation_reuses_layout_until_geometry_changes() -> None
     assert row.prepare_calls == 2
     assert first.bounds.width > initial_first_bounds.width
 
-    window.resize(420, 120)
+    window.resize(420, 260)
 
     assert runtime.generation == 4
     assert row.prepare_calls == 3
-    assert row.bounds == Rect(0.0, 0.0, 420.0, 120.0)
+    assert row.bounds == Rect(0.0, 0.0, 420.0, 260.0)
