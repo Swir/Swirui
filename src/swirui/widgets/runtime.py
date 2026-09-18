@@ -57,6 +57,10 @@ def compile_component_scene(
     invalidation still recompiles the scene, but unchanged layout containers do
     not repeat measurement and arrangement until geometry-relevant state or the
     logical viewport actually changes.
+
+    A widget's visual-only offset is applied after its descendants are compiled,
+    translating the complete retained subtree so paint, clipping and hit testing
+    agree while measurement and arrangement remain unchanged.
     """
 
     viewport = Rect(0.0, 0.0, float(width), float(height))
@@ -109,6 +113,10 @@ def _compile_component(
         if isinstance(component, SceneChildPreparer):
             child_nodes = component.prepare_scene_children(child_nodes)
         visual_node.add(*child_nodes)
+        if isinstance(component, Widget):
+            offset = component.visual_offset
+            if offset.x != 0.0 or offset.y != 0.0:
+                _translate_scene_subtree(visual_node, offset.x, offset.y)
         return visual_node
 
     if not child_nodes:
@@ -121,6 +129,15 @@ def _compile_component(
     )
     node.add(*child_nodes)
     return node
+
+
+def _translate_scene_subtree(node: SceneNode, dx: float, dy: float) -> None:
+    """Translate ``node`` and descendants in logical DIPs without touching layout state."""
+
+    bounds = node.bounds
+    node.bounds = Rect(bounds.x + dx, bounds.y + dy, bounds.width, bounds.height)
+    for child in node.children:
+        _translate_scene_subtree(child, dx, dy)
 
 
 def _child_viewport(child: Component, fallback: Rect) -> Rect:
