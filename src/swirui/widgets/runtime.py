@@ -56,7 +56,8 @@ def compile_component_scene(
     Widget layout preparers are revision/viewport cached. A paint-only retained
     invalidation still recompiles the scene, but unchanged layout containers do
     not repeat measurement and arrangement until geometry-relevant state or the
-    logical viewport actually changes.
+    logical viewport actually changes. Post-layout ``visual_offset`` translations
+    move the complete compiled subtree only after measurement and arrangement.
     """
 
     viewport = Rect(0.0, 0.0, float(width), float(height))
@@ -109,6 +110,10 @@ def _compile_component(
         if isinstance(component, SceneChildPreparer):
             child_nodes = component.prepare_scene_children(child_nodes)
         visual_node.add(*child_nodes)
+        if isinstance(component, Widget):
+            offset = component.visual_offset
+            if offset.x != 0.0 or offset.y != 0.0:
+                _translate_scene_subtree(visual_node, offset.x, offset.y)
         return visual_node
 
     if not child_nodes:
@@ -128,6 +133,15 @@ def _child_viewport(child: Component, fallback: Rect) -> Rect:
 
     bounds = getattr(child, "bounds", None)
     return bounds if isinstance(bounds, Rect) else fallback
+
+
+def _translate_scene_subtree(node: SceneNode, dx: float, dy: float) -> None:
+    """Translate retained paint/input geometry without mutating layout bounds."""
+
+    bounds = node.bounds
+    node.bounds = Rect(bounds.x + dx, bounds.y + dy, bounds.width, bounds.height)
+    for child in node.children:
+        _translate_scene_subtree(child, dx, dy)
 
 
 class WidgetRuntime:

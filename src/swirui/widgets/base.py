@@ -6,7 +6,7 @@ import math
 from dataclasses import dataclass
 
 from swirui.core import AccessibilityRole, Component
-from swirui.rendering.geometry import Rect, Size
+from swirui.rendering.geometry import Point, Rect, Size
 from swirui.rendering.scene import SceneNode
 
 _LAYOUT_VISUAL_ONLY_INVALIDATIONS = frozenset(
@@ -25,6 +25,7 @@ _LAYOUT_VISUAL_ONLY_INVALIDATIONS = frozenset(
         "pointer_enter",
         "pointer_leave",
         "pointer_up",
+        "visual_offset",
         "z_index",
     }
 )
@@ -66,6 +67,10 @@ class Widget(Component):
     authored size is retained separately so arrangement never destroys the
     widget's intrinsic measurement for a later reflow.
 
+    ``visual_offset`` translates the compiled visual subtree without changing
+    authored or arranged geometry. It is therefore suitable for animation and
+    interaction effects that must preserve intrinsic measurement and layout caches.
+
     Layout-affecting invalidations carry a monotonically increasing revision.
     The widget runtime uses that revision plus the logical viewport to skip
     redundant layout preparation for paint/input-only changes while still
@@ -99,6 +104,7 @@ class Widget(Component):
         self._opacity = self._validate_opacity(opacity)
         self._z_index = int(z_index)
         self._clip_to_bounds = bool(clip_to_bounds)
+        self._visual_offset = Point()
         self._layout_constraints = LayoutConstraints()
         self._layout_grow = 0.0
         self._layout_revision = 0
@@ -162,6 +168,21 @@ class Widget(Component):
         self.invalidate(reason="clip_to_bounds")
 
     @property
+    def visual_offset(self) -> Point:
+        """Return the paint/input translation applied after retained layout."""
+
+        return self._visual_offset
+
+    @visual_offset.setter
+    def visual_offset(self, value: Point) -> None:
+        if not math.isfinite(value.x) or not math.isfinite(value.y):
+            raise ValueError("visual_offset coordinates must be finite.")
+        if value == self._visual_offset:
+            return
+        self._visual_offset = value
+        self.invalidate(reason="visual_offset")
+
+    @property
     def layout_constraints(self) -> LayoutConstraints:
         return self._layout_constraints
 
@@ -211,6 +232,12 @@ class Widget(Component):
 
     def set_layout_grow(self, grow: float) -> Widget:
         self.layout_grow = grow
+        return self
+
+    def set_visual_offset(self, x: float = 0.0, y: float = 0.0) -> Widget:
+        """Set a post-layout visual translation in logical DIPs and return ``self``."""
+
+        self.visual_offset = Point(float(x), float(y))
         return self
 
     def intrinsic_size(self, available: Size | None = None) -> Size:

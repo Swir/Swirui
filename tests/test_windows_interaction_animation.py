@@ -6,7 +6,15 @@ from typing import Any
 
 import pytest
 
-from swirui import AnimationController, App, Button, InteractionAnimator, Window, mount
+from swirui import (
+    AnimationController,
+    App,
+    Button,
+    InteractionAnimator,
+    MagneticInteractionAnimator,
+    Window,
+    mount,
+)
 from swirui.platforms.windows import Win32PlatformBackend
 from swirui.rendering import Rect, WgpuRenderer
 
@@ -121,5 +129,70 @@ def test_real_win32_pointer_animates_retained_button_in_persistent_wgpu_context(
         assert renderer.persistent_context_count == initial_contexts
     finally:
         animator.dispose()
+        controller.dispose()
+        app.stop()
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="magnetic interaction smoke requires Windows")
+def test_real_win32_magnetic_offset_tracks_hit_testing_and_reuses_wgpu_context() -> None:
+    renderer = WgpuRenderer()
+    backend = _isolated_backend()
+    app = App("SwirUI magnetic interaction smoke", platform_backend=backend, renderer=renderer)
+    window = app.add_window(Window(title="SwirUI magnetic interaction", width=520, height=260))
+    button = Button(
+        "Magnetic",
+        key="magnetic-button",
+        bounds=Rect(120.0, 86.0, 220.0, 52.0),
+    )
+    authored_bounds = button.bounds
+    runtime = mount(window, button)
+    controller = AnimationController(app, window)
+    magnetic = MagneticInteractionAnimator(controller, button)
+
+    try:
+        app.start()
+        assert window.native_handle is not None
+        assert renderer.frames_rendered >= 1
+        assert renderer.persistent_context_count == 1
+        initial_contexts = renderer.persistent_context_count
+        hwnd = window.native_handle.value
+        user32 = _user32()
+        x = max(1, round(315.0 * window.scale))
+        y = max(1, round(110.0 * window.scale))
+
+        user32.SendMessageW(ctypes.c_void_p(hwnd), 0x0200, 0, _lparam(x, y))
+        _pump_until(app, lambda: magnetic.offset.x > 0.0)
+        assert button.bounds == authored_bounds
+        assert window.scene is not None
+        attracted = next(node for node in window.scene.walk() if node.key == "magnetic-button")
+        assert attracted.bounds.x > authored_bounds.x
+        assert attracted.bounds.y < authored_bounds.y
+        assert window.scene.hit_test_xy(315.0, 110.0) is not None
+
+        previous_frames = renderer.frames_rendered
+        _render_after_invalidation(app, renderer, previous_frames)
+        assert renderer.persistent_context_count == initial_contexts
+        assert runtime.generation > 1
+
+        outside_x = max(1, round(20.0 * window.scale))
+        outside_y = max(1, round(20.0 * window.scale))
+        user32.SendMessageW(
+            ctypes.c_void_p(hwnd),
+            0x0200,
+            0,
+            _lparam(outside_x, outside_y),
+        )
+        _pump_until(app, lambda: magnetic.active)
+        controller.tick(2.0)
+        assert magnetic.active is False
+        assert magnetic.offset.x == pytest.approx(0.0)
+        assert magnetic.offset.y == pytest.approx(0.0)
+        assert button.bounds == authored_bounds
+
+        previous_frames = renderer.frames_rendered
+        _render_after_invalidation(app, renderer, previous_frames)
+        assert renderer.persistent_context_count == initial_contexts
+    finally:
+        magnetic.dispose()
         controller.dispose()
         app.stop()

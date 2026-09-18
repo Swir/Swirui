@@ -47,6 +47,7 @@ from .core import (
 )
 from .effect_animation import BackdropBlurTransition, GlowTransition
 from .interaction_animation import InteractionAnimationSpec, InteractionAnimator, InteractionPhase
+from .magnetic_animation import MagneticInteractionAnimator, MagneticInteractionSpec
 from .widgets import (
     Accordion,
     AdaptiveNavigation,
@@ -165,6 +166,8 @@ __all__ = [
     "Label",
     "LayoutConstraints",
     "LayoutDirection",
+    "MagneticInteractionAnimator",
+    "MagneticInteractionSpec",
     "MainAxisAlignment",
     "Modal",
     "NavigationMode",
