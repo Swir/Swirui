@@ -98,7 +98,13 @@ def test_sequence_chaining_and_cancellation_do_not_force_completion() -> None:
     values: list[float] = []
     completions: list[str] = []
     first = Tween(0.0, 1.0, 0.1, values.append)
-    second = Tween(1.0, 2.0, 0.2, values.append, on_complete=lambda: completions.append("second"))
+    second = Tween(
+        1.0,
+        2.0,
+        0.2,
+        values.append,
+        on_complete=lambda: completions.append("second"),
+    )
     sequence = first.then(second).start()
 
     sequence.advance(0.15)
@@ -136,6 +142,12 @@ def test_animation_controller_is_window_scoped_and_disposable() -> None:
     controller.play(tween)
     app.emit("frame_rendered", window=other_window, frame_delta=0.5)
     assert values[-1] == 0.0
+
+    # FrameScheduler has no delta on its first rendered frame. The controller
+    # must keep the window invalidated so the second frame can begin timing.
+    app.emit("frame_rendered", window=first_window, frame_delta=None)
+    assert values[-1] == 0.0
+    assert controller.active_count == 1
 
     app.emit("frame_rendered", window=first_window, frame_delta=0.25)
     assert values[-1] == pytest.approx(2.5)

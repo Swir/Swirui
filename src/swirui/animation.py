@@ -334,6 +334,10 @@ class AnimationController:
         if event.data.get("window") is not self.window:
             return
         frame_delta = event.data.get("frame_delta")
+        if frame_delta is None:
+            if self._animations:
+                self.app.invalidate(self.window)
+            return
         if not isinstance(frame_delta, (int, float)):
             return
         delta = float(frame_delta)
@@ -352,11 +356,14 @@ def tween_state(
 ) -> Tween:
     """Create a tween that writes each sampled value into a reactive State."""
 
+    def update(value: float) -> None:
+        state.set(value)
+
     return Tween(
         float(state.value),
         to_value,
         duration,
-        state.set,
+        update,
         easing=easing,
         on_complete=on_complete,
     )
