@@ -8,11 +8,14 @@ import pytest
 from swirui import (
     App,
     Button,
+    Column,
     CrossAxisAlignment,
     Grid,
+    Input,
     Insets,
     Label,
     Row,
+    TextArea,
     Window,
     Wrap,
     mount,
@@ -212,5 +215,59 @@ def test_intrinsic_text_reflow_renders_across_persistent_win32_wgpu_frames() -> 
         assert window.scene is not None
         keys = {node.key for node in window.scene.walk()}
         assert {"intrinsic-first", "intrinsic-second"}.issubset(keys)
+    finally:
+        app.stop()
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Layout native smoke requires Windows")
+def test_intrinsic_editable_controls_render_and_reflow_in_real_win32_wgpu_session() -> None:
+    renderer = WgpuRenderer()
+    backend = _isolated_backend()
+    app = App("SwirUI intrinsic controls smoke", platform_backend=backend, renderer=renderer)
+    window = app.add_window(Window(title="SwirUI intrinsic controls", width=620, height=460))
+    name = Input(
+        bounds=Rect(0.0, 0.0, 40.0, 20.0),
+        key="intrinsic-input",
+        placeholder="Project name with content-driven desired width",
+        font_size=17.0,
+    )
+    notes = TextArea(
+        "First line with enough text to wrap inside the available column width.\nSecond line.",
+        bounds=Rect(0.0, 0.0, 60.0, 24.0),
+        key="intrinsic-area",
+        font_size=16.0,
+    )
+    column = Column(
+        key="intrinsic-controls-column",
+        bounds=Rect(0.0, 0.0, 1.0, 1.0),
+        fill_viewport=True,
+        padding=28.0,
+        spacing=18.0,
+        cross_alignment=CrossAxisAlignment.START,
+    )
+    column.add(name, notes)
+    runtime = mount(window, column)
+
+    try:
+        app.start()
+        assert renderer.frames_rendered == 1
+        assert renderer.persistent_context_count == 1
+        assert name.bounds.width > 40.0
+        assert notes.bounds.height > 24.0
+        initial_contexts = renderer.persistent_context_count
+        initial_generation = runtime.generation
+
+        notes.value = (
+            notes.value
+            + "\nThird line added after mount to force intrinsic invalidation and reflow."
+        )
+        assert runtime.generation > initial_generation
+        app.invalidate(window)
+        assert app.render_pending(time.monotonic() + 1.0) == 1
+        assert renderer.persistent_context_count == initial_contexts
+        assert renderer.frames_rendered >= 2
+        assert window.scene is not None
+        keys = {node.key for node in window.scene.walk()}
+        assert {"intrinsic-input", "intrinsic-area"}.issubset(keys)
     finally:
         app.stop()
