@@ -1,4 +1,4 @@
-"""Frame-rate-independent retained fade and slide transitions for SwirUI."""
+"""Frame-rate-independent retained fade, slide and scale transitions for SwirUI."""
 
 from __future__ import annotations
 
@@ -170,6 +170,82 @@ class SlideTransition:
         )
 
 
+class ScaleTransition:
+    """Animate uniform post-layout scale for a complete retained widget subtree.
+
+    Scale is applied around the root widget's visual center during SceneGraph
+    compilation. Authored layout bounds and intrinsic measurement remain unchanged;
+    descendants, path geometry, corner radii, shaped-text metrics, clipping and hit
+    testing all consume the same transformed retained geometry.
+    """
+
+    def __init__(
+        self,
+        widget: Widget,
+        *,
+        from_scale: float = 0.92,
+        to_scale: float | None = None,
+        duration: float = 0.22,
+        easing: Easing = ease_in_out_cubic,
+        on_complete: Callable[[], None] | None = None,
+    ) -> None:
+        self.widget = widget
+        self.duration = _non_negative("duration", duration)
+        self._authored_scale = widget.visual_scale
+        self.from_scale = _positive("from_scale", from_scale)
+        self.to_scale = _positive(
+            "to_scale",
+            self._authored_scale if to_scale is None else to_scale,
+        )
+        self.easing = easing
+        self._tween = Tween(
+            self.from_scale,
+            self.to_scale,
+            self.duration,
+            self._apply,
+            easing=self.easing,
+            on_complete=on_complete,
+        )
+
+    @property
+    def status(self) -> AnimationStatus:
+        return self._tween.status
+
+    @property
+    def elapsed(self) -> float:
+        return self._tween.elapsed
+
+    @property
+    def progress(self) -> float:
+        return self._tween.progress
+
+    def start(self) -> ScaleTransition:
+        """Start or restart from ``from_scale``."""
+
+        self._tween.start()
+        return self
+
+    def advance(self, delta_seconds: float) -> float:
+        """Advance using elapsed seconds and return any unused completion tail."""
+
+        return self._tween.advance(delta_seconds)
+
+    def cancel(self) -> bool:
+        """Cancel while retaining the currently presented scale sample."""
+
+        return self._tween.cancel()
+
+    def restore(self) -> None:
+        """Restore scale captured when this transition was created."""
+
+        if self.status is AnimationStatus.RUNNING:
+            self._tween.cancel()
+        self.widget.visual_scale = self._authored_scale
+
+    def _apply(self, value: float) -> None:
+        self.widget.visual_scale = value
+
+
 def _finite_point(name: str, point: Point) -> Point:
     if not math.isfinite(point.x) or not math.isfinite(point.y):
         raise ValueError(f"{name} coordinates must be finite.")
@@ -180,6 +256,13 @@ def _non_negative(name: str, value: float) -> float:
     normalized = float(value)
     if not math.isfinite(normalized) or normalized < 0.0:
         raise ValueError(f"{name} must be finite and non-negative.")
+    return normalized
+
+
+def _positive(name: str, value: float) -> float:
+    normalized = float(value)
+    if not math.isfinite(normalized) or normalized <= 0.0:
+        raise ValueError(f"{name} must be finite and greater than zero.")
     return normalized
 
 
