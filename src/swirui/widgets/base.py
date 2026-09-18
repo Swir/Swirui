@@ -25,6 +25,7 @@ _LAYOUT_VISUAL_ONLY_INVALIDATIONS = frozenset(
         "pointer_enter",
         "pointer_leave",
         "pointer_up",
+        "visual_clip",
         "visual_offset",
         "visual_scale",
         "z_index",
@@ -70,9 +71,10 @@ class Widget(Component):
 
     ``visual_offset`` translates the fully compiled visual subtree without
     changing authored or arranged layout geometry. ``visual_scale`` similarly
-    scales the compiled subtree around the widget's visual center. Both are
-    post-layout transforms suitable for animations and interaction effects while
-    keeping measurement stable.
+    scales the compiled subtree around the widget's visual center, while
+    ``visual_clip`` can apply an independent post-layout rectangular clip. These
+    transforms are suitable for animations and interaction effects while keeping
+    measurement stable.
 
     Layout-affecting invalidations carry a monotonically increasing revision.
     The widget runtime uses that revision plus the logical viewport to skip
@@ -109,6 +111,7 @@ class Widget(Component):
         self._clip_to_bounds = bool(clip_to_bounds)
         self._visual_offset = Point()
         self._visual_scale = 1.0
+        self._visual_clip: Rect | None = None
         self._layout_constraints = LayoutConstraints()
         self._layout_grow = 0.0
         self._layout_revision = 0
@@ -203,6 +206,24 @@ class Widget(Component):
         self.invalidate(reason="visual_scale")
 
     @property
+    def visual_clip(self) -> Rect | None:
+        """Return an optional absolute logical-DIP clip applied after layout."""
+
+        return self._visual_clip
+
+    @visual_clip.setter
+    def visual_clip(self, value: Rect | None) -> None:
+        if value is not None and any(
+            not math.isfinite(number)
+            for number in (value.x, value.y, value.width, value.height)
+        ):
+            raise ValueError("visual_clip geometry must be finite.")
+        if value == self._visual_clip:
+            return
+        self._visual_clip = value
+        self.invalidate(reason="visual_clip")
+
+    @property
     def layout_constraints(self) -> LayoutConstraints:
         return self._layout_constraints
 
@@ -264,6 +285,12 @@ class Widget(Component):
         """Set a visual-only uniform scale and return this widget."""
 
         self.visual_scale = scale
+        return self
+
+    def set_visual_clip(self, clip: Rect | None) -> Widget:
+        """Set a visual-only logical-DIP clip and return this widget."""
+
+        self.visual_clip = clip
         return self
 
     def intrinsic_size(self, available: Size | None = None) -> Size:
