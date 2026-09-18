@@ -1,5 +1,17 @@
 """Public package API for SwirUI."""
 
+from .animation import (
+    AnimationController,
+    AnimationSequence,
+    AnimationStatus,
+    Tween,
+    ease_in_out_cubic,
+    ease_out_bounce,
+    ease_out_cubic,
+    ease_out_elastic,
+    linear,
+    tween_state,
+)
 from .app import App
 from .core import (
     AccessibilityNode,
@@ -101,6 +113,9 @@ __all__ = [
     "AdaptiveQualityPolicy",
     "AdaptiveQualityStats",
     "Accordion",
+    "AnimationController",
+    "AnimationSequence",
+    "AnimationStatus",
     "App",
     "AppConfig",
     "AsyncSnapshot",
@@ -166,6 +181,7 @@ __all__ = [
     "TextArea",
     "Toast",
     "Tooltip",
+    "Tween",
     "ViewportClass",
     "VisualQuality",
     "Widget",
@@ -176,7 +192,13 @@ __all__ = [
     "bind_bidirectional",
     "build_accessibility_tree",
     "computed",
+    "ease_in_out_cubic",
+    "ease_out_bounce",
+    "ease_out_cubic",
+    "ease_out_elastic",
+    "linear",
     "mount",
     "state_transaction",
+    "tween_state",
 ]
 __version__ = "0.1.0a1"
