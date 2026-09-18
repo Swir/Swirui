@@ -7,6 +7,7 @@ from collections.abc import Iterator
 from dataclasses import dataclass, field
 from enum import StrEnum
 
+from .affine import Affine2D
 from .geometry import Color, CornerRadius, Path2D, Point, Rect
 
 _MAX_BACKDROP_BLUR_RADIUS = 64.0
@@ -23,7 +24,14 @@ class SceneNodeKind(StrEnum):
 
 @dataclass(slots=True)
 class SceneNode:
-    """A render-backend friendly node in the prepared scene graph."""
+    """A render-backend friendly node in the prepared scene graph.
+
+    ``transform`` maps authored logical-DIP coordinates into visual coordinates.
+    Hit testing already honors the exact inverse affine transform. Raster
+    composition intentionally rejects transformed nodes until every primitive,
+    shaped text and clipping path share one verified renderer contract; this
+    prevents partial rotation support from silently diverging from input.
+    """
 
     key: str
     kind: SceneNodeKind
@@ -41,6 +49,7 @@ class SceneNode:
     clip_to_bounds: bool = False
     hit_testable: bool = True
     blur_radius: float = 0.0
+    transform: Affine2D = field(default_factory=Affine2D)
 
     def __post_init__(self) -> None:
         if not 0.0 <= self.opacity <= 1.0:
@@ -68,6 +77,14 @@ class SceneNode:
                 )
             if self.bounds.width <= 0.0 or self.bounds.height <= 0.0:
                 raise ValueError("Backdrop blur bounds must have positive dimensions.")
+
+    @property
+    def visual_bounds(self) -> Rect:
+        """Return the axis-aligned visual bounds after this node's transform."""
+
+        if self.transform.is_identity:
+            return self.bounds
+        return self.transform.transform_rect_bounds(self.bounds)
 
     def add(self, *children: SceneNode) -> SceneNode:
         for child in children:
@@ -102,7 +119,18 @@ class SceneNode:
         and applies the result to the node and its full subtree. Empty clipped
         subtrees are discarded before renderer resource preparation. A ``None``
         clip means no ancestor has requested clipping.
+
+        Affine transforms are deliberately blocked from raster composition here
+        until the native renderer can apply one transform coherently to rounded
+        rectangles, paths, images, shaped text and rotated clipping. Hit testing
+        can evolve first without ever displaying geometry at a different position
+        from the pointer target.
         """
+
+        if not self.transform.is_identity:
+            raise RuntimeError(
+                "Affine SceneNode raster transforms require the native transform compositor."
+            )
 
         effective_opacity = inherited_opacity * self.opacity
         if effective_opacity <= 0.0:
@@ -134,6 +162,9 @@ class SceneNode:
         visual hit targets unless they have a fill. Decorative nodes can opt out
         of direct hit testing with ``hit_testable=False`` while their descendants
         remain independently eligible.
+
+        A node affine transform is inverted before bounds/path testing, keeping
+        pointer geometry exact even for rotated or translated retained nodes.
         """
 
         path = self.hit_path(point)
@@ -144,7 +175,7 @@ class SceneNode:
 
         if self.opacity <= 0.0:
             return ()
-        if self.clip_to_bounds and not self.bounds.contains(point):
+        if self.clip_to_bounds and not self._transformed_bounds_contains(point):
             return ()
 
         candidates = (
@@ -169,22 +200,25 @@ class SceneNode:
     def _subtree_may_hit(self, point: Point) -> bool:
         """Reject a subtree only when it is impossible for it to hit ``point``.
 
-        Leaf visuals cannot hit outside their own bounds, so broad-phase culling
-        can remove them before z-order sorting. Containers with descendants stay
-        eligible outside their bounds unless clipping is enabled because SwirUI
+        Leaf visuals cannot hit outside their transformed bounds, so broad-phase
+        culling can remove them before z-order sorting. Containers with descendants
+        stay eligible outside their bounds unless clipping is enabled because SwirUI
         permits descendants to paint and receive input beyond an unclipped parent.
         """
 
         if self.opacity <= 0.0:
             return False
-        if self.bounds.contains(point):
+        if self._transformed_bounds_contains(point):
             return True
         if self.clip_to_bounds:
             return False
         return bool(self.children)
 
     def _contains_visual_point(self, point: Point) -> bool:
-        if not self.hit_testable or not self.bounds.contains(point):
+        if not self.hit_testable:
+            return False
+        authored = self._authored_point(point)
+        if not self.bounds.contains(authored):
             return False
         if self.kind in (SceneNodeKind.GROUP, SceneNodeKind.BACKDROP_BLUR):
             return self.fill is not None
@@ -192,9 +226,17 @@ class SceneNode:
             path = self.path
             if path is None:
                 return False
-            local = Point(point.x - self.bounds.x, point.y - self.bounds.y)
+            local = Point(authored.x - self.bounds.x, authored.y - self.bounds.y)
             return path.contains(local)
         return True
+
+    def _transformed_bounds_contains(self, point: Point) -> bool:
+        return self.bounds.contains(self._authored_point(point))
+
+    def _authored_point(self, point: Point) -> Point:
+        if self.transform.is_identity:
+            return point
+        return self.transform.inverse().transform_point(point)
 
 
 @dataclass(slots=True)
@@ -209,6 +251,12 @@ class Scene:
     def __post_init__(self) -> None:
         if self.width < 0 or self.height < 0:
             raise ValueError("Scene dimensions cannot be negative.")
+
+    @property
+    def has_affine_transforms(self) -> bool:
+        """Return whether any retained node carries a non-identity affine transform."""
+
+        return any(not node.transform.is_identity for node in self.walk())
 
     def touch(self) -> None:
         self.generation += 1
