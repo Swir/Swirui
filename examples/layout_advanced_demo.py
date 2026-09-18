@@ -5,6 +5,7 @@ from swirui import (
     Button,
     ConstraintLayout,
     ConstraintSpec,
+    CrossAxisAlignment,
     Dock,
     DockPanel,
     Flow,
@@ -44,7 +45,10 @@ def main() -> int:
     overlay.add(workspace)
     overlay.set_placement(
         workspace,
-        OverlayPlacement(),
+        OverlayPlacement(
+            horizontal=CrossAxisAlignment.STRETCH,
+            vertical=CrossAxisAlignment.STRETCH,
+        ),
     )
 
     root = DockPanel(
