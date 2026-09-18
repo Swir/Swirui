@@ -72,6 +72,15 @@ def test_page_transition_moves_retained_pages_without_recreating_wgpu_context() 
 
         controller.play(transition)
         controller.tick(0.15)
+        assert outgoing.opacity == pytest.approx(0.5)
+        assert incoming.opacity == pytest.approx(0.5)
+        assert outgoing.visual_offset.x == pytest.approx(-24.0)
+        assert incoming.visual_offset.x == pytest.approx(24.0)
+
+        # Freeze the deterministic midpoint before presenting it. A rendered frame
+        # also advances AnimationController from real frame telemetry, so leaving
+        # the transition running here would intentionally move beyond 50%.
+        assert transition.cancel() is True
         previous_frames = renderer.frames_rendered
         _render_after_invalidation(app, renderer, previous_frames)
 
@@ -85,7 +94,9 @@ def test_page_transition_moves_retained_pages_without_recreating_wgpu_context() 
         assert outgoing_node.opacity == pytest.approx(0.5)
         assert incoming_node.opacity == pytest.approx(0.5)
 
-        controller.tick(0.15)
+        transition.restore()
+        controller.play(transition)
+        controller.tick(0.30)
         previous_frames = renderer.frames_rendered
         _render_after_invalidation(app, renderer, previous_frames)
         assert renderer.persistent_context_count == initial_contexts
