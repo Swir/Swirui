@@ -10,6 +10,8 @@ from swirui import (
     ResponsiveLayoutSpec,
     ResponsiveValue,
     ViewportClass,
+    Window,
+    mount,
 )
 from swirui.rendering import Rect, Size
 from swirui.widgets import compile_component_scene
@@ -155,3 +157,19 @@ def test_variant_update_invalidates_retained_tree_and_applies_on_next_layout() -
     assert layout.current_variant is ViewportClass.DESKTOP
     assert first.bounds.x == pytest.approx(40.0)
     assert second.bounds.y >= first.bounds.bottom + 30.0
+
+
+def test_window_resize_preserves_focused_component_across_responsive_reflow() -> None:
+    layout, first, second = _layout()
+    window = Window(width=600, height=420)
+    runtime = mount(window, layout)
+    window.focus_component(second)
+    initial_generation = runtime.generation
+
+    window.resize(1000, 420)
+
+    assert runtime.generation > initial_generation
+    assert layout.current_variant is ViewportClass.DESKTOP
+    assert window.focused_component is second
+    assert second.parent is layout
+    assert first.bounds.x < second.bounds.x
