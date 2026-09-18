@@ -32,47 +32,83 @@ def test_rotated_scenegraph_geometry_reaches_real_wgpu_and_keeps_input_aligned()
     root = SceneNode(
         key="root",
         kind=SceneNodeKind.GROUP,
-        bounds=Rect(0.0, 0.0, 560.0, 360.0),
+        bounds=Rect(0.0, 0.0, 620.0, 400.0),
         hit_testable=False,
     )
     path_node = SceneNode(
         key="rotated-path",
         kind=SceneNodeKind.PATH,
-        bounds=Rect(70.0, 90.0, 180.0, 140.0),
+        bounds=Rect(55.0, 95.0, 170.0, 130.0),
         fill=Color.from_hex("#0088FF"),
         path=Path2D.polygon(
             Point(0.0, 0.0),
-            Point(180.0, 0.0),
-            Point(180.0, 140.0),
-            Point(0.0, 140.0),
+            Point(170.0, 0.0),
+            Point(170.0, 130.0),
+            Point(0.0, 130.0),
         ),
         transform=Affine2D.rotation(
             math.radians(24.0),
-            origin=Point(160.0, 160.0),
+            origin=Point(140.0, 160.0),
         ),
     )
     rectangle_node = SceneNode(
         key="rotated-rounded-rectangle",
         kind=SceneNodeKind.RECTANGLE,
-        bounds=Rect(330.0, 105.0, 140.0, 110.0),
+        bounds=Rect(255.0, 105.0, 130.0, 105.0),
         fill=Color.from_hex("#62E5FF"),
         corner_radius=CornerRadius(28.0, 20.0, 12.0, 6.0),
         transform=Affine2D.rotation(
             math.radians(-19.0),
-            origin=Point(400.0, 160.0),
+            origin=Point(320.0, 158.0),
         ),
     )
-    root.add(path_node, rectangle_node)
-    scene = Scene(560.0, 360.0, root)
+    image_node = SceneNode(
+        key="rotated-image",
+        kind=SceneNodeKind.IMAGE,
+        bounds=Rect(440.0, 105.0, 110.0, 110.0),
+        resource_id="affine-checker",
+        opacity=0.9,
+        transform=Affine2D.rotation(
+            math.radians(17.0),
+            origin=Point(495.0, 160.0),
+        ),
+    )
+    root.add(path_node, rectangle_node, image_node)
+    scene = Scene(620.0, 400.0, root)
 
     renderer = WgpuRenderer()
+    renderer.register_image_rgba(
+        "affine-checker",
+        2,
+        2,
+        bytes(
+            [
+                0,
+                136,
+                255,
+                255,
+                98,
+                229,
+                255,
+                255,
+                98,
+                229,
+                255,
+                255,
+                0,
+                136,
+                255,
+                255,
+            ]
+        ),
+    )
     backend = _isolated_backend("scenegraph")
     app = App(
         "SwirUI Affine Geometry Integration",
         platform_backend=backend,
         renderer=renderer,
     )
-    window = Window(title="SwirUI Affine Geometry", width=560, height=360)
+    window = Window(title="SwirUI Affine Geometry", width=620, height=400)
     window.set_scene(scene)
     app.add_window(window)
 
@@ -82,34 +118,43 @@ def test_rotated_scenegraph_geometry_reaches_real_wgpu_and_keeps_input_aligned()
         assert renderer.last_path_count > 2
         assert renderer.last_rectangle_count == 0
         assert renderer.last_text_count == 0
-        assert renderer.last_image_count == 0
+        assert renderer.last_image_count == 1
         assert renderer.persistent_context_count == 1
         assert renderer.adapter_name
         assert renderer.graphics_backend
 
-        authored_path_probe = Point(110.0, 125.0)
+        authored_path_probe = Point(105.0, 130.0)
         visual_path_probe = path_node.transform.transform_point(authored_path_probe)
         assert scene.hit_test(visual_path_probe) is path_node
 
-        authored_rectangle_probe = Point(390.0, 155.0)
+        authored_rectangle_probe = Point(315.0, 155.0)
         visual_rectangle_probe = rectangle_node.transform.transform_point(
             authored_rectangle_probe
         )
         assert scene.hit_test(visual_rectangle_probe) is rectangle_node
 
+        authored_image_probe = Point(495.0, 160.0)
+        visual_image_probe = image_node.transform.transform_point(authored_image_probe)
+        assert scene.hit_test(visual_image_probe) is image_node
+
         path_node.transform = Affine2D.rotation(
             math.radians(-17.0),
-            origin=Point(160.0, 160.0),
+            origin=Point(140.0, 160.0),
         )
         rectangle_node.transform = Affine2D.rotation(
             math.radians(14.0),
-            origin=Point(400.0, 160.0),
+            origin=Point(320.0, 158.0),
+        )
+        image_node.transform = Affine2D.rotation(
+            math.radians(-23.0),
+            origin=Point(495.0, 160.0),
         )
         scene.touch()
         renderer.render(window, None)
 
         assert renderer.frames_rendered == 2
         assert renderer.last_path_count > 2
+        assert renderer.last_image_count == 1
         assert renderer.persistent_context_count == 1
         visual_path_probe = path_node.transform.transform_point(authored_path_probe)
         assert scene.hit_test(visual_path_probe) is path_node
@@ -117,5 +162,7 @@ def test_rotated_scenegraph_geometry_reaches_real_wgpu_and_keeps_input_aligned()
             authored_rectangle_probe
         )
         assert scene.hit_test(visual_rectangle_probe) is rectangle_node
+        visual_image_probe = image_node.transform.transform_point(authored_image_probe)
+        assert scene.hit_test(visual_image_probe) is image_node
     finally:
         app.stop()
