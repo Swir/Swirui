@@ -82,6 +82,8 @@ class SceneNode:
     def visual_bounds(self) -> Rect:
         """Return the axis-aligned visual bounds after this node's transform."""
 
+        if self.transform.is_identity:
+            return self.bounds
         return self.transform.transform_rect_bounds(self.bounds)
 
     def add(self, *children: SceneNode) -> SceneNode:
@@ -215,7 +217,7 @@ class SceneNode:
     def _contains_visual_point(self, point: Point) -> bool:
         if not self.hit_testable:
             return False
-        authored = self.transform.inverse().transform_point(point)
+        authored = self._authored_point(point)
         if not self.bounds.contains(authored):
             return False
         if self.kind in (SceneNodeKind.GROUP, SceneNodeKind.BACKDROP_BLUR):
@@ -229,8 +231,12 @@ class SceneNode:
         return True
 
     def _transformed_bounds_contains(self, point: Point) -> bool:
-        authored = self.transform.inverse().transform_point(point)
-        return self.bounds.contains(authored)
+        return self.bounds.contains(self._authored_point(point))
+
+    def _authored_point(self, point: Point) -> Point:
+        if self.transform.is_identity:
+            return point
+        return self.transform.inverse().transform_point(point)
 
 
 @dataclass(slots=True)
