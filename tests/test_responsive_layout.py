@@ -120,7 +120,7 @@ def test_ultrawide_variant_centers_bounded_content_region() -> None:
     assert layout.bounds == Rect(0.0, 0.0, 1800.0, 500.0)
     assert first.bounds.x == pytest.approx(400.0)
     assert second.bounds.x > first.bounds.right
-    assert second.bounds.right <= pytest.approx(1400.0)
+    assert second.bounds.right <= 1400.0
 
 
 def test_responsive_layout_measurement_uses_available_width_variant() -> None:
