@@ -5,10 +5,11 @@ from __future__ import annotations
 import math
 
 from swirui.core import AccessibilityRole
-from swirui.rendering.geometry import Color, Rect
+from swirui.rendering.geometry import Color, Rect, Size
 from swirui.rendering.scene import SceneNode, SceneNodeKind
 
 from .base import Widget
+from .measurement import measure_text_block
 
 
 class Label(Widget):
@@ -93,6 +94,19 @@ class Label(Widget):
             return
         self._font_family = normalized
         self.invalidate(reason="font_family")
+
+    def intrinsic_size(self, available: Size | None = None) -> Size:
+        """Measure text content while preserving an explicitly authored baseline."""
+
+        measured = measure_text_block(
+            self.text,
+            font_size=self.font_size,
+            available_width=None if available is None else available.width,
+        )
+        return Size(
+            max(self.preferred_size.width, measured.width),
+            max(self.preferred_size.height, measured.height),
+        )
 
     def build_scene_node(self) -> SceneNode:
         return SceneNode(

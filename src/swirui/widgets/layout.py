@@ -237,8 +237,14 @@ class _LinearLayout(Widget):
         main_offset, gap = self._main_position(remaining, len(children))
         cursor = self._main_origin(content) + main_offset
 
-        for child, measured_size, main_size in zip(children, measured, main_sizes, strict=True):
-            cross_size = self._cross_size(measured_size)
+        for child, main_size in zip(children, main_sizes, strict=True):
+            final_available = (
+                Size(main_size, available_cross)
+                if self._horizontal
+                else Size(available_cross, main_size)
+            )
+            final_measure = child.measure(final_available)
+            cross_size = self._cross_size(final_measure)
             cross_size = self._resolve_cross_size(child, available_cross, cross_size)
             cross_offset = self._cross_offset(available_cross, cross_size)
             child_bounds = self._rect_for(

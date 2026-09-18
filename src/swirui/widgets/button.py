@@ -7,10 +7,11 @@ from typing import Any
 
 from swirui.core import AccessibilityRole, Event
 from swirui.platforms import PlatformEvent, PlatformEventKind, PointerButton
-from swirui.rendering.geometry import Color, CornerRadius, Rect
+from swirui.rendering.geometry import Color, CornerRadius, Rect, Size
 from swirui.rendering.scene import SceneNode, SceneNodeKind
 
 from .base import Widget
+from .measurement import measure_text_block
 
 _VK_RETURN = 0x0D
 _VK_SPACE = 0x20
@@ -106,6 +107,20 @@ class Button(Widget):
     @property
     def focused(self) -> bool:
         return self._focused
+
+    def intrinsic_size(self, available: Size | None = None) -> Size:
+        """Measure the button label and retain explicit authored minimum geometry."""
+
+        _ = available
+        content = measure_text_block(
+            self.text,
+            font_size=self._font_size,
+            wrap=False,
+        )
+        return Size(
+            max(self.preferred_size.width, content.width + (2.0 * self._padding)),
+            max(self.preferred_size.height, content.height),
+        )
 
     def build_scene_node(self) -> SceneNode:
         node = SceneNode(
