@@ -25,6 +25,14 @@ from swirui.platforms.windows import Win32PlatformBackend
 from swirui.rendering import Rect, WgpuRenderer
 
 
+class _CountingRow(Row):
+    prepare_calls = 0
+
+    def prepare_layout(self, viewport: Rect) -> None:
+        self.prepare_calls += 1
+        super().prepare_layout(viewport)
+
+
 def _isolated_backend() -> Win32PlatformBackend:
     backend = Win32PlatformBackend()
     backend._class_name = f"SwirUI.Layout.{id(backend):x}"
@@ -58,7 +66,7 @@ def test_row_layout_routes_arranged_input_in_real_win32_wgpu_session() -> None:
     second = Button("Secondary", key="secondary", bounds=Rect(0.0, 0.0, 160.0, 48.0))
     first.set_layout_grow(1.0)
     second.set_layout_grow(2.0)
-    row = Row(
+    row = _CountingRow(
         key="native-row",
         bounds=Rect(0.0, 0.0, 1.0, 1.0),
         fill_viewport=True,
@@ -78,6 +86,7 @@ def test_row_layout_routes_arranged_input_in_real_win32_wgpu_session() -> None:
         assert renderer.persistent_context_count == 1
         initial_contexts = renderer.persistent_context_count
 
+        assert row.prepare_calls == 1
         assert row.bounds == Rect(0.0, 0.0, 720.0, 360.0)
         assert first.bounds.x == pytest.approx(32.0)
         assert second.bounds.x > first.bounds.right
@@ -105,8 +114,19 @@ def test_row_layout_routes_arranged_input_in_real_win32_wgpu_session() -> None:
         assert len(clicks) == 1
         assert window.focused_component is second
 
+        prepared_after_input = row.prepare_calls
+        first.opacity = 0.65
+        assert row.prepare_calls == prepared_after_input
+        assert window.scene is not None
+        primary_node = next(node for node in window.scene.walk() if node.key == "primary")
+        assert primary_node.opacity == pytest.approx(0.65)
+
+        first.text = "Primary action with longer intrinsic content"
+        assert row.prepare_calls == prepared_after_input + 1
+
         row.spacing = 28.0
         assert runtime.generation > 1
+        assert row.prepare_calls == prepared_after_input + 2
         app.invalidate(window)
         assert app.render_pending(time.monotonic() + 1.0) == 1
         assert renderer.persistent_context_count == initial_contexts
