@@ -1,4 +1,4 @@
-"""Event-driven hover, press and focus animation helpers for retained widgets."""
+"""Event-driven interaction animation helpers for retained widgets."""
 
 from __future__ import annotations
 
@@ -7,8 +7,16 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
-from .animation import AnimationController, AnimationStatus, Easing, Tween, ease_out_cubic
+from .animation import (
+    AnimationController,
+    AnimationStatus,
+    Easing,
+    SpringAnimation,
+    Tween,
+    ease_out_cubic,
+)
 from .core import Event
+from .rendering.geometry import Point
 
 if TYPE_CHECKING:
     from .widgets.base import Widget
@@ -220,6 +228,167 @@ class InteractionAnimator:
         }[phase]
 
 
+@dataclass(frozen=True, slots=True)
+class MagneticInteractionSpec:
+    """Spring parameters for pointer-driven visual attraction."""
+
+    max_offset: float = 12.0
+    mass: float = 1.0
+    stiffness: float = 220.0
+    damping: float = 22.0
+    max_duration: float = 1.5
+
+    def __post_init__(self) -> None:
+        _positive("max_offset", self.max_offset)
+        _positive("mass", self.mass)
+        _positive("stiffness", self.stiffness)
+        _non_negative("damping", self.damping)
+        _positive("max_duration", self.max_duration)
+
+
+class MagneticInteraction:
+    """Attract a retained widget toward its pointer using a damped spring.
+
+    Pointer coordinates are consumed in SwirUI's logical-DIP space. The target
+    displacement is radial-clamped to ``max_offset`` and applied through the
+    widget's visual-only offset, so layout measurement and arrangement do not
+    drift while the compiled subtree, clip bounds and hit testing move together.
+
+    Every retarget starts from the currently presented offset. Leaving or disabling
+    the widget springs back to the authored idle offset, and ``dispose()`` detaches
+    all listeners while optionally restoring that offset immediately.
+    """
+
+    def __init__(
+        self,
+        controller: AnimationController,
+        widget: Widget,
+        *,
+        spec: MagneticInteractionSpec | None = None,
+    ) -> None:
+        self.controller = controller
+        self.widget = widget
+        self.spec = spec or MagneticInteractionSpec()
+        self._idle_offset = widget.visual_offset
+        self._start_offset = widget.visual_offset
+        self._target_offset = widget.visual_offset
+        self._animation: SpringAnimation | None = None
+        self._disposed = False
+        self._unsubscribers = (
+            widget.on("pointer_move", self._on_pointer_move),
+            widget.on("pointer_leave", self._on_pointer_leave),
+            widget.on("invalidated", self._on_invalidated),
+        )
+
+    @property
+    def idle_offset(self) -> Point:
+        return self._idle_offset
+
+    @property
+    def target_offset(self) -> Point:
+        return self._target_offset
+
+    @property
+    def active(self) -> bool:
+        animation = self._animation
+        return animation is not None and animation.status is AnimationStatus.RUNNING
+
+    @property
+    def disposed(self) -> bool:
+        return self._disposed
+
+    def dispose(self, *, restore: bool = True) -> None:
+        """Detach listeners, cancel the spring and optionally restore the idle offset."""
+
+        if self._disposed:
+            return
+        self._disposed = True
+        for unsubscribe in self._unsubscribers:
+            unsubscribe()
+        self._cancel_current()
+        self._target_offset = self._idle_offset
+        if restore:
+            self.widget.visual_offset = self._idle_offset
+
+    def _on_pointer_move(self, event: Event) -> None:
+        if self._disposed or not self.widget.enabled:
+            return
+        platform_event = event.data.get("event")
+        x = getattr(platform_event, "x", None)
+        y = getattr(platform_event, "y", None)
+        if x is None or y is None:
+            return
+        pointer_x = float(x)
+        pointer_y = float(y)
+        if not math.isfinite(pointer_x) or not math.isfinite(pointer_y):
+            return
+
+        bounds = self.widget.bounds
+        half_width = max(bounds.width * 0.5, 1.0e-9)
+        half_height = max(bounds.height * 0.5, 1.0e-9)
+        dx = (pointer_x - (bounds.x + half_width)) / half_width * self.spec.max_offset
+        dy = (pointer_y - (bounds.y + half_height)) / half_height * self.spec.max_offset
+        magnitude = math.hypot(dx, dy)
+        if magnitude > self.spec.max_offset:
+            scale = self.spec.max_offset / magnitude
+            dx *= scale
+            dy *= scale
+        self._retarget(Point(self._idle_offset.x + dx, self._idle_offset.y + dy))
+
+    def _on_pointer_leave(self, _event: Event) -> None:
+        self._retarget(self._idle_offset)
+
+    def _on_invalidated(self, event: Event) -> None:
+        if event.data.get("reason") == "enabled" and not self.widget.enabled:
+            self._retarget(self._idle_offset)
+
+    def _retarget(self, target: Point) -> None:
+        if self._disposed:
+            return
+        current = self.widget.visual_offset
+        if _points_close(current, target):
+            self._cancel_current()
+            self._target_offset = target
+            if current != target:
+                self.widget.visual_offset = target
+            return
+
+        self._cancel_current()
+        self._start_offset = current
+        self._target_offset = target
+        animation = SpringAnimation(
+            0.0,
+            1.0,
+            self._apply_progress,
+            mass=self.spec.mass,
+            stiffness=self.spec.stiffness,
+            damping=self.spec.damping,
+            max_duration=self.spec.max_duration,
+        )
+        self._animation = animation
+        self.controller.play(animation)
+
+    def _apply_progress(self, progress: float) -> None:
+        start = self._start_offset
+        target = self._target_offset
+        self.widget.visual_offset = Point(
+            start.x + (target.x - start.x) * progress,
+            start.y + (target.y - start.y) * progress,
+        )
+
+    def _cancel_current(self) -> None:
+        animation = self._animation
+        if animation is not None and animation.status is AnimationStatus.RUNNING:
+            animation.cancel()
+        self._animation = None
+
+
+def _points_close(left: Point, right: Point) -> bool:
+    return math.isclose(left.x, right.x, abs_tol=1.0e-12) and math.isclose(
+        left.y, right.y, abs_tol=1.0e-12
+    )
+
+
 def _opacity(name: str, value: float) -> float:
     normalized = float(value)
     if not math.isfinite(normalized) or not 0.0 <= normalized <= 1.0:
@@ -228,6 +397,20 @@ def _opacity(name: str, value: float) -> float:
 
 
 def _duration(name: str, value: float) -> float:
+    normalized = float(value)
+    if not math.isfinite(normalized) or normalized < 0.0:
+        raise ValueError(f"{name} must be finite and non-negative.")
+    return normalized
+
+
+def _positive(name: str, value: float) -> float:
+    normalized = float(value)
+    if not math.isfinite(normalized) or normalized <= 0.0:
+        raise ValueError(f"{name} must be finite and positive.")
+    return normalized
+
+
+def _non_negative(name: str, value: float) -> float:
     normalized = float(value)
     if not math.isfinite(normalized) or normalized < 0.0:
         raise ValueError(f"{name} must be finite and non-negative.")
