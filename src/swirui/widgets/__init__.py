@@ -25,6 +25,14 @@ from .layout_advanced import (
 from .layout_panels import Grid, Stack, Wrap
 from .overlays import Dialog, Modal, Notification, Toast
 from .progress import ProgressBar, ProgressRing
+from .responsive import (
+    LayoutDirection,
+    ResponsiveBreakpoints,
+    ResponsiveLayout,
+    ResponsiveLayoutSpec,
+    ResponsiveValue,
+    ViewportClass,
+)
 from .runtime import (
     SceneChildPreparer,
     SceneLayoutPreparer,
@@ -66,6 +74,7 @@ __all__ = [
     "Insets",
     "Label",
     "LayoutConstraints",
+    "LayoutDirection",
     "MainAxisAlignment",
     "Modal",
     "Notification",
@@ -77,6 +86,10 @@ __all__ = [
     "ProgressRing",
     "RadioButton",
     "RangeSlider",
+    "ResponsiveBreakpoints",
+    "ResponsiveLayout",
+    "ResponsiveLayoutSpec",
+    "ResponsiveValue",
     "Row",
     "SceneChildPreparer",
     "SceneLayoutPreparer",
@@ -90,6 +103,7 @@ __all__ = [
     "TextArea",
     "Toast",
     "Tooltip",
+    "ViewportClass",
     "Widget",
     "WidgetRuntime",
     "Wrap",
