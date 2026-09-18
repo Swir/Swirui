@@ -10,6 +10,8 @@ from swirui.rendering.geometry import Rect
 from swirui.rendering.scene import Scene, SceneNode, SceneNodeKind
 from swirui.window import Window
 
+from .base import Widget
+
 
 @runtime_checkable
 class SceneRenderable(Protocol):
@@ -49,6 +51,11 @@ def compile_component_scene(
     compilation, allowing retained containers to arrange child Widget bounds
     without rebuilding the tree a second time. Disabled ancestors make their
     full visual subtree non-hit-testable without hiding it.
+
+    Widget layout preparers are revision/viewport cached. A paint-only retained
+    invalidation still recompiles the scene, but unchanged layout containers do
+    not repeat measurement and arrangement until geometry-relevant state or the
+    logical viewport actually changes.
     """
 
     viewport = Rect(0.0, 0.0, float(width), float(height))
@@ -71,7 +78,13 @@ def _compile_component(
 
     effective_enabled = ancestors_enabled and component.enabled
     if isinstance(component, SceneLayoutPreparer):
-        component.prepare_layout(viewport)
+        prepare_layout = True
+        if isinstance(component, Widget):
+            prepare_layout = component._layout_preparation_needed(viewport)
+        if prepare_layout:
+            component.prepare_layout(viewport)
+            if isinstance(component, Widget):
+                component._mark_layout_prepared(viewport)
 
     visual_node = component.build_scene_node() if isinstance(component, SceneRenderable) else None
     descendant_viewport = visual_node.bounds if visual_node is not None else viewport
