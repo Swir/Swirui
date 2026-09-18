@@ -47,7 +47,19 @@ def pack_affine_clip(region: ClipRegion) -> NativeAffineClip:
     """Pack one exact transformed clip as matrix + authored rectangle geometry."""
 
     transform, bounds = region
-    return (*pack_affine_transform(transform), *pack_rect(bounds))
+    packed = pack_affine_transform(transform)
+    return (
+        packed[0],
+        packed[1],
+        packed[2],
+        packed[3],
+        packed[4],
+        packed[5],
+        bounds.x,
+        bounds.y,
+        bounds.width,
+        bounds.height,
+    )
 
 
 def pack_affine_clips(regions: Iterable[ClipRegion]) -> tuple[NativeAffineClip, ...]:
