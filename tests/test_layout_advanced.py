@@ -102,6 +102,12 @@ def test_vertical_flow_wraps_into_columns() -> None:
 def test_overlay_uses_per_child_alignment_and_offsets() -> None:
     base = Button("Base", bounds=Rect(0.0, 0.0, 120.0, 60.0))
     badge = Button("Badge", bounds=Rect(0.0, 0.0, 60.0, 30.0))
+    badge.set_layout_constraints(
+        min_width=60.0,
+        max_width=60.0,
+        min_height=30.0,
+        max_height=30.0,
+    )
     overlay = Overlay(bounds=Rect(10.0, 20.0, 300.0, 180.0), padding=10.0)
     overlay.add(base, badge)
     overlay.set_placement(
