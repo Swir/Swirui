@@ -198,7 +198,9 @@ class RepeatAnimation:
             self._status is AnimationStatus.RUNNING
             and self.animation.status is AnimationStatus.IDLE
         ):
-            raise RuntimeError("Repeated animation did not enter RUNNING or COMPLETED on start().")
+            raise RuntimeError(
+                "Repeated animation did not enter RUNNING or COMPLETED on start()."
+            )
 
     def _finish(self) -> None:
         self._status = AnimationStatus.COMPLETED
