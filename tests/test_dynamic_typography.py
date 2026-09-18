@@ -26,13 +26,13 @@ def _scope() -> tuple[DynamicTypography, Column, Label, Button, Input]:
         font_size=20.0,
     )
     button = Button(
-        "Continue",
+        "Continue with responsive typography",
         key="type-button",
         bounds=Rect(0.0, 0.0, 120.0, 44.0),
         font_size=16.0,
     )
     field = Input(
-        "SwirUI",
+        "Responsive typography input",
         key="type-input",
         bounds=Rect(0.0, 0.0, 180.0, 44.0),
         font_size=16.0,
