@@ -7,6 +7,12 @@ The project uses semantic versioning where practical during pre-alpha developmen
 ## [Unreleased]
 
 ### Added
+- Complete 0.6 Reactive Runtime surface with thread-safe `State`, dynamic `ComputedState`, reactive properties, one-way/two-way bindings, observable collections, dependency tracking and batched state transactions.
+- Asyncio-aware `AsyncState` with loading/value/error snapshots, replacement cancellation and stale-completion protection.
+- Atomic JSON-backed `PersistentState` with versioned storage, custom codecs, reload/reset/persist support and failure-before-publication semantics.
+- Retained component lifecycle hooks for mount/update/unmount plus transaction-scoped `WidgetRuntime` update coalescing for minimal retained rebuilds.
+- Frame-rate-independent animation foundation with elapsed-time `Tween`, serial `AnimationSequence`, deterministic cancellation/chaining, cubic/bounce/elastic easing and reactive-state tweening.
+- Window-scoped `AnimationController` driven by real `App.frame_rendered` telemetry so active sequences reuse the existing display-aware frame scheduler without multi-window double stepping.
 - Initial project architecture and package metadata.
 - Public project roadmap with real progress tracking.
 - Python 3.11–3.14 development target.
