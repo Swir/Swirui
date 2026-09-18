@@ -6,7 +6,16 @@ import pytest
 
 from swirui import App, Window
 from swirui.platforms import NullPlatformBackend
-from swirui.rendering import Color, Path2D, Point, Rect, Scene, SceneNode, SceneNodeKind, WgpuRenderer
+from swirui.rendering import (
+    Color,
+    Path2D,
+    Point,
+    Rect,
+    Scene,
+    SceneNode,
+    SceneNodeKind,
+    WgpuRenderer,
+)
 from swirui.rendering.affine import Affine2D
 
 
