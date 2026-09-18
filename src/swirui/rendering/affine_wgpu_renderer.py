@@ -131,7 +131,7 @@ class WgpuRenderer(_CustomWgpuRenderer):
                 clip = self._resolved_affine_clip(scene, clips)
                 if clip is None or node.bounds.intersection(clip) is None:
                     continue
-                fill = node.fill
+                rect_fill = node.fill
                 radius = node.corner_radius
                 clip_left, clip_top, clip_right, clip_bottom = self._clip_tuple(clip, scale)
                 rectangles.append(
@@ -140,10 +140,10 @@ class WgpuRenderer(_CustomWgpuRenderer):
                         self._scale(node.bounds.y, scale),
                         self._scale(node.bounds.width, scale),
                         self._scale(node.bounds.height, scale),
-                        fill.r,
-                        fill.g,
-                        fill.b,
-                        fill.a * effective_opacity,
+                        rect_fill.r,
+                        rect_fill.g,
+                        rect_fill.b,
+                        rect_fill.a * effective_opacity,
                         self._scale(radius.top_left, scale),
                         self._scale(radius.top_right, scale),
                         self._scale(radius.bottom_right, scale),
@@ -163,7 +163,7 @@ class WgpuRenderer(_CustomWgpuRenderer):
                 clip = self._resolved_affine_clip(scene, clips)
                 if clip is None or node.bounds.intersection(clip) is None:
                     continue
-                fill = node.fill or _DEFAULT_TEXT_COLOR
+                text_fill = node.fill or _DEFAULT_TEXT_COLOR
                 texts.append(
                     (
                         node.text,
@@ -172,10 +172,10 @@ class WgpuRenderer(_CustomWgpuRenderer):
                         self._scale(node.bounds.width, scale),
                         self._scale(node.bounds.height, scale),
                         self._scale(node.font_size, scale),
-                        fill.r,
-                        fill.g,
-                        fill.b,
-                        fill.a * effective_opacity,
+                        text_fill.r,
+                        text_fill.g,
+                        text_fill.b,
+                        text_fill.a * effective_opacity,
                         node.font_family,
                         self._clip_tuple(clip, scale),
                     )
@@ -219,12 +219,12 @@ class WgpuRenderer(_CustomWgpuRenderer):
             if clip is None or visual_bounds.intersection(clip) is None:
                 continue
             path = node.path
-            fill = node.fill
-            if path is None or fill is None:
+            path_fill = node.fill
+            if path is None or path_fill is None:
                 continue
 
             clip_left, clip_top, clip_right, clip_bottom = self._clip_tuple(clip, scale)
-            alpha = fill.a * effective_opacity
+            alpha = path_fill.a * effective_opacity
             transform = self._physical_affine(world_transform, scale)
             for triangle in path.triangulate():
                 for point in triangle:
@@ -232,9 +232,9 @@ class WgpuRenderer(_CustomWgpuRenderer):
                         (
                             self._scale(node.bounds.x + point.x, scale),
                             self._scale(node.bounds.y + point.y, scale),
-                            fill.r,
-                            fill.g,
-                            fill.b,
+                            path_fill.r,
+                            path_fill.g,
+                            path_fill.b,
                             alpha,
                             clip_left,
                             clip_top,
