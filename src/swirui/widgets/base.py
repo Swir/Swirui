@@ -9,7 +9,6 @@ from swirui.core import AccessibilityRole, Component
 from swirui.rendering.geometry import Rect, Size
 from swirui.rendering.scene import SceneNode
 
-
 _LAYOUT_VISUAL_ONLY_INVALIDATIONS = frozenset(
     {
         "clip_to_bounds",
