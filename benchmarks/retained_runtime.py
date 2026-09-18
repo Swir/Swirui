@@ -9,6 +9,7 @@ regressions, not public performance claims.
 from __future__ import annotations
 
 import argparse
+import math
 import sys
 from collections.abc import Callable
 from pathlib import Path
@@ -35,6 +36,7 @@ from swirui.rendering import (
     SceneNodeKind,
     WgpuRenderer,
 )
+from swirui.rendering.affine import Affine2D
 
 BenchmarkWorkload = Callable[[], object]
 
@@ -88,6 +90,34 @@ def _hit_test_workload(scene: Scene) -> BenchmarkWorkload:
         )
         if any(key is None for key in keys):
             raise RuntimeError("Retained scene hit testing missed a populated grid cell.")
+        return keys
+
+    return workload
+
+
+def _affine_hit_test_workload() -> BenchmarkWorkload:
+    """Exercise hierarchical inverse mapping and an exact transformed root clip."""
+
+    scene = _build_grid_scene()
+    transform = Affine2D.rotation(
+        math.radians(17.0),
+        origin=Point(scene.width * 0.5, scene.height * 0.5),
+    ).then(Affine2D.translation(13.0, -9.0))
+    scene.root.transform = transform
+    authored_points = tuple(
+        Point(column * 24.0 + 12.0, row * 24.0 + 12.0)
+        for row in range(0, 32, 4)
+        for column in range(0, 32, 4)
+    )
+    visual_points = tuple(transform.transform_point(point) for point in authored_points)
+
+    def workload() -> object:
+        keys = tuple(
+            node.key if (node := scene.hit_test(point)) is not None else None
+            for point in visual_points
+        )
+        if any(key is None for key in keys):
+            raise RuntimeError("Affine retained hit testing missed a transformed grid cell.")
         return keys
 
     return workload
@@ -207,6 +237,7 @@ def _run_suite(budget_path: Path) -> list[BenchmarkResult]:
     scenarios: tuple[tuple[str, BenchmarkWorkload, int, int], ...] = (
         ("retained_scene_walk_1024", _scene_walk_workload(scene), 60, 10),
         ("scene_hit_testing_1024", _hit_test_workload(scene), 40, 8),
+        ("affine_hit_testing_1024", _affine_hit_test_workload(), 40, 8),
         ("reflection_tessellation_96", _reflection_build_workload(), 40, 8),
         ("cached_effect_clone_64", _cached_effect_build_workload(), 80, 12),
         ("cached_backdrop_payload_256", _cached_backdrop_payload_workload(), 100, 16),
