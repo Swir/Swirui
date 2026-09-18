@@ -136,9 +136,10 @@ class Component(EventEmitter):
                 and child.mounted_window is not self._mounted_window
             ):
                 raise ValueError("A mounted root cannot be attached to a different component tree.")
-            if child.parent is not None:
-                child.parent.remove(child)
+
             old_parent = child.parent
+            if old_parent is not None:
+                old_parent.remove(child)
             child.parent = self
             self.children.append(child)
             try:
@@ -146,7 +147,7 @@ class Component(EventEmitter):
                     child._mount(self._mounted_window)
             except BaseException:
                 self.children.remove(child)
-                child.parent = old_parent
+                child.parent = None
                 raise
             child.emit("parent_changed", old_parent=old_parent, new_parent=self)
             self.emit("child_added", child=child)
