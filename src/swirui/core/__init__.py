@@ -2,6 +2,7 @@
 
 from .accessibility import AccessibilityNode, AccessibilityRole, build_accessibility_tree
 from .binding import Binding, ReactiveProperty, bind, bind_bidirectional
+from .collections import ObservableDict, ObservableList
 from .component import Component
 from .config import AppConfig, PresentationMode, VisualQuality
 from .events import Event, EventEmitter, EventPhase
@@ -28,6 +29,8 @@ __all__ = [
     "Event",
     "EventEmitter",
     "EventPhase",
+    "ObservableDict",
+    "ObservableList",
     "PresentationMode",
     "ReactiveProperty",
     "State",
