@@ -10,6 +10,26 @@ from swirui.rendering.geometry import Rect, Size
 from swirui.rendering.scene import SceneNode
 
 
+_LAYOUT_VISUAL_ONLY_INVALIDATIONS = frozenset(
+    {
+        "clip_to_bounds",
+        "color",
+        "enabled",
+        "focus_gained",
+        "focus_lost",
+        "focusable",
+        "key_down",
+        "key_up",
+        "opacity",
+        "pointer_down",
+        "pointer_enter",
+        "pointer_leave",
+        "pointer_up",
+        "z_index",
+    }
+)
+
+
 @dataclass(frozen=True, slots=True)
 class LayoutConstraints:
     """Min/max logical-DIP size constraints shared by retained layouts."""
@@ -45,6 +65,11 @@ class Widget(Component):
     emitting a second invalidation from inside the same retained rebuild. The
     authored size is retained separately so arrangement never destroys the
     widget's intrinsic measurement for a later reflow.
+
+    Layout-affecting invalidations carry a monotonically increasing revision.
+    The widget runtime uses that revision plus the logical viewport to skip
+    redundant layout preparation for paint/input-only changes while still
+    recompiling the SceneGraph so visual and hit-test state stays current.
     """
 
     def __init__(
@@ -76,6 +101,9 @@ class Widget(Component):
         self._clip_to_bounds = bool(clip_to_bounds)
         self._layout_constraints = LayoutConstraints()
         self._layout_grow = 0.0
+        self._layout_revision = 0
+        self._prepared_layout_revision = -1
+        self._prepared_layout_viewport: Rect | None = None
 
     @property
     def bounds(self) -> Rect:
@@ -158,6 +186,13 @@ class Widget(Component):
         self._layout_grow = normalized
         self.invalidate(reason="layout_grow")
 
+    def invalidate(self, *, reason: str = "changed", source: Component | None = None) -> None:
+        """Invalidate retained output and advance layout revision when geometry may change."""
+
+        if reason not in _LAYOUT_VISUAL_ONLY_INVALIDATIONS:
+            self._layout_revision += 1
+        super().invalidate(reason=reason, source=source)
+
     def set_layout_constraints(
         self,
         *,
@@ -217,6 +252,20 @@ class Widget(Component):
         """Apply arranged bounds without changing this widget's intrinsic size."""
 
         self._bounds = value
+
+    def _layout_preparation_needed(self, viewport: Rect) -> bool:
+        """Return whether a layout preparer must run for this retained rebuild."""
+
+        return (
+            self._prepared_layout_revision != self._layout_revision
+            or self._prepared_layout_viewport != viewport
+        )
+
+    def _mark_layout_prepared(self, viewport: Rect) -> None:
+        """Record a successful layout pass for revision/viewport reuse."""
+
+        self._prepared_layout_revision = self._layout_revision
+        self._prepared_layout_viewport = viewport
 
     @staticmethod
     def _validate_opacity(value: float) -> float:
