@@ -9,16 +9,17 @@ from threading import RLock, local
 from typing import Any, Generic, Protocol, TypeVar, cast
 
 T = TypeVar("T")
+S_co = TypeVar("S_co", covariant=True)
 Subscriber = Callable[[T], None]
 
 
-class _ReactiveSource(Protocol[T]):
+class _ReactiveSource(Protocol[S_co]):
     @property
-    def value(self) -> T: ...
+    def value(self) -> S_co: ...
 
     def subscribe(
         self,
-        subscriber: Subscriber[T],
+        subscriber: Subscriber[S_co],
         *,
         immediate: bool = False,
     ) -> Callable[[], None]: ...
@@ -178,7 +179,8 @@ class State(Generic[T]):
         return unsubscribe
 
     def _notify_if_changed(self, previous: T) -> None:
-        current = self.value
+        with self._lock:
+            current = self._value
         if current != previous:
             self._notify_subscribers(current)
 
