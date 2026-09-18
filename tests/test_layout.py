@@ -16,6 +16,14 @@ from swirui import (
 from swirui.rendering import Point, Rect, Scene, SceneNode, Size
 
 
+class _CountingRow(Row):
+    prepare_calls = 0
+
+    def prepare_layout(self, viewport: Rect) -> None:
+        self.prepare_calls += 1
+        super().prepare_layout(viewport)
+
+
 def _node(scene: Scene, key: str) -> SceneNode:
     return next(node for node in scene.walk() if node.key == key)
 
@@ -174,3 +182,43 @@ def test_layout_property_change_invalidates_once_and_rebuilds_scene() -> None:
     row.spacing = 20.0
 
     assert runtime.generation == 2
+
+
+def test_visual_only_invalidation_reuses_layout_until_geometry_changes() -> None:
+    first = Button("One", key="one", bounds=Rect(0.0, 0.0, 80.0, 40.0))
+    second = Button("Two", key="two", bounds=Rect(0.0, 0.0, 80.0, 40.0))
+    row = _CountingRow(
+        key="counting-row",
+        bounds=Rect(0.0, 0.0, 1.0, 1.0),
+        fill_viewport=True,
+        spacing=12.0,
+    )
+    row.add(first, second)
+    window = Window(width=320, height=100)
+    runtime = mount(window, row)
+
+    assert runtime.generation == 1
+    assert row.prepare_calls == 1
+    initial_first_bounds = first.bounds
+    initial_second_bounds = second.bounds
+
+    first.opacity = 0.5
+
+    assert runtime.generation == 2
+    assert row.prepare_calls == 1
+    assert first.bounds == initial_first_bounds
+    assert second.bounds == initial_second_bounds
+    assert window.scene is not None
+    assert _node(window.scene, "one").opacity == pytest.approx(0.5)
+
+    first.text = "A much longer label that changes intrinsic measurement"
+
+    assert runtime.generation == 3
+    assert row.prepare_calls == 2
+    assert first.bounds.width > initial_first_bounds.width
+
+    window.resize(420, 120)
+
+    assert runtime.generation == 4
+    assert row.prepare_calls == 3
+    assert row.bounds == Rect(0.0, 0.0, 420.0, 120.0)
