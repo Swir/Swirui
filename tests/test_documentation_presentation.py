@@ -7,7 +7,11 @@ ROOT = Path(__file__).resolve().parents[1]
 README = ROOT / "README.md"
 ROADMAP = ROOT / "ROADMAP.md"
 
-_LEGACY_METER = re.compile(r"[█▓▒░]{4,}")
+# Catch old block-character meters and common bracketed ASCII meters without
+# confusing Markdown headings, checklist boxes, tables or directory trees.
+_LEGACY_METER = re.compile(
+    r"(?:[█▓▒░■□]{4,}|\[(?:[#=█▓▒░■□]+-+|-+[#=█▓▒░■□]+|[#=█▓▒░■□]{6,})\])"
+)
 
 
 def test_readme_uses_v2_standard_and_one_project_progress_card() -> None:
