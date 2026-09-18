@@ -6,7 +6,19 @@ on:
     paths:
       - "native/src/affine.rs"
       - "native/src/lib.rs"
+      - "native/src/renderer.rs"
+      - "native/src/rectangles.wgsl"
+      - "native/src/shape.rs"
+      - "native/src/shapes.wgsl"
+      - "native/src/image.rs"
+      - "native/src/images.wgsl"
+      - "native/src/text.rs"
+      - "src/swirui/rendering/affine.py"
       - "src/swirui/rendering/native_affine.py"
+      - "src/swirui/rendering/scene.py"
+      - "src/swirui/rendering/wgpu_renderer.py"
+      - "tests/test_affine_scene.py"
+      - "tests/test_affine_compositor_traversal.py"
       - "tests/test_native_affine_contract.py"
       - "tests/test_windows_affine_contract.py"
       - ".github/workflows/affine-native.yml"
@@ -14,7 +26,19 @@ on:
     paths:
       - "native/src/affine.rs"
       - "native/src/lib.rs"
+      - "native/src/renderer.rs"
+      - "native/src/rectangles.wgsl"
+      - "native/src/shape.rs"
+      - "native/src/shapes.wgsl"
+      - "native/src/image.rs"
+      - "native/src/images.wgsl"
+      - "native/src/text.rs"
+      - "src/swirui/rendering/affine.py"
       - "src/swirui/rendering/native_affine.py"
+      - "src/swirui/rendering/scene.py"
+      - "src/swirui/rendering/wgpu_renderer.py"
+      - "tests/test_affine_scene.py"
+      - "tests/test_affine_compositor_traversal.py"
       - "tests/test_native_affine_contract.py"
       - "tests/test_windows_affine_contract.py"
       - ".github/workflows/affine-native.yml"
@@ -61,6 +85,9 @@ jobs:
         run: |
           $wheel = (Get-ChildItem dist-native\*.whl | Select-Object -First 1).FullName
           python -m pip install $wheel
+
+      - name: Verify retained affine compositor contract
+        run: pytest tests/test_affine_scene.py tests/test_affine_compositor_traversal.py -q
 
       - name: Verify Python payload packing
         run: pytest tests/test_native_affine_contract.py -q
