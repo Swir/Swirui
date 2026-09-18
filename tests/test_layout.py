@@ -13,7 +13,7 @@ from swirui import (
     Window,
     mount,
 )
-from swirui.rendering import Point, Rect, Scene, SceneNode
+from swirui.rendering import Point, Rect, Scene, SceneNode, Size
 
 
 def _node(scene: Scene, key: str) -> SceneNode:
@@ -36,6 +36,27 @@ def test_layout_constraints_validate_and_constrain_preferred_widget_size() -> No
 
     with pytest.raises(ValueError, match="Minimum"):
         LayoutConstraints(min_width=100.0, max_width=50.0)
+
+
+def test_arranged_bounds_do_not_destroy_intrinsic_measurement() -> None:
+    button = Button("Action", bounds=Rect(12.0, 18.0, 90.0, 40.0))
+
+    button._set_layout_bounds(Rect(0.0, 0.0, 320.0, 180.0))
+
+    assert button.bounds == Rect(0.0, 0.0, 320.0, 180.0)
+    assert button.preferred_size == Size(90.0, 40.0)
+    assert button.intrinsic_size() == Size(90.0, 40.0)
+    assert button.measure() == Size(90.0, 40.0)
+
+
+def test_explicit_bounds_change_updates_intrinsic_measurement_after_arrangement() -> None:
+    button = Button("Action", bounds=Rect(0.0, 0.0, 90.0, 40.0))
+    button._set_layout_bounds(Rect(0.0, 0.0, 320.0, 180.0))
+
+    button.bounds = Rect(20.0, 24.0, 140.0, 52.0)
+
+    assert button.preferred_size == Size(140.0, 52.0)
+    assert button.measure() == Size(140.0, 52.0)
 
 
 def test_row_arranges_spacing_padding_grow_constraints_and_cross_stretch() -> None:

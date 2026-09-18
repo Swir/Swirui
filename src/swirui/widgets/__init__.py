@@ -12,6 +12,16 @@ from .layout import (
     MainAxisAlignment,
     Row,
 )
+from .layout_advanced import (
+    ConstraintLayout,
+    ConstraintSpec,
+    Dock,
+    DockPanel,
+    Flow,
+    FlowDirection,
+    Overlay,
+    OverlayPlacement,
+)
 from .layout_panels import Grid, Stack, Wrap
 from .overlays import Dialog, Modal, Notification, Toast
 from .progress import ProgressBar, ProgressRing
@@ -39,9 +49,15 @@ __all__ = [
     "Checkbox",
     "Chip",
     "Column",
+    "ConstraintLayout",
+    "ConstraintSpec",
     "CrossAxisAlignment",
     "Dialog",
+    "Dock",
+    "DockPanel",
     "Expander",
+    "Flow",
+    "FlowDirection",
     "Frame",
     "GlassCard",
     "Grid",
@@ -53,6 +69,8 @@ __all__ = [
     "MainAxisAlignment",
     "Modal",
     "Notification",
+    "Overlay",
+    "OverlayPlacement",
     "Panel",
     "PasswordInput",
     "ProgressBar",
