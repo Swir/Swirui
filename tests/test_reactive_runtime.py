@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from swirui import ComputedState, State, computed, state_transaction
+from swirui import Component, ComputedState, State, Window, computed, mount, state_transaction
 
 
 def test_computed_state_tracks_sources_and_notifies_only_on_change() -> None:
@@ -147,3 +147,48 @@ def test_computed_dispose_detaches_dependencies_and_subscribers() -> None:
     assert values == []
     with pytest.raises(RuntimeError, match="disposed"):
         doubled.subscribe(values.append)
+
+
+def test_reactive_transaction_coalesces_one_runtime_rebuild() -> None:
+    window = Window(title="Reactive coalescing")
+    root = Component("root")
+    runtime = mount(window, root)
+    left = State(0)
+    right = State(0)
+    left.subscribe(lambda _value: root.invalidate(reason="left"))
+    right.subscribe(lambda _value: root.invalidate(reason="right"))
+
+    assert runtime.generation == 1
+    with state_transaction():
+        left.set(1)
+        right.set(1)
+        assert runtime.generation == 1
+
+    assert runtime.generation == 2
+
+    left.set(2)
+    right.set(2)
+    assert runtime.generation == 4
+    runtime.unmount()
+
+
+def test_reactive_transaction_keeps_independent_runtime_updates_separate() -> None:
+    first_root = Component("first")
+    second_root = Component("second")
+    first_runtime = mount(Window(title="First"), first_root)
+    second_runtime = mount(Window(title="Second"), second_root)
+    first_state = State(0)
+    second_state = State(0)
+    first_state.subscribe(lambda _value: first_root.invalidate(reason="first"))
+    second_state.subscribe(lambda _value: second_root.invalidate(reason="second"))
+
+    with state_transaction():
+        first_state.set(1)
+        second_state.set(1)
+        first_state.set(2)
+        second_state.set(2)
+
+    assert first_runtime.generation == 2
+    assert second_runtime.generation == 2
+    first_runtime.unmount()
+    second_runtime.unmount()
