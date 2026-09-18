@@ -1,5 +1,18 @@
 """Public package API for SwirUI."""
 
+from .animation import (
+    AnimationController,
+    AnimationHandle,
+    AnimationSequence,
+    AnimationStatus,
+    Tween,
+    animate_bounds,
+    animate_opacity,
+    ease_in_cubic,
+    ease_in_out_cubic,
+    ease_out_cubic,
+    linear,
+)
 from .app import App
 from .core import (
     AccessibilityNode,
@@ -27,19 +40,6 @@ from .core import (
     build_accessibility_tree,
     computed,
     state_transaction,
-)
-from .animation import (
-    AnimationController,
-    AnimationHandle,
-    AnimationSequence,
-    AnimationStatus,
-    Tween,
-    animate_bounds,
-    animate_opacity,
-    ease_in_cubic,
-    ease_in_out_cubic,
-    ease_out_cubic,
-    linear,
 )
 from .widgets import (
     Accordion,
