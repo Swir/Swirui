@@ -240,35 +240,29 @@ class SceneNode:
             return ()
 
         world_transform = _compose_transform(self.transform, parent_transform)
+        authored_point = self._authored_point(point, world_transform)
         effective_clips = inherited_clips
         if self.clip_to_bounds:
-            if not self._transformed_bounds_contains(point, world_transform):
+            if not self.bounds.contains(authored_point):
                 return ()
             effective_clips = (*inherited_clips, (world_transform, self.bounds))
 
-        if world_transform.is_identity:
-            candidates: list[tuple[int, SceneNode]] = []
-            point_x = point.x
-            point_y = point.y
-            for index, child in enumerate(self.children):
-                if child.opacity <= 0.0:
-                    continue
-                if child.transform.is_identity:
-                    bounds = child.bounds
-                    inside = (
-                        bounds.x <= point_x <= bounds.x + bounds.width
-                        and bounds.y <= point_y <= bounds.y + bounds.height
-                    )
-                    if inside or (child.children and not child.clip_to_bounds):
-                        candidates.append((index, child))
-                elif child._subtree_may_hit(point, world_transform):
+        candidates: list[tuple[int, SceneNode]] = []
+        point_x = authored_point.x
+        point_y = authored_point.y
+        for index, child in enumerate(self.children):
+            if child.opacity <= 0.0:
+                continue
+            if child.transform.is_identity:
+                bounds = child.bounds
+                inside = (
+                    bounds.x <= point_x <= bounds.x + bounds.width
+                    and bounds.y <= point_y <= bounds.y + bounds.height
+                )
+                if inside or (child.children and not child.clip_to_bounds):
                     candidates.append((index, child))
-        else:
-            candidates = [
-                (index, child)
-                for index, child in enumerate(self.children)
-                if child._subtree_may_hit(point, world_transform)
-            ]
+            elif child._subtree_may_hit(point, world_transform):
+                candidates.append((index, child))
         ordered_children = sorted(
             candidates,
             key=lambda item: (item[1].z_index, item[0]),
@@ -279,8 +273,23 @@ class SceneNode:
             if child_path:
                 return (self, *child_path)
 
-        if self._contains_visual_point(point, world_transform):
-            return (self,)
+        if self.hit_testable:
+            if not self.bounds.contains(authored_point):
+                return ()
+            if self.kind in (SceneNodeKind.GROUP, SceneNodeKind.BACKDROP_BLUR):
+                if self.fill is not None:
+                    return (self,)
+            elif self.kind is SceneNodeKind.PATH:
+                path = self.path
+                if path is not None:
+                    local = Point(
+                        authored_point.x - self.bounds.x,
+                        authored_point.y - self.bounds.y,
+                    )
+                    if path.contains(local):
+                        return (self,)
+            else:
+                return (self,)
         return ()
 
     def _subtree_may_hit(
