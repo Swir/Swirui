@@ -5,7 +5,7 @@ import time
 
 import pytest
 
-from swirui import AnimationController, App, Button, ScaleTransition, Window, linear, mount
+from swirui import App, Button, ScaleTransition, Window, linear, mount
 from swirui.platforms.windows import Win32PlatformBackend
 from swirui.rendering import Rect, WgpuRenderer
 
@@ -46,7 +46,6 @@ def test_scale_transition_reuses_persistent_wgpu_context() -> None:
         font_size=24.0,
     )
     runtime = mount(window, button)
-    controller = AnimationController(app, window)
     transition = ScaleTransition(button, 0.5, duration=0.30, easing=linear)
 
     try:
@@ -57,8 +56,8 @@ def test_scale_transition_reuses_persistent_wgpu_context() -> None:
         initial_contexts = renderer.persistent_context_count
         authored_bounds = button.bounds
 
-        controller.play(transition)
-        controller.tick(0.15)
+        transition.start()
+        transition.advance(0.15)
         assert button.visual_scale == pytest.approx(0.75)
         previous_frames = renderer.frames_rendered
         _render_after_invalidation(app, renderer, previous_frames)
@@ -73,7 +72,7 @@ def test_scale_transition_reuses_persistent_wgpu_context() -> None:
         assert text.font_size == pytest.approx(18.0)
         assert button.bounds == authored_bounds
 
-        controller.tick(0.15)
+        transition.advance(0.15)
         previous_frames = renderer.frames_rendered
         _render_after_invalidation(app, renderer, previous_frames)
         assert renderer.persistent_context_count == initial_contexts
@@ -87,5 +86,4 @@ def test_scale_transition_reuses_persistent_wgpu_context() -> None:
         node = next(node for node in window.scene.walk() if node.key == "scale-button")
         assert node.bounds == authored_bounds
     finally:
-        controller.dispose()
         app.stop()
