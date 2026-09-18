@@ -26,6 +26,7 @@ _LAYOUT_VISUAL_ONLY_INVALIDATIONS = frozenset(
         "pointer_leave",
         "pointer_up",
         "visual_offset",
+        "visual_scale",
         "z_index",
     }
 )
@@ -67,10 +68,11 @@ class Widget(Component):
     authored size is retained separately so arrangement never destroys the
     widget's intrinsic measurement for a later reflow.
 
-    ``visual_offset`` translates the fully compiled visual subtree without
-    changing authored or arranged layout geometry. It is therefore suitable for
-    animations and interaction effects that must move painting and hit testing
-    while leaving measurement stable.
+    ``visual_offset`` translates the fully compiled visual subtree and
+    ``visual_scale`` uniformly scales it around the widget center without changing
+    authored or arranged layout geometry. They are suitable for animations and
+    interaction effects that must move painting and hit testing while leaving
+    measurement stable.
 
     Layout-affecting invalidations carry a monotonically increasing revision.
     The widget runtime uses that revision plus the logical viewport to skip
@@ -106,6 +108,7 @@ class Widget(Component):
         self._z_index = int(z_index)
         self._clip_to_bounds = bool(clip_to_bounds)
         self._visual_offset = Point()
+        self._visual_scale = 1.0
         self._layout_constraints = LayoutConstraints()
         self._layout_grow = 0.0
         self._layout_revision = 0
@@ -184,6 +187,22 @@ class Widget(Component):
         self.invalidate(reason="visual_offset")
 
     @property
+    def visual_scale(self) -> float:
+        """Return the uniform visual-only scale applied around the widget center."""
+
+        return self._visual_scale
+
+    @visual_scale.setter
+    def visual_scale(self, value: float) -> None:
+        normalized = float(value)
+        if not math.isfinite(normalized) or normalized < 0.0:
+            raise ValueError("visual_scale must be finite and non-negative.")
+        if normalized == self._visual_scale:
+            return
+        self._visual_scale = normalized
+        self.invalidate(reason="visual_scale")
+
+    @property
     def layout_constraints(self) -> LayoutConstraints:
         return self._layout_constraints
 
@@ -239,6 +258,12 @@ class Widget(Component):
         """Set a visual-only logical-DIP translation and return this widget."""
 
         self.visual_offset = Point(float(x), float(y))
+        return self
+
+    def set_visual_scale(self, scale: float = 1.0) -> Widget:
+        """Set a uniform visual-only scale around this widget's center and return it."""
+
+        self.visual_scale = scale
         return self
 
     def intrinsic_size(self, available: Size | None = None) -> Size:

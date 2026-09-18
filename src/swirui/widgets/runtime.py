@@ -7,7 +7,7 @@ from typing import Protocol, runtime_checkable
 
 from swirui.core import Component, Event
 from swirui.core.state import schedule_reactive_update
-from swirui.rendering.geometry import Rect
+from swirui.rendering.geometry import CornerRadius, Path2D, Point, Rect
 from swirui.rendering.scene import Scene, SceneNode, SceneNodeKind
 from swirui.window import Window
 
@@ -58,9 +58,10 @@ def compile_component_scene(
     not repeat measurement and arrangement until geometry-relevant state or the
     logical viewport actually changes.
 
-    A widget's visual-only offset is applied after its descendants are compiled,
-    translating the complete retained subtree so paint, clipping and hit testing
-    agree while measurement and arrangement remain unchanged.
+    Visual-only widget scale is applied around the compiled root node's center,
+    followed by visual-only translation. Both operations transform the complete
+    retained subtree after layout so painting, clipping and hit testing agree while
+    authored measurement and arrangement remain unchanged.
     """
 
     viewport = Rect(0.0, 0.0, float(width), float(height))
@@ -114,6 +115,11 @@ def _compile_component(
             child_nodes = component.prepare_scene_children(child_nodes)
         visual_node.add(*child_nodes)
         if isinstance(component, Widget):
+            scale = component.visual_scale
+            if scale != 1.0:
+                center_x = visual_node.bounds.x + visual_node.bounds.width * 0.5
+                center_y = visual_node.bounds.y + visual_node.bounds.height * 0.5
+                _scale_scene_subtree(visual_node, scale, center_x, center_y)
             offset = component.visual_offset
             if offset.x != 0.0 or offset.y != 0.0:
                 _translate_scene_subtree(visual_node, offset.x, offset.y)
@@ -129,6 +135,39 @@ def _compile_component(
     )
     node.add(*child_nodes)
     return node
+
+
+def _scale_scene_subtree(node: SceneNode, scale: float, origin_x: float, origin_y: float) -> None:
+    """Uniformly scale ``node`` and descendants around one logical-DIP origin."""
+
+    if scale == 0.0:
+        node.opacity = 0.0
+        return
+
+    bounds = node.bounds
+    node.bounds = Rect(
+        origin_x + (bounds.x - origin_x) * scale,
+        origin_y + (bounds.y - origin_y) * scale,
+        bounds.width * scale,
+        bounds.height * scale,
+    )
+    radius = node.corner_radius
+    node.corner_radius = CornerRadius(
+        radius.top_left * scale,
+        radius.top_right * scale,
+        radius.bottom_right * scale,
+        radius.bottom_left * scale,
+    )
+    node.font_size *= scale
+    if node.blur_radius > 0.0:
+        node.blur_radius *= scale
+    if node.path is not None:
+        scaled_points = tuple(
+            Point(point.x * scale, point.y * scale) for point in node.path.points
+        )
+        node.path = Path2D(scaled_points)
+    for child in node.children:
+        _scale_scene_subtree(child, scale, origin_x, origin_y)
 
 
 def _translate_scene_subtree(node: SceneNode, dx: float, dy: float) -> None:

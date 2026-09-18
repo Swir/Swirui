@@ -55,6 +55,7 @@ from .interaction_animation import (
 )
 from .page_transition import PageTransition, PageTransitionDirection
 from .shared_element_transition import SharedElementTransition
+from .transform_animation import FadeTransition, ScaleTransition, SlideTransition
 from .widgets import (
     Accordion,
     AdaptiveNavigation,
@@ -158,6 +159,7 @@ __all__ = [
     "DockPanel",
     "DynamicTypography",
     "Expander",
+    "FadeTransition",
     "Flow",
     "FlowDirection",
     "Frame",
@@ -201,8 +203,10 @@ __all__ = [
     "ResponsiveLayoutSpec",
     "ResponsiveValue",
     "Row",
+    "ScaleTransition",
     "ScrollView",
     "SharedElementTransition",
+    "SlideTransition",
     "Slider",
     "SplitView",
     "SpringAnimation",
