@@ -188,6 +188,9 @@ jobs:
       - name: Verify retained core widgets
         run: pytest tests/test_windows_widgets.py tests/test_windows_scroll_view.py -q
 
+      - name: Verify interaction animation on retained GPU path
+        run: pytest tests/test_windows_interaction_animation.py -q
+
       - name: Verify retained expander and accordion
         run: pytest tests/test_windows_expander.py -q
 
