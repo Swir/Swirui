@@ -173,3 +173,31 @@ def test_window_resize_preserves_focused_component_across_responsive_reflow() ->
     assert window.focused_component is second
     assert second.parent is layout
     assert first.bounds.x < second.bounds.x
+
+
+def test_dpi_scale_preserves_logical_spacing_and_maps_it_to_physical_pixels() -> None:
+    layout, first, second = _layout()
+    window = Window(width=1000, height=420)
+    runtime = mount(window, layout)
+
+    assert layout.current_variant is ViewportClass.DESKTOP
+    logical_gap = second.bounds.x - first.bounds.right
+    logical_left_padding = first.bounds.x - layout.bounds.x
+    initial_generation = runtime.generation
+    initial_first_bounds = first.bounds
+    initial_second_bounds = second.bounds
+
+    assert logical_gap == pytest.approx(18.0)
+    assert logical_left_padding == pytest.approx(28.0)
+    assert window.pixel_size == (1000, 420)
+
+    window._set_scale(1.5)
+
+    # Layout geometry stays in DIPs across a monitor-scale transition. Only the
+    # native/GPU physical boundary scales, so spacing does not drift or reflow.
+    assert runtime.generation == initial_generation
+    assert first.bounds == initial_first_bounds
+    assert second.bounds == initial_second_bounds
+    assert window.pixel_size == (1500, 630)
+    assert window.logical_to_physical(logical_gap) == pytest.approx(27.0)
+    assert window.logical_to_physical(logical_left_padding) == pytest.approx(42.0)

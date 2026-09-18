@@ -79,10 +79,20 @@ def test_responsive_layout_reflows_across_real_win32_wgpu_resize() -> None:
         initial_contexts = renderer.persistent_context_count
         initial_generation = runtime.generation
 
+        # Spacing/padding are authored in logical DIPs. The real native monitor
+        # scale maps them to physical GPU pixels without changing layout policy.
+        compact_gap = secondary.bounds.y - primary.bounds.bottom
+        assert compact_gap == pytest.approx(14.0)
+        assert window.logical_to_physical(compact_gap) == pytest.approx(14.0 * window.scale)
+        assert window.pixel_width == max(1, round(window.width * window.scale))
+
         window.resize(980, 360)
         assert runtime.generation > initial_generation
         assert layout.current_variant is ViewportClass.DESKTOP
         assert secondary.bounds.x > primary.bounds.right
+        desktop_gap = secondary.bounds.x - primary.bounds.right
+        assert desktop_gap == pytest.approx(20.0)
+        assert window.logical_to_physical(desktop_gap) == pytest.approx(20.0 * window.scale)
 
         app.invalidate(window)
         assert app.render_pending(time.monotonic() + 1.0) == 1
