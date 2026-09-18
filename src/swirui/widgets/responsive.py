@@ -227,7 +227,9 @@ class ResponsiveLayout(_LinearLayout):
         self._current_variant = variant
         self._horizontal = spec.direction is LayoutDirection.ROW
         self._spacing = spec.spacing
-        self._padding = spec.padding
+        self._padding = (
+            spec.padding if isinstance(spec.padding, Insets) else Insets.all(spec.padding)
+        )
         self._main_alignment = spec.main_alignment
         self._cross_alignment = spec.cross_alignment
         self._active_content_max_width = spec.max_content_width
