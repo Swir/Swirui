@@ -89,50 +89,47 @@ class SlideTransition:
         self.to_offset = to_offset
         self.easing = easing
         self._original = widget.visual_offset
-        self._x = Tween(
-            self._original.x,
-            to_offset.x,
+        self._tween = Tween(
+            0.0,
+            1.0,
             self.duration,
-            self._apply_x,
+            self._apply_progress,
             easing=easing,
             on_complete=on_complete,
         )
-        self._from_y = self._original.y
-        self._to_y = to_offset.y
 
     @property
     def status(self) -> AnimationStatus:
-        return self._x.status
+        return self._tween.status
 
     @property
     def progress(self) -> float:
-        return self._x.progress
+        return self._tween.progress
 
     @property
     def elapsed(self) -> float:
-        return self._x.elapsed
+        return self._tween.elapsed
 
     def start(self) -> SlideTransition:
-        self._x.start()
+        self._tween.start()
         return self
 
     def advance(self, delta_seconds: float) -> float:
-        return self._x.advance(delta_seconds)
+        return self._tween.advance(delta_seconds)
 
     def cancel(self) -> bool:
-        return self._x.cancel()
+        return self._tween.cancel()
 
     def restore(self) -> None:
         if self.status is AnimationStatus.RUNNING:
-            self._x.cancel()
+            self._tween.cancel()
         self.widget.visual_offset = self._original
 
-    def _apply_x(self, x: float) -> None:
-        span = self.to_offset.x - self._original.x
-        progress = 1.0 if span == 0.0 else (x - self._original.x) / span
-        progress = min(1.0, max(0.0, progress))
-        y = self._from_y + (self._to_y - self._from_y) * progress
-        self.widget.visual_offset = Point(x, y)
+    def _apply_progress(self, progress: float) -> None:
+        self.widget.visual_offset = Point(
+            self._original.x + (self.to_offset.x - self._original.x) * progress,
+            self._original.y + (self.to_offset.y - self._original.y) * progress,
+        )
 
 
 class ScaleTransition:
