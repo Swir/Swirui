@@ -4,7 +4,7 @@ import sys
 
 import pytest
 
-from swirui import App, Window
+from swirui import App, Button, Insets, Row, Window, mount
 from swirui.core import Event
 from swirui.platforms import DisplayInfo, NativeWindowHandle, PlatformEvent, PlatformEventKind
 from swirui.platforms.windows import Win32PlatformBackend
@@ -175,5 +175,60 @@ def test_real_wgpu_surface_tracks_logical_scene_across_dpi_scales() -> None:
         assert renderer.last_image_count == 1
         assert renderer.adapter_name
         assert renderer.graphics_backend
+    finally:
+        app.stop()
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Win32 HiDPI layout smoke requires Windows")
+def test_retained_layout_spacing_remains_logical_across_dpi_scales() -> None:
+    backend = ForcedScaleWin32Backend(1.5)
+    renderer = WgpuRenderer()
+    app = App("SwirUI HiDPI Layout Smoke", platform_backend=backend, renderer=renderer)
+    window = app.add_window(Window(title="SwirUI HiDPI Layout Smoke", width=480, height=220))
+    first = Button("One", key="dpi-one", bounds=Rect(0.0, 0.0, 96.0, 44.0))
+    second = Button("Two", key="dpi-two", bounds=Rect(0.0, 0.0, 96.0, 44.0))
+    row = Row(
+        key="dpi-row",
+        bounds=Rect(0.0, 0.0, 1.0, 1.0),
+        fill_viewport=True,
+        padding=Insets.symmetric(horizontal=24.0, vertical=72.0),
+        spacing=20.0,
+    )
+    row.add(first, second)
+    runtime = mount(window, row)
+
+    try:
+        app.start()
+        assert window.native_handle is not None
+        handle = window.native_handle
+        surface = renderer.surfaces[handle.value]
+        initial_contexts = renderer.persistent_context_count
+        initial_generation = runtime.generation
+
+        assert window.scale == pytest.approx(1.5)
+        assert window.pixel_size == (720, 330)
+        assert second.bounds.x - first.bounds.right == pytest.approx(20.0)
+        assert first.bounds.x == pytest.approx(24.0)
+        assert second.bounds.right <= pytest.approx(row.bounds.right - 24.0)
+
+        backend.forced_scale = 2.0
+        backend.post_test_event(
+            PlatformEvent(PlatformEventKind.RESIZE, handle, width=960, height=440)
+        )
+        backend.post_test_event(
+            PlatformEvent(PlatformEventKind.DPI_CHANGED, handle, scale=2.0)
+        )
+        backend.post_test_event(PlatformEvent(PlatformEventKind.DISPLAY_CHANGED, handle))
+        app.process_events()
+
+        assert window.scale == pytest.approx(2.0)
+        assert (window.width, window.height) == (480, 220)
+        assert window.pixel_size == (960, 440)
+        assert (surface.width, surface.height) == (960, 440)
+        assert runtime.generation > initial_generation
+        assert row.bounds == Rect(0.0, 0.0, 480.0, 220.0)
+        assert first.bounds.x == pytest.approx(24.0)
+        assert second.bounds.x - first.bounds.right == pytest.approx(20.0)
+        assert renderer.persistent_context_count == initial_contexts
     finally:
         app.stop()
