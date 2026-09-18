@@ -7,7 +7,7 @@ from typing import Protocol, runtime_checkable
 
 from swirui.core import Component, Event
 from swirui.core.state import schedule_reactive_update
-from swirui.rendering.geometry import Rect
+from swirui.rendering.geometry import CornerRadius, Path2D, Point, Rect
 from swirui.rendering.scene import Scene, SceneNode, SceneNodeKind
 from swirui.window import Window
 
@@ -58,9 +58,9 @@ def compile_component_scene(
     not repeat measurement and arrangement until geometry-relevant state or the
     logical viewport actually changes.
 
-    A widget's visual-only offset is applied after its descendants are compiled,
-    translating the complete retained subtree so paint, clipping and hit testing
-    agree while measurement and arrangement remain unchanged.
+    A widget's visual-only scale and offset are applied after its descendants are
+    compiled, transforming the complete retained subtree so paint, clipping and
+    hit testing agree while measurement and arrangement remain unchanged.
     """
 
     viewport = Rect(0.0, 0.0, float(width), float(height))
@@ -114,6 +114,11 @@ def _compile_component(
             child_nodes = component.prepare_scene_children(child_nodes)
         visual_node.add(*child_nodes)
         if isinstance(component, Widget):
+            scale = component.visual_scale
+            if scale != 1.0:
+                bounds = visual_node.bounds
+                pivot = Point(bounds.x + bounds.width * 0.5, bounds.y + bounds.height * 0.5)
+                _scale_scene_subtree(visual_node, scale, pivot)
             offset = component.visual_offset
             if offset.x != 0.0 or offset.y != 0.0:
                 _translate_scene_subtree(visual_node, offset.x, offset.y)
@@ -129,6 +134,31 @@ def _compile_component(
     )
     node.add(*child_nodes)
     return node
+
+
+def _scale_scene_subtree(node: SceneNode, scale: float, pivot: Point) -> None:
+    """Uniformly scale ``node`` and descendants around one logical-DIP pivot."""
+
+    bounds = node.bounds
+    node.bounds = Rect(
+        pivot.x + (bounds.x - pivot.x) * scale,
+        pivot.y + (bounds.y - pivot.y) * scale,
+        bounds.width * scale,
+        bounds.height * scale,
+    )
+    radius = node.corner_radius
+    node.corner_radius = CornerRadius(
+        radius.top_left * scale,
+        radius.top_right * scale,
+        radius.bottom_right * scale,
+        radius.bottom_left * scale,
+    )
+    if node.kind is SceneNodeKind.TEXT:
+        node.font_size *= scale
+    if node.kind is SceneNodeKind.PATH and node.path is not None:
+        node.path = Path2D(tuple(Point(point.x * scale, point.y * scale) for point in node.path.points))
+    for child in node.children:
+        _scale_scene_subtree(child, scale, pivot)
 
 
 def _translate_scene_subtree(node: SceneNode, dx: float, dy: float) -> None:
