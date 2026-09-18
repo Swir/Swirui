@@ -410,7 +410,11 @@ class Flow(_AdvancedPanel):
             line_main = sum(self._main_size(size) for _child, size in line)
             line_main += self.spacing * max(0, len(line) - 1)
             line_cross = max(self._cross_size(size) for _child, size in line)
-            available_main = content.width if self.direction is FlowDirection.HORIZONTAL else content.height
+            available_main = (
+                content.width
+                if self.direction is FlowDirection.HORIZONTAL
+                else content.height
+            )
             remaining = max(0.0, available_main - line_main)
             offset, gap = _main_position(self.main_alignment, remaining, len(line), self.spacing)
             main_cursor = (
