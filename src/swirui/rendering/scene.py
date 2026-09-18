@@ -39,12 +39,23 @@ class SceneNode:
     resource_id: str | None = None
     children: list[SceneNode] = field(default_factory=list)
     clip_to_bounds: bool = False
+    clip_rect: Rect | None = None
     hit_testable: bool = True
     blur_radius: float = 0.0
 
     def __post_init__(self) -> None:
         if not 0.0 <= self.opacity <= 1.0:
             raise ValueError("opacity must be between 0.0 and 1.0.")
+        if self.clip_rect is not None and any(
+            not math.isfinite(value)
+            for value in (
+                self.clip_rect.x,
+                self.clip_rect.y,
+                self.clip_rect.width,
+                self.clip_rect.height,
+            )
+        ):
+            raise ValueError("Scene clip geometry must be finite.")
         if self.kind is SceneNodeKind.PATH:
             if self.path is None:
                 raise ValueError("Path scene nodes require Path2D geometry.")
@@ -98,10 +109,12 @@ class SceneNode:
     ) -> Iterator[tuple[SceneNode, float, Rect | None]]:
         """Yield painter-ordered nodes with cumulative opacity and rectangular clip.
 
-        ``clip_to_bounds`` intersects this node's bounds with the inherited clip
-        and applies the result to the node and its full subtree. Empty clipped
-        subtrees are discarded before renderer resource preparation. A ``None``
-        clip means no ancestor has requested clipping.
+        ``clip_to_bounds`` intersects this node's bounds with the inherited clip.
+        ``clip_rect`` adds an independent retained clip, useful for visual-only
+        transitions that must not mutate layout bounds. The effective result applies
+        to the node and its full subtree. Empty clipped subtrees are discarded before
+        renderer resource preparation. A ``None`` clip means no ancestor requested
+        clipping.
         """
 
         effective_opacity = inherited_opacity * self.opacity
@@ -112,8 +125,19 @@ class SceneNode:
         if self.clip_to_bounds:
             effective_clip = (
                 self.bounds
-                if inherited_clip is None
-                else inherited_clip.intersection(self.bounds)
+                if effective_clip is None
+                else effective_clip.intersection(self.bounds)
+            )
+            if effective_clip is None:
+                return
+
+        if self.clip_rect is not None:
+            if self.clip_rect.width <= 0.0 or self.clip_rect.height <= 0.0:
+                return
+            effective_clip = (
+                self.clip_rect
+                if effective_clip is None
+                else effective_clip.intersection(self.clip_rect)
             )
             if effective_clip is None:
                 return
@@ -146,6 +170,11 @@ class SceneNode:
             return ()
         if self.clip_to_bounds and not self.bounds.contains(point):
             return ()
+        if self.clip_rect is not None:
+            if self.clip_rect.width <= 0.0 or self.clip_rect.height <= 0.0:
+                return ()
+            if not self.clip_rect.contains(point):
+                return ()
 
         candidates = (
             (index, child)
@@ -177,6 +206,11 @@ class SceneNode:
 
         if self.opacity <= 0.0:
             return False
+        if self.clip_rect is not None:
+            if self.clip_rect.width <= 0.0 or self.clip_rect.height <= 0.0:
+                return False
+            if not self.clip_rect.contains(point):
+                return False
         if self.bounds.contains(point):
             return True
         if self.clip_to_bounds:
