@@ -34,6 +34,22 @@ def _lparam(x: int, y: int) -> int:
     return ((y & 0xFFFF) << 16) | (x & 0xFFFF)
 
 
+def _drain_native_events(app: App, *, max_rounds: int = 32) -> None:
+    """Drain setup-time Win32 messages before injecting deterministic input.
+
+    ``ShowWindow`` can leave a real cursor ``WM_MOUSEMOVE`` queued behind a
+    synchronous ``SendMessageW`` injection. If both are consumed in one poll,
+    that stale move can immediately undo the synthetic hover and make the smoke
+    test depend on the hosted runner's cursor position. Draining first preserves
+    the real Win32 routing path while removing that unrelated startup ordering.
+    """
+
+    for _ in range(max_rounds):
+        if app.process_events() == 0:
+            return
+    pytest.fail("Win32 startup event queue did not settle before interaction injection.")
+
+
 def _pump_until(app: App, predicate: Callable[[], bool], *, timeout: float = 1.0) -> None:
     """Pump native events until the expected routed state is observable."""
 
@@ -88,6 +104,14 @@ def test_real_win32_pointer_animates_retained_button_in_persistent_wgpu_context(
         user32 = _user32()
         x = max(1, round(180.0 * window.scale))
         y = max(1, round(110.0 * window.scale))
+
+        _drain_native_events(app)
+        assert window.scene is not None
+        logical_x = window.physical_to_logical(float(x))
+        logical_y = window.physical_to_logical(float(y))
+        target = window.scene.hit_test_xy(logical_x, logical_y)
+        assert target is not None
+        assert target.key == "animated-button"
 
         user32.SendMessageW(ctypes.c_void_p(hwnd), 0x0200, 0, _lparam(x, y))
         _pump_until(app, lambda: animator.phase.value == "hovered")
