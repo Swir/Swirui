@@ -45,6 +45,7 @@ from .core import (
     computed,
     state_transaction,
 )
+from .effect_animation import BackdropBlurTransition, GlowTransition
 from .interaction_animation import InteractionAnimationSpec, InteractionAnimator, InteractionPhase
 from .widgets import (
     Accordion,
@@ -130,6 +131,7 @@ __all__ = [
     "AsyncSnapshot",
     "AsyncState",
     "AsyncStatus",
+    "BackdropBlurTransition",
     "Badge",
     "Binding",
     "Button",
@@ -152,6 +154,7 @@ __all__ = [
     "FlowDirection",
     "Frame",
     "GlassCard",
+    "GlowTransition",
     "Grid",
     "IconButton",
     "Input",
