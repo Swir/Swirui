@@ -16,16 +16,22 @@ from .base import Widget
 
 @runtime_checkable
 class SceneRenderable(Protocol):
+    """Structural contract implemented by visual retained components."""
+
     def build_scene_node(self) -> SceneNode: ...
 
 
 @runtime_checkable
 class SceneLayoutPreparer(Protocol):
+    """Optional pre-compilation hook for retained layout containers."""
+
     def prepare_layout(self, viewport: Rect) -> None: ...
 
 
 @runtime_checkable
 class SceneChildPreparer(Protocol):
+    """Optional hook for containers that transform compiled child scene nodes."""
+
     def prepare_scene_children(
         self,
         children: tuple[SceneNode, ...],
@@ -39,7 +45,23 @@ def compile_component_scene(
     height: float,
     generation: int = 0,
 ) -> Scene | None:
-    """Compile a visible component tree into a renderer-ready SceneGraph."""
+    """Compile a visible component tree into a renderer-ready SceneGraph.
+
+    Logical container components become transparent scene groups only when they
+    contain visual descendants. Layout preparation runs before descendant
+    compilation, allowing retained containers to arrange child Widget bounds
+    without rebuilding the tree a second time. Disabled ancestors make their
+    full visual subtree non-hit-testable without hiding it.
+
+    Widget layout preparers are revision/viewport cached. A paint-only retained
+    invalidation still recompiles the scene, but unchanged layout containers do
+    not repeat measurement and arrangement until geometry-relevant state or the
+    logical viewport actually changes.
+
+    A widget's visual-only clip, scale and offset are applied after its descendants
+    are compiled. The complete retained subtree is transformed so painting, clipping
+    and hit testing agree while measurement and arrangement remain unchanged.
+    """
 
     viewport = Rect(0.0, 0.0, float(width), float(height))
     if root is None or not root.visible:
@@ -117,6 +139,8 @@ def _compile_component(
 
 
 def _scale_rect(bounds: Rect, scale: float, pivot: Point) -> Rect:
+    """Scale one logical-DIP rectangle around a shared transform pivot."""
+
     return Rect(
         pivot.x + (bounds.x - pivot.x) * scale,
         pivot.y + (bounds.y - pivot.y) * scale,
@@ -126,6 +150,8 @@ def _scale_rect(bounds: Rect, scale: float, pivot: Point) -> Rect:
 
 
 def _scale_scene_subtree(node: SceneNode, scale: float, pivot: Point) -> None:
+    """Uniformly scale ``node`` and descendants around one logical-DIP pivot."""
+
     node.bounds = _scale_rect(node.bounds, scale, pivot)
     if node.clip_rect is not None:
         node.clip_rect = _scale_rect(node.clip_rect, scale, pivot)
@@ -145,6 +171,8 @@ def _scale_scene_subtree(node: SceneNode, scale: float, pivot: Point) -> None:
 
 
 def _translate_scene_subtree(node: SceneNode, dx: float, dy: float) -> None:
+    """Translate ``node`` and descendants in logical DIPs without touching layout state."""
+
     bounds = node.bounds
     node.bounds = Rect(bounds.x + dx, bounds.y + dy, bounds.width, bounds.height)
     if node.clip_rect is not None:
@@ -155,12 +183,28 @@ def _translate_scene_subtree(node: SceneNode, dx: float, dy: float) -> None:
 
 
 def _child_viewport(child: Component, fallback: Rect) -> Rect:
+    """Prefer an already-arranged child bounds rectangle for nested layouts."""
+
     bounds = getattr(child, "bounds", None)
     return bounds if isinstance(bounds, Rect) else fallback
 
 
 class WidgetRuntime:
-    """Mount a retained widget tree into one framework Window."""
+    """Mount a retained widget tree into one framework Window.
+
+    The runtime listens once to root-level invalidation. Widget mutations rebuild
+    the backend-neutral SceneGraph synchronously outside reactive transactions.
+    During ``state_transaction()`` flushes, repeated invalidations for the same
+    runtime are coalesced and exactly one rebuild runs after state notifications
+    and computed dependencies settle. ``Window.set_scene`` then uses the
+    application's existing scene invalidation/frame-scheduler path.
+
+    Mounting also owns the retained component lifecycle. Parent-first ``on_mount``
+    hooks run before the initial scene build; child-first ``on_unmount`` hooks run
+    when the runtime is detached, the root is replaced, or the hosting Window closes.
+    Components inserted into or removed from a mounted subtree inherit that lifecycle
+    automatically through :class:`~swirui.core.Component`.
+    """
 
     def __init__(self, window: Window) -> None:
         self.window = window
@@ -257,4 +301,6 @@ class WidgetRuntime:
 
 
 def mount(window: Window, root: Component) -> WidgetRuntime:
+    """Convenience helper that mounts ``root`` and returns its retained runtime."""
+
     return WidgetRuntime(window).mount(root)
