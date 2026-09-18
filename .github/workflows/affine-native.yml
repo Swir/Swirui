@@ -1,0 +1,69 @@
+name: Native Affine Contract
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "native/src/affine.rs"
+      - "native/src/lib.rs"
+      - "src/swirui/rendering/native_affine.py"
+      - "tests/test_native_affine_contract.py"
+      - "tests/test_windows_affine_contract.py"
+      - ".github/workflows/affine-native.yml"
+  pull_request:
+    paths:
+      - "native/src/affine.rs"
+      - "native/src/lib.rs"
+      - "src/swirui/rendering/native_affine.py"
+      - "tests/test_native_affine_contract.py"
+      - "tests/test_windows_affine_contract.py"
+      - ".github/workflows/affine-native.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-affine-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows-affine:
+    name: Win32 PyO3 affine contract / Python 3.14
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+
+      - name: Set up stable Rust
+        run: rustup toolchain install stable --profile minimal && rustup default stable
+
+      - name: Install Python tools
+        run: python -m pip install --upgrade pip && python -m pip install -e ".[dev]" maturin==1.15.0
+
+      - name: Check native core
+        run: cargo check --manifest-path native/Cargo.toml --all-targets
+
+      - name: Test native affine Rust contract
+        run: cargo test --manifest-path native/Cargo.toml --lib affine::tests
+
+      - name: Build PyO3 extension
+        working-directory: native
+        run: maturin build --release --interpreter python --out ../dist-native
+
+      - name: Install PyO3 extension
+        shell: pwsh
+        run: |
+          $wheel = (Get-ChildItem dist-native\*.whl | Select-Object -First 1).FullName
+          python -m pip install $wheel
+
+      - name: Verify Python payload packing
+        run: pytest tests/test_native_affine_contract.py -q
+
+      - name: Verify real Python to native affine boundary
+        run: pytest tests/test_windows_affine_contract.py -q
