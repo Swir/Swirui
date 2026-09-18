@@ -1,6 +1,6 @@
 import pytest
 
-from swirui import Button, Column, Label, Row
+from swirui import Button, Column, Input, Label, PasswordInput, Row, TextArea
 from swirui.rendering import Rect, Size
 from swirui.widgets.measurement import measure_text_block
 
@@ -48,6 +48,49 @@ def test_button_intrinsic_width_includes_label_and_horizontal_padding() -> None:
     assert measured.width >= label.width + 28.0
     assert measured.height >= label.height
     assert measured.width > button.preferred_size.width
+
+
+def test_inputs_measure_visible_value_placeholder_and_masked_content() -> None:
+    empty = Input(
+        bounds=Rect(0.0, 0.0, 30.0, 18.0),
+        placeholder="Type a longer project name",
+        font_size=16.0,
+        padding=10.0,
+    )
+    filled = Input(
+        "SwirUI desktop application",
+        bounds=Rect(0.0, 0.0, 30.0, 18.0),
+        font_size=16.0,
+        padding=10.0,
+    )
+    password = PasswordInput(
+        "secret-value",
+        bounds=Rect(0.0, 0.0, 30.0, 18.0),
+        font_size=16.0,
+        padding=10.0,
+    )
+
+    assert empty.measure().width > 30.0
+    assert filled.measure().width > 30.0
+    assert password.measure().width > 30.0
+    assert empty.measure().height >= (16.0 * 1.3) + 20.0
+
+
+def test_text_area_intrinsic_height_tracks_multiline_content_and_width_constraint() -> None:
+    area = TextArea(
+        "First retained line with enough words to wrap\nSecond line\nThird line",
+        bounds=Rect(0.0, 0.0, 40.0, 24.0),
+        font_size=16.0,
+        padding=8.0,
+    )
+
+    natural = area.measure()
+    constrained = area.measure(Size(130.0, 500.0))
+
+    assert natural.width > 40.0
+    assert natural.height > 24.0
+    assert constrained.width <= 130.0
+    assert constrained.height >= natural.height
 
 
 def test_row_remeasures_cross_axis_after_children_are_shrunk() -> None:
