@@ -4,16 +4,8 @@ import math
 
 import pytest
 
-from swirui.rendering import (
-    Affine2D,
-    Color,
-    Path2D,
-    Point,
-    Rect,
-    Scene,
-    SceneNode,
-    SceneNodeKind,
-)
+from swirui.rendering import Color, Path2D, Point, Rect, Scene, SceneNode, SceneNodeKind
+from swirui.rendering.affine import Affine2D
 
 
 def test_rotation_inverse_and_composition_are_deterministic() -> None:
