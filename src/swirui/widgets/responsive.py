@@ -9,7 +9,6 @@ from typing import Generic, TypeVar
 
 from swirui.rendering.geometry import Rect, Size
 
-from .base import Widget
 from .layout import (
     CrossAxisAlignment,
     Insets,
