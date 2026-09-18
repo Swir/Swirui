@@ -5,6 +5,8 @@
 //! into a monolithic backend.
 
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+mod affine;
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 mod color_filter;
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 mod custom_effect;
