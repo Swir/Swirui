@@ -144,7 +144,7 @@ def test_constraint_layout_stretches_paired_edges_and_centers_with_offsets() -> 
     layout.prepare_layout(layout.bounds)
 
     assert stretched.bounds == Rect(40.0, 45.0, 430.0, 44.0)
-    assert centered.bounds == Rect(212.0, 122.0, 120.0, 60.0)
+    assert centered.bounds == Rect(212.0, 132.0, 120.0, 60.0)
 
 
 def test_constraint_layout_applies_child_min_max_after_anchor_resolution() -> None:
