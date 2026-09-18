@@ -1,4 +1,4 @@
-"""Run retained fade, slide and scale transitions on SwirUI's frame clock."""
+"""Run retained fade, slide, scale and reveal transitions on SwirUI's frame clock."""
 
 from __future__ import annotations
 
@@ -10,6 +10,7 @@ from swirui import (
     Component,
     FadeTransition,
     Label,
+    RevealTransition,
     ScaleTransition,
     SlideTransition,
     Window,
@@ -21,15 +22,15 @@ from swirui.rendering import Color, Point, Rect
 def main() -> int:
     app = App("SwirUI Visual Transition")
     window = app.add_window(
-        Window(title="SwirUI — Fade + Slide + Scale", width=820, height=460)
+        Window(title="SwirUI — Retained Visual Transitions", width=820, height=460)
     )
     root = Component("visual transition demo")
     card = Card(key="transition-card", bounds=Rect(250.0, 132.0, 320.0, 176.0))
     card.add(
         Label(
-            "Fade + Slide + Scale",
-            bounds=Rect(290.0, 196.0, 260.0, 48.0),
-            font_size=25.0,
+            "Fade + Slide + Scale + Reveal",
+            bounds=Rect(275.0, 196.0, 290.0, 48.0),
+            font_size=22.0,
             color=Color.from_hex("#62E5FF"),
         )
     )
@@ -46,6 +47,7 @@ def main() -> int:
                 duration=0.65,
             ),
             ScaleTransition(card, from_scale=0.82, duration=0.65),
+            RevealTransition(card, duration=0.65),
         )
     )
 
