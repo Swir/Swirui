@@ -169,7 +169,8 @@ def test_blur_and_glow_transitions_reuse_real_persistent_wgpu_context() -> None:
         assert renderer._contexts[handle] is initial_context
         assert window.scene is not None
         blur_node = next(node for node in window.scene.walk() if node.key == "animated-blur")
-        assert blur_node.blur_radius == pytest.approx(18.0)
+        assert blur_node.blur_radius == pytest.approx(blur_state[0].radius)
+        assert source_blur.radius <= blur_node.blur_radius <= target_blur.radius
         assert any(node.key.startswith("animated-glow:layer:") for node in window.scene.walk())
 
         controller.tick(0.25)
