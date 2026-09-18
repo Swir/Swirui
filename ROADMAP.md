@@ -8,7 +8,7 @@
 
 **Overall completion: 68%**
 
-Progress is based on implemented and verified roadmap work. Ideas, mockups and unfinished prototypes do not increase the percentage. The current weighted model preserves the verified 56% baseline through completed 0.4 Core Widgets, then adds one percentage point for each verified 0.5 Layout Engine group. Release readiness is tracked separately from project completion. The 0.6 checklist records newly verified reactive-runtime scope without inventing a new weighting rule or double-counting the foundational `State` work already represented earlier in the roadmap.
+Progress is based on implemented and verified roadmap work. Ideas, mockups and unfinished prototypes do not increase the percentage. The current weighted model preserves the verified 56% baseline through completed 0.4 Core Widgets, then adds one percentage point for each verified 0.5 Layout Engine group. Release readiness is tracked separately from project completion. Completed 0.6 Reactive Runtime work and the verified 0.7 animation foundation are tracked by their own checklists without inventing a new weighting rule or double-counting foundational work already represented earlier in the roadmap.
 
 ---
 
@@ -175,7 +175,7 @@ Layout spacing and padding remain authored in logical DIPs across monitor-scale 
 
 ## 0.6 Alpha — Reactive Runtime
 
-**Status:** Underway 🚧 — 8 / 12 groups verified
+**Status:** Complete ✅ — 12 / 12 groups verified
 
 - [x] Basic thread-safe `State`
 - [x] Computed state
@@ -184,17 +184,19 @@ Layout spacing and padding remain authored in logical DIPs across monitor-scale 
 - [x] Two-way binding
 - [x] Observable collections
 - [x] Dependency tracking
-- [ ] Async state
-- [ ] Persistent state
-- [ ] Component lifecycle hooks
-- [ ] Minimal-update scheduling
+- [x] Async state
+- [x] Persistent state
+- [x] Component lifecycle hooks
+- [x] Minimal-update scheduling
 - [x] Batched state transactions
 
-### Verified 0.6 slice
+### 0.6 gate
 
-`ComputedState` is read-only and discovers dependencies dynamically from reactive reads. Nested `state_transaction()` scopes coalesce notifications and recompute computed chains in dependency order at the outer boundary. `ReactiveProperty`, disposable one-way/two-way bindings, `ObservableList` and `ObservableDict` are public Python APIs with deterministic coverage for dependency switching, batching, disposal, observable snapshots and exception flushing. The merged implementation passed the full repository CI gate before these checklist items were credited. Async state, persistent state, component lifecycle integration and minimal-update scheduling remain open.
+The Reactive Runtime gate is complete with all 12 named groups implemented and verified. `ComputedState` discovers dependencies dynamically from reactive reads, nested `state_transaction()` scopes coalesce notifications and dependency-ordered recomputation, and retained `WidgetRuntime` updates are coalesced once per runtime after a transaction settles. `ReactiveProperty`, disposable one-way/two-way bindings, `ObservableList`, `ObservableDict`, asyncio-aware `AsyncState` and atomic JSON-backed `PersistentState` are public Python APIs. Retained components now have deterministic parent-first mount, update and child-first unmount lifecycle hooks. The implementation passed the full repository CI gates before these items were credited. Completion applies only to 0.6 and does not imply beta or release readiness.
 
 ## 0.7 Alpha — Animation Engine
+
+**Status:** Underway 🚧 — 2 / 12 groups verified
 
 - [ ] Fade / slide / scale / rotate
 - [ ] Blur / glow transitions
@@ -206,8 +208,12 @@ Layout spacing and padding remain authored in logical DIPs across monitor-scale 
 - [ ] Hover / press / focus animations
 - [ ] Magnetic interactions
 - [ ] Particle effects
-- [ ] Frame-rate-independent timing
-- [ ] Animation cancellation / chaining
+- [x] Frame-rate-independent timing
+- [x] Animation cancellation / chaining
+
+### Verified 0.7 slice
+
+The first Animation Engine foundation uses elapsed-time-driven `Tween` values rather than frame counts, carries unused frame time across serial `AnimationSequence` boundaries, and supports deterministic cancellation without forcing completion. A window-scoped `AnimationController` advances from real `App.frame_rendered` telemetry and requests subsequent frames through the existing display-aware scheduler, preventing multi-window double stepping. Reactive `State` tweening plus cubic, bounce and elastic easing helpers are available, but easing helpers alone do not complete the broader spring/elastic/bounce group. The merged implementation passed the full repository CI gate before the two timing/chaining groups were credited.
 
 ## 0.8 Beta — Professional Widgets
 
@@ -441,6 +447,9 @@ AI output must remain ordinary, editable SwirUI code.
 - [x] DPI-aware logical spacing / padding conversion coverage
 - [x] Retained layout invalidation optimization coverage
 - [x] Reactive runtime computed state / bindings / observable collections / transaction coverage
+- [x] Reactive async/persistent state + cancellation coverage
+- [x] Component lifecycle + minimal-update scheduling coverage
+- [x] Animation elapsed-time timing / chaining / cancellation coverage
 - [ ] Screenshot tests
 - [ ] Visual regression tests
 - [x] Accessibility tests
