@@ -103,7 +103,10 @@ def test_particle_scene_uses_clipped_noninteractive_gpu_batch_nodes() -> None:
     assert all(child.kind is SceneNodeKind.RECTANGLE for child in node.children)
     assert all(child.hit_testable is False for child in node.children)
     assert all(child.fill is not None and 0.0 < child.fill.a <= 0.8 for child in node.children)
-    assert all(child.corner_radius.top_left == pytest.approx(child.bounds.width * 0.5) for child in node.children)
+    assert all(
+        child.corner_radius.top_left == pytest.approx(child.bounds.width * 0.5)
+        for child in node.children
+    )
 
 
 def test_particle_field_cancellation_holds_current_sample() -> None:
