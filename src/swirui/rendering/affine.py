@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from .geometry import Point, Rect
 
 _DETERMINANT_EPSILON = 1.0e-12
+_AXIS_ALIGNMENT_EPSILON = 1.0e-12
 _ORIGIN = Point()
 
 
@@ -52,6 +53,20 @@ class Affine2D:
             and self.m22 == 1.0
             and self.tx == 0.0
             and self.ty == 0.0
+        )
+
+    @property
+    def is_axis_aligned(self) -> bool:
+        """Return whether axis-aligned rectangles remain axis-aligned after mapping.
+
+        Translation and independent X/Y scale are axis-aligned. Rotation and shear
+        are not. A tiny tolerance absorbs floating-point residue from composed
+        transforms such as a mathematically complete turn.
+        """
+
+        return (
+            abs(self.m12) <= _AXIS_ALIGNMENT_EPSILON
+            and abs(self.m21) <= _AXIS_ALIGNMENT_EPSILON
         )
 
     @classmethod
@@ -102,6 +117,23 @@ class Affine2D:
         return Point(
             self.m11 * point.x + self.m12 * point.y + self.tx,
             self.m21 * point.x + self.m22 * point.y + self.ty,
+        )
+
+    def inverse_transform_point(self, point: Point) -> Point:
+        """Map one visual point back to authored coordinates without allocating a matrix.
+
+        Pointer routing invokes inverse mapping frequently. Computing the two
+        coordinates directly preserves the exact ``inverse().transform_point()``
+        result while avoiding a temporary ``Affine2D`` object for every clip and
+        candidate in the retained hit-test path.
+        """
+
+        determinant = self.determinant
+        x = point.x - self.tx
+        y = point.y - self.ty
+        return Point(
+            (self.m22 * x - self.m12 * y) / determinant,
+            (-self.m21 * x + self.m11 * y) / determinant,
         )
 
     def inverse(self) -> Affine2D:

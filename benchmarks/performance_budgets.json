@@ -9,6 +9,11 @@
     "max_p95_us": 45000,
     "max_worst_us": 100000
   },
+  "affine_hit_testing_1024": {
+    "max_median_us": 60000,
+    "max_p95_us": 90000,
+    "max_worst_us": 200000
+  },
   "reflection_tessellation_96": {
     "max_median_us": 20000,
     "max_p95_us": 40000,

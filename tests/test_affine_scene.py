@@ -111,6 +111,46 @@ def test_parent_transform_applies_to_descendant_hit_testing() -> None:
     assert scene.hit_test(visual_hit) is child
 
 
+def test_rotated_parent_identity_child_broad_phase_preserves_painter_order() -> None:
+    parent = SceneNode(
+        key="rotated-parent",
+        kind=SceneNodeKind.GROUP,
+        bounds=Rect(20.0, 20.0, 240.0, 180.0),
+        hit_testable=False,
+        clip_to_bounds=True,
+        transform=Affine2D.rotation(math.radians(19.0), origin=Point(140.0, 110.0)),
+    )
+    back = SceneNode(
+        key="back",
+        kind=SceneNodeKind.RECTANGLE,
+        bounds=Rect(80.0, 70.0, 100.0, 72.0),
+        fill=Color.from_hex("#0088FF"),
+        z_index=1,
+    )
+    front = SceneNode(
+        key="front",
+        kind=SceneNodeKind.RECTANGLE,
+        bounds=Rect(100.0, 82.0, 100.0, 72.0),
+        fill=Color.from_hex("#62E5FF"),
+        z_index=4,
+    )
+    outside = SceneNode(
+        key="outside",
+        kind=SceneNodeKind.RECTANGLE,
+        bounds=Rect(220.0, 160.0, 24.0, 24.0),
+        fill=Color.from_hex("#F4FAFF"),
+        z_index=9,
+    )
+    parent.add(back, front, outside)
+    scene = Scene(320.0, 240.0, parent)
+
+    authored_hit = Point(125.0, 105.0)
+    visual_hit = parent.transform.transform_point(authored_hit)
+
+    assert scene.hit_path(visual_hit) == (parent, front)
+    assert scene.hit_test(visual_hit) is front
+
+
 def test_nested_transforms_compose_child_then_parent_in_visual_order() -> None:
     parent = SceneNode(
         key="parent",
