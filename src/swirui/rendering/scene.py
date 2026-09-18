@@ -11,6 +11,8 @@ from .affine import Affine2D
 from .geometry import Color, CornerRadius, Path2D, Point, Rect
 
 _MAX_BACKDROP_BLUR_RADIUS = 64.0
+_IDENTITY_TRANSFORM = Affine2D()
+ClipRegion = tuple[Affine2D, Rect]
 
 
 class SceneNodeKind(StrEnum):
@@ -27,10 +29,11 @@ class SceneNode:
     """A render-backend friendly node in the prepared scene graph.
 
     ``transform`` maps authored logical-DIP coordinates into visual coordinates.
-    Hit testing already honors the exact inverse affine transform. Raster
-    composition intentionally rejects transformed nodes until every primitive,
-    shaped text and clipping path share one verified renderer contract; this
-    prevents partial rotation support from silently diverging from input.
+    Hit testing composes ancestor and descendant affine transforms before mapping
+    the pointer back into each node's authored coordinates. Raster composition
+    intentionally rejects transformed nodes until every primitive, shaped text
+    and clipping path share one verified renderer contract; this prevents partial
+    rotation support from silently diverging from input.
     """
 
     key: str
@@ -80,7 +83,7 @@ class SceneNode:
 
     @property
     def visual_bounds(self) -> Rect:
-        """Return the axis-aligned visual bounds after this node's transform."""
+        """Return the axis-aligned visual bounds after this node's own transform."""
 
         if self.transform.is_identity:
             return self.bounds
@@ -163,8 +166,10 @@ class SceneNode:
         of direct hit testing with ``hit_testable=False`` while their descendants
         remain independently eligible.
 
-        A node affine transform is inverted before bounds/path testing, keeping
-        pointer geometry exact even for rotated or translated retained nodes.
+        Affine transforms are composed from the current node through its ancestors
+        before hit testing. This keeps descendants aligned with transformed parent
+        containers and preserves exact transformed clipping rather than reducing a
+        rotated clip to its axis-aligned visual bounds.
         """
 
         path = self.hit_path(point)
@@ -173,15 +178,30 @@ class SceneNode:
     def hit_path(self, point: Point) -> tuple[SceneNode, ...]:
         """Return the ancestry path from this node to the topmost visual hit."""
 
+        return self._hit_path(point, _IDENTITY_TRANSFORM, ())
+
+    def _hit_path(
+        self,
+        point: Point,
+        parent_transform: Affine2D,
+        inherited_clips: tuple[ClipRegion, ...],
+    ) -> tuple[SceneNode, ...]:
         if self.opacity <= 0.0:
             return ()
-        if self.clip_to_bounds and not self._transformed_bounds_contains(point):
+        if not self._point_within_clips(point, inherited_clips):
             return ()
+
+        world_transform = self.transform.then(parent_transform)
+        effective_clips = inherited_clips
+        if self.clip_to_bounds:
+            if not self._transformed_bounds_contains(point, world_transform):
+                return ()
+            effective_clips = (*inherited_clips, (world_transform, self.bounds))
 
         candidates = (
             (index, child)
             for index, child in enumerate(self.children)
-            if child._subtree_may_hit(point)
+            if child._subtree_may_hit(point, world_transform, effective_clips)
         )
         ordered_children = sorted(
             candidates,
@@ -189,35 +209,46 @@ class SceneNode:
             reverse=True,
         )
         for _, child in ordered_children:
-            child_path = child.hit_path(point)
+            child_path = child._hit_path(point, world_transform, effective_clips)
             if child_path:
                 return (self, *child_path)
 
-        if self._contains_visual_point(point):
+        if self._contains_visual_point(point, world_transform):
             return (self,)
         return ()
 
-    def _subtree_may_hit(self, point: Point) -> bool:
+    def _subtree_may_hit(
+        self,
+        point: Point,
+        parent_transform: Affine2D = _IDENTITY_TRANSFORM,
+        inherited_clips: tuple[ClipRegion, ...] = (),
+    ) -> bool:
         """Reject a subtree only when it is impossible for it to hit ``point``.
 
-        Leaf visuals cannot hit outside their transformed bounds, so broad-phase
-        culling can remove them before z-order sorting. Containers with descendants
-        stay eligible outside their bounds unless clipping is enabled because SwirUI
-        permits descendants to paint and receive input beyond an unclipped parent.
+        Leaf visuals cannot hit outside their fully composed transformed bounds, so
+        broad-phase culling can remove them before z-order sorting. Containers with
+        descendants stay eligible outside their bounds unless clipping is enabled
+        because SwirUI permits descendants to paint and receive input beyond an
+        unclipped parent. Exact transformed ancestor clips are checked first.
         """
 
-        if self.opacity <= 0.0:
+        if self.opacity <= 0.0 or not self._point_within_clips(point, inherited_clips):
             return False
-        if self._transformed_bounds_contains(point):
+        world_transform = self.transform.then(parent_transform)
+        if self._transformed_bounds_contains(point, world_transform):
             return True
         if self.clip_to_bounds:
             return False
         return bool(self.children)
 
-    def _contains_visual_point(self, point: Point) -> bool:
+    def _contains_visual_point(
+        self,
+        point: Point,
+        world_transform: Affine2D = _IDENTITY_TRANSFORM,
+    ) -> bool:
         if not self.hit_testable:
             return False
-        authored = self._authored_point(point)
+        authored = self._authored_point(point, world_transform)
         if not self.bounds.contains(authored):
             return False
         if self.kind in (SceneNodeKind.GROUP, SceneNodeKind.BACKDROP_BLUR):
@@ -230,13 +261,25 @@ class SceneNode:
             return path.contains(local)
         return True
 
-    def _transformed_bounds_contains(self, point: Point) -> bool:
-        return self.bounds.contains(self._authored_point(point))
+    def _transformed_bounds_contains(
+        self,
+        point: Point,
+        world_transform: Affine2D = _IDENTITY_TRANSFORM,
+    ) -> bool:
+        return self.bounds.contains(self._authored_point(point, world_transform))
 
-    def _authored_point(self, point: Point) -> Point:
-        if self.transform.is_identity:
+    @staticmethod
+    def _point_within_clips(point: Point, clips: tuple[ClipRegion, ...]) -> bool:
+        return all(
+            bounds.contains(transform.inverse().transform_point(point))
+            for transform, bounds in clips
+        )
+
+    @staticmethod
+    def _authored_point(point: Point, world_transform: Affine2D) -> Point:
+        if world_transform.is_identity:
             return point
-        return self.transform.inverse().transform_point(point)
+        return world_transform.inverse().transform_point(point)
 
 
 @dataclass(slots=True)
