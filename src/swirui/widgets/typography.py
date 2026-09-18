@@ -203,11 +203,11 @@ class DynamicTypography(Widget):
             self._font_baselines[target] = baseline
             self._last_applied[target] = effective
 
-        for target in tuple(self._font_baselines):
-            if target in active:
+        for stale_target in tuple(self._font_baselines):
+            if stale_target in active:
                 continue
-            target._font_size = self._font_baselines.pop(target)
-            self._last_applied.pop(target, None)
+            stale_target._font_size = self._font_baselines.pop(stale_target)
+            self._last_applied.pop(stale_target, None)
 
     def _typography_targets(self, root: Component) -> Iterator[_TypographyTarget]:
         if isinstance(root, DynamicTypography):
