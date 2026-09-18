@@ -34,6 +34,22 @@ def _lparam(x: int, y: int) -> int:
     return ((y & 0xFFFF) << 16) | (x & 0xFFFF)
 
 
+def _drain_native_events(app: App, *, max_rounds: int = 32) -> None:
+    """Drain setup-time Win32 messages before deterministic pointer injection.
+
+    ``ShowWindow`` can leave a real cursor ``WM_MOUSEMOVE`` queued behind a
+    synchronous ``SendMessageW`` injection. If both are consumed in one poll,
+    that stale move can immediately deactivate the magnetic interaction and make
+    this smoke test depend on the hosted runner's cursor position. Draining the
+    queue first keeps the real Win32 routing path while removing startup noise.
+    """
+
+    for _ in range(max_rounds):
+        if app.process_events() == 0:
+            return
+    pytest.fail("Win32 startup event queue did not settle before magnetic input injection.")
+
+
 def _pump_until(app: App, predicate: Callable[[], bool], *, timeout: float = 1.0) -> None:
     deadline = time.monotonic() + timeout
     while not predicate():
@@ -84,6 +100,14 @@ def test_real_win32_pointer_moves_retained_subtree_in_persistent_wgpu_context() 
         user32 = _user32()
         inside_x = max(1, round(330.0 * window.scale))
         inside_y = max(1, round(112.0 * window.scale))
+
+        _drain_native_events(app)
+        assert window.scene is not None
+        logical_x = window.physical_to_logical(float(inside_x))
+        logical_y = window.physical_to_logical(float(inside_y))
+        target = window.scene.hit_test_xy(logical_x, logical_y)
+        assert target is not None
+        assert target.key == "magnetic-button"
 
         user32.SendMessageW(ctypes.c_void_p(hwnd), 0x0200, 0, _lparam(inside_x, inside_y))
         _pump_until(app, lambda: magnetic.active)
