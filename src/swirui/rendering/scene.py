@@ -13,6 +13,7 @@ from .geometry import Color, CornerRadius, Path2D, Point, Rect
 _MAX_BACKDROP_BLUR_RADIUS = 64.0
 _IDENTITY_TRANSFORM = Affine2D()
 ClipRegion = tuple[Affine2D, Rect]
+AffineCompositedNode = tuple["SceneNode", float, tuple[ClipRegion, ...], Affine2D]
 
 
 def _compose_transform(local: Affine2D, parent: Affine2D) -> Affine2D:
@@ -163,6 +164,43 @@ class SceneNode:
         for child in sorted(self.children, key=lambda item: item.z_index):
             yield from child.walk_composited(effective_opacity, effective_clip)
 
+    def walk_composited_affine(
+        self,
+        inherited_opacity: float = 1.0,
+        inherited_clips: tuple[ClipRegion, ...] = (),
+        parent_transform: Affine2D = _IDENTITY_TRANSFORM,
+    ) -> Iterator[AffineCompositedNode]:
+        """Yield retained nodes with composed affine transforms and exact clip regions.
+
+        Unlike :meth:`walk_composited`, this traversal does not flatten clipping to
+        one axis-aligned rectangle and does not reject affine transforms. Instead,
+        every clip keeps the world transform that maps its authored bounds into
+        visual coordinates. Native renderers can therefore decide which transformed
+        primitive/clip combinations they genuinely support while sharing one
+        deterministic opacity, hierarchy and painter-order calculation.
+
+        This method is the compositor-facing bridge for incremental native affine
+        rendering. It does not itself make a transformed scene renderable; backend
+        submission must still reject unsupported primitive or clip combinations.
+        """
+
+        effective_opacity = inherited_opacity * self.opacity
+        if effective_opacity <= 0.0:
+            return
+
+        world_transform = _compose_transform(self.transform, parent_transform)
+        effective_clips = inherited_clips
+        if self.clip_to_bounds:
+            effective_clips = (*inherited_clips, (world_transform, self.bounds))
+
+        yield self, effective_opacity, effective_clips, world_transform
+        for child in sorted(self.children, key=lambda item: item.z_index):
+            yield from child.walk_composited_affine(
+                effective_opacity,
+                effective_clips,
+                world_transform,
+            )
+
     def contains(self, target: SceneNode) -> bool:
         return any(node is target for node in self.walk())
 
@@ -285,7 +323,7 @@ class SceneNode:
             authored = (
                 point
                 if transform.is_identity
-                else transform.inverse().transform_point(point)
+                else transform.inverse_transform_point(point)
             )
             if not bounds.contains(authored):
                 return False
@@ -295,7 +333,7 @@ class SceneNode:
     def _authored_point(point: Point, world_transform: Affine2D) -> Point:
         if world_transform.is_identity:
             return point
-        return world_transform.inverse().transform_point(point)
+        return world_transform.inverse_transform_point(point)
 
 
 @dataclass(slots=True)
@@ -332,6 +370,11 @@ class Scene:
         """Yield painter-ordered nodes with cumulative opacity and clip bounds."""
 
         yield from self.root.walk_composited()
+
+    def walk_composited_affine(self) -> Iterator[AffineCompositedNode]:
+        """Yield painter-ordered nodes with world transforms and exact clip regions."""
+
+        yield from self.root.walk_composited_affine()
 
     def hit_test(self, point: Point) -> SceneNode | None:
         return self.root.hit_test(point)
