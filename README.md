@@ -27,18 +27,19 @@
 
 <img width="100%" src="assets/readme/progress-card.svg" alt="SwirUI project progress: 68.0% — 0.5 Alpha Layout Engine complete; 12 of 12 layout groups verified">
 
-**68% authoritative weighted project progress — 0.5 Alpha Layout Engine is complete; 0.6 Alpha Reactive Runtime is underway.**
+**68% authoritative weighted project progress — 0.6 Alpha Reactive Runtime is complete; 0.7 Alpha Animation Engine is underway.**
 
 - `0.1 Alpha — Foundation` ✅
 - `0.2 Alpha — Native Window + First Renderer` ✅
 - `0.3 Alpha — Visual Engine` ✅
 - `0.4 Alpha — Core Widgets` ✅
 - `0.5 Alpha — Layout Engine` ✅
-- `0.6 Alpha — Reactive Runtime` 🚧
+- `0.6 Alpha — Reactive Runtime` ✅
+- `0.7 Alpha — Animation Engine` 🚧
 
-The current published percentage preserves the verified weighting documented in `ROADMAP.md` through completed 0.5. New 0.6 functionality is tracked by its checklist until the next weighting extension is explicitly documented; it is never double-counted or used to invent release readiness.
+The current published percentage preserves the verified weighting documented in `ROADMAP.md` through completed 0.5. Completed 0.6 work and verified 0.7 timing/chaining work are tracked by their milestone checklists until a later weighting extension is explicitly documented; they are never double-counted or used to invent release readiness.
 
-SwirUI remains **pre-alpha**. Public APIs may still change while the reactive, animation and professional-widget layers are developed. There is no public GitHub Release yet.
+SwirUI remains **pre-alpha**. Public APIs may still change while the animation and professional-widget layers are developed. There is no public GitHub Release yet.
 
 ## Overview
 
@@ -46,7 +47,7 @@ SwirUI is being built as a complete Python desktop application framework rather 
 
 The Windows renderer uses a persistent per-window wgpu context and retained SceneGraph. Linux/X11 and macOS/Cocoa already provide real native window and input backends. GPU presentation on Linux/macOS and Wayland support remain future work and are not claimed as complete.
 
-The completed 0.5 layout layer provides content-aware intrinsic measurement, min/max constraints, responsive compact/desktop/ultrawide policies, adaptive navigation, dynamic typography, DPI-stable logical spacing and revision-aware layout caching. The active 0.6 runtime now adds computed state with dynamic dependency tracking, batched transactions, reactive properties, one-way/two-way bindings and observable list/dict collections.
+The completed 0.5 layout layer provides content-aware intrinsic measurement, min/max constraints, responsive compact/desktop/ultrawide policies, adaptive navigation, dynamic typography, DPI-stable logical spacing and revision-aware layout caching. The completed 0.6 runtime adds computed state with dynamic dependency tracking, batched transactions, reactive properties, one-way/two-way bindings, observable collections, asyncio-aware state, atomic persistent state, retained component lifecycle hooks and coalesced minimal-update scheduling. The active 0.7 animation layer now has verified elapsed-time timing plus serial cancellation/chaining foundations.
 
 ## Highlights
 
@@ -67,7 +68,8 @@ The completed 0.5 layout layer provides content-aware intrinsic measurement, min
 | Core widgets | Retained Text/Label, Button/IconButton, text inputs, toggles, Slider/RangeSlider, progress, surfaces, ScrollView, Accordion, SplitView, Modal/Dialog and Toast/Notification |
 | Layout engine | Row/Column, Stack/Grid/Wrap, DockPanel/Flow/Overlay, ConstraintLayout, intrinsic sizing, min/max constraints and optimized retained reflow |
 | Responsive UI | Logical-DIP breakpoints, compact/desktop/ultrawide variants, adaptive navigation and `DynamicTypography` |
-| Reactive runtime | Thread-safe `State`, `ComputedState`, dynamic dependency tracking, transactions, bindings, `ReactiveProperty`, `ObservableList` and `ObservableDict` |
+| Reactive runtime | `State`/`ComputedState`, dependency tracking, transactions, bindings, observable collections, `AsyncState`, `PersistentState`, lifecycle hooks and coalesced retained updates |
+| Animation foundation | Elapsed-time `Tween`, serial `AnimationSequence`, cancellation, easing, reactive-state tweening and window-scoped frame scheduling |
 | Performance | Adaptive visual-quality profiles plus retained effect/GPU caches and layout-preparation revision caching |
 | Accessibility | Semantic roles/tree, keyboard focus routing, keyboard-only traversal, checked state, numeric value/range and dialog/alert semantics |
 
@@ -90,7 +92,7 @@ Run the native-window demo:
 python examples/native_window_demo.py
 ```
 
-Try the retained widgets, layout engine and reactive runtime:
+Try the retained widgets, layout engine, reactive runtime and animation timing foundation:
 
 ```powershell
 python examples/core_widgets_demo.py
@@ -100,6 +102,9 @@ python examples/responsive_layout_demo.py
 python examples/adaptive_navigation_demo.py
 python examples/dynamic_typography_demo.py
 python examples/reactive_runtime_demo.py
+python examples/async_persistent_state_demo.py
+python examples/component_lifecycle_demo.py
+python examples/animation_timing_demo.py
 ```
 
 ### Windows GPU development
@@ -168,7 +173,23 @@ with state_transaction():
     discount.set(0.10)
 ```
 
-Computed dependencies are discovered from reads performed by the computation. Nested transactions coalesce notifications and dependency-ordered computed recomputation at the outer boundary. `bind()` and `bind_bidirectional()` return disposable binding handles, and observable collections publish immutable/defensive snapshots.
+Computed dependencies are discovered from reads performed by the computation. Nested transactions coalesce notifications, dependency-ordered computed recomputation and retained runtime rebuild requests at the outer boundary. `bind()` and `bind_bidirectional()` return disposable binding handles, observable collections publish immutable/defensive snapshots, `AsyncState` exposes asyncio loading/value/error/cancellation state, and `PersistentState` writes versioned JSON atomically.
+
+### Animation timing
+
+```python
+from swirui import State, Tween, ease_in_out_cubic, tween_state
+
+position = State(0.0)
+move_out = tween_state(position, 320.0, 0.6, easing=ease_in_out_cubic)
+move_back = Tween(320.0, 0.0, 0.4, position.set, easing=ease_in_out_cubic)
+sequence = move_out.then(move_back).start()
+
+while sequence.status.value == "running":
+    sequence.advance(1.0 / 120.0)
+```
+
+Real applications can hand the same sequence to a window-scoped `AnimationController`, which advances from `App.frame_rendered` timing and uses the existing display-aware frame scheduler. The broader 0.7 visual transition/physics groups remain under development.
 
 ### Retained layout example
 
@@ -217,6 +238,9 @@ renderer = WgpuRenderer(custom_shader=effect)
 
 ```text
 examples/reactive_runtime_demo.py
+examples/async_persistent_state_demo.py
+examples/component_lifecycle_demo.py
+examples/animation_timing_demo.py
 examples/core_widgets_demo.py
 examples/core_toggles_demo.py
 examples/range_progress_demo.py
@@ -261,13 +285,16 @@ Python Application API
         ├── App / Window / Component / State / ComputedState
         ├── retained widgets + complete 0.5 layout API
         ├── responsive layout / adaptive navigation / dynamic typography
-        ├── reactive properties / bindings / observable collections
+        ├── reactive properties / bindings / async + persistent state
+        ├── elapsed-time animation timing + serial sequence API
         ├── routed input + accessibility semantics
         └── runtime configuration + adaptive visual quality
         │
 SwirUI Runtime
         │
         ├── reactive dependency tracking + batched transactions
+        ├── retained component lifecycle + minimal-update coalescing
+        ├── window-scoped animation scheduling from frame telemetry
         ├── intrinsic measure → arrange + min/max constraints
         ├── compact / desktop / ultrawide logical-DIP policies
         ├── revision-aware retained layout invalidation cache
@@ -306,7 +333,8 @@ Every significant runtime change is expected to preserve the existing quality ga
 - HiDPI, multi-monitor, presentation-policy, text, image, path, effects and cache coverage
 - retained widget interaction, accessibility and real Win32 input/rendering coverage
 - intrinsic measurement, responsive reflow, adaptive navigation, dynamic typography and DPI-aware spacing coverage
-- reactive-runtime tests for dynamic dependencies, batching, computed chains, bindings, observable collections, disposal and exception flushing
+- reactive-runtime tests for dynamic dependencies, batching, computed chains, bindings, observable collections, async/persistent state, lifecycle, disposal and update coalescing
+- animation timing, sequence carry-over, cancellation, window scoping and reactive-state tween coverage
 - real custom-WGSL validation and persistent-runtime smoke coverage
 
 SwirUI does not claim performance superiority over other frameworks without reproducible measurements.
@@ -315,7 +343,7 @@ SwirUI does not claim performance superiority over other frameworks without repr
 
 The authoritative plan and its single roadmap progress graphic are in **[ROADMAP.md](ROADMAP.md)**.
 
-**0.5 Alpha — Layout Engine is complete. 0.6 Alpha — Reactive Runtime is underway.** The first verified 0.6 package adds computed state, dynamic dependency tracking, transactions, reactive properties, one-way/two-way bindings and observable collections. Async state, persistent state, lifecycle integration and minimal-update scheduling remain open. This does not imply beta or release readiness.
+**0.6 Alpha — Reactive Runtime is complete. 0.7 Alpha — Animation Engine is underway.** The first verified 0.7 package adds elapsed-time-driven tween timing, deterministic serial chaining/cancellation, window-scoped frame scheduling and reactive-state tweening. Visual transition families, physics, shared-element/page transitions, interaction animations, magnetic effects and particles remain open. This does not imply beta or release readiness.
 
 ## Releases
 
