@@ -211,7 +211,7 @@ class SceneNode:
         candidates = (
             (index, child)
             for index, child in enumerate(self.children)
-            if child._subtree_may_hit(point, world_transform, effective_clips)
+            if child._subtree_may_hit(point, world_transform)
         )
         ordered_children = sorted(
             candidates,
@@ -231,18 +231,16 @@ class SceneNode:
         self,
         point: Point,
         parent_transform: Affine2D = _IDENTITY_TRANSFORM,
-        inherited_clips: tuple[ClipRegion, ...] = (),
     ) -> bool:
         """Reject a subtree only when it is impossible for it to hit ``point``.
 
-        Leaf visuals cannot hit outside their fully composed transformed bounds, so
-        broad-phase culling can remove them before z-order sorting. Containers with
-        descendants stay eligible outside their bounds unless clipping is enabled
-        because SwirUI permits descendants to paint and receive input beyond an
-        unclipped parent. Exact transformed ancestor clips are checked first.
+        The caller has already verified every inherited clip for this pointer, so
+        the broad phase only evaluates this subtree's composed visual bounds. Leaf
+        visuals can be rejected immediately; unclipped containers with descendants
+        remain eligible outside their own bounds because descendants may overflow.
         """
 
-        if self.opacity <= 0.0 or not self._point_within_clips(point, inherited_clips):
+        if self.opacity <= 0.0:
             return False
         world_transform = _compose_transform(self.transform, parent_transform)
         if self._transformed_bounds_contains(point, world_transform):
