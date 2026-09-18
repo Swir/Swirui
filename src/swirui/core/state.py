@@ -291,7 +291,9 @@ class ComputedState(Generic[T]):
         identity = id(self)
         stack = _evaluation_stack.get()
         if identity in stack:
-            raise RuntimeError("Reactive dependency cycle detected while evaluating computed state.")
+            raise RuntimeError(
+                "Reactive dependency cycle detected while evaluating computed state."
+            )
 
         collector: list[_Dependency] = []
         collector_token: Token[list[_Dependency] | None] = _dependency_collector.set(collector)
