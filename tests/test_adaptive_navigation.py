@@ -89,7 +89,7 @@ def test_custom_breakpoints_and_variant_specs_reflow_same_children() -> None:
 
 
 def test_measure_accounts_for_navigation_extent_and_padding() -> None:
-    shell, _navigation, _content = _navigation()
+    shell, _nav_widget, _content_widget = _navigation()
 
     compact = shell.measure(Size(600.0, 420.0))
     desktop = shell.measure(Size(1000.0, 520.0))
