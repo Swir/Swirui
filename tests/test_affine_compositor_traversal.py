@@ -64,7 +64,10 @@ def test_affine_compositor_traversal_preserves_hierarchy_opacity_and_exact_clip(
     root.add(parent)
     scene = Scene(420.0, 300.0, root)
 
-    records = {node.key: (opacity, clips, transform) for node, opacity, clips, transform in scene.walk_composited_affine()}
+    records = {
+        node.key: (opacity, clips, transform)
+        for node, opacity, clips, transform in scene.walk_composited_affine()
+    }
 
     parent_opacity, parent_clips, parent_world = records["rotated-clip"]
     child_opacity, child_clips, child_world = records["translated-child"]
