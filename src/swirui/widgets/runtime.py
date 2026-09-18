@@ -162,7 +162,10 @@ def _scale_scene_subtree(node: SceneNode, scale: float, origin_x: float, origin_
     if node.blur_radius > 0.0:
         node.blur_radius *= scale
     if node.path is not None:
-        node.path = Path2D(tuple(Point(point.x * scale, point.y * scale) for point in node.path.points))
+        scaled_points = tuple(
+            Point(point.x * scale, point.y * scale) for point in node.path.points
+        )
+        node.path = Path2D(scaled_points)
     for child in node.children:
         _scale_scene_subtree(child, scale, origin_x, origin_y)
 
