@@ -79,7 +79,7 @@ class ParticleField(Widget):
             raise ValueError("particle_count must be between 1 and 4096.")
         palette = (_DEFAULT_PARTICLE_COLOR,) if colors is None else tuple(colors)
         if not palette:
-            raise ValueError("ParticleField requires at least one color.")
+            raise ValueError("ParticleField colors must contain at least one color.")
         self._speed_range = self._validate_range(speed_range, "speed_range", allow_zero=True)
         self._size_range = self._validate_range(size_range, "size_range", allow_zero=False)
         self._lifetime_range = self._validate_range(
