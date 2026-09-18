@@ -1,6 +1,7 @@
 import re
 import xml.etree.ElementTree as ET
 from pathlib import Path
+
 ROOT = Path(__file__).resolve().parents[1]
 LEGACY_PROGRESS_METER = re.compile(r"\[[█▓▒░#=\-\s]+\]\s*\d+(?:\.\d+)?%")
 
