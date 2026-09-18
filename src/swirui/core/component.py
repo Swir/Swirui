@@ -118,7 +118,7 @@ class Component(EventEmitter):
         del reason, source
 
     def on_unmount(self, window: Window) -> None:
-        """Lifecycle hook called once before this component becomes detached."""
+        """Lifecycle hook called after descendants detach from the hosting window."""
 
         del window
 
@@ -235,9 +235,9 @@ class Component(EventEmitter):
             return
         for child in reversed(self.children):
             child._unmount()
+        self._mounted_window = None
         self.on_unmount(window)
         self.emit("unmounted", window=window)
-        self._mounted_window = None
 
     def __iter__(self) -> Iterator[Component]:
         return iter(self.children)
