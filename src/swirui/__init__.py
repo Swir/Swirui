@@ -17,6 +17,8 @@ from .core import (
 )
 from .widgets import (
     Accordion,
+    AdaptiveNavigation,
+    AdaptiveNavigationSpec,
     Badge,
     Button,
     Card,
@@ -43,6 +45,7 @@ from .widgets import (
     LayoutDirection,
     MainAxisAlignment,
     Modal,
+    NavigationMode,
     Notification,
     Overlay,
     OverlayPlacement,
@@ -77,6 +80,8 @@ from .window import Window
 __all__ = [
     "AccessibilityNode",
     "AccessibilityRole",
+    "AdaptiveNavigation",
+    "AdaptiveNavigationSpec",
     "AdaptiveQualityController",
     "AdaptiveQualityDecision",
     "AdaptiveQualityPolicy",
@@ -111,6 +116,7 @@ __all__ = [
     "LayoutDirection",
     "MainAxisAlignment",
     "Modal",
+    "NavigationMode",
     "Notification",
     "Overlay",
     "OverlayPlacement",

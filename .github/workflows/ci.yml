@@ -203,6 +203,9 @@ jobs:
       - name: Verify responsive breakpoint layout
         run: pytest tests/test_windows_responsive_layout.py -q
 
+      - name: Verify adaptive navigation layout
+        run: pytest tests/test_windows_adaptive_navigation.py -q
+
       - name: Verify advanced Dock / Flow / Overlay / Constraint layouts
         run: pytest tests/test_windows_layout_advanced.py -q
 

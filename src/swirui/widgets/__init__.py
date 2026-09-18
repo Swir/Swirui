@@ -23,6 +23,7 @@ from .layout_advanced import (
     OverlayPlacement,
 )
 from .layout_panels import Grid, Stack, Wrap
+from .navigation import AdaptiveNavigation, AdaptiveNavigationSpec, NavigationMode
 from .overlays import Dialog, Modal, Notification, Toast
 from .progress import ProgressBar, ProgressRing
 from .responsive import (
@@ -51,6 +52,8 @@ from .tooltip import Tooltip
 
 __all__ = [
     "Accordion",
+    "AdaptiveNavigation",
+    "AdaptiveNavigationSpec",
     "Badge",
     "Button",
     "Card",
@@ -77,6 +80,7 @@ __all__ = [
     "LayoutDirection",
     "MainAxisAlignment",
     "Modal",
+    "NavigationMode",
     "Notification",
     "Overlay",
     "OverlayPlacement",
