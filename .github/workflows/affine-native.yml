@@ -84,7 +84,7 @@ jobs:
         run: cargo check --manifest-path native/Cargo.toml --all-targets
 
       - name: Test native affine Rust contract
-        run: cargo test --manifest-path native/Cargo.toml --lib affine::tests shape::tests
+        run: cargo test --manifest-path native/Cargo.toml --lib
 
       - name: Build PyO3 extension
         working-directory: native
