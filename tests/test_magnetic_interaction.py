@@ -94,10 +94,10 @@ def test_magnetic_interaction_retargets_from_current_presented_offset() -> None:
 
 def test_pointer_leave_disable_and_dispose_restore_authored_idle_offset() -> None:
     controller, button, interaction = _runtime()
-    button.visual_offset = Point(2.0, 3.0)
     interaction.dispose()
-
+    button.visual_offset = Point(2.0, 3.0)
     interaction = MagneticInteraction(controller, button)
+
     _move(button, 300.0, 110.0)
     controller.tick(0.04)
     assert button.visual_offset != Point(2.0, 3.0)
