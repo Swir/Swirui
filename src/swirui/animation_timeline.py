@@ -133,20 +133,22 @@ class RepeatAnimation:
             return remaining
 
         while self._status is AnimationStatus.RUNNING:
-            if self.animation.status is AnimationStatus.CANCELLED:
+            status_before = self.animation.status
+            if status_before is AnimationStatus.CANCELLED:
                 self._status = AnimationStatus.CANCELLED
                 return remaining
-            if self.animation.status is AnimationStatus.IDLE:
+            if status_before is AnimationStatus.IDLE:
                 raise RuntimeError("Repeated animation returned to IDLE while running.")
 
             before = remaining
             remaining = _valid_tail(self.animation.advance(remaining), before)
-            if self.animation.status is AnimationStatus.CANCELLED:
+            status_after = self.animation.status
+            if status_after is AnimationStatus.CANCELLED:
                 self._status = AnimationStatus.CANCELLED
                 return remaining
-            if self.animation.status is AnimationStatus.RUNNING:
+            if status_after is AnimationStatus.RUNNING:
                 return remaining
-            if self.animation.status is not AnimationStatus.COMPLETED:
+            if status_after is not AnimationStatus.COMPLETED:
                 raise RuntimeError("Repeated animation entered an unsupported status.")
 
             self._completed_iterations += 1
@@ -158,7 +160,8 @@ class RepeatAnimation:
             self._consume_immediate_completions()
             if self._status is not AnimationStatus.RUNNING or remaining <= 0.0:
                 return remaining
-            if self.animation.status is AnimationStatus.RUNNING and remaining == before:
+            restarted_status = self.animation.status
+            if restarted_status is AnimationStatus.RUNNING and remaining == before:
                 return remaining
 
         return remaining
