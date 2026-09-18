@@ -9,34 +9,19 @@ from swirui.window import Window
 
 from .affine import Affine2D
 from .custom_wgpu_renderer import WgpuRenderer as _CustomWgpuRenderer
-from .geometry import Rect
+from .geometry import Color, Rect
 from .scene import ClipRegion, Scene, SceneNodeKind
 from .wgpu_renderer import ImageInstance, RectangleInstance, TextInstance
 
-AffineShapeVertex: TypeAlias = tuple[
-    float,
-    float,
-    float,
-    float,
-    float,
-    float,
-    float,
-    float,
-    float,
-    float,
-    float,
-    float,
-    float,
-    float,
-    float,
-    float,
-]
+AffineShapeVertex: TypeAlias = tuple[float, ...]
 AffineScenePayload: TypeAlias = tuple[
     list[RectangleInstance],
     list[TextInstance],
     list[ImageInstance],
     list[AffineShapeVertex],
 ]
+
+_DEFAULT_TEXT_COLOR = Color(1.0, 1.0, 1.0, 1.0)
 
 
 class WgpuRenderer(_CustomWgpuRenderer):
@@ -178,11 +163,7 @@ class WgpuRenderer(_CustomWgpuRenderer):
                 clip = self._resolved_affine_clip(scene, clips)
                 if clip is None or node.bounds.intersection(clip) is None:
                     continue
-                fill = node.fill
-                if fill is None:
-                    from .wgpu_renderer import _DEFAULT_TEXT_COLOR
-
-                    fill = _DEFAULT_TEXT_COLOR
+                fill = node.fill or _DEFAULT_TEXT_COLOR
                 texts.append(
                     (
                         node.text,
