@@ -8,7 +8,7 @@
 
 **Overall completion: 68%**
 
-Progress is based on implemented and verified roadmap work. Ideas, mockups and unfinished prototypes do not increase the percentage. The current weighted model preserves the verified 56% baseline through completed 0.4 Core Widgets, then adds one percentage point for each verified 0.5 Layout Engine group. Release readiness is tracked separately from project completion. The 0.6 checklist records newly verified reactive-runtime scope without inventing a new weighting rule or double-counting the foundational `State` work already represented earlier in the roadmap.
+Progress is based on implemented and verified roadmap work. Ideas, mockups and unfinished prototypes do not increase the percentage. The current weighted model preserves the verified 56% baseline through completed 0.4 Core Widgets, then adds one percentage point for each verified 0.5 Layout Engine group. Release readiness is tracked separately from project completion. The completed 0.6 checklist records verified reactive-runtime scope without inventing a new weighting rule or double-counting the foundational `State` work already represented earlier in the roadmap.
 
 ---
 
@@ -175,7 +175,7 @@ Layout spacing and padding remain authored in logical DIPs across monitor-scale 
 
 ## 0.6 Alpha — Reactive Runtime
 
-**Status:** Underway 🚧 — 8 / 12 groups verified
+**Status:** Complete ✅ — 12 / 12 groups verified
 
 - [x] Basic thread-safe `State`
 - [x] Computed state
@@ -184,15 +184,19 @@ Layout spacing and padding remain authored in logical DIPs across monitor-scale 
 - [x] Two-way binding
 - [x] Observable collections
 - [x] Dependency tracking
-- [ ] Async state
-- [ ] Persistent state
-- [ ] Component lifecycle hooks
-- [ ] Minimal-update scheduling
+- [x] Async state
+- [x] Persistent state
+- [x] Component lifecycle hooks
+- [x] Minimal-update scheduling
 - [x] Batched state transactions
 
-### Verified 0.6 slice
+### 0.6 gate
 
-`ComputedState` is read-only and discovers dependencies dynamically from reactive reads. Nested `state_transaction()` scopes coalesce notifications and recompute computed chains in dependency order at the outer boundary. `ReactiveProperty`, disposable one-way/two-way bindings, `ObservableList` and `ObservableDict` are public Python APIs with deterministic coverage for dependency switching, batching, disposal, observable snapshots and exception flushing. The merged implementation passed the full repository CI gate before these checklist items were credited. Async state, persistent state, component lifecycle integration and minimal-update scheduling remain open.
+The Reactive Runtime gate is complete with all 12 named groups implemented and verified. `ComputedState` discovers dependencies dynamically from reactive reads, while nested `state_transaction()` scopes coalesce notifications and recompute computed chains in dependency order at the outer boundary. `ReactiveProperty`, disposable one-way/two-way bindings, `ObservableList` and `ObservableDict` provide deterministic public Python APIs for retained application state.
+
+`AsyncState` adds asyncio-backed task lifecycle with replacement cancellation, stale-completion protection and reactive ready/error/cancelled snapshots. `PersistentState` adds versioned JSON persistence with atomic writes, codecs, reload/reset/persist support and failure-before-publication behavior. Mounted components expose parent-first `on_mount`, bubbled `on_update` and child-first `on_unmount` lifecycle hooks, including automatic lifecycle propagation for dynamically inserted/removed children and Window/runtime teardown. During reactive transactions, repeated invalidations for one `WidgetRuntime` are coalesced into a single retained SceneGraph rebuild after state notifications and computed dependencies settle, while immediate updates outside transactions and independent runtime scheduling are preserved.
+
+The implementation passed the full repository CI gate across Python 3.11–3.14, Ruff, strict Mypy, retained-runtime performance budgets, Rust/wgpu/PyO3 checks, Linux/X11, macOS/Cocoa and real Win32+wGPU smoke coverage before the final two lifecycle/scheduling checklist items were credited. Completion applies only to the named 0.6 milestone and does not imply beta or public release readiness.
 
 ## 0.7 Alpha — Animation Engine
 
@@ -440,7 +444,7 @@ AI output must remain ordinary, editable SwirUI code.
 - [x] Windows advanced Dock / Flow / Overlay / ConstraintLayout + persistent wgpu smoke test
 - [x] DPI-aware logical spacing / padding conversion coverage
 - [x] Retained layout invalidation optimization coverage
-- [x] Reactive runtime computed state / bindings / observable collections / transaction coverage
+- [x] Reactive runtime computed state / bindings / observable collections / async + persistent state / component lifecycle / transaction-scoped retained-update coverage
 - [ ] Screenshot tests
 - [ ] Visual regression tests
 - [x] Accessibility tests
