@@ -14,7 +14,7 @@ def test_persistent_state_starts_from_default_without_eager_file(tmp_path: Path)
 
     assert state.value == "dark"
     assert state.path == path
-    assert path.exists() is False
+    assert not path.exists()
 
 
 def test_persistent_state_set_is_atomic_and_reactive(tmp_path: Path) -> None:
@@ -30,7 +30,7 @@ def test_persistent_state_set_is_atomic_and_reactive(tmp_path: Path) -> None:
         "schema": 1,
         "value": 70,
     }
-    assert list(tmp_path.glob(".*.tmp")) == []
+    assert not list(tmp_path.glob(".*.tmp"))
 
     restored = PersistentState(path, 0)
     assert restored.value == 70
@@ -91,7 +91,7 @@ def test_persistent_state_failed_encoding_does_not_publish_change(tmp_path: Path
 
     assert state.value == 1
     assert values == []
-    assert path.exists() is False
+    assert not path.exists()
 
 
 def test_persistent_state_rejects_corrupt_or_unknown_schema(tmp_path: Path) -> None:
