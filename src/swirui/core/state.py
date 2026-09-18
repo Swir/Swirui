@@ -48,6 +48,7 @@ class _BatchRuntime(local):
         self.flushing = False
         self.pending_notifications: dict[object, Callable[[], None]] = {}
         self.pending_computed: dict[ComputedState[Any], None] = {}
+        self.pending_updates: dict[object, Callable[[], None]] = {}
 
 
 _batch_runtime = _BatchRuntime()
@@ -66,6 +67,22 @@ def _schedule_computed(state: ComputedState[Any]) -> None:
         _batch_runtime.pending_computed.setdefault(state, None)
         return
     state._recompute()
+
+
+def schedule_reactive_update(key: object, callback: Callable[[], None]) -> None:
+    """Run or coalesce one retained update at the current transaction boundary.
+
+    Outside a reactive transaction the callback runs immediately. While an outer
+    ``state_transaction()`` is active, or while its dependency graph is flushing,
+    callbacks sharing ``key`` collapse into one invocation after all queued state
+    notifications and computed recomputations settle. WidgetRuntime uses itself as
+    the key so one affected retained tree is rebuilt at most once per transaction.
+    """
+
+    if _defer_notifications():
+        _batch_runtime.pending_updates.setdefault(key, callback)
+        return
+    callback()
 
 
 def _flush_computed() -> None:
@@ -91,6 +108,7 @@ def _flush_batch() -> None:
         return
 
     _batch_runtime.flushing = True
+    updates: tuple[Callable[[], None], ...] = ()
     try:
         while _batch_runtime.pending_notifications or _batch_runtime.pending_computed:
             if _batch_runtime.pending_notifications:
@@ -99,8 +117,13 @@ def _flush_batch() -> None:
                 for callback in callbacks:
                     callback()
             _flush_computed()
+        updates = tuple(_batch_runtime.pending_updates.values())
+        _batch_runtime.pending_updates.clear()
     finally:
         _batch_runtime.flushing = False
+
+    for callback in updates:
+        callback()
 
 
 @contextmanager
@@ -109,6 +132,8 @@ def state_transaction() -> Iterator[None]:
 
     Transactions coalesce notifications; they are not rollback boundaries. If an exception
     leaves the block, writes that already happened remain applied and are flushed normally.
+    Retained UI updates requested by transaction subscribers are also coalesced per runtime
+    and run only after the dependency graph reaches a stable value.
     """
 
     _batch_runtime.depth += 1
