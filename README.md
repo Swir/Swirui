@@ -17,7 +17,7 @@
 
 [![CI](https://img.shields.io/github/actions/workflow/status/Swir/Swirui/ci.yml?branch=main&style=flat-square&label=CI&color=0088FF)](https://github.com/Swir/Swirui/actions/workflows/ci.yml)
 ![Status](https://img.shields.io/badge/status-pre--alpha-0088FF?style=flat-square)
-![Progress](https://img.shields.io/badge/project%20progress-59%25-0088FF?style=flat-square)
+![Progress](https://img.shields.io/badge/project%20progress-61%25-0088FF?style=flat-square)
 
 </div>
 
@@ -25,11 +25,11 @@
 
 ## Project Status
 
-<img width="100%" src="assets/readme/progress-card.svg" alt="SwirUI project progress: 59.0% — 0.5 Alpha Layout Engine in progress; 3 of 12 layout groups verified">
+<img width="100%" src="assets/readme/progress-card.svg" alt="SwirUI project progress: 61.0% — 0.5 Alpha Layout Engine in progress; 5 of 12 layout groups verified">
 
-**59% — 0.5 Alpha Layout Engine underway; Row/Column, Stack/Grid/Wrap and min/max constraints are implemented and verified.**
+**61% — 0.5 Alpha Layout Engine underway; Row/Column, Stack/Grid/Wrap, DockPanel/Flow/Overlay, ConstraintLayout and min/max constraints are implemented and verified.**
 
-`[████████████░░░░░░░░] 59%`
+`[████████████░░░░░░░░] 61%`
 
 - `0.1 Alpha — Foundation` ✅
 - `0.2 Alpha — Native Window + First Renderer` ✅
@@ -47,7 +47,7 @@ SwirUI is being built as a complete Python desktop application framework rather 
 
 The Windows renderer uses a persistent per-window wgpu context and retained SceneGraph. Linux/X11 and macOS/Cocoa already provide real native window and input backends. GPU presentation on Linux/macOS and Wayland support remain future work and are not claimed as complete.
 
-The active layout layer now prepares retained widget geometry before descendant SceneGraph compilation. This keeps layout policy in the Python public/runtime layer while reusing the same native GPU renderer, HiDPI boundary, routed input and persistent per-window wgpu context.
+The active layout layer now prepares retained widget geometry before descendant SceneGraph compilation. It includes linear, stacked, grid, wrapping, docking, flow, overlay and parent-relative constraint containers while keeping authored preferred sizes separate from arranged bounds across reflow. This keeps layout policy in the Python public/runtime layer while reusing the same native GPU renderer, HiDPI boundary, routed input and persistent per-window wgpu context.
 
 ## Highlights
 
@@ -66,7 +66,7 @@ The active layout layer now prepares retained widget geometry before descendant 
 | Post-processing | Persistent scene blur, affine RGBA color filters and validated custom WGSL effects |
 | Custom shaders | Bounded Python `CustomShaderEffect` API, native Naga validation, persistent GPU pass and bounded pipeline reuse |
 | Core widgets | Retained Text/Label, Button/IconButton, text inputs, toggles, Slider/RangeSlider, determinate progress, Badge/Chip, Tooltip, Panel/Frame, Card/GlassCard, ScrollView, Expander/Accordion, SplitView, Modal/Dialog and Toast/Notification |
-| Layout engine | Retained Row/Column, Stack, weighted Grid and Wrap with logical-DIP padding/spacing/alignment, viewport reflow, weighted grow/shrink and min/max constraints |
+| Layout engine | Retained Row/Column, Stack, weighted Grid, Wrap, DockPanel, bidirectional Flow, independently aligned Overlay and parent-relative ConstraintLayout with logical-DIP spacing/alignment, viewport reflow and min/max constraints |
 | Performance | Adaptive visual-quality profiles plus retained effect and GPU resource caches |
 | Accessibility | Semantic roles/tree, keyboard focus routing, keyboard-only traversal, checked state, numeric value/range and dialog/alert semantics |
 
@@ -89,7 +89,7 @@ Run the native-window demo:
 python examples/native_window_demo.py
 ```
 
-Try the retained core widgets and first verified layout containers:
+Try the retained core widgets and verified layout containers:
 
 ```powershell
 python examples/core_widgets_demo.py
@@ -102,6 +102,7 @@ python examples/core_split_view_demo.py
 python examples/core_overlays_demo.py
 python examples/layout_row_column_demo.py
 python examples/layout_panels_demo.py
+python examples/layout_advanced_demo.py
 ```
 
 ### Windows GPU development
@@ -186,7 +187,7 @@ row.add(primary, secondary)
 mount(window, row)
 ```
 
-Layout geometry remains in logical DIPs. The retained layout pass runs before child SceneGraph compilation, so the arranged bounds are used by rendering and hit testing without recreating the native GPU context.
+Layout geometry remains in logical DIPs. The retained layout pass runs before child SceneGraph compilation, so the arranged bounds are used by rendering and hit testing without recreating the native GPU context. Parent arrangement also preserves each widget's explicitly authored preferred size, avoiding cumulative measurement drift across later reflows.
 
 ### Bounded custom WGSL effect
 
@@ -225,6 +226,7 @@ examples/core_split_view_demo.py
 examples/core_overlays_demo.py
 examples/layout_row_column_demo.py
 examples/layout_panels_demo.py
+examples/layout_advanced_demo.py
 examples/gpu_rectangles_demo.py
 examples/gpu_text_demo.py
 examples/gpu_image_demo.py
@@ -256,12 +258,13 @@ Python Application API
         │
         ├── App / Window / Component / State
         ├── retained widgets + Row / Column / Stack / Grid / Wrap
+        ├── DockPanel / Flow / Overlay / ConstraintLayout
         ├── routed input + accessibility semantics
         └── runtime configuration + adaptive visual quality
         │
 SwirUI Runtime
         │
-        ├── retained layout preparation + min/max constraints
+        ├── retained layout preparation + min/max constraints + stable preferred sizing
         ├── Win32 / X11 / Cocoa native backends
         ├── logical DIP ↔ physical pixel boundary
         ├── retained RenderTree / SceneGraph
@@ -299,17 +302,18 @@ Every significant runtime change is expected to preserve the existing quality ga
 - HiDPI, multi-monitor, presentation-policy, text, image, path, effects and cache coverage
 - retained widget interaction, accessibility and real Win32 input/rendering coverage
 - retained layout measurement/reflow, arranged hit testing and persistent Win32/wgpu-context coverage
+- advanced Dock/Flow/Overlay/ConstraintLayout arrangement and persistent Win32/wgpu-context coverage
 - real custom-WGSL validation and persistent-runtime smoke coverage
 
 SwirUI does not claim performance superiority over other frameworks without reproducible measurements.
 
 ## Roadmap
 
-<img width="100%" src="assets/readme/progress-mini.svg" alt="SwirUI roadmap progress: 59.0% — 3 of 12 Layout Engine groups verified">
+<img width="100%" src="assets/readme/progress-mini.svg" alt="SwirUI roadmap progress: 61.0% — 5 of 12 Layout Engine groups verified">
 
 The authoritative plan is **[ROADMAP.md](ROADMAP.md)**.
 
-**0.5 Alpha — Layout Engine** is underway. The verified foundation includes Row/Column, Stack/weighted Grid/Wrap and shared min/max constraints with weighted grow/shrink sizing, nested layout preparation and viewport reflow. The remaining layout groups — beginning with Dock/Flow/Overlay and deeper constraint/intrinsic sizing work — are still open; this milestone is not complete and does not imply release readiness.
+**0.5 Alpha — Layout Engine** is underway. The verified foundation now includes Row/Column, Stack/weighted Grid/Wrap, DockPanel/Flow/Overlay, parent-relative ConstraintLayout and shared min/max constraints with weighted grow/shrink sizing, nested layout preparation and viewport reflow. Parent arrangement preserves authored preferred sizes across reflow, but the broader intrinsic-sizing group remains open. The remaining layout groups begin with intrinsic sizing and responsive breakpoints; this milestone is not complete and does not imply release readiness.
 
 ## Releases
 

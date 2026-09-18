@@ -4,9 +4,9 @@
 
 ## Project progress
 
-**Overall completion: 59%**
+**Overall completion: 61%**
 
-`[████████████░░░░░░░░] 59%`
+`[████████████░░░░░░░░] 61%`
 
 Progress is based on implemented and verified roadmap work. Ideas, mockups and unfinished prototypes do not increase the percentage.
 
@@ -156,8 +156,8 @@ The Core Widgets gate is complete with all 15 retained widget groups implemented
 
 - [x] Row / Column
 - [x] Stack / Grid / Wrap
-- [ ] Dock / Flow / Overlay
-- [ ] Constraint layout
+- [x] Dock / Flow / Overlay
+- [x] Constraint layout
 - [ ] Intrinsic sizing
 - [x] Min / max constraints
 - [ ] Responsive breakpoints
@@ -169,7 +169,7 @@ The Core Widgets gate is complete with all 15 retained widget groups implemented
 
 ### 0.5 verified foundation
 
-The first verified layout foundation provides retained `Row`, `Column`, `Stack`, weighted `Grid` and `Wrap` containers with logical-DIP padding, spacing, alignment and viewport reflow. Widget-level min/max constraints plus weighted grow/shrink sizing are applied before descendant SceneGraph compilation, including nested layouts, without recursively invalidating the tree from inside the same layout pass. Deterministic component tests and real Win32/wgpu smoke coverage verify routed pointer input through arranged bounds and persistent per-window GPU-context reuse. The remaining 0.5 groups are still open and the milestone is not complete.
+The verified layout foundation provides retained `Row`, `Column`, `Stack`, weighted `Grid`, `Wrap`, `DockPanel`, bidirectional `Flow`, independently aligned `Overlay` and parent-relative `ConstraintLayout` containers with logical-DIP padding, spacing, alignment and viewport reflow. Widget-level min/max constraints plus weighted grow/shrink sizing are applied before descendant SceneGraph compilation, including nested layouts, without recursively invalidating the tree from inside the same layout pass. Parent arrangement now preserves explicitly authored preferred sizes separately from arranged bounds so repeated reflow does not destroy a widget's measurement baseline; this is groundwork for the still-open broader intrinsic-sizing group rather than completion of it. Deterministic component tests and real Win32/wgpu smoke coverage verify routed pointer input through arranged bounds and persistent per-window GPU-context reuse. The remaining 0.5 groups are still open and the milestone is not complete.
 
 ## 0.6 Alpha — Reactive Runtime
 
@@ -426,6 +426,7 @@ AI output must remain ordinary, editable SwirUI code.
 - [x] Windows retained SplitView + persistent wgpu smoke test
 - [x] Windows retained Modal / Dialog + Toast / Notification + persistent wgpu smoke test
 - [x] Windows retained layout engine + persistent wgpu smoke test
+- [x] Windows advanced Dock / Flow / Overlay / ConstraintLayout + persistent wgpu smoke test
 - [ ] Screenshot tests
 - [ ] Visual regression tests
 - [x] Accessibility tests
