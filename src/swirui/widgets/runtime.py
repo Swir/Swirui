@@ -223,8 +223,11 @@ class WidgetRuntime:
         if root is not None and root.mounted_window is self.window:
             root._unmount()
 
+    def _rebuild_scheduled(self) -> None:
+        self.rebuild()
+
     def _on_root_invalidated(self, _event: Event) -> None:
-        schedule_reactive_update(self, self.rebuild)
+        schedule_reactive_update(self, self._rebuild_scheduled)
 
     def _on_window_resized(self, _event: Event) -> None:
         self.rebuild()
