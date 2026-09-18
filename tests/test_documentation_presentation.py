@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import re
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 README = ROOT / "README.md"
 ROADMAP = ROOT / "ROADMAP.md"
+TEMPLATE = ROOT / "assets" / "readme" / "progress-template.svg"
 
 # Catch old block-character meters and common bracketed ASCII meters without
 # confusing Markdown headings, checklist boxes, tables or directory trees.
@@ -20,6 +22,7 @@ def test_readme_uses_v2_standard_and_one_project_progress_card() -> None:
     assert readme.startswith("<!-- SWIR-README-STANDARD:v2 -->")
     assert readme.count('src="assets/readme/progress-card.svg"') == 1
     assert 'src="assets/readme/progress-mini.svg"' not in readme
+    assert "progress-template.svg" not in readme
     assert "## 🔎 Search Keywords" in readme
     assert _LEGACY_METER.search(readme) is None
 
@@ -29,7 +32,17 @@ def test_roadmap_uses_one_mini_without_legacy_meter_or_duplicate_card() -> None:
 
     assert roadmap.count('src="assets/readme/progress-mini.svg"') == 1
     assert 'src="assets/readme/progress-card.svg"' not in roadmap
+    assert "progress-template.svg" not in roadmap
     assert _LEGACY_METER.search(roadmap) is None
+
+
+def test_progress_template_is_valid_explicitly_non_live_svg() -> None:
+    template = TEMPLATE.read_text(encoding="utf-8")
+
+    ET.fromstring(template)
+    assert "TEMPLATE / NOT PROJECT DATA" in template
+    assert ">N/A<" in template
+    assert "live project percentage" in template
 
 
 def test_verified_runtime_status_is_recorded_without_changing_weighted_percentage() -> None:
