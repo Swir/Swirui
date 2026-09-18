@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import TypeAlias
 
 from swirui.core import Component
@@ -9,7 +10,7 @@ from swirui.window import Window
 
 from .affine import Affine2D
 from .custom_wgpu_renderer import WgpuRenderer as _CustomWgpuRenderer
-from .geometry import Color, Rect
+from .geometry import Color, CornerRadius, Point, Rect
 from .scene import ClipRegion, Scene, SceneNodeKind
 from .wgpu_renderer import ImageInstance, RectangleInstance, TextInstance
 
@@ -22,22 +23,23 @@ AffineScenePayload: TypeAlias = tuple[
 ]
 
 _DEFAULT_TEXT_COLOR = Color(1.0, 1.0, 1.0, 1.0)
+_ROUNDED_CORNER_SEGMENTS = 8
 
 
 class WgpuRenderer(_CustomWgpuRenderer):
-    """Persistent renderer with the first native affine GPU-compositor slice.
+    """Persistent renderer with verified retained affine GPU-compositor slices.
 
     Non-affine scenes keep the existing mature renderer path unchanged. Scenes
     containing retained transforms use the exact ``walk_composited_affine``
-    hierarchy. This first GPU slice supports arbitrary affine transforms for
-    filled ``Path2D`` geometry while preserving inherited opacity, HiDPI scaling,
-    painter ordering inside the existing primitive batches and persistent native
-    wgpu contexts.
+    hierarchy. Arbitrary affine transforms are currently supported for filled
+    ``Path2D`` geometry and solid/rounded rectangle fills through the native
+    affine shape pipeline, while preserving inherited opacity, HiDPI scaling,
+    persistent native wgpu contexts and axis-aligned clipping.
 
-    Rectangle, shaped-text and image raster transforms remain deliberately gated
-    until their native pipelines consume the same affine contract. Transformed
-    clip regions are accepted only when they remain axis-aligned; rotated/sheared
-    clipping also stays gated rather than being approximated by a bounding box.
+    Shaped-text and image raster transforms remain deliberately gated until their
+    native pipelines consume the same affine contract. Transformed clip regions
+    are accepted only when they remain axis-aligned; rotated/sheared clipping
+    also stays gated rather than being approximated by a bounding box.
     """
 
     def render(self, window: Window, root: Component | None) -> None:
@@ -125,35 +127,45 @@ class WgpuRenderer(_CustomWgpuRenderer):
             if node.kind in (SceneNodeKind.GROUP, SceneNodeKind.RECTANGLE):
                 if node.fill is None:
                     continue
-                self._require_identity_raster_transform(node.kind, world_transform)
                 if node.bounds.width <= 0.0 or node.bounds.height <= 0.0:
                     continue
                 clip = self._resolved_affine_clip(scene, clips)
-                if clip is None or node.bounds.intersection(clip) is None:
+                visual_bounds = world_transform.transform_rect_bounds(node.bounds)
+                if clip is None or visual_bounds.intersection(clip) is None:
                     continue
+
                 rect_fill = node.fill
                 radius = node.corner_radius
-                clip_left, clip_top, clip_right, clip_bottom = self._clip_tuple(clip, scale)
-                rectangles.append(
-                    (
-                        self._scale(node.bounds.x, scale),
-                        self._scale(node.bounds.y, scale),
-                        self._scale(node.bounds.width, scale),
-                        self._scale(node.bounds.height, scale),
-                        rect_fill.r,
-                        rect_fill.g,
-                        rect_fill.b,
-                        rect_fill.a * effective_opacity,
-                        self._scale(radius.top_left, scale),
-                        self._scale(radius.top_right, scale),
-                        self._scale(radius.bottom_right, scale),
-                        self._scale(radius.bottom_left, scale),
-                        clip_left,
-                        clip_top,
-                        clip_right,
-                        clip_bottom,
+                clip_tuple = self._clip_tuple(clip, scale)
+                if world_transform.is_identity:
+                    rectangles.append(
+                        (
+                            self._scale(node.bounds.x, scale),
+                            self._scale(node.bounds.y, scale),
+                            self._scale(node.bounds.width, scale),
+                            self._scale(node.bounds.height, scale),
+                            rect_fill.r,
+                            rect_fill.g,
+                            rect_fill.b,
+                            rect_fill.a * effective_opacity,
+                            self._scale(radius.top_left, scale),
+                            self._scale(radius.top_right, scale),
+                            self._scale(radius.bottom_right, scale),
+                            self._scale(radius.bottom_left, scale),
+                            *clip_tuple,
+                        )
                     )
-                )
+                else:
+                    self._append_affine_rectangle(
+                        paths,
+                        node.bounds,
+                        radius,
+                        rect_fill,
+                        effective_opacity,
+                        clip_tuple,
+                        world_transform,
+                        scale,
+                    )
                 continue
 
             if node.kind is SceneNodeKind.TEXT:
@@ -245,6 +257,105 @@ class WgpuRenderer(_CustomWgpuRenderer):
                     )
 
         return rectangles, texts, images, paths
+
+    def _append_affine_rectangle(
+        self,
+        paths: list[AffineShapeVertex],
+        bounds: Rect,
+        radius: CornerRadius,
+        fill: Color,
+        effective_opacity: float,
+        clip: tuple[float, float, float, float],
+        transform: Affine2D,
+        scale: float,
+    ) -> None:
+        outline = self._rounded_rectangle_outline(bounds, radius)
+        if len(outline) < 3:
+            return
+
+        physical_transform = self._physical_affine(transform, scale)
+        alpha = fill.a * effective_opacity
+        anchor = outline[0]
+        for index in range(1, len(outline) - 1):
+            for point in (anchor, outline[index], outline[index + 1]):
+                paths.append(
+                    (
+                        self._scale(point.x, scale),
+                        self._scale(point.y, scale),
+                        fill.r,
+                        fill.g,
+                        fill.b,
+                        alpha,
+                        *clip,
+                        *physical_transform,
+                    )
+                )
+
+    @staticmethod
+    def _rounded_rectangle_outline(
+        bounds: Rect,
+        radius: CornerRadius,
+    ) -> tuple[Point, ...]:
+        max_radius = min(bounds.width, bounds.height) * 0.5
+        radii = (
+            min(radius.top_left, max_radius),
+            min(radius.top_right, max_radius),
+            min(radius.bottom_right, max_radius),
+            min(radius.bottom_left, max_radius),
+        )
+        points: list[Point] = []
+
+        def append_point(point: Point) -> None:
+            if not points or points[-1] != point:
+                points.append(point)
+
+        def append_arc(
+            center_x: float,
+            center_y: float,
+            corner_radius: float,
+            start_angle: float,
+        ) -> None:
+            if corner_radius == 0.0:
+                append_point(Point(center_x, center_y))
+                return
+            step = (math.pi * 0.5) / _ROUNDED_CORNER_SEGMENTS
+            for segment in range(_ROUNDED_CORNER_SEGMENTS + 1):
+                angle = start_angle + step * segment
+                append_point(
+                    Point(
+                        center_x + math.cos(angle) * corner_radius,
+                        center_y + math.sin(angle) * corner_radius,
+                    )
+                )
+
+        top_left, top_right, bottom_right, bottom_left = radii
+        append_arc(
+            bounds.x + top_left,
+            bounds.y + top_left,
+            top_left,
+            math.pi,
+        )
+        append_arc(
+            bounds.right - top_right,
+            bounds.y + top_right,
+            top_right,
+            math.pi * 1.5,
+        )
+        append_arc(
+            bounds.right - bottom_right,
+            bounds.bottom - bottom_right,
+            bottom_right,
+            0.0,
+        )
+        append_arc(
+            bounds.x + bottom_left,
+            bounds.bottom - bottom_left,
+            bottom_left,
+            math.pi * 0.5,
+        )
+        if len(points) > 1 and points[0] == points[-1]:
+            points.pop()
+        return tuple(points)
 
     @staticmethod
     def _require_identity_raster_transform(
