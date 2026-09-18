@@ -27,16 +27,16 @@
 
 <img width="100%" src="assets/readme/progress-card.svg" alt="SwirUI project progress: 68.0% — 0.5 Alpha Layout Engine complete; 12 of 12 layout groups verified">
 
-**68% project progress — 0.5 Alpha Layout Engine is complete with all 12 named layout groups implemented and verified.**
+**68% authoritative weighted project progress — 0.5 Alpha Layout Engine is complete; 0.6 Alpha Reactive Runtime is underway.**
 
 - `0.1 Alpha — Foundation` ✅
 - `0.2 Alpha — Native Window + First Renderer` ✅
 - `0.3 Alpha — Visual Engine` ✅
 - `0.4 Alpha — Core Widgets` ✅
 - `0.5 Alpha — Layout Engine` ✅
-- `0.6 Alpha — Reactive Runtime` is the next active milestone
+- `0.6 Alpha — Reactive Runtime` 🚧
 
-Progress increases only for implemented and verified roadmap work. Documentation-only changes, skeletons and unfinished experiments do not increase the percentage. Release readiness is separate from project completion.
+The current published percentage preserves the verified weighting documented in `ROADMAP.md` through completed 0.5. New 0.6 functionality is tracked by its checklist until the next weighting extension is explicitly documented; it is never double-counted or used to invent release readiness.
 
 SwirUI remains **pre-alpha**. Public APIs may still change while the reactive, animation and professional-widget layers are developed. There is no public GitHub Release yet.
 
@@ -46,7 +46,7 @@ SwirUI is being built as a complete Python desktop application framework rather 
 
 The Windows renderer uses a persistent per-window wgpu context and retained SceneGraph. Linux/X11 and macOS/Cocoa already provide real native window and input backends. GPU presentation on Linux/macOS and Wayland support remain future work and are not claimed as complete.
 
-The completed 0.5 layout layer prepares retained widget geometry before descendant SceneGraph compilation. It combines content-aware intrinsic measurement, min/max constraints, responsive compact/desktop/ultrawide policies, adaptive navigation, dynamic typography, DPI-stable logical spacing and revision-aware layout caching while preserving component identity, focus state and the existing native GPU renderer.
+The completed 0.5 layout layer provides content-aware intrinsic measurement, min/max constraints, responsive compact/desktop/ultrawide policies, adaptive navigation, dynamic typography, DPI-stable logical spacing and revision-aware layout caching. The active 0.6 runtime now adds computed state with dynamic dependency tracking, batched transactions, reactive properties, one-way/two-way bindings and observable list/dict collections.
 
 ## Highlights
 
@@ -64,10 +64,10 @@ The completed 0.5 layout layer prepares retained widget geometry before descenda
 | Materials | Native backdrop blur, `FrostedGlass` and `Acrylic` with deterministic grain |
 | Post-processing | Persistent scene blur, affine RGBA color filters and validated custom WGSL effects |
 | Custom shaders | Bounded Python `CustomShaderEffect` API, native Naga validation, persistent GPU pass and bounded pipeline reuse |
-| Core widgets | Retained Text/Label, Button/IconButton, text inputs, toggles, Slider/RangeSlider, determinate progress, Badge/Chip, Tooltip, Panel/Frame, Card/GlassCard, ScrollView, Expander/Accordion, SplitView, Modal/Dialog and Toast/Notification |
-| Layout engine | Row/Column, Stack/Grid/Wrap, DockPanel/Flow/Overlay, ConstraintLayout, content-aware intrinsic sizing, min/max constraints and optimized retained reflow |
-| Responsive UI | Logical-DIP breakpoints, compact/desktop/ultrawide variants, adaptive navigation and `DynamicTypography` without replacing retained component trees |
-| DPI-aware layout | Spacing/padding remain stable in logical DIPs across monitor scale changes and convert at the native/GPU physical-pixel boundary |
+| Core widgets | Retained Text/Label, Button/IconButton, text inputs, toggles, Slider/RangeSlider, progress, surfaces, ScrollView, Accordion, SplitView, Modal/Dialog and Toast/Notification |
+| Layout engine | Row/Column, Stack/Grid/Wrap, DockPanel/Flow/Overlay, ConstraintLayout, intrinsic sizing, min/max constraints and optimized retained reflow |
+| Responsive UI | Logical-DIP breakpoints, compact/desktop/ultrawide variants, adaptive navigation and `DynamicTypography` |
+| Reactive runtime | Thread-safe `State`, `ComputedState`, dynamic dependency tracking, transactions, bindings, `ReactiveProperty`, `ObservableList` and `ObservableDict` |
 | Performance | Adaptive visual-quality profiles plus retained effect/GPU caches and layout-preparation revision caching |
 | Accessibility | Semantic roles/tree, keyboard focus routing, keyboard-only traversal, checked state, numeric value/range and dialog/alert semantics |
 
@@ -90,23 +90,16 @@ Run the native-window demo:
 python examples/native_window_demo.py
 ```
 
-Try the retained core widgets and completed layout engine:
+Try the retained widgets, layout engine and reactive runtime:
 
 ```powershell
 python examples/core_widgets_demo.py
-python examples/core_toggles_demo.py
-python examples/range_progress_demo.py
-python examples/core_surfaces_demo.py
-python examples/core_scroll_view_demo.py
-python examples/expander_accordion_demo.py
-python examples/core_split_view_demo.py
-python examples/core_overlays_demo.py
 python examples/layout_row_column_demo.py
-python examples/layout_panels_demo.py
 python examples/layout_advanced_demo.py
 python examples/responsive_layout_demo.py
 python examples/adaptive_navigation_demo.py
 python examples/dynamic_typography_demo.py
+python examples/reactive_runtime_demo.py
 ```
 
 ### Windows GPU development
@@ -141,34 +134,41 @@ python examples/gpu_custom_shader_demo.py
 
 ## Usage
 
-Foundation API:
+### Foundation API
 
 ```python
 from swirui import App, AppConfig, Component, State, Window
 
 counter = State(0)
-
-app = App(
-    name="SwirUI Demo",
-    config=AppConfig(target_fps=120),
-)
-window = Window(
-    title="Future starts here",
-    width=1100,
-    height=720,
-)
-
+app = App(name="SwirUI Demo", config=AppConfig(target_fps=120))
+window = Window(title="Future starts here", width=1100, height=720)
 root = Component("dashboard")
 window.set_root(root)
 app.add_window(window)
-
 counter.subscribe(lambda value: print("Counter:", value))
 counter.set(1)
-
 app.run()
 ```
 
-When the native GPU extension is installed on Windows, SwirUI can select the wgpu renderer automatically. Explicit renderer injection remains available for tests and custom backends.
+### Reactive runtime
+
+```python
+from swirui import State, computed, state_transaction
+
+price = State(12.0)
+quantity = State(2)
+discount = State(0.0)
+subtotal = computed(lambda: price.value * quantity.value)
+total = computed(lambda: subtotal.value * (1.0 - discount.value))
+
+total.subscribe(lambda value: print(f"Total: {value:.2f}"), immediate=True)
+with state_transaction():
+    price.set(15.0)
+    quantity.set(3)
+    discount.set(0.10)
+```
+
+Computed dependencies are discovered from reads performed by the computation. Nested transactions coalesce notifications and dependency-ordered computed recomputation at the outer boundary. `bind()` and `bind_bidirectional()` return disposable binding handles, and observable collections publish immutable/defensive snapshots.
 
 ### Retained layout example
 
@@ -184,58 +184,16 @@ row = Row(
     spacing=16,
     cross_alignment=CrossAxisAlignment.STRETCH,
 )
-
-primary = Button("Primary", bounds=Rect(0, 0, 160, 48)).set_layout_grow(1)
-secondary = Button("Secondary", bounds=Rect(0, 0, 160, 48)).set_layout_grow(2)
-row.add(primary, secondary)
+row.add(
+    Button("Primary", bounds=Rect(0, 0, 160, 48)).set_layout_grow(1),
+    Button("Secondary", bounds=Rect(0, 0, 160, 48)).set_layout_grow(2),
+)
 mount(window, row)
 ```
 
-Layout geometry remains in logical DIPs. The retained layout pass runs before child SceneGraph compilation, so arranged bounds are used by rendering and hit testing without recreating the native GPU context. Parent arrangement preserves each widget's authored preferred size, while content-aware measurement can grow text-bearing controls and containers when their content requires more space.
-
-### Responsive retained layout
-
-```python
-from swirui import (
-    Button,
-    CrossAxisAlignment,
-    LayoutDirection,
-    ResponsiveLayout,
-    ResponsiveLayoutSpec,
-    Window,
-    mount,
-)
-from swirui.rendering import Rect
-
-window = Window(title="Responsive", width=960, height=520)
-layout = ResponsiveLayout(
-    bounds=Rect(0, 0, 1, 1),
-    fill_viewport=True,
-    compact=ResponsiveLayoutSpec(
-        direction=LayoutDirection.COLUMN,
-        spacing=12,
-        padding=24,
-        cross_alignment=CrossAxisAlignment.STRETCH,
-    ),
-    desktop=ResponsiveLayoutSpec(
-        direction=LayoutDirection.ROW,
-        spacing=20,
-        padding=32,
-        cross_alignment=CrossAxisAlignment.CENTER,
-    ),
-)
-layout.add(
-    Button("Primary", bounds=Rect(0, 0, 160, 48)),
-    Button("Secondary", bounds=Rect(0, 0, 180, 48)),
-)
-mount(window, layout)
-```
-
-The same retained children survive breakpoint changes, so focus/input state is not discarded when the window moves between compact, desktop and ultrawide arrangements. Spacing and padding stay in logical DIPs; `Window.scale` maps them to physical pixels at the native/GPU boundary.
+Layout geometry remains in logical DIPs. The retained layout pass runs before child SceneGraph compilation, so arranged bounds are used by rendering and hit testing without recreating the native GPU context.
 
 ### Bounded custom WGSL effect
-
-Custom effects receive the already rendered pixel color, normalized UV coordinates and a four-float parameter block. SwirUI owns texture/sampler bindings, entry points, validation and pipeline lifecycle.
 
 ```python
 from swirui.rendering import CustomShaderEffect, WgpuRenderer
@@ -255,11 +213,10 @@ effect = CustomShaderEffect(source, parameters=(0.15, 0.0, 0.0, 0.0))
 renderer = WgpuRenderer(custom_shader=effect)
 ```
 
-Changing only the four parameters updates a small native uniform buffer. Changing to a new validated source creates a new GPU pipeline, while recently used pipelines are retained in a bounded native cache.
-
-### GPU and runtime examples
+## GPU and Runtime Examples
 
 ```text
+examples/reactive_runtime_demo.py
 examples/core_widgets_demo.py
 examples/core_toggles_demo.py
 examples/range_progress_demo.py
@@ -296,21 +253,21 @@ examples/adaptive_quality_demo.py
 examples/high_refresh_demo.py
 ```
 
-These examples exercise the same retained contracts used by applications. Public geometry remains in logical DIPs while native surfaces and GPU submission operate in physical pixels.
-
 ## Technology & Architecture
 
 ```text
 Python Application API
         │
-        ├── App / Window / Component / State
+        ├── App / Window / Component / State / ComputedState
         ├── retained widgets + complete 0.5 layout API
         ├── responsive layout / adaptive navigation / dynamic typography
+        ├── reactive properties / bindings / observable collections
         ├── routed input + accessibility semantics
         └── runtime configuration + adaptive visual quality
         │
 SwirUI Runtime
         │
+        ├── reactive dependency tracking + batched transactions
         ├── intrinsic measure → arrange + min/max constraints
         ├── compact / desktop / ultrawide logical-DIP policies
         ├── revision-aware retained layout invalidation cache
@@ -333,8 +290,6 @@ Native Core
         └── Rust 2024 + wgpu 30 + PyO3 ABI3
 ```
 
-Custom shader execution is deliberately narrow rather than arbitrary GPU access. The Python contract rejects additional bindings, texture operations, workgroup state and unbounded loops. Composed WGSL is validated natively, then executed as a persistent fullscreen post-process after blur and color filtering. The renderer retains the effect target and a bounded cache of compiled pipelines across frames.
-
 ## Testing & Quality
 
 Every significant runtime change is expected to preserve the existing quality gates:
@@ -350,21 +305,17 @@ Every significant runtime change is expected to preserve the existing quality ga
 - integrated 0.2 native renderer/runtime gate
 - HiDPI, multi-monitor, presentation-policy, text, image, path, effects and cache coverage
 - retained widget interaction, accessibility and real Win32 input/rendering coverage
-- intrinsic measurement, min/max constraints and retained responsive reflow coverage
-- real Win32 responsive layout, adaptive navigation and dynamic typography coverage on the persistent wgpu context
-- DPI-aware logical spacing/padding checks tied to the same logical-DIP → physical-pixel boundary used by rendering
-- layout-invalidation tests proving paint/input-only rebuilds can skip redundant measure/arrange work
+- intrinsic measurement, responsive reflow, adaptive navigation, dynamic typography and DPI-aware spacing coverage
+- reactive-runtime tests for dynamic dependencies, batching, computed chains, bindings, observable collections, disposal and exception flushing
 - real custom-WGSL validation and persistent-runtime smoke coverage
 
 SwirUI does not claim performance superiority over other frameworks without reproducible measurements.
 
 ## Roadmap
 
-<img width="100%" src="assets/readme/progress-mini.svg" alt="SwirUI roadmap progress: 68.0% — 12 of 12 Layout Engine groups verified">
+The authoritative plan and its single roadmap progress graphic are in **[ROADMAP.md](ROADMAP.md)**.
 
-The authoritative plan is **[ROADMAP.md](ROADMAP.md)**.
-
-**0.5 Alpha — Layout Engine is complete.** All 12 named groups are implemented and verified: core and advanced containers, content-aware intrinsic sizing, min/max constraints, responsive breakpoints, adaptive navigation, dynamic typography, compact/desktop/ultrawide variants, DPI-aware logical spacing and optimized retained layout invalidation. The next milestone is **0.6 Alpha — Reactive Runtime**. Completing 0.5 does not imply beta or release readiness.
+**0.5 Alpha — Layout Engine is complete. 0.6 Alpha — Reactive Runtime is underway.** The first verified 0.6 package adds computed state, dynamic dependency tracking, transactions, reactive properties, one-way/two-way bindings and observable collections. Async state, persistent state, lifecycle integration and minimal-update scheduling remain open. This does not imply beta or release readiness.
 
 ## Releases
 
@@ -395,7 +346,7 @@ Swirui/
 
 ## 🔎 Search Keywords
 
-`python desktop gui` • `python gpu ui` • `native python ui framework` • `python retained widgets` • `python layout engine` • `python responsive layout` • `python dynamic typography` • `python adaptive navigation` • `python row column grid layout` • `python scrollview widget` • `wgpu python renderer` • `rust pyo3 gui` • `win32 python gui` • `reactive desktop ui` • `high refresh rate ui` • `hidpi desktop ui` • `gpu text rendering` • `frosted glass ui` • `custom wgsl effects` • `multi monitor python ui`
+`python desktop gui` • `python gpu ui` • `native python ui framework` • `python reactive ui` • `python computed state` • `python data binding` • `python observable collections` • `python retained widgets` • `python layout engine` • `python responsive layout` • `python dynamic typography` • `wgpu python renderer` • `rust pyo3 gui` • `win32 python gui` • `high refresh rate ui` • `hidpi desktop ui` • `gpu text rendering` • `frosted glass ui` • `custom wgsl effects` • `multi monitor python ui`
 
 <img width="100%" src="https://raw.githubusercontent.com/Swir/Swir/main/assets/power-divider-v4.svg" alt="SWIR electric divider" />
 
