@@ -16,7 +16,6 @@ from collections import OrderedDict
 from dataclasses import replace
 from typing import Any
 
-from swirui.core import PresentationMode
 from swirui.window import Window
 
 from .affine import Affine2D
@@ -33,22 +32,8 @@ _INTERNAL_TEXT_RESOURCE_PREFIX = "__swirui_affine_text_"
 class WgpuRenderer(_AffineClipWgpuRenderer):
     """Persistent wgpu renderer with arbitrary-affine shaped-text composition."""
 
-    def __init__(
-        self,
-        *,
-        background: Color | None = None,
-        native_module: Any | None = None,
-        presentation_mode: PresentationMode = PresentationMode.AUTO_VSYNC,
-        maximum_frame_latency: int = 1,
-        scene_blur_radius: float = 0.0,
-    ) -> None:
-        super().__init__(
-            background=background,
-            native_module=native_module,
-            presentation_mode=presentation_mode,
-            maximum_frame_latency=maximum_frame_latency,
-            scene_blur_radius=scene_blur_radius,
-        )
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
         self._affine_text_cache: OrderedDict[str, int] = OrderedDict()
         self._affine_text_cache_bytes = 0
 
