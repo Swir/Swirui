@@ -15,10 +15,20 @@ from .scene import ClipRegion, Scene, SceneNodeKind
 from .wgpu_renderer import ImageInstance, RectangleInstance, TextInstance
 
 AffineShapeVertex: TypeAlias = tuple[float, ...]
+AffineImageInstance: TypeAlias = tuple[
+    str,
+    float,
+    float,
+    float,
+    float,
+    float,
+    tuple[float, float, float, float],
+    tuple[float, float, float, float, float, float],
+]
 AffineScenePayload: TypeAlias = tuple[
     list[RectangleInstance],
     list[TextInstance],
-    list[ImageInstance],
+    list[ImageInstance | AffineImageInstance],
     list[AffineShapeVertex],
 ]
 
@@ -32,14 +42,14 @@ class WgpuRenderer(_CustomWgpuRenderer):
     Non-affine scenes keep the existing mature renderer path unchanged. Scenes
     containing retained transforms use the exact ``walk_composited_affine``
     hierarchy. Arbitrary affine transforms are currently supported for filled
-    ``Path2D`` geometry and solid/rounded rectangle fills through the native
-    affine shape pipeline, while preserving inherited opacity, HiDPI scaling,
+    ``Path2D`` geometry, solid/rounded rectangle fills and RGBA images through
+    native GPU pipelines while preserving inherited opacity, HiDPI scaling,
     persistent native wgpu contexts and axis-aligned clipping.
 
-    Shaped-text and image raster transforms remain deliberately gated until their
-    native pipelines consume the same affine contract. Transformed clip regions
-    are accepted only when they remain axis-aligned; rotated/sheared clipping
-    also stays gated rather than being approximated by a bounding box.
+    Shaped-text raster transforms remain deliberately gated until glyphon consumes
+    the same affine contract. Transformed clip regions are accepted only when they
+    remain axis-aligned; rotated/sheared clipping also stays gated rather than
+    being approximated by a bounding box.
     """
 
     def render(self, window: Window, root: Component | None) -> None:
@@ -115,7 +125,7 @@ class WgpuRenderer(_CustomWgpuRenderer):
         scale = window.scale
         rectangles: list[RectangleInstance] = []
         texts: list[TextInstance] = []
-        images: list[ImageInstance] = []
+        images: list[ImageInstance | AffineImageInstance] = []
         paths: list[AffineShapeVertex] = []
 
         for node, effective_opacity, clips, world_transform in scene.walk_composited_affine():
@@ -195,11 +205,11 @@ class WgpuRenderer(_CustomWgpuRenderer):
                 continue
 
             if node.kind is SceneNodeKind.IMAGE:
-                self._require_identity_raster_transform(node.kind, world_transform)
                 if node.bounds.width <= 0.0 or node.bounds.height <= 0.0:
                     continue
                 clip = self._resolved_affine_clip(scene, clips)
-                if clip is None or node.bounds.intersection(clip) is None:
+                visual_bounds = world_transform.transform_rect_bounds(node.bounds)
+                if clip is None or visual_bounds.intersection(clip) is None:
                     continue
                 resource_id = node.resource_id
                 native_id = (
@@ -209,17 +219,23 @@ class WgpuRenderer(_CustomWgpuRenderer):
                     raise RuntimeError(
                         f"Scene image resource {resource_id!r} is not registered with WgpuRenderer."
                     )
-                images.append(
-                    (
-                        native_id,
-                        self._scale(node.bounds.x, scale),
-                        self._scale(node.bounds.y, scale),
-                        self._scale(node.bounds.width, scale),
-                        self._scale(node.bounds.height, scale),
-                        effective_opacity,
-                        self._clip_tuple(clip, scale),
-                    )
+                geometry: ImageInstance = (
+                    native_id,
+                    self._scale(node.bounds.x, scale),
+                    self._scale(node.bounds.y, scale),
+                    self._scale(node.bounds.width, scale),
+                    self._scale(node.bounds.height, scale),
+                    effective_opacity,
+                    self._clip_tuple(clip, scale),
                 )
+                if world_transform.is_identity:
+                    images.append(geometry)
+                else:
+                    affine_geometry: AffineImageInstance = (
+                        *geometry,
+                        self._physical_affine(world_transform, scale),
+                    )
+                    images.append(affine_geometry)
                 continue
 
             if node.kind is not SceneNodeKind.PATH:
@@ -383,7 +399,10 @@ class WgpuRenderer(_CustomWgpuRenderer):
         return clip
 
     @staticmethod
-    def _physical_affine(transform: Affine2D, scale: float) -> tuple[float, ...]:
+    def _physical_affine(
+        transform: Affine2D,
+        scale: float,
+    ) -> tuple[float, float, float, float, float, float]:
         return (
             transform.m11,
             transform.m12,

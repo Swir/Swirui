@@ -30,6 +30,7 @@ class _FakeAffineContext:
         self.height = height
         self.path_calls: list[tuple[object, ...]] = []
         self.clear_calls: list[tuple[object, ...]] = []
+        self.image_uploads: list[tuple[str, int, int, bytes]] = []
 
     def draw_scene_with_paths(
         self,
@@ -45,6 +46,20 @@ class _FakeAffineContext:
         assert isinstance(images, list)
         assert isinstance(paths, list)
         return len(rectangles), len(texts), len(images), len(paths) // 3
+
+    def register_image_rgba(
+        self,
+        resource_id: str,
+        width: int,
+        height: int,
+        rgba: bytes,
+    ) -> None:
+        self.image_uploads.append((resource_id, width, height, bytes(rgba)))
+
+    def unregister_image(self, resource_id: str) -> bool:
+        before = len(self.image_uploads)
+        self.image_uploads = [entry for entry in self.image_uploads if entry[0] != resource_id]
+        return len(self.image_uploads) != before
 
     def clear(self, *background: object) -> None:
         self.clear_calls.append(background)
@@ -215,6 +230,83 @@ def test_affine_path_renderer_tessellates_rotated_rounded_rectangle() -> None:
             assert len(vertex) == 16
             assert vertex[6:10] == (0.0, 0.0, 360.0, 240.0)
             assert vertex[10:16] == pytest.approx(expected_transform)
+    finally:
+        app.stop()
+
+
+def test_affine_path_renderer_packs_rotated_image_for_native_gpu_pipeline() -> None:
+    native = _FakeAffineNative()
+    renderer = WgpuRenderer(native_module=native)
+    renderer.register_image_rgba(
+        "badge",
+        2,
+        2,
+        bytes(
+            [
+                0,
+                136,
+                255,
+                255,
+                98,
+                229,
+                255,
+                255,
+                98,
+                229,
+                255,
+                255,
+                0,
+                136,
+                255,
+                255,
+            ]
+        ),
+    )
+    root = SceneNode(
+        key="root",
+        kind=SceneNodeKind.GROUP,
+        bounds=Rect(0.0, 0.0, 420.0, 300.0),
+        hit_testable=False,
+    )
+    image = SceneNode(
+        key="rotated-image",
+        kind=SceneNodeKind.IMAGE,
+        bounds=Rect(120.0, 80.0, 150.0, 110.0),
+        resource_id="badge",
+        opacity=0.75,
+        transform=Affine2D.rotation(math.radians(20.0), origin=Point(195.0, 135.0)),
+    )
+    root.add(image)
+    app = App(platform_backend=NullPlatformBackend(), renderer=renderer)
+    window = Window(width=420, height=300)
+    window.set_scene(Scene(420.0, 300.0, root))
+    app.add_window(window)
+
+    try:
+        app.start()
+        context = native.contexts[0]
+        assert len(context.image_uploads) == 1
+        rectangles, texts, images, paths = context.path_calls[0][:4]
+        assert rectangles == []
+        assert texts == []
+        assert paths == []
+        assert len(images) == 1
+        packed = images[0]
+        assert len(packed) == 8
+        assert packed[1:6] == pytest.approx((120.0, 80.0, 150.0, 110.0, 0.75))
+        assert packed[6] == (0.0, 0.0, 420.0, 300.0)
+        assert packed[7] == pytest.approx(
+            (
+                image.transform.m11,
+                image.transform.m12,
+                image.transform.m21,
+                image.transform.m22,
+                image.transform.tx,
+                image.transform.ty,
+            )
+        )
+        assert packed[0] == context.image_uploads[0][0]
+        assert renderer.last_image_count == 1
     finally:
         app.stop()
 

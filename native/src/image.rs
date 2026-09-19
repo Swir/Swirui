@@ -9,9 +9,34 @@ use std::collections::HashMap;
 use wgpu::util::DeviceExt;
 
 pub(crate) type ClipRect = (f32, f32, f32, f32);
-pub(crate) type ImageInstance = (String, f32, f32, f32, f32, f32, ClipRect);
+pub(crate) type AffineTransform = (f32, f32, f32, f32, f32, f32);
+type AxisAlignedImageData = (String, f32, f32, f32, f32, f32, ClipRect);
+type AffineImageData = (
+    String,
+    f32,
+    f32,
+    f32,
+    f32,
+    f32,
+    ClipRect,
+    AffineTransform,
+);
 
-const IMAGE_VERTEX_FLOATS: usize = 5;
+#[derive(Clone, Debug, FromPyObject)]
+pub(crate) enum ImageInstance {
+    AxisAligned(AxisAlignedImageData),
+    Affine(AffineImageData),
+}
+
+impl ImageInstance {
+    fn resource_id(&self) -> &str {
+        match self {
+            Self::AxisAligned((resource_id, ..)) | Self::Affine((resource_id, ..)) => resource_id,
+        }
+    }
+}
+
+const IMAGE_VERTEX_FLOATS: usize = 11;
 const IMAGE_VERTICES_PER_INSTANCE: usize = 6;
 const INITIAL_IMAGE_CAPACITY: usize = 8;
 
@@ -95,6 +120,16 @@ impl ImageSystem {
                             format: wgpu::VertexFormat::Float32,
                             offset: 4 * 4,
                             shader_location: 2,
+                        },
+                        wgpu::VertexAttribute {
+                            format: wgpu::VertexFormat::Float32x2,
+                            offset: 5 * 4,
+                            shader_location: 3,
+                        },
+                        wgpu::VertexAttribute {
+                            format: wgpu::VertexFormat::Float32x4,
+                            offset: 7 * 4,
+                            shader_location: 4,
                         },
                     ],
                 })],
@@ -235,36 +270,36 @@ impl ImageSystem {
         let mut values = Vec::with_capacity(
             images.len() * IMAGE_VERTICES_PER_INSTANCE * IMAGE_VERTEX_FLOATS,
         );
-        for (resource_id, x, y, width, height, opacity, clip) in images {
-            if !self.resources.contains_key(resource_id) {
+        for image in images {
+            if !self.resources.contains_key(image.resource_id()) {
                 return Err(PyKeyError::new_err(format!(
-                    "Image resource '{resource_id}' is not registered in this GPU context."
+                    "Image resource '{}' is not registered in this GPU context.",
+                    image.resource_id()
                 )));
             }
-            let visible_left = x.max(clip.0);
-            let visible_top = y.max(clip.1);
-            let visible_right = (*x + *width).min(clip.2);
-            let visible_bottom = (*y + *height).min(clip.3);
-            if visible_right <= visible_left || visible_bottom <= visible_top {
-                return Err(PyValueError::new_err(
-                    "Image clip must intersect the image bounds before GPU submission.",
-                ));
+            match image {
+                ImageInstance::AxisAligned((_, x, y, width, height, opacity, clip)) => {
+                    append_axis_aligned_vertices(
+                        &mut values,
+                        (*x, *y, *width, *height),
+                        *opacity,
+                        *clip,
+                        surface_width,
+                        surface_height,
+                    )?;
+                }
+                ImageInstance::Affine((_, x, y, width, height, opacity, clip, transform)) => {
+                    append_affine_vertices(
+                        &mut values,
+                        (*x, *y, *width, *height),
+                        *opacity,
+                        *clip,
+                        *transform,
+                        surface_width,
+                        surface_height,
+                    );
+                }
             }
-
-            let u0 = (visible_left - *x) / *width;
-            let v0 = (visible_top - *y) / *height;
-            let u1 = (visible_right - *x) / *width;
-            let v1 = (visible_bottom - *y) / *height;
-            let left = (visible_left / surface_width as f32) * 2.0 - 1.0;
-            let right = (visible_right / surface_width as f32) * 2.0 - 1.0;
-            let top = 1.0 - (visible_top / surface_height as f32) * 2.0;
-            let bottom = 1.0 - (visible_bottom / surface_height as f32) * 2.0;
-            push_vertex(&mut values, left, top, u0, v0, *opacity);
-            push_vertex(&mut values, right, top, u1, v0, *opacity);
-            push_vertex(&mut values, right, bottom, u1, v1, *opacity);
-            push_vertex(&mut values, left, top, u0, v0, *opacity);
-            push_vertex(&mut values, right, bottom, u1, v1, *opacity);
-            push_vertex(&mut values, left, bottom, u0, v1, *opacity);
         }
 
         let bytes = floats_to_bytes(&values);
@@ -280,10 +315,10 @@ impl ImageSystem {
         pass.set_pipeline(&self.pipeline);
         pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
         for (index, image) in images.iter().enumerate() {
-            let resource = self.resources.get(&image.0).ok_or_else(|| {
+            let resource = self.resources.get(image.resource_id()).ok_or_else(|| {
                 PyKeyError::new_err(format!(
                     "Image resource '{}' disappeared before rendering.",
-                    image.0
+                    image.resource_id()
                 ))
             })?;
             pass.set_bind_group(0, &resource.bind_group, &[]);
@@ -333,44 +368,212 @@ pub(crate) fn validate_image_resource(
 }
 
 pub(crate) fn validate_image_instances(images: &[ImageInstance]) -> PyResult<()> {
-    for (resource_id, x, y, width, height, opacity, clip) in images {
-        if resource_id.trim().is_empty() {
-            return Err(PyValueError::new_err("Image instance resource_id cannot be empty."));
-        }
-        if ![
-            *x, *y, *width, *height, *opacity, clip.0, clip.1, clip.2, clip.3,
-        ]
-        .into_iter()
-        .all(f32::is_finite)
-        {
-            return Err(PyValueError::new_err(
-                "Image geometry, opacity and clip bounds must be finite.",
-            ));
-        }
-        if *width <= 0.0 || *height <= 0.0 {
-            return Err(PyValueError::new_err(
-                "Image width and height must be greater than zero.",
-            ));
-        }
-        if !(0.0..=1.0).contains(opacity) {
-            return Err(PyValueError::new_err(
-                "Image opacity must be between 0.0 and 1.0.",
-            ));
-        }
-        if clip.2 <= clip.0 || clip.3 <= clip.1 {
-            return Err(PyValueError::new_err(
-                "Image clip bounds must have positive width and height.",
-            ));
-        }
-        if (*x + *width).min(clip.2) <= x.max(clip.0)
-            || (*y + *height).min(clip.3) <= y.max(clip.1)
-        {
-            return Err(PyValueError::new_err(
-                "Image clip must intersect the image bounds.",
-            ));
+    for image in images {
+        match image {
+            ImageInstance::AxisAligned((resource_id, x, y, width, height, opacity, clip)) => {
+                validate_common_image_instance(resource_id, (*x, *y, *width, *height), *opacity, *clip)?;
+                if (*x + *width).min(clip.2) <= x.max(clip.0)
+                    || (*y + *height).min(clip.3) <= y.max(clip.1)
+                {
+                    return Err(PyValueError::new_err(
+                        "Image clip must intersect the image bounds.",
+                    ));
+                }
+            }
+            ImageInstance::Affine((resource_id, x, y, width, height, opacity, clip, transform)) => {
+                validate_common_image_instance(resource_id, (*x, *y, *width, *height), *opacity, *clip)?;
+                if ![
+                    transform.0,
+                    transform.1,
+                    transform.2,
+                    transform.3,
+                    transform.4,
+                    transform.5,
+                ]
+                .into_iter()
+                .all(f32::is_finite)
+                {
+                    return Err(PyValueError::new_err(
+                        "Affine image transform values must be finite.",
+                    ));
+                }
+                let bounds = transformed_bounds((*x, *y, *width, *height), *transform);
+                if bounds.2 <= clip.0
+                    || bounds.0 >= clip.2
+                    || bounds.3 <= clip.1
+                    || bounds.1 >= clip.3
+                {
+                    return Err(PyValueError::new_err(
+                        "Image clip must intersect the transformed image bounds.",
+                    ));
+                }
+            }
         }
     }
     Ok(())
+}
+
+fn validate_common_image_instance(
+    resource_id: &str,
+    geometry: (f32, f32, f32, f32),
+    opacity: f32,
+    clip: ClipRect,
+) -> PyResult<()> {
+    if resource_id.trim().is_empty() {
+        return Err(PyValueError::new_err("Image instance resource_id cannot be empty."));
+    }
+    if ![
+        geometry.0,
+        geometry.1,
+        geometry.2,
+        geometry.3,
+        opacity,
+        clip.0,
+        clip.1,
+        clip.2,
+        clip.3,
+    ]
+    .into_iter()
+    .all(f32::is_finite)
+    {
+        return Err(PyValueError::new_err(
+            "Image geometry, opacity and clip bounds must be finite.",
+        ));
+    }
+    if geometry.2 <= 0.0 || geometry.3 <= 0.0 {
+        return Err(PyValueError::new_err(
+            "Image width and height must be greater than zero.",
+        ));
+    }
+    if !(0.0..=1.0).contains(&opacity) {
+        return Err(PyValueError::new_err(
+            "Image opacity must be between 0.0 and 1.0.",
+        ));
+    }
+    if clip.2 <= clip.0 || clip.3 <= clip.1 {
+        return Err(PyValueError::new_err(
+            "Image clip bounds must have positive width and height.",
+        ));
+    }
+    Ok(())
+}
+
+#[cfg(target_os = "windows")]
+fn append_axis_aligned_vertices(
+    values: &mut Vec<f32>,
+    geometry: (f32, f32, f32, f32),
+    opacity: f32,
+    clip: ClipRect,
+    surface_width: u32,
+    surface_height: u32,
+) -> PyResult<()> {
+    let (x, y, width, height) = geometry;
+    let visible_left = x.max(clip.0);
+    let visible_top = y.max(clip.1);
+    let visible_right = (x + width).min(clip.2);
+    let visible_bottom = (y + height).min(clip.3);
+    if visible_right <= visible_left || visible_bottom <= visible_top {
+        return Err(PyValueError::new_err(
+            "Image clip must intersect the image bounds before GPU submission.",
+        ));
+    }
+
+    let u0 = (visible_left - x) / width;
+    let v0 = (visible_top - y) / height;
+    let u1 = (visible_right - x) / width;
+    let v1 = (visible_bottom - y) / height;
+    let top_left = (visible_left, visible_top);
+    let top_right = (visible_right, visible_top);
+    let bottom_right = (visible_right, visible_bottom);
+    let bottom_left = (visible_left, visible_bottom);
+    push_screen_vertex(values, top_left, (u0, v0), opacity, clip, surface_width, surface_height);
+    push_screen_vertex(values, top_right, (u1, v0), opacity, clip, surface_width, surface_height);
+    push_screen_vertex(values, bottom_right, (u1, v1), opacity, clip, surface_width, surface_height);
+    push_screen_vertex(values, top_left, (u0, v0), opacity, clip, surface_width, surface_height);
+    push_screen_vertex(values, bottom_right, (u1, v1), opacity, clip, surface_width, surface_height);
+    push_screen_vertex(values, bottom_left, (u0, v1), opacity, clip, surface_width, surface_height);
+    Ok(())
+}
+
+#[cfg(target_os = "windows")]
+fn append_affine_vertices(
+    values: &mut Vec<f32>,
+    geometry: (f32, f32, f32, f32),
+    opacity: f32,
+    clip: ClipRect,
+    transform: AffineTransform,
+    surface_width: u32,
+    surface_height: u32,
+) {
+    let (x, y, width, height) = geometry;
+    let top_left = transform_point(transform, x, y);
+    let top_right = transform_point(transform, x + width, y);
+    let bottom_right = transform_point(transform, x + width, y + height);
+    let bottom_left = transform_point(transform, x, y + height);
+    push_screen_vertex(values, top_left, (0.0, 0.0), opacity, clip, surface_width, surface_height);
+    push_screen_vertex(values, top_right, (1.0, 0.0), opacity, clip, surface_width, surface_height);
+    push_screen_vertex(values, bottom_right, (1.0, 1.0), opacity, clip, surface_width, surface_height);
+    push_screen_vertex(values, top_left, (0.0, 0.0), opacity, clip, surface_width, surface_height);
+    push_screen_vertex(values, bottom_right, (1.0, 1.0), opacity, clip, surface_width, surface_height);
+    push_screen_vertex(values, bottom_left, (0.0, 1.0), opacity, clip, surface_width, surface_height);
+}
+
+#[cfg(target_os = "windows")]
+fn push_screen_vertex(
+    values: &mut Vec<f32>,
+    pixel_position: (f32, f32),
+    uv: (f32, f32),
+    opacity: f32,
+    clip: ClipRect,
+    surface_width: u32,
+    surface_height: u32,
+) {
+    let ndc_x = (pixel_position.0 / surface_width as f32) * 2.0 - 1.0;
+    let ndc_y = 1.0 - (pixel_position.1 / surface_height as f32) * 2.0;
+    values.extend_from_slice(&[
+        ndc_x,
+        ndc_y,
+        uv.0,
+        uv.1,
+        opacity,
+        pixel_position.0,
+        pixel_position.1,
+        clip.0,
+        clip.1,
+        clip.2,
+        clip.3,
+    ]);
+}
+
+fn transform_point(transform: AffineTransform, x: f32, y: f32) -> (f32, f32) {
+    (
+        transform.0 * x + transform.1 * y + transform.4,
+        transform.2 * x + transform.3 * y + transform.5,
+    )
+}
+
+fn transformed_bounds(
+    geometry: (f32, f32, f32, f32),
+    transform: AffineTransform,
+) -> (f32, f32, f32, f32) {
+    let (x, y, width, height) = geometry;
+    let points = [
+        transform_point(transform, x, y),
+        transform_point(transform, x + width, y),
+        transform_point(transform, x + width, y + height),
+        transform_point(transform, x, y + height),
+    ];
+    let mut left = f32::INFINITY;
+    let mut top = f32::INFINITY;
+    let mut right = f32::NEG_INFINITY;
+    let mut bottom = f32::NEG_INFINITY;
+    for (point_x, point_y) in points {
+        left = left.min(point_x);
+        top = top.min(point_y);
+        right = right.max(point_x);
+        bottom = bottom.max(point_y);
+    }
+    (left, top, right, bottom)
 }
 
 fn next_image_capacity(current: usize, required: usize) -> PyResult<usize> {
@@ -399,11 +602,6 @@ fn create_vertex_buffer(device: &wgpu::Device, capacity: usize) -> wgpu::Buffer 
 }
 
 #[cfg(target_os = "windows")]
-fn push_vertex(values: &mut Vec<f32>, x: f32, y: f32, u: f32, v: f32, opacity: f32) {
-    values.extend_from_slice(&[x, y, u, v, opacity]);
-}
-
-#[cfg(target_os = "windows")]
 fn floats_to_bytes(values: &[f32]) -> Vec<u8> {
     let mut bytes = Vec::with_capacity(std::mem::size_of_val(values));
     for value in values {
@@ -416,6 +614,18 @@ fn floats_to_bytes(values: &[f32]) -> Vec<u8> {
 mod tests {
     use super::*;
 
+    fn axis_aligned_instance(opacity: f32, width: f32, clip: ClipRect) -> ImageInstance {
+        ImageInstance::AxisAligned((
+            "checker".to_owned(),
+            10.0,
+            20.0,
+            width,
+            80.0,
+            opacity,
+            clip,
+        ))
+    }
+
     #[test]
     fn validates_rgba_resource_length() {
         assert!(validate_image_resource("checker", 2, 2, &[255; 16]).is_ok());
@@ -425,41 +635,60 @@ mod tests {
     }
 
     #[test]
-    fn validates_image_instances() {
-        let valid = (
+    fn validates_axis_aligned_image_instances() {
+        assert!(validate_image_instances(&[axis_aligned_instance(
+            0.75,
+            100.0,
+            (0.0, 0.0, 200.0, 200.0),
+        )])
+        .is_ok());
+        assert!(validate_image_instances(&[axis_aligned_instance(
+            1.5,
+            100.0,
+            (0.0, 0.0, 200.0, 200.0),
+        )])
+        .is_err());
+        assert!(validate_image_instances(&[axis_aligned_instance(
+            1.0,
+            0.0,
+            (0.0, 0.0, 200.0, 200.0),
+        )])
+        .is_err());
+        assert!(validate_image_instances(&[axis_aligned_instance(
+            1.0,
+            100.0,
+            (300.0, 300.0, 400.0, 400.0),
+        )])
+        .is_err());
+    }
+
+    #[test]
+    fn validates_affine_image_instances_and_transformed_clip_intersection() {
+        let valid = ImageInstance::Affine((
             "checker".to_owned(),
             10.0,
             20.0,
             100.0,
             80.0,
             0.75,
-            (0.0, 0.0, 200.0, 200.0),
-        );
+            (0.0, 0.0, 220.0, 220.0),
+            (0.0, -1.0, 1.0, 0.0, 160.0, 10.0),
+        ));
         assert!(validate_image_instances(&[valid]).is_ok());
 
-        let invalid_opacity = (
+        let invalid_transform = ImageInstance::Affine((
             "checker".to_owned(),
             10.0,
             20.0,
             100.0,
             80.0,
-            1.5,
-            (0.0, 0.0, 200.0, 200.0),
-        );
-        assert!(validate_image_instances(&[invalid_opacity]).is_err());
-
-        let invalid_size = (
-            "checker".to_owned(),
-            10.0,
-            20.0,
-            0.0,
-            80.0,
             1.0,
-            (0.0, 0.0, 200.0, 200.0),
-        );
-        assert!(validate_image_instances(&[invalid_size]).is_err());
+            (0.0, 0.0, 220.0, 220.0),
+            (f32::NAN, 0.0, 0.0, 1.0, 0.0, 0.0),
+        ));
+        assert!(validate_image_instances(&[invalid_transform]).is_err());
 
-        let disjoint_clip = (
+        let disjoint = ImageInstance::Affine((
             "checker".to_owned(),
             10.0,
             20.0,
@@ -467,8 +696,18 @@ mod tests {
             80.0,
             1.0,
             (300.0, 300.0, 400.0, 400.0),
+            (1.0, 0.0, 0.0, 1.0, 0.0, 0.0),
+        ));
+        assert!(validate_image_instances(&[disjoint]).is_err());
+    }
+
+    #[test]
+    fn affine_bounds_follow_the_shape_pipeline_matrix_convention() {
+        let bounds = transformed_bounds(
+            (10.0, 20.0, 40.0, 30.0),
+            (0.0, -1.0, 1.0, 0.0, 100.0, 5.0),
         );
-        assert!(validate_image_instances(&[disjoint_clip]).is_err());
+        assert_eq!(bounds, (50.0, 15.0, 80.0, 55.0));
     }
 
     #[test]
