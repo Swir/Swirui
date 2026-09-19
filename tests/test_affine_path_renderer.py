@@ -18,6 +18,10 @@ from swirui.rendering import (
     WgpuRenderer,
 )
 from swirui.rendering.affine import Affine2D
+from swirui.rendering.affine_clipping import (
+    point_in_convex_polygon,
+    transformed_rect_polygon,
+)
 
 
 class _FakeAffineContext:
@@ -149,7 +153,7 @@ def test_affine_path_renderer_packs_composed_world_transform_and_clip() -> None:
         app.stop()
 
 
-def test_affine_path_renderer_rejects_rotated_clip_instead_of_approximating_it() -> None:
+def test_affine_path_renderer_clips_geometry_to_rotated_parent_exactly() -> None:
     native = _FakeAffineNative()
     renderer = WgpuRenderer(native_module=native)
     clipped = SceneNode(
@@ -164,9 +168,14 @@ def test_affine_path_renderer_rejects_rotated_clip_instead_of_approximating_it()
         SceneNode(
             key="path",
             kind=SceneNodeKind.PATH,
-            bounds=Rect(100.0, 90.0, 120.0, 100.0),
+            bounds=Rect(50.0, 45.0, 300.0, 230.0),
             fill=Color.from_hex("#62E5FF"),
-            path=_triangle(),
+            path=Path2D.polygon(
+                Point(0.0, 0.0),
+                Point(300.0, 35.0),
+                Point(260.0, 230.0),
+                Point(35.0, 205.0),
+            ),
         )
     )
     scene = Scene(420.0, 300.0, clipped)
@@ -176,8 +185,22 @@ def test_affine_path_renderer_rejects_rotated_clip_instead_of_approximating_it()
     app.add_window(window)
 
     try:
-        with pytest.raises(RuntimeError, match="Rotated or sheared SceneNode clipping"):
-            app.start()
+        app.start()
+        context = native.contexts[0]
+        rectangles, texts, images, paths = context.path_calls[0][:4]
+        assert rectangles == []
+        assert texts == []
+        assert images == []
+        assert isinstance(paths, list)
+        assert paths
+        assert len(paths) % 3 == 0
+
+        clip_polygon = transformed_rect_polygon(clipped.transform, clipped.bounds)
+        for vertex in paths:
+            assert len(vertex) == 16
+            assert vertex[6:10] == (0.0, 0.0, 420.0, 300.0)
+            assert vertex[10:16] == pytest.approx((1.0, 0.0, 0.0, 1.0, 0.0, 0.0))
+            assert point_in_convex_polygon(Point(vertex[0], vertex[1]), clip_polygon)
     finally:
         app.stop()
 

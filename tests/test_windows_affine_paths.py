@@ -85,7 +85,31 @@ def test_rotated_scenegraph_geometry_reaches_real_wgpu_and_keeps_input_aligned()
             origin=Point(310.0, 310.0),
         ).then(Affine2D.translation(8.0, -4.0)),
     )
-    root.add(path_node, rectangle_node, image_node, text_node)
+    clip_group = SceneNode(
+        key="rotated-geometry-clip",
+        kind=SceneNodeKind.GROUP,
+        bounds=Rect(20.0, 245.0, 135.0, 115.0),
+        clip_to_bounds=True,
+        hit_testable=False,
+        transform=Affine2D.rotation(
+            math.radians(11.0),
+            origin=Point(87.5, 302.5),
+        ),
+    )
+    clipped_path = SceneNode(
+        key="exact-clipped-path",
+        kind=SceneNodeKind.PATH,
+        bounds=Rect(-5.0, 230.0, 190.0, 150.0),
+        fill=Color.from_hex("#4DCBFF"),
+        path=Path2D.polygon(
+            Point(0.0, 0.0),
+            Point(190.0, 15.0),
+            Point(165.0, 150.0),
+            Point(20.0, 135.0),
+        ),
+    )
+    clip_group.add(clipped_path)
+    root.add(path_node, rectangle_node, image_node, text_node, clip_group)
     scene = Scene(620.0, 400.0, root)
 
     renderer = WgpuRenderer()
@@ -127,7 +151,7 @@ def test_rotated_scenegraph_geometry_reaches_real_wgpu_and_keeps_input_aligned()
     try:
         app.start()
         assert renderer.frames_rendered == 1
-        assert renderer.last_path_count > 2
+        assert renderer.last_path_count > 4
         assert renderer.last_rectangle_count == 0
         assert renderer.last_text_count == 1
         assert renderer.last_image_count == 1
@@ -153,6 +177,10 @@ def test_rotated_scenegraph_geometry_reaches_real_wgpu_and_keeps_input_aligned()
         visual_text_probe = text_node.transform.transform_point(authored_text_probe)
         assert scene.hit_test(visual_text_probe) is text_node
 
+        authored_clipped_probe = Point(90.0, 300.0)
+        visual_clipped_probe = clip_group.transform.transform_point(authored_clipped_probe)
+        assert scene.hit_test(visual_clipped_probe) is clipped_path
+
         path_node.transform = Affine2D.rotation(
             math.radians(-17.0),
             origin=Point(140.0, 160.0),
@@ -169,11 +197,15 @@ def test_rotated_scenegraph_geometry_reaches_real_wgpu_and_keeps_input_aligned()
             0.92,
             origin=Point(310.0, 310.0),
         ).then(Affine2D.translation(-10.0, 7.0))
+        clip_group.transform = Affine2D.rotation(
+            math.radians(-9.0),
+            origin=Point(87.5, 302.5),
+        )
         scene.touch()
         renderer.render(window, None)
 
         assert renderer.frames_rendered == 2
-        assert renderer.last_path_count > 2
+        assert renderer.last_path_count > 4
         assert renderer.last_text_count == 1
         assert renderer.last_image_count == 1
         assert renderer.persistent_context_count == 1
@@ -187,5 +219,7 @@ def test_rotated_scenegraph_geometry_reaches_real_wgpu_and_keeps_input_aligned()
         assert scene.hit_test(visual_image_probe) is image_node
         visual_text_probe = text_node.transform.transform_point(authored_text_probe)
         assert scene.hit_test(visual_text_probe) is text_node
+        visual_clipped_probe = clip_group.transform.transform_point(authored_clipped_probe)
+        assert scene.hit_test(visual_clipped_probe) is clipped_path
     finally:
         app.stop()
