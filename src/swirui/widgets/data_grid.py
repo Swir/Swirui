@@ -539,16 +539,16 @@ class DataGrid(Widget):
         if platform_event.y < header_bottom:
             resize_key = self._separator_hit(platform_event.x)
             if resize_key is not None:
-                column = self._column_by_key(resize_key)
-                if column.resizable:
+                resize_column = self._column_by_key(resize_key)
+                if resize_column.resizable:
                     self._resizing_column_key = resize_key
                     self._resize_origin_x = platform_event.x
-                    self._resize_origin_width = column.resolved_width
+                    self._resize_origin_width = resize_column.resolved_width
                     event.prevent_default()
                     return
-            column = self._column_at_x(platform_event.x)
-            if column is not None and column.sortable:
-                self.toggle_sort(column.key)
+            header_column = self._column_at_x(platform_event.x)
+            if header_column is not None and header_column.sortable:
+                self.toggle_sort(header_column.key)
                 event.prevent_default()
             return
 
