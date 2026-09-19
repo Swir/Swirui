@@ -82,6 +82,12 @@ class Win32PlatformBackend(_LegacyWin32PlatformBackend):
         self._user32.AdjustWindowRectEx.restype = ctypes.c_bool
         self._user32.GetKeyState.argtypes = [ctypes.c_int]
         self._user32.GetKeyState.restype = ctypes.c_short
+        self._user32.SetCapture.argtypes = [ctypes.c_void_p]
+        self._user32.SetCapture.restype = ctypes.c_void_p
+        self._user32.GetCapture.argtypes = []
+        self._user32.GetCapture.restype = ctypes.c_void_p
+        self._user32.ReleaseCapture.argtypes = []
+        self._user32.ReleaseCapture.restype = ctypes.c_bool
 
         try:
             adjust_for_dpi: Any = self._user32.AdjustWindowRectExForDpi
@@ -161,13 +167,36 @@ class Win32PlatformBackend(_LegacyWin32PlatformBackend):
         self._logical_client_sizes[handle] = (width / scale, height / scale)
         self._resize_client_area(handle, width, height)
 
+    def capture_pointer(self, handle: NativeWindowHandle) -> bool:
+        """Capture Win32 mouse routing to ``handle`` until the gesture releases."""
+
+        self._require_window(handle)
+        self._user32.SetCapture(ctypes.c_void_p(handle.value))
+        captured = self._user32.GetCapture()
+        return bool(captured) and int(captured) == handle.value
+
+    def release_pointer(self, handle: NativeWindowHandle) -> bool:
+        """Release Win32 mouse capture only when ``handle`` currently owns it."""
+
+        self._require_window(handle)
+        captured = self._user32.GetCapture()
+        if not captured or int(captured) != handle.value:
+            return False
+        return bool(self._user32.ReleaseCapture())
+
     def destroy_window(self, handle: NativeWindowHandle) -> None:
+        self.release_pointer(handle)
         self._logical_client_sizes.pop(handle, None)
         self._logical_min_client_sizes.pop(handle, None)
         self._dpi_resizing.discard(handle)
         super().destroy_window(handle)
 
     def shutdown(self) -> None:
+        captured = self._user32.GetCapture()
+        if captured:
+            capture_handle = NativeWindowHandle(int(captured))
+            if capture_handle in self._windows:
+                self._user32.ReleaseCapture()
         self._logical_client_sizes.clear()
         self._logical_min_client_sizes.clear()
         self._dpi_resizing.clear()

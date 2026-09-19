@@ -66,6 +66,13 @@ def _render_after_invalidation(
     *,
     timeout: float = 1.0,
 ) -> None:
+    """Wait for a real GPU frame without assuming animations stay frozen afterward.
+
+    A rendered frame emits ``frame_rendered`` and can legitimately advance an
+    active animation controller. Geometry assertions therefore belong immediately
+    after the deterministic manual tick, before this helper pumps another frame.
+    """
+
     deadline = time.monotonic() + timeout
     while renderer.frames_rendered <= previous_frames:
         app.process_events()
@@ -111,34 +118,39 @@ def test_real_win32_pointer_moves_retained_subtree_in_persistent_wgpu_context() 
 
         user32.SendMessageW(ctypes.c_void_p(hwnd), 0x0200, 0, _lparam(inside_x, inside_y))
         _pump_until(app, lambda: magnetic.active)
+        generation_before_move = runtime.generation
         controller.tick(magnetic.spec.max_duration)
         assert button.visual_offset.x > 0.0
         assert abs(button.visual_offset.y) < 1.0
         moved_offset = button.visual_offset
-
-        previous_frames = renderer.frames_rendered
-        _render_after_invalidation(app, renderer, previous_frames)
-        assert renderer.persistent_context_count == initial_contexts
+        assert runtime.generation > generation_before_move
         assert window.scene is not None
         moved = next(node for node in window.scene.walk() if node.key == "magnetic-button")
         assert moved.bounds.x == pytest.approx(120.0 + moved_offset.x)
         assert moved.bounds.y == pytest.approx(86.0 + moved_offset.y)
         assert window.scene.hit_test_xy(330.0 + moved_offset.x, 112.0) is moved
-        assert runtime.generation > 1
-
-        outside_x = max(1, round(470.0 * window.scale))
-        outside_y = inside_y
-        user32.SendMessageW(ctypes.c_void_p(hwnd), 0x0200, 0, _lparam(outside_x, outside_y))
-        _pump_until(app, lambda: magnetic.target_offset == Point())
-        controller.tick(magnetic.spec.max_duration)
-        assert button.visual_offset == Point()
 
         previous_frames = renderer.frames_rendered
         _render_after_invalidation(app, renderer, previous_frames)
         assert renderer.persistent_context_count == initial_contexts
+
+        outside_x = max(1, round(470.0 * window.scale))
+        outside_y = inside_y
+        generation_before_restore = runtime.generation
+        user32.SendMessageW(ctypes.c_void_p(hwnd), 0x0200, 0, _lparam(outside_x, outside_y))
+        _pump_until(app, lambda: magnetic.target_offset == Point())
+        controller.tick(magnetic.spec.max_duration)
+        assert button.visual_offset == Point()
+        # process_events() renders pending frames, so the spring may already have
+        # rebuilt the retained scene while _pump_until observes the zero target.
+        assert runtime.generation > generation_before_restore
         assert window.scene is not None
         restored = next(node for node in window.scene.walk() if node.key == "magnetic-button")
         assert restored.bounds == Rect(120.0, 86.0, 220.0, 52.0)
+
+        previous_frames = renderer.frames_rendered
+        _render_after_invalidation(app, renderer, previous_frames)
+        assert renderer.persistent_context_count == initial_contexts
     finally:
         magnetic.dispose()
         controller.dispose()

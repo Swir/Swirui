@@ -20,10 +20,10 @@ def main() -> int:
     )
     status = Label(
         (
-            "Click headers to sort, drag header separators to resize, "
+            "Click headers to sort, drag headers to reorder, drag separators to resize, "
             "use ↑ ↓ Home End PageUp PageDown."
         ),
-        bounds=Rect(32.0, 68.0, 840.0, 28.0),
+        bounds=Rect(32.0, 68.0, 850.0, 28.0),
         font_size=15.0,
         color=Color.from_hex("#DDF5FF"),
     )
@@ -65,8 +65,15 @@ def main() -> int:
         direction = "descending" if event.data.get("descending") else "ascending"
         status.text = f"Sorted by {column_key} ({direction})."
 
+    def column_drag_finished(event: Event) -> None:
+        status.text = (
+            f"Moved {event.data['column_key']} column from "
+            f"{event.data['old_index']} to {event.data['new_index']}."
+        )
+
     grid.on("selection_changed", selection_changed)
     grid.on("sort_changed", sort_changed)
+    grid.on("column_drag_finished", column_drag_finished)
     root.add(title, status, grid)
     mount(window, root)
     return app.run()

@@ -180,6 +180,32 @@ def test_win32_backend_normalizes_real_keyboard_and_system_key_messages() -> Non
         backend.shutdown()
 
 
+@pytest.mark.skipif(
+    sys.platform != "win32",
+    reason="Win32 pointer capture smoke test requires Windows",
+)
+def test_win32_backend_acquires_and_releases_real_pointer_capture() -> None:
+    backend = _isolated_backend("pointer-capture")
+    backend.initialize()
+    handle = backend.create_window(NativeWindowSpec("SwirUI Pointer Capture Smoke", 640, 420))
+
+    try:
+        assert backend.capture_pointer(handle) is True
+
+        win_dll: Any = ctypes.__dict__["WinDLL"]
+        user32: Any = win_dll("user32", use_last_error=True)
+        user32.GetCapture.argtypes = []
+        user32.GetCapture.restype = ctypes.c_void_p
+        assert int(user32.GetCapture()) == handle.value
+
+        assert backend.release_pointer(handle) is True
+        assert not user32.GetCapture()
+        assert backend.release_pointer(handle) is False
+    finally:
+        backend.destroy_window(handle)
+        backend.shutdown()
+
+
 @pytest.mark.skipif(sys.platform != "win32", reason="Win32 renderer smoke test requires Windows")
 def test_win32_preview_renderer_paints_scene_into_real_window() -> None:
     root = SceneNode(

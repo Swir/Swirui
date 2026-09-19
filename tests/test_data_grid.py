@@ -231,6 +231,16 @@ def test_header_pointer_sort_and_resize_use_retained_input_routing() -> None:
             button=PointerButton.LEFT,
         )
     )
+    assert grid.sort_column_key is None
+    window._apply_platform_event(
+        PlatformEvent(
+            PlatformEventKind.POINTER_UP,
+            handle,
+            x=130.0,
+            y=35.0,
+            button=PointerButton.LEFT,
+        )
+    )
     assert grid.sort_column_key == "name"
     assert grid.sort_descending is False
 
