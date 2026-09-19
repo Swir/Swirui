@@ -48,6 +48,8 @@ class DataGrid(_RetainedDataGrid):
             if resize_key is not None and self._column_by_key(resize_key).resizable:
                 self._clear_header_press()
                 super()._on_pointer_down(event)
+                if self._resizing_column_key is not None:
+                    self._capture_pointer_for_header_gesture()
                 return
 
             header_column = self._column_at_x(platform_event.x)
@@ -56,6 +58,7 @@ class DataGrid(_RetainedDataGrid):
                 self._header_press_x = platform_event.x
                 self._header_press_index = self._column_index(header_column.key)
                 self._header_drag_started = False
+                self._capture_pointer_for_header_gesture()
                 # Defer click-to-sort until pointer-up. This keeps the row model
                 # stable while the gesture is still ambiguous between click and
                 # drag, and avoids firing a sort event that immediately needs to
@@ -128,6 +131,11 @@ class DataGrid(_RetainedDataGrid):
         if column.sortable:
             self.toggle_sort(column_key)
         event.prevent_default()
+
+    def _capture_pointer_for_header_gesture(self) -> None:
+        window = self.mounted_window
+        if window is not None:
+            window.capture_pointer(self)
 
     def _auto_scroll_for_header_drag(self, x: float) -> None:
         if self.content_width <= self.bounds.width:
