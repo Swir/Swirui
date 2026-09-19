@@ -180,7 +180,10 @@ def test_win32_backend_normalizes_real_keyboard_and_system_key_messages() -> Non
         backend.shutdown()
 
 
-@pytest.mark.skipif(sys.platform != "win32", reason="Win32 pointer capture smoke test requires Windows")
+@pytest.mark.skipif(
+    sys.platform != "win32",
+    reason="Win32 pointer capture smoke test requires Windows",
+)
 def test_win32_backend_acquires_and_releases_real_pointer_capture() -> None:
     backend = _isolated_backend("pointer-capture")
     backend.initialize()
