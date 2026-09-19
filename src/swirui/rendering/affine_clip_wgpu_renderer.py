@@ -1,14 +1,16 @@
-"""Affine wgpu renderer with exact rotated/sheared geometry clipping.
+"""Affine wgpu renderer with exact rotated/sheared clipping.
 
 This layer keeps the mature affine renderer fast path untouched for ordinary
-axis-aligned clips. When retained geometry enters a rotated or sheared
-``clip_to_bounds`` hierarchy, triangles are transformed to world space and
-clipped exactly against the transformed convex quads before native submission.
-Images and shaped text keep their existing explicit non-axis clip gate until
-those pipelines gain equivalent texture/glyph clipping support.
+axis-aligned clips. When retained geometry or images enter a rotated or sheared
+``clip_to_bounds`` hierarchy, authored triangles are transformed to world space
+and clipped exactly against the transformed convex quads before native
+submission. Shaped text keeps its explicit non-axis clip gate until the glyph
+pipeline gains equivalent affine clipping support.
 """
 
 from __future__ import annotations
+
+from typing import cast
 
 from swirui.window import Window
 
@@ -34,9 +36,19 @@ from .wgpu_renderer import ImageInstance, RectangleInstance, TextInstance
 
 _IDENTITY_GPU_AFFINE = (1.0, 0.0, 0.0, 1.0, 0.0, 0.0)
 
+ClippedImageVertex = tuple[float, float, float, float]
+ClippedImageTriangle = tuple[
+    str,
+    ClippedImageVertex,
+    ClippedImageVertex,
+    ClippedImageVertex,
+    float,
+    tuple[float, float, float, float],
+]
+
 
 class WgpuRenderer(_BaseAffineWgpuRenderer):
-    """Persistent affine renderer with exact convex clips for filled geometry."""
+    """Persistent affine renderer with exact convex clips for filled GPU content."""
 
     def _affine_scene_payload(self, window: Window, scene: Scene) -> AffineScenePayload:
         if not self._scene_has_non_axis_clip(scene):
@@ -45,7 +57,7 @@ class WgpuRenderer(_BaseAffineWgpuRenderer):
         scale = window.scale
         rectangles: list[RectangleInstance] = []
         texts: list[TextInstance] = []
-        images: list[ImageInstance | AffineImageInstance] = []
+        images: list[ImageInstance | AffineImageInstance | ClippedImageTriangle] = []
         paths: list[AffineShapeVertex] = []
 
         for node, effective_opacity, clips, world_transform in scene.walk_composited_affine():
@@ -143,9 +155,9 @@ class WgpuRenderer(_BaseAffineWgpuRenderer):
             if node.kind is SceneNodeKind.IMAGE:
                 if node.bounds.width <= 0.0 or node.bounds.height <= 0.0:
                     continue
-                clip = self._resolved_affine_clip(scene, clips)
+                axis_clip, convex_clips = self._resolved_geometry_clips(scene, clips)
                 visual_bounds = world_transform.transform_rect_bounds(node.bounds)
-                if clip is None or visual_bounds.intersection(clip) is None:
+                if axis_clip is None or visual_bounds.intersection(axis_clip) is None:
                     continue
                 resource_id = node.resource_id
                 native_id = (
@@ -155,6 +167,21 @@ class WgpuRenderer(_BaseAffineWgpuRenderer):
                     raise RuntimeError(
                         f"Scene image resource {resource_id!r} is not registered with WgpuRenderer."
                     )
+
+                clip_tuple = self._clip_tuple(axis_clip, scale)
+                if convex_clips:
+                    self._append_exact_clipped_image(
+                        images,
+                        native_id,
+                        node.bounds,
+                        effective_opacity,
+                        clip_tuple,
+                        convex_clips,
+                        world_transform,
+                        scale,
+                    )
+                    continue
+
                 geometry: ImageInstance = (
                     native_id,
                     self._scale(node.bounds.x, scale),
@@ -162,7 +189,7 @@ class WgpuRenderer(_BaseAffineWgpuRenderer):
                     self._scale(node.bounds.width, scale),
                     self._scale(node.bounds.height, scale),
                     effective_opacity,
-                    self._clip_tuple(clip, scale),
+                    clip_tuple,
                 )
                 if world_transform.is_identity:
                     images.append(geometry)
@@ -227,7 +254,11 @@ class WgpuRenderer(_BaseAffineWgpuRenderer):
                             )
                         )
 
-        return rectangles, texts, images, paths
+        # The native PyO3 image enum accepts the fixed six-field clipped-triangle
+        # variant in addition to the legacy axis-aligned and affine tuples. Keep the
+        # public affine payload alias stable until that lower-level representation
+        # becomes part of the general renderer contract.
+        return cast(AffineScenePayload, (rectangles, texts, images, paths))
 
     @staticmethod
     def _scene_has_non_axis_clip(scene: Scene) -> bool:
@@ -253,6 +284,69 @@ class WgpuRenderer(_BaseAffineWgpuRenderer):
             else:
                 convex_clips.append(transformed_rect_polygon(transform, bounds))
         return axis_clip, tuple(convex_clips)
+
+    def _append_exact_clipped_image(
+        self,
+        images: list[ImageInstance | AffineImageInstance | ClippedImageTriangle],
+        native_id: str,
+        bounds: Rect,
+        effective_opacity: float,
+        axis_clip: tuple[float, float, float, float],
+        convex_clips: tuple[ConvexPolygon, ...],
+        world_transform: Affine2D,
+        scale: float,
+    ) -> None:
+        authored_top_left = Point(bounds.x, bounds.y)
+        authored_top_right = Point(bounds.right, bounds.y)
+        authored_bottom_right = Point(bounds.right, bounds.bottom)
+        authored_bottom_left = Point(bounds.x, bounds.bottom)
+        for authored_triangle in (
+            (authored_top_left, authored_top_right, authored_bottom_right),
+            (authored_top_left, authored_bottom_right, authored_bottom_left),
+        ):
+            world_triangle = (
+                world_transform.transform_point(authored_triangle[0]),
+                world_transform.transform_point(authored_triangle[1]),
+                world_transform.transform_point(authored_triangle[2]),
+            )
+            polygon = clip_triangle_to_convex_polygons(world_triangle, convex_clips)
+            for clipped_triangle in triangulate_convex_polygon(polygon):
+                first = self._image_vertex_from_world(
+                    clipped_triangle[0], bounds, world_transform, scale
+                )
+                second = self._image_vertex_from_world(
+                    clipped_triangle[1], bounds, world_transform, scale
+                )
+                third = self._image_vertex_from_world(
+                    clipped_triangle[2], bounds, world_transform, scale
+                )
+                images.append(
+                    (
+                        native_id,
+                        first,
+                        second,
+                        third,
+                        effective_opacity,
+                        axis_clip,
+                    )
+                )
+
+    def _image_vertex_from_world(
+        self,
+        point: Point,
+        bounds: Rect,
+        world_transform: Affine2D,
+        scale: float,
+    ) -> ClippedImageVertex:
+        authored = world_transform.inverse_transform_point(point)
+        u = min(1.0, max(0.0, (authored.x - bounds.x) / bounds.width))
+        v = min(1.0, max(0.0, (authored.y - bounds.y) / bounds.height))
+        return (
+            self._scale(point.x, scale),
+            self._scale(point.y, scale),
+            u,
+            v,
+        )
 
     def _append_exact_clipped_fan(
         self,
