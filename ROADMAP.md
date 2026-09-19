@@ -198,9 +198,9 @@ Layout spacing and padding remain authored in logical DIPs across monitor-scale 
 
 ## 0.7 Alpha — Animation Engine
 
-**Status:** Underway 🚧 — 11 / 12 groups verified
+**Status:** Complete ✅ — 12 / 12 groups verified
 
-- [ ] Fade / slide / scale / rotate
+- [x] Fade / slide / scale / rotate
 - [x] Blur / glow transitions
 - [x] Morph / flip / reveal
 - [x] Spring / elastic / bounce
@@ -222,6 +222,8 @@ Retained interaction helpers cover hover/press/focus opacity transitions, animat
 `PageTransition` now performs retained slide-and-cross-fade navigation without mutating authored layout bounds, while `SharedElementTransition` aligns two retained representations by their visual centers, cross-fades them along one logical path and preserves their pre-existing visual offsets. Both are driven by the same elapsed-time animation clock and compile through the retained SceneGraph, so clipping and hit testing track the sampled visual position without recreating the native window or persistent wgpu context. Deterministic unit coverage protects frame-partition independence, cancellation, restoration and boundary cases, and dedicated real Win32+wGPU smoke gates verify persistent-context reuse.
 
 `MorphTransition` aligns positive, matching-aspect retained source/target elements by visual center, interpolates their verified uniform visual scales and cross-fades them without mutating authored layout. `FlipTransition` provides a deterministic center-collapse flip with a single midpoint content-swap hook, while `RevealTransition` combines retained scale and opacity from a configurable hidden state back to the captured authored visual state. Exact-head CI #697 verified these APIs across Python 3.11–3.14, strict Ruff/Mypy, performance budgets, Rust cargo check/test, Maturin/PyO3, Linux/X11, macOS/Cocoa and the real Win32+wGPU persistent-context smoke gate before this eleventh 0.7 group was credited.
+
+`RotateTransition` completes the transform group with center-origin retained rotation and geometry-accurate hit testing while preserving authored layout. Arbitrary-affine shaped text now remains native-shaped: rotation, shear, reflection, non-uniform scale and non-axis clips are rasterized through cosmic-text into bounded cached RGBA resources, then transformed and clipped by the verified affine image/wgpu path. Exact-head CI #774 and Native Affine Contract #32 passed on PR #118 before merge, including the real Win32+wGPU RotateTransition shaped-text smoke. Completion applies only to 0.7 and does not imply beta or release readiness.
 
 ## 0.8 Beta — Professional Widgets
 
@@ -423,6 +425,7 @@ AI output must remain ordinary, editable SwirUI code.
 - [x] Windows persistent GPU context multi-frame + resize smoke test
 - [x] Windows per-corner rounded-rectangle shader smoke test
 - [x] Windows shaped-text SceneGraph → Python → Rust/wgpu smoke test
+- [x] Windows arbitrary-affine shaped-text + RotateTransition persistent wgpu smoke test
 - [x] Windows image-resource SceneGraph → Python → Rust/wgpu smoke test
 - [x] Windows filled Path2D SceneGraph → Python → Rust/wgpu smoke test
 - [x] Windows retained linear / radial / mesh gradient GPU smoke tests
