@@ -311,7 +311,61 @@ def test_affine_path_renderer_packs_rotated_image_for_native_gpu_pipeline() -> N
         app.stop()
 
 
-def test_affine_path_renderer_keeps_transformed_text_gated() -> None:
+def test_affine_path_renderer_packs_uniform_scale_and_translation_for_shaped_text() -> None:
+    native = _FakeAffineNative()
+    renderer = WgpuRenderer(native_module=native)
+    root = SceneNode(
+        key="root",
+        kind=SceneNodeKind.GROUP,
+        bounds=Rect(0.0, 0.0, 420.0, 300.0),
+        hit_testable=False,
+    )
+    text = SceneNode(
+        key="scaled-text",
+        kind=SceneNodeKind.TEXT,
+        bounds=Rect(90.0, 90.0, 180.0, 48.0),
+        text="Scaled glyphon text",
+        fill=Color.from_hex("#EAF7FF"),
+        font_size=22.0,
+        transform=Affine2D.uniform_scale(
+            1.2,
+            origin=Point(180.0, 114.0),
+        ).then(Affine2D.translation(12.0, -8.0)),
+    )
+    root.add(text)
+    app = App(platform_backend=NullPlatformBackend(), renderer=renderer)
+    window = Window(width=420, height=300)
+    window.set_scene(Scene(420.0, 300.0, root))
+    app.add_window(window)
+
+    try:
+        app.start()
+        context = native.contexts[0]
+        rectangles, texts, images, paths = context.path_calls[0][:4]
+        assert rectangles == []
+        assert images == []
+        assert paths == []
+        assert len(texts) == 1
+        packed = texts[0]
+        expected_bounds = text.transform.transform_rect_bounds(text.bounds)
+        assert packed[0] == "Scaled glyphon text"
+        assert packed[1:5] == pytest.approx(
+            (
+                expected_bounds.x,
+                expected_bounds.y,
+                expected_bounds.width,
+                expected_bounds.height,
+            )
+        )
+        assert packed[5] == pytest.approx(26.4)
+        assert packed[6:10] == pytest.approx((234 / 255, 247 / 255, 1.0, 1.0))
+        assert packed[11] == (0.0, 0.0, 420.0, 300.0)
+        assert renderer.last_text_count == 1
+    finally:
+        app.stop()
+
+
+def test_affine_path_renderer_keeps_rotated_text_gated() -> None:
     native = _FakeAffineNative()
     renderer = WgpuRenderer(native_module=native)
     root = SceneNode(
@@ -336,7 +390,7 @@ def test_affine_path_renderer_keeps_transformed_text_gated() -> None:
     app.add_window(window)
 
     try:
-        with pytest.raises(RuntimeError, match="text nodes require"):
+        with pytest.raises(RuntimeError, match="text nodes currently require positive uniform scale"):
             app.start()
     finally:
         app.stop()
