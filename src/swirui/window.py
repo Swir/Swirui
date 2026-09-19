@@ -66,6 +66,7 @@ class Window(EventEmitter):
         self.scene: Scene | None = None
         self.hovered_scene_node: SceneNode | None = None
         self.focused_component: Component | None = None
+        self.pointer_capture_component: Component | None = None
         self.visible = False
         self.closed = False
         self.focused = False
@@ -106,6 +107,10 @@ class Window(EventEmitter):
             component, self.focused_component
         ):
             self.focus_component(None)
+        if self.pointer_capture_component is not None and not self._component_belongs_to(
+            component, self.pointer_capture_component
+        ):
+            self.release_pointer_capture()
         self.root = component
         self.emit("root_changed", old_root=old_root, root=component)
         return self
@@ -152,6 +157,67 @@ class Window(EventEmitter):
             "component_focus_changed",
             old_component=old_component,
             component=component,
+        )
+
+    def capture_pointer(self, component: Component) -> None:
+        """Capture subsequent pointer routing to one mounted component.
+
+        Capture remains logically active until explicit release, pointer-up,
+        focus loss, hiding, closing, or removal of the captured component from
+        the current root tree. Native backends may additionally acquire their
+        operating-system pointer grab so moves/up events continue outside the
+        window while a retained drag is active.
+        """
+
+        component_path = self._component_path_for_component(component)
+        if not component_path:
+            raise ValueError("Pointer capture component must belong to the window root tree.")
+        if any(not item.enabled or not item.visible for item in component_path):
+            raise ValueError("Pointer capture component and ancestors must be enabled and visible.")
+        if component is self.pointer_capture_component:
+            return
+
+        old_component = self.pointer_capture_component
+        self.pointer_capture_component = component
+        native_acquired = self._set_native_pointer_capture(True)
+        if old_component is not None:
+            old_component.emit(
+                "pointer_capture_lost",
+                window=self,
+                related_target=component,
+            )
+        component.emit(
+            "pointer_capture_gained",
+            window=self,
+            related_target=old_component,
+            native=native_acquired,
+        )
+        self.emit(
+            "pointer_capture_changed",
+            old_component=old_component,
+            component=component,
+            native=native_acquired,
+        )
+
+    def release_pointer_capture(self, component: Component | None = None) -> None:
+        """Release the current pointer capture if owned by ``component`` when supplied."""
+
+        captured = self.pointer_capture_component
+        if captured is None or (component is not None and captured is not component):
+            return
+        self.pointer_capture_component = None
+        native_released = self._set_native_pointer_capture(False)
+        captured.emit(
+            "pointer_capture_lost",
+            window=self,
+            related_target=None,
+            native=native_released,
+        )
+        self.emit(
+            "pointer_capture_changed",
+            old_component=captured,
+            component=None,
+            native=native_released,
         )
 
     def focus_next(self, *, reverse: bool = False) -> Component | None:
@@ -217,6 +283,7 @@ class Window(EventEmitter):
 
     def hide(self) -> None:
         if self.visible:
+            self.release_pointer_capture()
             if self._platform_backend is not None and self.native_handle is not None:
                 self._platform_backend.hide_window(self.native_handle)
             self.visible = False
@@ -226,6 +293,7 @@ class Window(EventEmitter):
     def close(self) -> None:
         if self.closed:
             return
+        self.release_pointer_capture()
         if self._platform_backend is not None and self.native_handle is not None:
             self._platform_backend.destroy_window(self.native_handle)
         self._mark_closed()
@@ -243,6 +311,8 @@ class Window(EventEmitter):
         self.emit("native_bound", handle=handle, scale=self.scale, display=self.display)
 
     def _unbind_native(self) -> None:
+        if self.pointer_capture_component is not None:
+            self.release_pointer_capture()
         if self.native_handle is None:
             self._platform_backend = None
             self.display = None
@@ -283,6 +353,8 @@ class Window(EventEmitter):
 
         if event.kind is PlatformEventKind.FOCUS:
             focused = bool(event.focused)
+            if not focused:
+                self.release_pointer_capture()
             if focused != self.focused:
                 self.focused = focused
                 self.emit("focus_changed", focused=focused)
@@ -328,6 +400,24 @@ class Window(EventEmitter):
             self._set_scale(display.scale)
         self.emit("display_changed", old_display=old_display, display=display)
 
+    def _set_native_pointer_capture(self, capture: bool) -> bool:
+        backend = self._platform_backend
+        handle = self.native_handle
+        if backend is None or handle is None:
+            return False
+        method = getattr(
+            backend,
+            "capture_pointer" if capture else "release_pointer",
+            None,
+        )
+        if not callable(method):
+            return False
+        try:
+            result = method(handle)
+        except (OSError, RuntimeError, ValueError):
+            return False
+        return result is not False
+
     def _logical_pointer_event(self, event: PlatformEvent) -> PlatformEvent:
         """Translate native physical pointer coordinates into logical DIPs."""
 
@@ -344,15 +434,25 @@ class Window(EventEmitter):
         if self.scene is not None and event.x is not None and event.y is not None:
             scene_path = self.scene.hit_path_xy(event.x, event.y)
         scene_target = scene_path[-1] if scene_path else None
-        component_path = self._component_path_for_scene_target(scene_target)
+        hit_component_path = self._component_path_for_scene_target(scene_target)
+        hit_component_target = hit_component_path[-1] if hit_component_path else None
+
+        captured = self.pointer_capture_component
+        component_path = hit_component_path
+        if captured is not None:
+            captured_path = self._component_path_for_component(captured)
+            if captured_path and all(item.enabled and item.visible for item in captured_path):
+                component_path = captured_path
+            else:
+                self.release_pointer_capture(captured)
         component_target = component_path[-1] if component_path else None
 
         if (
             event.kind is PlatformEventKind.POINTER_DOWN
-            and component_target is not None
-            and self._component_is_focus_candidate(component_target)
+            and hit_component_target is not None
+            and self._component_is_focus_candidate(hit_component_target)
         ):
-            self.focus_component(component_target)
+            self.focus_component(hit_component_target)
 
         pointer_target_changed = (
             event.kind is PlatformEventKind.POINTER_MOVE
@@ -387,15 +487,15 @@ class Window(EventEmitter):
                     "pointer_enter",
                     event,
                     scene_target,
-                    component_path,
+                    hit_component_path,
                 )
                 self.emit(
                     "pointer_enter",
                     event=event,
                     target=scene_target,
                     path=scene_path,
-                    component_target=component_target,
-                    component_path=component_path,
+                    component_target=hit_component_target,
+                    component_path=hit_component_path,
                     routed_event=routed_enter,
                 )
 
@@ -406,15 +506,31 @@ class Window(EventEmitter):
             scene_path,
             component_path,
         )
-        self.emit(
+        window_event = self.emit(
             event.kind.value,
             event=event,
             target=scene_target,
             path=scene_path,
             component_target=component_target,
             component_path=component_path,
+            hit_component_target=hit_component_target,
+            hit_component_path=hit_component_path,
+            pointer_captured=self.pointer_capture_component is not None,
             routed_event=routed_event,
         )
+
+        if (
+            event.kind is PlatformEventKind.POINTER_DOWN
+            and self.pointer_capture_component is None
+            and hit_component_target is not None
+            and (
+                window_event.default_prevented
+                or (routed_event is not None and routed_event.default_prevented)
+            )
+        ):
+            self.capture_pointer(hit_component_target)
+        elif event.kind is PlatformEventKind.POINTER_UP:
+            self.release_pointer_capture()
 
     def _apply_keyboard_event(self, event: PlatformEvent) -> None:
         focused = self.focused_component
@@ -613,6 +729,7 @@ class Window(EventEmitter):
     def _mark_closed(self) -> None:
         if self.closed:
             return
+        self.release_pointer_capture()
         self.focus_component(None)
         self.visible = False
         self.focused = False
