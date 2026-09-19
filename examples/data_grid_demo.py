@@ -19,7 +19,10 @@ def main() -> int:
         color=Color.from_hex("#62E5FF"),
     )
     status = Label(
-        "Click headers to sort, drag header separators to resize, use ↑ ↓ Home End PageUp PageDown.",
+        (
+            "Click headers to sort, drag header separators to resize, "
+            "use ↑ ↓ Home End PageUp PageDown."
+        ),
         bounds=Rect(32.0, 68.0, 840.0, 28.0),
         font_size=15.0,
         color=Color.from_hex("#DDF5FF"),
