@@ -61,6 +61,24 @@ fn validate_affine_transform(values: Vec<f32>) -> PyResult<()> {
         .map_err(PyValueError::new_err)
 }
 
+#[pyfunction]
+#[pyo3(signature = (content, width, height, font_size, red, green, blue, alpha, family))]
+fn rasterize_text_rgba(
+    content: &str,
+    width: u32,
+    height: u32,
+    font_size: f32,
+    red: f32,
+    green: f32,
+    blue: f32,
+    alpha: f32,
+    family: &str,
+) -> PyResult<Vec<u8>> {
+    text::rasterize_text_rgba(
+        content, width, height, font_size, red, green, blue, alpha, family,
+    )
+}
+
 fn backend_names(backends: wgpu::Backends) -> Vec<&'static str> {
     let candidates = [
         (wgpu::Backends::DX12, "dx12"),
@@ -83,6 +101,7 @@ fn _swirui_native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(probe_adapter, module)?)?;
     module.add_function(wrap_pyfunction!(validate_custom_shader_wgsl, module)?)?;
     module.add_function(wrap_pyfunction!(validate_affine_transform, module)?)?;
+    module.add_function(wrap_pyfunction!(rasterize_text_rgba, module)?)?;
     module.add_function(wrap_pyfunction!(clear_win32_surface, module)?)?;
     module.add_function(wrap_pyfunction!(draw_rectangles_win32_surface, module)?)?;
     #[cfg(target_os = "windows")]

@@ -21,6 +21,8 @@ pub(crate) type TextInstance = (
     ClipRect,
 );
 
+const MAX_RASTER_PIXELS: usize = 16_777_216;
+
 pub(crate) struct TextSystem {
     font_system: FontSystem,
     swash_cache: SwashCache,
@@ -166,6 +168,66 @@ impl TextSystem {
     }
 }
 
+pub(crate) fn rasterize_text_rgba(
+    content: &str,
+    width: u32,
+    height: u32,
+    font_size: f32,
+    red: f32,
+    green: f32,
+    blue: f32,
+    alpha: f32,
+    family: &str,
+) -> PyResult<Vec<u8>> {
+    let byte_len = validate_raster_request(
+        content, width, height, font_size, red, green, blue, alpha, family,
+    )?;
+    let mut rgba = vec![0_u8; byte_len];
+    let mut font_system = FontSystem::new();
+    let mut swash_cache = SwashCache::new();
+    let metrics = Metrics::new(font_size, font_size * 1.25);
+    let mut buffer = Buffer::new(&mut font_system, metrics);
+    buffer.set_size(Some(width as f32), Some(height as f32));
+    let attrs = Attrs::new().family(Family::Name(family));
+    buffer.set_text(content, &attrs, Shaping::Advanced, None);
+    let base_color = Color::rgba(
+        channel_to_u8(red),
+        channel_to_u8(green),
+        channel_to_u8(blue),
+        255,
+    );
+    buffer.draw(
+        &mut font_system,
+        &mut swash_cache,
+        base_color,
+        |x, y, glyph_width, glyph_height, color| {
+            let (source_red, source_green, source_blue, source_alpha) = color.as_rgba_tuple();
+            let source_alpha = ((f32::from(source_alpha) * alpha).round()).clamp(0.0, 255.0) as u8;
+            if source_alpha == 0 {
+                return;
+            }
+            for offset_y in 0..glyph_height {
+                let pixel_y = i64::from(y) + i64::from(offset_y);
+                if pixel_y < 0 || pixel_y >= i64::from(height) {
+                    continue;
+                }
+                for offset_x in 0..glyph_width {
+                    let pixel_x = i64::from(x) + i64::from(offset_x);
+                    if pixel_x < 0 || pixel_x >= i64::from(width) {
+                        continue;
+                    }
+                    let pixel_index = ((pixel_y as usize * width as usize) + pixel_x as usize) * 4;
+                    blend_rgba_pixel(
+                        &mut rgba[pixel_index..pixel_index + 4],
+                        (source_red, source_green, source_blue, source_alpha),
+                    );
+                }
+            }
+        },
+    );
+    Ok(rgba)
+}
+
 pub(crate) fn validate_texts(texts: &[TextInstance]) -> PyResult<()> {
     for text in texts {
         let (
@@ -228,6 +290,78 @@ pub(crate) fn validate_texts(texts: &[TextInstance]) -> PyResult<()> {
     Ok(())
 }
 
+fn validate_raster_request(
+    content: &str,
+    width: u32,
+    height: u32,
+    font_size: f32,
+    red: f32,
+    green: f32,
+    blue: f32,
+    alpha: f32,
+    family: &str,
+) -> PyResult<usize> {
+    if content.is_empty() {
+        return Err(PyValueError::new_err("Text content cannot be empty."));
+    }
+    if family.trim().is_empty() {
+        return Err(PyValueError::new_err("Text font family cannot be empty."));
+    }
+    if width == 0 || height == 0 {
+        return Err(PyValueError::new_err(
+            "Text raster dimensions must be greater than zero.",
+        ));
+    }
+    if !font_size.is_finite() || font_size <= 0.0 || !(font_size * 1.25).is_finite() {
+        return Err(PyValueError::new_err(
+            "Text raster font size must be finite and greater than zero.",
+        ));
+    }
+    if [red, green, blue, alpha]
+        .into_iter()
+        .any(|channel| !channel.is_finite() || !(0.0..=1.0).contains(&channel))
+    {
+        return Err(PyValueError::new_err(
+            "Text raster color channels must be finite and between 0.0 and 1.0.",
+        ));
+    }
+    let pixels = (width as usize)
+        .checked_mul(height as usize)
+        .ok_or_else(|| PyValueError::new_err("Text raster dimensions are too large."))?;
+    if pixels > MAX_RASTER_PIXELS {
+        return Err(PyValueError::new_err(format!(
+            "Text raster exceeds the {MAX_RASTER_PIXELS}-pixel safety limit."
+        )));
+    }
+    pixels
+        .checked_mul(4)
+        .ok_or_else(|| PyValueError::new_err("Text raster byte size overflowed."))
+}
+
+fn blend_rgba_pixel(destination: &mut [u8], source: (u8, u8, u8, u8)) {
+    let source_alpha = f32::from(source.3) / 255.0;
+    if source_alpha <= 0.0 {
+        return;
+    }
+    let destination_alpha = f32::from(destination[3]) / 255.0;
+    let output_alpha = source_alpha + destination_alpha * (1.0 - source_alpha);
+    if output_alpha <= f32::EPSILON {
+        destination.fill(0);
+        return;
+    }
+    for channel in 0..3 {
+        let source_premultiplied =
+            f32::from([source.0, source.1, source.2][channel]) / 255.0 * source_alpha;
+        let destination_premultiplied =
+            f32::from(destination[channel]) / 255.0 * destination_alpha;
+        let output = (source_premultiplied
+            + destination_premultiplied * (1.0 - source_alpha))
+            / output_alpha;
+        destination[channel] = (output * 255.0).round().clamp(0.0, 255.0) as u8;
+    }
+    destination[3] = (output_alpha * 255.0).round().clamp(0.0, 255.0) as u8;
+}
+
 fn channel_to_u8(channel: f32) -> u8 {
     (channel * 255.0).round() as u8
 }
@@ -272,5 +406,55 @@ mod tests {
         let mut disjoint_clip = valid_text();
         disjoint_clip.11 = (500.0, 500.0, 600.0, 600.0);
         assert!(validate_texts(&[disjoint_clip]).is_err());
+    }
+
+    #[test]
+    fn validates_raster_requests_and_limits_allocation() {
+        assert_eq!(
+            validate_raster_request(
+                "SwirUI",
+                128,
+                48,
+                22.0,
+                0.2,
+                0.8,
+                1.0,
+                1.0,
+                "Segoe UI",
+            )
+            .expect("valid raster request"),
+            128 * 48 * 4
+        );
+        assert!(
+            validate_raster_request("", 128, 48, 22.0, 1.0, 1.0, 1.0, 1.0, "Segoe UI").is_err()
+        );
+        assert!(
+            validate_raster_request("SwirUI", 0, 48, 22.0, 1.0, 1.0, 1.0, 1.0, "Segoe UI")
+                .is_err()
+        );
+        assert!(
+            validate_raster_request(
+                "SwirUI",
+                16_384,
+                16_384,
+                22.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                "Segoe UI",
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn alpha_blending_preserves_straight_rgba() {
+        let mut destination = [0_u8, 0, 255, 128];
+        blend_rgba_pixel(&mut destination, (255, 0, 0, 128));
+        assert_eq!(destination[3], 192);
+        assert!((i16::from(destination[0]) - 170).abs() <= 1);
+        assert_eq!(destination[1], 0);
+        assert!((i16::from(destination[2]) - 85).abs() <= 1);
     }
 }
