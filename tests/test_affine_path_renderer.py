@@ -390,7 +390,10 @@ def test_affine_path_renderer_keeps_rotated_text_gated() -> None:
     app.add_window(window)
 
     try:
-        with pytest.raises(RuntimeError, match="text nodes currently require positive uniform scale"):
+        with pytest.raises(
+            RuntimeError,
+            match="text nodes currently require positive uniform scale",
+        ):
             app.start()
     finally:
         app.stop()
