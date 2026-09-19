@@ -2,9 +2,11 @@
 
 Build and install the native module from ``native/`` before running this example.
 Transformed Path2D, rounded rectangles and RGBA images render through persistent
-native GPU pipelines. Shaped text supports positive uniform scale plus translation;
-text rotation/shear and rotated clips intentionally remain gated until those
-compositor slices land.
+native GPU pipelines. Filled geometry also supports exact rotated/sheared
+``clip_to_bounds`` regions through deterministic convex clipping. Shaped text
+supports positive uniform scale plus translation; text rotation/shear and
+non-axis clips for text/images intentionally remain gated until those compositor
+slices land.
 """
 
 from __future__ import annotations
@@ -49,7 +51,7 @@ root.add(
         "subtitle",
         SceneNodeKind.TEXT,
         Rect(70, 120, 960, 44),
-        text="SceneGraph transform → PyO3 affine payload → persistent Rust/wgpu pipelines",
+        text="SceneGraph transform → exact affine clips → persistent Rust/wgpu pipelines",
         fill=Color.from_hex("#62E5FF"),
         font_size=19,
         hit_testable=False,
@@ -122,6 +124,34 @@ clip_layer.add(
     ),
 )
 root.add(clip_layer)
+
+rotated_clip = SceneNode(
+    "rotated-geometry-clip",
+    SceneNodeKind.GROUP,
+    Rect(775, 500, 220, 125),
+    clip_to_bounds=True,
+    hit_testable=False,
+    transform=Affine2D.rotation(
+        math.radians(14.0),
+        origin=Point(885.0, 562.5),
+    ),
+)
+rotated_clip.add(
+    SceneNode(
+        "exact-clipped-geometry",
+        SceneNodeKind.PATH,
+        Rect(735, 475, 300, 180),
+        fill=Color.from_hex("#35BFFF"),
+        opacity=0.82,
+        path=Path2D.polygon(
+            Point(0, 25),
+            Point(300, 0),
+            Point(265, 180),
+            Point(35, 155),
+        ),
+    )
+)
+root.add(rotated_clip)
 
 window = Window(title="SwirUI — Affine GPU Geometry", width=WIDTH, height=HEIGHT)
 window.set_scene(Scene(WIDTH, HEIGHT, root))
