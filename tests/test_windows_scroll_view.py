@@ -39,6 +39,12 @@ def _send_click(user32: Any, hwnd: int, x: int, y: int) -> None:
     user32.SendMessageW(ctypes.c_void_p(hwnd), 0x0202, 0, point)
 
 
+def _send_drag(user32: Any, hwnd: int, start_x: int, y: int, end_x: int) -> None:
+    user32.SendMessageW(ctypes.c_void_p(hwnd), 0x0201, 0, _lparam(start_x, y))
+    user32.SendMessageW(ctypes.c_void_p(hwnd), 0x0200, 0x0001, _lparam(end_x, y))
+    user32.SendMessageW(ctypes.c_void_p(hwnd), 0x0202, 0, _lparam(end_x, y))
+
+
 def _send_key(user32: Any, hwnd: int, key_code: int) -> None:
     user32.SendMessageW(ctypes.c_void_p(hwnd), 0x0100, key_code, 0)
     user32.SendMessageW(ctypes.c_void_p(hwnd), 0x0101, key_code, 0)
@@ -129,7 +135,7 @@ def test_datagrid_virtualization_and_keyboard_selection_in_real_win32_wgpu_sessi
     ]
     grid = DataGrid(
         (
-            DataGridColumn("id", "ID", width=80.0),
+            DataGridColumn("id", "ID", width=80.0, min_width=60.0, max_width=140.0),
             DataGridColumn("name", "Name", width=240.0),
             DataGridColumn("status", "Status", width=140.0),
         ),
@@ -150,6 +156,21 @@ def test_datagrid_virtualization_and_keyboard_selection_in_real_win32_wgpu_sessi
         hwnd = window.native_handle.value
         user32 = _user32()
 
+        header_y = max(1, round(44.0 * window.scale))
+        separator_x = max(1, round(104.0 * window.scale))
+        resize_end_x = max(1, round(134.0 * window.scale))
+        _send_drag(user32, hwnd, separator_x, header_y, resize_end_x)
+        app.process_events()
+        assert grid.columns[0].resolved_width == pytest.approx(110.0)
+
+        header_x = max(1, round(54.0 * window.scale))
+        _send_click(user32, hwnd, header_x, header_y)
+        _send_click(user32, hwnd, header_x, header_y)
+        app.process_events()
+        assert grid.sort_column_key == "id"
+        assert grid.sort_descending is True
+        assert grid.rows[0]["id"] == 199
+
         _send_click(
             user32,
             hwnd,
@@ -159,6 +180,8 @@ def test_datagrid_virtualization_and_keyboard_selection_in_real_win32_wgpu_sessi
         app.process_events()
         assert window.focused_component is grid
         assert grid.selected_index == 0
+        assert grid.selected_row is not None
+        assert grid.selected_row["id"] == 199
 
         _send_key(user32, hwnd, 0x28)
         _send_key(user32, hwnd, 0x28)
