@@ -506,7 +506,7 @@ class Window(EventEmitter):
             scene_path,
             component_path,
         )
-        window_event = self.emit(
+        self.emit(
             event.kind.value,
             event=event,
             target=scene_target,
@@ -519,17 +519,7 @@ class Window(EventEmitter):
             routed_event=routed_event,
         )
 
-        if (
-            event.kind is PlatformEventKind.POINTER_DOWN
-            and self.pointer_capture_component is None
-            and hit_component_target is not None
-            and (
-                window_event.default_prevented
-                or (routed_event is not None and routed_event.default_prevented)
-            )
-        ):
-            self.capture_pointer(hit_component_target)
-        elif event.kind is PlatformEventKind.POINTER_UP:
+        if event.kind is PlatformEventKind.POINTER_UP:
             self.release_pointer_capture()
 
     def _apply_keyboard_event(self, event: PlatformEvent) -> None:
