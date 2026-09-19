@@ -73,7 +73,19 @@ def test_rotated_scenegraph_geometry_reaches_real_wgpu_and_keeps_input_aligned()
             origin=Point(495.0, 160.0),
         ),
     )
-    root.add(path_node, rectangle_node, image_node)
+    text_node = SceneNode(
+        key="scaled-text",
+        kind=SceneNodeKind.TEXT,
+        bounds=Rect(175.0, 285.0, 270.0, 50.0),
+        text="SwirUI affine shaped text",
+        fill=Color.from_hex("#EAF7FF"),
+        font_size=24.0,
+        transform=Affine2D.uniform_scale(
+            1.12,
+            origin=Point(310.0, 310.0),
+        ).then(Affine2D.translation(8.0, -4.0)),
+    )
+    root.add(path_node, rectangle_node, image_node, text_node)
     scene = Scene(620.0, 400.0, root)
 
     renderer = WgpuRenderer()
@@ -117,7 +129,7 @@ def test_rotated_scenegraph_geometry_reaches_real_wgpu_and_keeps_input_aligned()
         assert renderer.frames_rendered == 1
         assert renderer.last_path_count > 2
         assert renderer.last_rectangle_count == 0
-        assert renderer.last_text_count == 0
+        assert renderer.last_text_count == 1
         assert renderer.last_image_count == 1
         assert renderer.persistent_context_count == 1
         assert renderer.adapter_name
@@ -137,6 +149,10 @@ def test_rotated_scenegraph_geometry_reaches_real_wgpu_and_keeps_input_aligned()
         visual_image_probe = image_node.transform.transform_point(authored_image_probe)
         assert scene.hit_test(visual_image_probe) is image_node
 
+        authored_text_probe = Point(310.0, 310.0)
+        visual_text_probe = text_node.transform.transform_point(authored_text_probe)
+        assert scene.hit_test(visual_text_probe) is text_node
+
         path_node.transform = Affine2D.rotation(
             math.radians(-17.0),
             origin=Point(140.0, 160.0),
@@ -149,11 +165,16 @@ def test_rotated_scenegraph_geometry_reaches_real_wgpu_and_keeps_input_aligned()
             math.radians(-23.0),
             origin=Point(495.0, 160.0),
         )
+        text_node.transform = Affine2D.uniform_scale(
+            0.92,
+            origin=Point(310.0, 310.0),
+        ).then(Affine2D.translation(-10.0, 7.0))
         scene.touch()
         renderer.render(window, None)
 
         assert renderer.frames_rendered == 2
         assert renderer.last_path_count > 2
+        assert renderer.last_text_count == 1
         assert renderer.last_image_count == 1
         assert renderer.persistent_context_count == 1
         visual_path_probe = path_node.transform.transform_point(authored_path_probe)
@@ -164,5 +185,7 @@ def test_rotated_scenegraph_geometry_reaches_real_wgpu_and_keeps_input_aligned()
         assert scene.hit_test(visual_rectangle_probe) is rectangle_node
         visual_image_probe = image_node.transform.transform_point(authored_image_probe)
         assert scene.hit_test(visual_image_probe) is image_node
+        visual_text_probe = text_node.transform.transform_point(authored_text_probe)
+        assert scene.hit_test(visual_text_probe) is text_node
     finally:
         app.stop()

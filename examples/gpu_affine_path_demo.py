@@ -2,8 +2,9 @@
 
 Build and install the native module from ``native/`` before running this example.
 Transformed Path2D, rounded rectangles and RGBA images render through persistent
-native GPU pipelines. Shaped-text transforms and rotated clips intentionally
-remain gated until those compositor slices land.
+native GPU pipelines. Shaped text supports positive uniform scale plus translation;
+text rotation/shear and rotated clips intentionally remain gated until those
+compositor slices land.
 """
 
 from __future__ import annotations
@@ -105,6 +106,19 @@ clip_layer.add(
             math.radians(22.0),
             origin=Point(865.0, 375.0),
         ),
+    ),
+    SceneNode(
+        "scaled-shaped-text",
+        SceneNodeKind.TEXT,
+        Rect(305, 515, 500, 54),
+        text="glyphon text — retained uniform scale + translation",
+        fill=Color.from_hex("#EAF7FF"),
+        font_size=24,
+        hit_testable=False,
+        transform=Affine2D.uniform_scale(
+            1.08,
+            origin=Point(555.0, 542.0),
+        ).then(Affine2D.translation(14.0, -5.0)),
     ),
 )
 root.add(clip_layer)
