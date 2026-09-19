@@ -251,3 +251,94 @@ def test_capture_handler_can_stop_component_pointer_propagation() -> None:
     assert received == ["root-capture"]
 
     app.stop()
+
+
+def test_explicit_pointer_capture_routes_move_and_up_outside_hit_target() -> None:
+    backend = NullPlatformBackend()
+    app = App(platform_backend=backend, renderer=NullRenderer())
+    window = Window(width=640, height=400)
+    scene, _back_scene, _front_scene = _scene()
+    root, _back_component, front = _components()
+    window.set_root(root)
+    window.set_scene(scene)
+    app.add_window(window)
+    app.start()
+    assert window.native_handle is not None
+
+    routed: list[tuple[str, object]] = []
+    window_moves: list[Event] = []
+
+    def capture_press(event: Event) -> None:
+        routed.append((event.type, event.source))
+        window.capture_pointer(front)
+        event.prevent_default()
+
+    front.on("pointer_down", capture_press)
+    front.on("pointer_move", lambda event: routed.append((event.type, event.source)))
+    front.on("pointer_up", lambda event: routed.append((event.type, event.source)))
+    window.on("pointer_move", window_moves.append)
+
+    backend.post_event(_pointer_down(window.native_handle))
+    assert app.process_events() == 1
+    assert window.pointer_capture_component is front
+
+    backend.post_event(
+        PlatformEvent(
+            PlatformEventKind.POINTER_MOVE,
+            window.native_handle,
+            x=610,
+            y=360,
+        )
+    )
+    assert app.process_events() == 1
+    assert window.hovered_scene_node is None
+    assert routed[-1] == ("pointer_move", front)
+    assert window_moves[-1].data["target"] is None
+    assert window_moves[-1].data["hit_component_target"] is None
+    assert window_moves[-1].data["component_target"] is front
+    assert window_moves[-1].data["pointer_captured"] is True
+
+    backend.post_event(
+        PlatformEvent(
+            PlatformEventKind.POINTER_UP,
+            window.native_handle,
+            x=610,
+            y=360,
+            button=PointerButton.LEFT,
+        )
+    )
+    assert app.process_events() == 1
+    assert routed[-1] == ("pointer_up", front)
+    assert window.pointer_capture_component is None
+
+    app.stop()
+
+
+def test_focus_loss_releases_pointer_capture() -> None:
+    backend = NullPlatformBackend()
+    app = App(platform_backend=backend, renderer=NullRenderer())
+    window = Window(width=640, height=400)
+    scene, _back_scene, _front_scene = _scene()
+    root, _back_component, front = _components()
+    window.set_root(root)
+    window.set_scene(scene)
+    app.add_window(window)
+    app.start()
+    assert window.native_handle is not None
+
+    front.on("pointer_down", lambda _event: window.capture_pointer(front))
+    backend.post_event(_pointer_down(window.native_handle))
+    assert app.process_events() == 1
+    assert window.pointer_capture_component is front
+
+    backend.post_event(
+        PlatformEvent(
+            PlatformEventKind.FOCUS,
+            window.native_handle,
+            focused=False,
+        )
+    )
+    assert app.process_events() == 1
+    assert window.pointer_capture_component is None
+
+    app.stop()
