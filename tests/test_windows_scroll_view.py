@@ -179,7 +179,8 @@ def test_datagrid_virtualization_and_keyboard_selection_in_real_win32_wgpu_sessi
         row_nodes = [
             node
             for node in window.scene.walk()
-            if node.key.startswith("native-grid:row:") and ":cell:" not in node.key
+            if node.key.startswith("native-grid:row:")
+            and node.kind is SceneNodeKind.RECTANGLE
         ]
         assert len(row_nodes) <= 8
         assert any(node.key == "native-grid:row:199" for node in row_nodes)
