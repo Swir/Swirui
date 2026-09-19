@@ -34,6 +34,7 @@ AffineScenePayload: TypeAlias = tuple[
 
 _DEFAULT_TEXT_COLOR = Color(1.0, 1.0, 1.0, 1.0)
 _ROUNDED_CORNER_SEGMENTS = 8
+_TEXT_TRANSFORM_EPSILON = 1.0e-12
 
 
 class WgpuRenderer(_CustomWgpuRenderer):
@@ -46,10 +47,13 @@ class WgpuRenderer(_CustomWgpuRenderer):
     native GPU pipelines while preserving inherited opacity, HiDPI scaling,
     persistent native wgpu contexts and axis-aligned clipping.
 
-    Shaped-text raster transforms remain deliberately gated until glyphon consumes
-    the same affine contract. Transformed clip regions are accepted only when they
-    remain axis-aligned; rotated/sheared clipping also stays gated rather than
-    being approximated by a bounding box.
+    Shaped text supports positive uniform retained scale plus translation by
+    baking that exact visual transform into glyphon geometry before crossing the
+    PyO3 boundary. Text rotation, shear, reflection and non-uniform scale remain
+    deliberately gated until glyphon consumes the complete affine contract.
+    Transformed clip regions are accepted only when they remain axis-aligned;
+    rotated/sheared clipping also stays gated rather than being approximated by
+    a bounding box.
     """
 
     def render(self, window: Window, root: Component | None) -> None:
@@ -179,21 +183,25 @@ class WgpuRenderer(_CustomWgpuRenderer):
                 continue
 
             if node.kind is SceneNodeKind.TEXT:
-                self._require_identity_raster_transform(node.kind, world_transform)
                 if not node.text or node.bounds.width <= 0.0 or node.bounds.height <= 0.0:
                     continue
+                text_bounds, transformed_font_size = self._transformed_text_geometry(
+                    node.bounds,
+                    node.font_size,
+                    world_transform,
+                )
                 clip = self._resolved_affine_clip(scene, clips)
-                if clip is None or node.bounds.intersection(clip) is None:
+                if clip is None or text_bounds.intersection(clip) is None:
                     continue
                 text_fill = node.fill or _DEFAULT_TEXT_COLOR
                 texts.append(
                     (
                         node.text,
-                        self._scale(node.bounds.x, scale),
-                        self._scale(node.bounds.y, scale),
-                        self._scale(node.bounds.width, scale),
-                        self._scale(node.bounds.height, scale),
-                        self._scale(node.font_size, scale),
+                        self._scale(text_bounds.x, scale),
+                        self._scale(text_bounds.y, scale),
+                        self._scale(text_bounds.width, scale),
+                        self._scale(text_bounds.height, scale),
+                        self._scale(transformed_font_size, scale),
                         text_fill.r,
                         text_fill.g,
                         text_fill.b,
@@ -374,14 +382,40 @@ class WgpuRenderer(_CustomWgpuRenderer):
         return tuple(points)
 
     @staticmethod
-    def _require_identity_raster_transform(
-        kind: SceneNodeKind,
+    def _transformed_text_geometry(
+        bounds: Rect,
+        font_size: float,
         transform: Affine2D,
-    ) -> None:
-        if not transform.is_identity:
-            raise RuntimeError(
-                f"Affine transforms for {kind.value} nodes require the native transform compositor."
+    ) -> tuple[Rect, float]:
+        """Resolve the glyphon-safe affine subset without approximating unsupported transforms."""
+
+        uniform_scale = transform.m11
+        if (
+            not transform.is_axis_aligned
+            or uniform_scale <= 0.0
+            or transform.m22 <= 0.0
+            or not math.isclose(
+                uniform_scale,
+                transform.m22,
+                rel_tol=0.0,
+                abs_tol=_TEXT_TRANSFORM_EPSILON,
             )
+        ):
+            raise RuntimeError(
+                "Affine transforms for text nodes currently require positive uniform scale "
+                "and translation; rotation, shear, reflection and non-uniform scale remain gated."
+            )
+
+        transformed_origin = transform.transform_point(Point(bounds.x, bounds.y))
+        return (
+            Rect(
+                transformed_origin.x,
+                transformed_origin.y,
+                bounds.width * uniform_scale,
+                bounds.height * uniform_scale,
+            ),
+            font_size * uniform_scale,
+        )
 
     @staticmethod
     def _resolved_affine_clip(scene: Scene, clips: tuple[ClipRegion, ...]) -> Rect | None:
