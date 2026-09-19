@@ -26,6 +26,7 @@ class DataGrid(_RetainedDataGrid):
     _header_press_x = 0.0
     _header_press_index = 0
     _header_drag_started = False
+    _pointer_capture_loss_bound = False
 
     @property
     def dragging_column_key(self) -> str | None:
@@ -133,9 +134,39 @@ class DataGrid(_RetainedDataGrid):
         event.prevent_default()
 
     def _capture_pointer_for_header_gesture(self) -> None:
+        if not self._pointer_capture_loss_bound:
+            self.on("pointer_capture_lost", self._on_pointer_capture_lost)
+            self._pointer_capture_loss_bound = True
         window = self.mounted_window
         if window is not None:
             window.capture_pointer(self)
+
+    def _on_pointer_capture_lost(self, _event: Event) -> None:
+        resize_key = self._resizing_column_key
+        if resize_key is not None:
+            self._resizing_column_key = None
+            self.emit(
+                "column_resize_finished",
+                column_key=resize_key,
+                width=self._column_by_key(resize_key).resolved_width,
+                interrupted=True,
+            )
+
+        column_key = self._header_press_key
+        if column_key is None:
+            return
+        dragged = self._header_drag_started
+        old_index = self._header_press_index
+        new_index = self._column_index(column_key)
+        self._clear_header_press()
+        if dragged:
+            self.emit(
+                "column_drag_finished",
+                column_key=column_key,
+                old_index=old_index,
+                new_index=new_index,
+                interrupted=True,
+            )
 
     def _auto_scroll_for_header_drag(self, x: float) -> None:
         if self.content_width <= self.bounds.width:
