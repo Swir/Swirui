@@ -3,6 +3,7 @@
 from .badges import Badge, Chip
 from .base import LayoutConstraints, Widget
 from .button import Button, IconButton
+from .data_grid import DataGrid, DataGridColumn
 from .expander import Accordion, Expander
 from .input import Input, PasswordInput, TextArea
 from .layout import (
@@ -65,6 +66,8 @@ __all__ = [
     "ConstraintLayout",
     "ConstraintSpec",
     "CrossAxisAlignment",
+    "DataGrid",
+    "DataGridColumn",
     "Dialog",
     "Dock",
     "DockPanel",
