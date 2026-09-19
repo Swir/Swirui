@@ -18,7 +18,7 @@ def create_platform_backend() -> PlatformBackend:
     """
 
     if sys.platform == "win32":
-        from .windows import Win32PlatformBackend
+        from .windows_scroll import Win32PlatformBackend
 
         return Win32PlatformBackend()
     if sys.platform == "darwin":
@@ -26,7 +26,7 @@ def create_platform_backend() -> PlatformBackend:
 
         return MacOSCocoaPlatformBackend()
     if sys.platform.startswith("linux") and os.environ.get("DISPLAY"):
-        from .linux import LinuxX11PlatformBackend
+        from .linux_scroll import LinuxX11PlatformBackend
 
         return LinuxX11PlatformBackend()
     return NullPlatformBackend()
