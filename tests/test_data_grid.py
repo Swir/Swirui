@@ -111,7 +111,7 @@ def test_keyboard_navigation_keeps_selection_visible() -> None:
     grid.select_row(10)
     assert grid.scroll_offset == pytest.approx(240.0)
 
-    window._focused_component = grid
+    window.focus_component(grid)
     window._apply_platform_event(
         PlatformEvent(PlatformEventKind.KEY_DOWN, handle, key_code=0x28)
     )
