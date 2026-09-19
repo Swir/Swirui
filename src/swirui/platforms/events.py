@@ -17,6 +17,7 @@ class PlatformEventKind(StrEnum):
     POINTER_MOVE = "pointer_move"
     POINTER_DOWN = "pointer_down"
     POINTER_UP = "pointer_up"
+    POINTER_SCROLL = "pointer_scroll"
     KEY_DOWN = "key_down"
     KEY_UP = "key_up"
     TEXT_INPUT = "text_input"
@@ -43,6 +44,11 @@ class NativeWindowHandle:
 class PlatformEvent:
     """Normalized native event consumed by :class:`swirui.App`.
 
+    Pointer coordinates are physical pixels at the platform boundary. Scroll
+    deltas are logical-DIP viewport offsets: positive x scrolls content right
+    and positive y scrolls content down. Keeping deltas in DIPs preserves
+    high-resolution wheel/trackpad motion without coupling it to monitor scale.
+
     Keyboard modifier flags are captured at native dispatch time so framework
     default actions such as Shift+Tab traversal remain backend-neutral and do
     not need to query operating-system state later in the event pipeline.
@@ -55,6 +61,8 @@ class PlatformEvent:
     scale: float | None = None
     x: float | None = None
     y: float | None = None
+    delta_x: float = 0.0
+    delta_y: float = 0.0
     button: PointerButton | None = None
     key_code: int | None = None
     text: str | None = None

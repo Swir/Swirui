@@ -2,10 +2,16 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from typing import TYPE_CHECKING
+
 from swirui.core import Event
-from swirui.platforms import PlatformEventKind, PointerButton
+from swirui.platforms import PlatformEvent, PlatformEventKind, PointerButton
 
 from .data_grid import DataGrid as _RetainedDataGrid
+
+if TYPE_CHECKING:
+    from swirui.window import Window
 
 _HEADER_DRAG_THRESHOLD = 6.0
 _HEADER_DRAG_EDGE_ZONE = 28.0
@@ -13,13 +19,14 @@ _HEADER_DRAG_SCROLL_STEP = 36.0
 
 
 class DataGrid(_RetainedDataGrid):
-    """Professional DataGrid with direct, retained header drag reordering.
+    """Professional DataGrid with direct retained pointer interactions.
 
     The base grid keeps separator resize and programmatic column ordering
     semantics. This interaction layer adds direct pointer dragging with a
-    movement threshold, exact retained column moves and horizontal edge
-    auto-scroll. Header sorting is committed only on pointer-up so a drag never
-    causes a transient row reorder or a misleading ``sort_changed`` event.
+    movement threshold, exact retained column moves, horizontal edge
+    auto-scroll, and high-resolution wheel/trackpad scrolling. Header sorting
+    is committed only on pointer-up so a drag never causes a transient row
+    reorder or a misleading ``sort_changed`` event.
     """
 
     _header_press_key: str | None = None
@@ -27,12 +34,71 @@ class DataGrid(_RetainedDataGrid):
     _header_press_index = 0
     _header_drag_started = False
     _pointer_capture_loss_bound = False
+    _scroll_window_unsubscribe: Callable[[], None] | None = None
 
     @property
     def dragging_column_key(self) -> str | None:
         """Return the column currently being directly reordered, if any."""
 
         return self._header_press_key if self._header_drag_started else None
+
+    def on_mount(self, window: Window) -> None:
+        """Attach backend-neutral scroll delivery while this grid is mounted."""
+
+        super().on_mount(window)
+        if self._scroll_window_unsubscribe is None:
+            self._scroll_window_unsubscribe = window.on(
+                PlatformEventKind.POINTER_SCROLL.value,
+                self._on_window_pointer_scroll,
+            )
+
+    def on_unmount(self, window: Window) -> None:
+        """Detach the window scroll listener before the retained tree leaves."""
+
+        unsubscribe = self._scroll_window_unsubscribe
+        self._scroll_window_unsubscribe = None
+        if unsubscribe is not None:
+            unsubscribe()
+        super().on_unmount(window)
+
+    def _on_window_pointer_scroll(self, event: Event) -> None:
+        platform_event = event.data.get("event")
+        if not isinstance(platform_event, PlatformEvent):
+            return
+        if platform_event.kind is not PlatformEventKind.POINTER_SCROLL:
+            return
+        if not self.enabled or not self.visible:
+            return
+
+        window = self.mounted_window
+        if (
+            window is None
+            or platform_event.x is None
+            or platform_event.y is None
+        ):
+            return
+        x = window.physical_to_logical(platform_event.x)
+        y = window.physical_to_logical(platform_event.y)
+        if not self._contains_point(x, y):
+            return
+
+        delta_x = float(platform_event.delta_x)
+        delta_y = float(platform_event.delta_y)
+        if platform_event.shift and delta_x == 0.0 and delta_y != 0.0:
+            delta_x = delta_y
+            delta_y = 0.0
+        if delta_x == 0.0 and delta_y == 0.0:
+            return
+
+        before = (self.horizontal_scroll_offset, self.scroll_offset)
+        if delta_x != 0.0:
+            self.scroll_horizontal_by(delta_x)
+        if delta_y != 0.0:
+            self.scroll_by(delta_y)
+        after = (self.horizontal_scroll_offset, self.scroll_offset)
+        if after != before:
+            event.prevent_default()
+            event.stop_propagation()
 
     def _on_pointer_down(self, event: Event) -> None:
         platform_event = self._platform_event(event, PlatformEventKind.POINTER_DOWN)
