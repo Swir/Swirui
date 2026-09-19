@@ -155,3 +155,72 @@ def test_header_drag_keeps_capture_after_pointer_leaves_grid_bounds() -> None:
     assert window.pointer_capture_component is None
     assert finished[-1].data == {"column_key": "id", "old_index": 0, "new_index": 3}
     runtime.unmount()
+
+
+def test_focus_loss_finalizes_active_header_drag_without_stale_gesture() -> None:
+    window = Window(width=420, height=240)
+    grid = _wide_grid()
+    runtime = mount(window, grid)
+    finished: list[Event] = []
+    grid.on("column_drag_finished", finished.append)
+
+    _pointer(
+        window,
+        PlatformEventKind.POINTER_DOWN,
+        x=50.0,
+        button=PointerButton.LEFT,
+    )
+    _pointer(window, PlatformEventKind.POINTER_MOVE, x=390.0)
+    assert grid.dragging_column_key == "id"
+
+    window._apply_platform_event(
+        PlatformEvent(
+            PlatformEventKind.FOCUS,
+            NativeWindowHandle(1),
+            focused=False,
+        )
+    )
+
+    assert window.pointer_capture_component is None
+    assert grid.dragging_column_key is None
+    assert finished[-1].data == {
+        "column_key": "id",
+        "old_index": 0,
+        "new_index": 3,
+        "interrupted": True,
+    }
+    order = [column.key for column in grid.columns]
+    _pointer(window, PlatformEventKind.POINTER_MOVE, x=40.0)
+    assert [column.key for column in grid.columns] == order
+    runtime.unmount()
+
+
+def test_focus_loss_finalizes_active_column_resize() -> None:
+    window = Window(width=420, height=240)
+    grid = _wide_grid()
+    runtime = mount(window, grid)
+    finished: list[Event] = []
+    grid.on("column_resize_finished", finished.append)
+
+    _pointer(
+        window,
+        PlatformEventKind.POINTER_DOWN,
+        x=100.0,
+        button=PointerButton.LEFT,
+    )
+    assert window.pointer_capture_component is grid
+    _pointer(window, PlatformEventKind.POINTER_MOVE, x=132.0)
+
+    window._apply_platform_event(
+        PlatformEvent(
+            PlatformEventKind.FOCUS,
+            NativeWindowHandle(1),
+            focused=False,
+        )
+    )
+
+    assert window.pointer_capture_component is None
+    assert finished[-1].data["column_key"] == "id"
+    assert finished[-1].data["width"] == pytest.approx(112.0)
+    assert finished[-1].data["interrupted"] is True
+    runtime.unmount()
