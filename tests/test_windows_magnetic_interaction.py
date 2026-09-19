@@ -136,11 +136,13 @@ def test_real_win32_pointer_moves_retained_subtree_in_persistent_wgpu_context() 
 
         outside_x = max(1, round(470.0 * window.scale))
         outside_y = inside_y
+        generation_before_restore = runtime.generation
         user32.SendMessageW(ctypes.c_void_p(hwnd), 0x0200, 0, _lparam(outside_x, outside_y))
         _pump_until(app, lambda: magnetic.target_offset == Point())
-        generation_before_restore = runtime.generation
         controller.tick(magnetic.spec.max_duration)
         assert button.visual_offset == Point()
+        # process_events() renders pending frames, so the spring may already have
+        # rebuilt the retained scene while _pump_until observes the zero target.
         assert runtime.generation > generation_before_restore
         assert window.scene is not None
         restored = next(node for node in window.scene.walk() if node.key == "magnetic-button")
