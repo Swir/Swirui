@@ -44,14 +44,16 @@ def _pointer(
     )
 
 
-def test_direct_header_drag_reorders_and_restores_pre_drag_sort() -> None:
+def test_direct_header_drag_reorders_without_transient_sort() -> None:
     window = Window(width=420, height=240)
     grid = _wide_grid()
     runtime = mount(window, grid)
     started: list[Event] = []
     finished: list[Event] = []
+    sorted_events: list[Event] = []
     grid.on("column_drag_started", started.append)
     grid.on("column_drag_finished", finished.append)
+    grid.on("sort_changed", sorted_events.append)
 
     _pointer(
         window,
@@ -59,11 +61,12 @@ def test_direct_header_drag_reorders_and_restores_pre_drag_sort() -> None:
         x=50.0,
         button=PointerButton.LEFT,
     )
-    assert grid.sort_column_key == "id"
+    assert grid.sort_column_key is None
 
     _pointer(window, PlatformEventKind.POINTER_MOVE, x=245.0)
     assert grid.dragging_column_key == "id"
     assert grid.sort_column_key is None
+    assert sorted_events == []
     assert [column.key for column in grid.columns] == ["name", "status", "id", "owner"]
 
     _pointer(
@@ -73,6 +76,8 @@ def test_direct_header_drag_reorders_and_restores_pre_drag_sort() -> None:
         button=PointerButton.LEFT,
     )
     assert grid.dragging_column_key is None
+    assert grid.sort_column_key is None
+    assert sorted_events == []
     assert started[-1].data == {"column_key": "id", "old_index": 0}
     assert finished[-1].data == {"column_key": "id", "old_index": 0, "new_index": 2}
     runtime.unmount()
@@ -89,7 +94,9 @@ def test_header_drag_threshold_keeps_click_sort_and_edge_autoscrolls_wide_grid()
         x=110.0,
         button=PointerButton.LEFT,
     )
+    assert grid.sort_column_key is None
     _pointer(window, PlatformEventKind.POINTER_MOVE, x=114.0)
+    assert grid.sort_column_key is None
     _pointer(
         window,
         PlatformEventKind.POINTER_UP,

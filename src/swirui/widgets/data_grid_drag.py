@@ -15,17 +15,17 @@ _HEADER_DRAG_SCROLL_STEP = 36.0
 class DataGrid(_RetainedDataGrid):
     """Professional DataGrid with direct, retained header drag reordering.
 
-    The base grid keeps click-to-sort, separator resize and programmatic column
-    ordering semantics. This interaction layer adds direct pointer dragging with
-    a movement threshold, exact retained column moves, horizontal edge auto-scroll
-    and explicit drag lifecycle events without mutating row data.
+    The base grid keeps separator resize and programmatic column ordering
+    semantics. This interaction layer adds direct pointer dragging with a
+    movement threshold, exact retained column moves and horizontal edge
+    auto-scroll. Header sorting is committed only on pointer-up so a drag never
+    causes a transient row reorder or a misleading ``sort_changed`` event.
     """
 
     _header_press_key: str | None = None
     _header_press_x = 0.0
     _header_press_index = 0
     _header_drag_started = False
-    _header_sort_before: tuple[str | None, bool] | None = None
 
     @property
     def dragging_column_key(self) -> str | None:
@@ -56,11 +56,10 @@ class DataGrid(_RetainedDataGrid):
                 self._header_press_x = platform_event.x
                 self._header_press_index = self._column_index(header_column.key)
                 self._header_drag_started = False
-                self._header_sort_before = (self.sort_column_key, self.sort_descending)
-                # Preserve the established click-to-sort behavior. If the press
-                # turns into a drag, the original sort snapshot is restored at
-                # the drag threshold before the first column move occurs.
-                super()._on_pointer_down(event)
+                # Defer click-to-sort until pointer-up. This keeps the row model
+                # stable while the gesture is still ambiguous between click and
+                # drag, and avoids firing a sort event that immediately needs to
+                # be undone when the movement threshold is crossed.
                 event.prevent_default()
                 return
 
@@ -85,7 +84,6 @@ class DataGrid(_RetainedDataGrid):
             if abs(platform_event.x - self._header_press_x) < _HEADER_DRAG_THRESHOLD:
                 return
             self._header_drag_started = True
-            self._restore_pre_drag_sort()
             self.emit(
                 "column_drag_started",
                 column_key=column_key,
@@ -125,16 +123,11 @@ class DataGrid(_RetainedDataGrid):
             )
             event.prevent_default()
             return
-        super()._on_pointer_up(event)
 
-    def _restore_pre_drag_sort(self) -> None:
-        previous = self._header_sort_before
-        if previous is None:
-            return
-        previous_key, previous_descending = previous
-        if (self.sort_column_key, self.sort_descending) == previous:
-            return
-        self.sort_by(previous_key, descending=previous_descending)
+        column = self._column_by_key(column_key)
+        if column.sortable:
+            self.toggle_sort(column_key)
+        event.prevent_default()
 
     def _auto_scroll_for_header_drag(self, x: float) -> None:
         if self.content_width <= self.bounds.width:
@@ -159,4 +152,3 @@ class DataGrid(_RetainedDataGrid):
         self._header_press_x = 0.0
         self._header_press_index = 0
         self._header_drag_started = False
-        self._header_sort_before = None
