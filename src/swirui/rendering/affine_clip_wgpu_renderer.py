@@ -1,7 +1,7 @@
 """Affine wgpu renderer with exact rotated/sheared geometry clipping.
 
 This layer keeps the mature affine renderer fast path untouched for ordinary
-axis-aligned clips.  When retained geometry enters a rotated or sheared
+axis-aligned clips. When retained geometry enters a rotated or sheared
 ``clip_to_bounds`` hierarchy, triangles are transformed to world space and
 clipped exactly against the transformed convex quads before native submission.
 Images and shaped text keep their existing explicit non-axis clip gate until
@@ -9,6 +9,8 @@ those pipelines gain equivalent texture/glyph clipping support.
 """
 
 from __future__ import annotations
+
+from swirui.window import Window
 
 from .affine import Affine2D
 from .affine_clipping import (
@@ -34,11 +36,11 @@ _IDENTITY_GPU_AFFINE = (1.0, 0.0, 0.0, 1.0, 0.0, 0.0)
 class WgpuRenderer(_BaseAffineWgpuRenderer):
     """Persistent affine renderer with exact convex clips for filled geometry."""
 
-    def _affine_scene_payload(self, window: object, scene: Scene) -> AffineScenePayload:
+    def _affine_scene_payload(self, window: Window, scene: Scene) -> AffineScenePayload:
         if not self._scene_has_non_axis_clip(scene):
-            return super()._affine_scene_payload(window, scene)  # type: ignore[arg-type]
+            return super()._affine_scene_payload(window, scene)
 
-        scale = float(window.scale)  # type: ignore[attr-defined]
+        scale = window.scale
         rectangles: list[RectangleInstance] = []
         texts: list[TextInstance] = []
         images: list[ImageInstance | AffineImageInstance] = []
@@ -163,7 +165,11 @@ class WgpuRenderer(_BaseAffineWgpuRenderer):
                 if world_transform.is_identity:
                     images.append(geometry)
                 else:
-                    images.append((*geometry, self._physical_affine(world_transform, scale)))
+                    affine_geometry: AffineImageInstance = (
+                        *geometry,
+                        self._physical_affine(world_transform, scale),
+                    )
+                    images.append(affine_geometry)
                 continue
 
             if node.kind is not SceneNodeKind.PATH:
@@ -182,13 +188,14 @@ class WgpuRenderer(_BaseAffineWgpuRenderer):
             clip_tuple = self._clip_tuple(axis_clip, scale)
             if convex_clips:
                 for triangle in path.triangulate():
-                    authored = tuple(
-                        Point(node.bounds.x + point.x, node.bounds.y + point.y)
-                        for point in triangle
+                    authored = (
+                        Point(node.bounds.x + triangle[0].x, node.bounds.y + triangle[0].y),
+                        Point(node.bounds.x + triangle[1].x, node.bounds.y + triangle[1].y),
+                        Point(node.bounds.x + triangle[2].x, node.bounds.y + triangle[2].y),
                     )
                     self._append_exact_clipped_triangle(
                         paths,
-                        authored,  # type: ignore[arg-type]
+                        authored,
                         path_fill,
                         effective_opacity,
                         clip_tuple,
@@ -237,9 +244,7 @@ class WgpuRenderer(_BaseAffineWgpuRenderer):
         for transform, bounds in clips:
             if transform.is_axis_aligned:
                 transformed = transform.transform_rect_bounds(bounds)
-                axis_clip = (
-                    transformed if axis_clip is None else axis_clip.intersection(transformed)
-                )
+                axis_clip = axis_clip.intersection(transformed)
                 if axis_clip is None:
                     return None, ()
             else:
@@ -283,11 +288,12 @@ class WgpuRenderer(_BaseAffineWgpuRenderer):
         world_transform: Affine2D,
         scale: float,
     ) -> None:
-        world_triangle = tuple(world_transform.transform_point(point) for point in triangle)
-        polygon = clip_triangle_to_convex_polygons(
-            world_triangle,  # type: ignore[arg-type]
-            convex_clips,
+        world_triangle = (
+            world_transform.transform_point(triangle[0]),
+            world_transform.transform_point(triangle[1]),
+            world_transform.transform_point(triangle[2]),
         )
+        polygon = clip_triangle_to_convex_polygons(world_triangle, convex_clips)
         alpha = fill.a * effective_opacity
         for clipped_triangle in triangulate_convex_polygon(polygon):
             for point in clipped_triangle:
