@@ -10,6 +10,7 @@ use wgpu::util::DeviceExt;
 
 pub(crate) type ClipRect = (f32, f32, f32, f32);
 pub(crate) type AffineTransform = (f32, f32, f32, f32, f32, f32);
+type ImageVertex = (f32, f32, f32, f32);
 type AxisAlignedImageData = (String, f32, f32, f32, f32, f32, ClipRect);
 type AffineImageData = (
     String,
@@ -21,17 +22,28 @@ type AffineImageData = (
     ClipRect,
     AffineTransform,
 );
+type TriangleImageData = (
+    String,
+    ImageVertex,
+    ImageVertex,
+    ImageVertex,
+    f32,
+    ClipRect,
+);
 
 #[derive(Clone, Debug, FromPyObject)]
 pub(crate) enum ImageInstance {
     AxisAligned(AxisAlignedImageData),
     Affine(AffineImageData),
+    Triangle(TriangleImageData),
 }
 
 impl ImageInstance {
     fn resource_id(&self) -> &str {
         match self {
-            Self::AxisAligned((resource_id, ..)) | Self::Affine((resource_id, ..)) => resource_id,
+            Self::AxisAligned((resource_id, ..))
+            | Self::Affine((resource_id, ..))
+            | Self::Triangle((resource_id, ..)) => resource_id,
         }
     }
 }
@@ -299,6 +311,16 @@ impl ImageSystem {
                         surface_height,
                     );
                 }
+                ImageInstance::Triangle((_, first, second, third, opacity, clip)) => {
+                    append_triangle_vertices(
+                        &mut values,
+                        (*first, *second, *third),
+                        *opacity,
+                        *clip,
+                        surface_width,
+                        surface_height,
+                    );
+                }
             }
         }
 
@@ -371,7 +393,12 @@ pub(crate) fn validate_image_instances(images: &[ImageInstance]) -> PyResult<()>
     for image in images {
         match image {
             ImageInstance::AxisAligned((resource_id, x, y, width, height, opacity, clip)) => {
-                validate_common_image_instance(resource_id, (*x, *y, *width, *height), *opacity, *clip)?;
+                validate_common_image_instance(
+                    resource_id,
+                    (*x, *y, *width, *height),
+                    *opacity,
+                    *clip,
+                )?;
                 if (*x + *width).min(clip.2) <= x.max(clip.0)
                     || (*y + *height).min(clip.3) <= y.max(clip.1)
                 {
@@ -381,7 +408,12 @@ pub(crate) fn validate_image_instances(images: &[ImageInstance]) -> PyResult<()>
                 }
             }
             ImageInstance::Affine((resource_id, x, y, width, height, opacity, clip, transform)) => {
-                validate_common_image_instance(resource_id, (*x, *y, *width, *height), *opacity, *clip)?;
+                validate_common_image_instance(
+                    resource_id,
+                    (*x, *y, *width, *height),
+                    *opacity,
+                    *clip,
+                )?;
                 if ![
                     transform.0,
                     transform.1,
@@ -408,41 +440,35 @@ pub(crate) fn validate_image_instances(images: &[ImageInstance]) -> PyResult<()>
                     ));
                 }
             }
+            ImageInstance::Triangle((resource_id, first, second, third, opacity, clip)) => {
+                validate_triangle_image_instance(
+                    resource_id,
+                    (*first, *second, *third),
+                    *opacity,
+                    *clip,
+                )?;
+            }
         }
     }
     Ok(())
 }
 
-fn validate_common_image_instance(
+fn validate_image_identity_and_clip(
     resource_id: &str,
-    geometry: (f32, f32, f32, f32),
     opacity: f32,
     clip: ClipRect,
 ) -> PyResult<()> {
     if resource_id.trim().is_empty() {
-        return Err(PyValueError::new_err("Image instance resource_id cannot be empty."));
-    }
-    if ![
-        geometry.0,
-        geometry.1,
-        geometry.2,
-        geometry.3,
-        opacity,
-        clip.0,
-        clip.1,
-        clip.2,
-        clip.3,
-    ]
-    .into_iter()
-    .all(f32::is_finite)
-    {
         return Err(PyValueError::new_err(
-            "Image geometry, opacity and clip bounds must be finite.",
+            "Image instance resource_id cannot be empty.",
         ));
     }
-    if geometry.2 <= 0.0 || geometry.3 <= 0.0 {
+    if ![opacity, clip.0, clip.1, clip.2, clip.3]
+        .into_iter()
+        .all(f32::is_finite)
+    {
         return Err(PyValueError::new_err(
-            "Image width and height must be greater than zero.",
+            "Image opacity and clip bounds must be finite.",
         ));
     }
     if !(0.0..=1.0).contains(&opacity) {
@@ -453,6 +479,73 @@ fn validate_common_image_instance(
     if clip.2 <= clip.0 || clip.3 <= clip.1 {
         return Err(PyValueError::new_err(
             "Image clip bounds must have positive width and height.",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_common_image_instance(
+    resource_id: &str,
+    geometry: (f32, f32, f32, f32),
+    opacity: f32,
+    clip: ClipRect,
+) -> PyResult<()> {
+    validate_image_identity_and_clip(resource_id, opacity, clip)?;
+    if ![geometry.0, geometry.1, geometry.2, geometry.3]
+        .into_iter()
+        .all(f32::is_finite)
+    {
+        return Err(PyValueError::new_err("Image geometry must be finite."));
+    }
+    if geometry.2 <= 0.0 || geometry.3 <= 0.0 {
+        return Err(PyValueError::new_err(
+            "Image width and height must be greater than zero.",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_triangle_image_instance(
+    resource_id: &str,
+    triangle: (ImageVertex, ImageVertex, ImageVertex),
+    opacity: f32,
+    clip: ClipRect,
+) -> PyResult<()> {
+    validate_image_identity_and_clip(resource_id, opacity, clip)?;
+    let vertices = [triangle.0, triangle.1, triangle.2];
+    if !vertices
+        .iter()
+        .flat_map(|vertex| [vertex.0, vertex.1, vertex.2, vertex.3])
+        .all(f32::is_finite)
+    {
+        return Err(PyValueError::new_err(
+            "Clipped image triangle positions and UVs must be finite.",
+        ));
+    }
+    if vertices
+        .iter()
+        .any(|vertex| !(0.0..=1.0).contains(&vertex.2) || !(0.0..=1.0).contains(&vertex.3))
+    {
+        return Err(PyValueError::new_err(
+            "Clipped image triangle UVs must be between 0.0 and 1.0.",
+        ));
+    }
+
+    let twice_area = (triangle.1.0 - triangle.0.0) * (triangle.2.1 - triangle.0.1)
+        - (triangle.1.1 - triangle.0.1) * (triangle.2.0 - triangle.0.0);
+    if twice_area.abs() <= f32::EPSILON {
+        return Err(PyValueError::new_err(
+            "Clipped image triangle must have non-zero area.",
+        ));
+    }
+
+    let left = triangle.0.0.min(triangle.1.0).min(triangle.2.0);
+    let top = triangle.0.1.min(triangle.1.1).min(triangle.2.1);
+    let right = triangle.0.0.max(triangle.1.0).max(triangle.2.0);
+    let bottom = triangle.0.1.max(triangle.1.1).max(triangle.2.1);
+    if right <= clip.0 || left >= clip.2 || bottom <= clip.1 || top >= clip.3 {
+        return Err(PyValueError::new_err(
+            "Image clip must intersect the clipped image triangle.",
         ));
     }
     Ok(())
@@ -486,12 +579,60 @@ fn append_axis_aligned_vertices(
     let top_right = (visible_right, visible_top);
     let bottom_right = (visible_right, visible_bottom);
     let bottom_left = (visible_left, visible_bottom);
-    push_screen_vertex(values, top_left, (u0, v0), opacity, clip, surface_width, surface_height);
-    push_screen_vertex(values, top_right, (u1, v0), opacity, clip, surface_width, surface_height);
-    push_screen_vertex(values, bottom_right, (u1, v1), opacity, clip, surface_width, surface_height);
-    push_screen_vertex(values, top_left, (u0, v0), opacity, clip, surface_width, surface_height);
-    push_screen_vertex(values, bottom_right, (u1, v1), opacity, clip, surface_width, surface_height);
-    push_screen_vertex(values, bottom_left, (u0, v1), opacity, clip, surface_width, surface_height);
+    push_screen_vertex(
+        values,
+        top_left,
+        (u0, v0),
+        opacity,
+        clip,
+        surface_width,
+        surface_height,
+    );
+    push_screen_vertex(
+        values,
+        top_right,
+        (u1, v0),
+        opacity,
+        clip,
+        surface_width,
+        surface_height,
+    );
+    push_screen_vertex(
+        values,
+        bottom_right,
+        (u1, v1),
+        opacity,
+        clip,
+        surface_width,
+        surface_height,
+    );
+    push_screen_vertex(
+        values,
+        top_left,
+        (u0, v0),
+        opacity,
+        clip,
+        surface_width,
+        surface_height,
+    );
+    push_screen_vertex(
+        values,
+        bottom_right,
+        (u1, v1),
+        opacity,
+        clip,
+        surface_width,
+        surface_height,
+    );
+    push_screen_vertex(
+        values,
+        bottom_left,
+        (u0, v1),
+        opacity,
+        clip,
+        surface_width,
+        surface_height,
+    );
     Ok(())
 }
 
@@ -510,12 +651,116 @@ fn append_affine_vertices(
     let top_right = transform_point(transform, x + width, y);
     let bottom_right = transform_point(transform, x + width, y + height);
     let bottom_left = transform_point(transform, x, y + height);
-    push_screen_vertex(values, top_left, (0.0, 0.0), opacity, clip, surface_width, surface_height);
-    push_screen_vertex(values, top_right, (1.0, 0.0), opacity, clip, surface_width, surface_height);
-    push_screen_vertex(values, bottom_right, (1.0, 1.0), opacity, clip, surface_width, surface_height);
-    push_screen_vertex(values, top_left, (0.0, 0.0), opacity, clip, surface_width, surface_height);
-    push_screen_vertex(values, bottom_right, (1.0, 1.0), opacity, clip, surface_width, surface_height);
-    push_screen_vertex(values, bottom_left, (0.0, 1.0), opacity, clip, surface_width, surface_height);
+    push_screen_vertex(
+        values,
+        top_left,
+        (0.0, 0.0),
+        opacity,
+        clip,
+        surface_width,
+        surface_height,
+    );
+    push_screen_vertex(
+        values,
+        top_right,
+        (1.0, 0.0),
+        opacity,
+        clip,
+        surface_width,
+        surface_height,
+    );
+    push_screen_vertex(
+        values,
+        bottom_right,
+        (1.0, 1.0),
+        opacity,
+        clip,
+        surface_width,
+        surface_height,
+    );
+    push_screen_vertex(
+        values,
+        top_left,
+        (0.0, 0.0),
+        opacity,
+        clip,
+        surface_width,
+        surface_height,
+    );
+    push_screen_vertex(
+        values,
+        bottom_right,
+        (1.0, 1.0),
+        opacity,
+        clip,
+        surface_width,
+        surface_height,
+    );
+    push_screen_vertex(
+        values,
+        bottom_left,
+        (0.0, 1.0),
+        opacity,
+        clip,
+        surface_width,
+        surface_height,
+    );
+}
+
+#[cfg(target_os = "windows")]
+fn append_triangle_vertices(
+    values: &mut Vec<f32>,
+    triangle: (ImageVertex, ImageVertex, ImageVertex),
+    opacity: f32,
+    clip: ClipRect,
+    surface_width: u32,
+    surface_height: u32,
+) {
+    let first = triangle.0;
+    let second = triangle.1;
+    let third = triangle.2;
+    push_screen_vertex(
+        values,
+        (first.0, first.1),
+        (first.2, first.3),
+        opacity,
+        clip,
+        surface_width,
+        surface_height,
+    );
+    push_screen_vertex(
+        values,
+        (second.0, second.1),
+        (second.2, second.3),
+        opacity,
+        clip,
+        surface_width,
+        surface_height,
+    );
+    push_screen_vertex(
+        values,
+        (third.0, third.1),
+        (third.2, third.3),
+        opacity,
+        clip,
+        surface_width,
+        surface_height,
+    );
+
+    // Each ImageInstance retains the fixed six-vertex batching contract. The second
+    // triangle is intentionally degenerate, so exact clipped triangles neither
+    // overdraw nor require variable per-instance draw ranges.
+    for _ in 0..3 {
+        push_screen_vertex(
+            values,
+            (first.0, first.1),
+            (first.2, first.3),
+            opacity,
+            clip,
+            surface_width,
+            surface_height,
+        );
+    }
 }
 
 #[cfg(target_os = "windows")]
@@ -626,6 +871,17 @@ mod tests {
         ))
     }
 
+    fn triangle_instance(clip: ClipRect) -> ImageInstance {
+        ImageInstance::Triangle((
+            "checker".to_owned(),
+            (20.0, 25.0, 0.0, 0.0),
+            (90.0, 40.0, 1.0, 0.15),
+            (35.0, 110.0, 0.2, 1.0),
+            0.8,
+            clip,
+        ))
+    }
+
     #[test]
     fn validates_rgba_resource_length() {
         assert!(validate_image_resource("checker", 2, 2, &[255; 16]).is_ok());
@@ -699,6 +955,38 @@ mod tests {
             (1.0, 0.0, 0.0, 1.0, 0.0, 0.0),
         ));
         assert!(validate_image_instances(&[disjoint]).is_err());
+    }
+
+    #[test]
+    fn validates_exact_clipped_image_triangles() {
+        assert!(
+            validate_image_instances(&[triangle_instance((0.0, 0.0, 200.0, 200.0))]).is_ok()
+        );
+
+        let invalid_uv = ImageInstance::Triangle((
+            "checker".to_owned(),
+            (20.0, 25.0, -0.1, 0.0),
+            (90.0, 40.0, 1.0, 0.15),
+            (35.0, 110.0, 0.2, 1.0),
+            0.8,
+            (0.0, 0.0, 200.0, 200.0),
+        ));
+        assert!(validate_image_instances(&[invalid_uv]).is_err());
+
+        let degenerate = ImageInstance::Triangle((
+            "checker".to_owned(),
+            (20.0, 20.0, 0.0, 0.0),
+            (40.0, 40.0, 0.5, 0.5),
+            (60.0, 60.0, 1.0, 1.0),
+            1.0,
+            (0.0, 0.0, 200.0, 200.0),
+        ));
+        assert!(validate_image_instances(&[degenerate]).is_err());
+
+        assert!(
+            validate_image_instances(&[triangle_instance((300.0, 300.0, 400.0, 400.0))])
+                .is_err()
+        );
     }
 
     #[test]
