@@ -26,9 +26,11 @@ on:
       - "tests/test_affine_scene.py"
       - "tests/test_affine_compositor_traversal.py"
       - "tests/test_affine_path_renderer.py"
+      - "tests/test_affine_image_clipping.py"
       - "tests/test_native_affine_contract.py"
       - "tests/test_windows_affine_contract.py"
       - "tests/test_windows_affine_paths.py"
+      - "tests/test_windows_affine_image_clipping.py"
       - ".github/workflows/affine-native.yml"
   pull_request:
     paths:
@@ -54,9 +56,11 @@ on:
       - "tests/test_affine_scene.py"
       - "tests/test_affine_compositor_traversal.py"
       - "tests/test_affine_path_renderer.py"
+      - "tests/test_affine_image_clipping.py"
       - "tests/test_native_affine_contract.py"
       - "tests/test_windows_affine_contract.py"
       - "tests/test_windows_affine_paths.py"
+      - "tests/test_windows_affine_image_clipping.py"
       - ".github/workflows/affine-native.yml"
 
 permissions:
@@ -103,10 +107,10 @@ jobs:
           python -m pip install $wheel
 
       - name: Verify retained affine compositor contract
-        run: pytest tests/test_affine_clipping.py tests/test_affine_scene.py tests/test_affine_compositor_traversal.py tests/test_affine_path_renderer.py -q
+        run: pytest tests/test_affine_clipping.py tests/test_affine_scene.py tests/test_affine_compositor_traversal.py tests/test_affine_path_renderer.py tests/test_affine_image_clipping.py -q
 
       - name: Verify Python payload packing
         run: pytest tests/test_native_affine_contract.py -q
 
       - name: Verify real Python to native affine boundary
-        run: pytest tests/test_windows_affine_contract.py tests/test_windows_affine_paths.py -q
+        run: pytest tests/test_windows_affine_contract.py tests/test_windows_affine_paths.py tests/test_windows_affine_image_clipping.py -q
