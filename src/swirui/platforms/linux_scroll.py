@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from .events import NativeWindowHandle, PlatformEvent, PlatformEventKind
+from .linux import LinuxX11PlatformBackend as _BaseLinuxX11PlatformBackend
 from .linux import (
     _ButtonPress,
     _ControlMask,
@@ -11,7 +12,6 @@ from .linux import (
     _ShiftMask,
     _XEvent,
 )
-from .linux import LinuxX11PlatformBackend as _BaseLinuxX11PlatformBackend
 
 _WHEEL_STEP_DIP = 48.0
 _SCROLL_BUTTON_DELTAS: dict[int, tuple[float, float]] = {

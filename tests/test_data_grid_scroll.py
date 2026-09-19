@@ -192,7 +192,7 @@ def test_x11_scroll_buttons_normalize_to_backend_neutral_deltas() -> None:
 @pytest.mark.skipif(sys.platform != "win32", reason="Win32 normalization test")
 def test_win32_scroll_message_keeps_partial_wheel_motion() -> None:
     from swirui.platforms.base import NativeWindowSpec
-    from swirui.platforms.windows_scroll import Win32PlatformBackend, _WM_MOUSEWHEEL
+    from swirui.platforms.windows_scroll import _WM_MOUSEWHEEL, Win32PlatformBackend
 
     backend = Win32PlatformBackend()
     backend.initialize()
