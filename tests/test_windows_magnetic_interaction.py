@@ -136,14 +136,18 @@ def test_real_win32_pointer_moves_retained_subtree_in_persistent_wgpu_context() 
 
         outside_x = max(1, round(470.0 * window.scale))
         outside_y = inside_y
+        offset_before_restore = button.visual_offset
         generation_before_restore = runtime.generation
         user32.SendMessageW(ctypes.c_void_p(hwnd), 0x0200, 0, _lparam(outside_x, outside_y))
         _pump_until(app, lambda: magnetic.target_offset == Point())
         controller.tick(magnetic.spec.max_duration)
         assert button.visual_offset == Point()
-        # process_events() renders pending frames, so the spring may already have
-        # rebuilt the retained scene while _pump_until observes the zero target.
-        assert runtime.generation > generation_before_restore
+        # A real runner cursor can emit a pointer-leave while the preceding GPU
+        # frame is pumped. If that already restored the widget, this second
+        # outside move is intentionally a no-op and must not invent a rebuild.
+        # When the widget was still displaced, the explicit restore must rebuild.
+        if offset_before_restore != Point():
+            assert runtime.generation > generation_before_restore
         assert window.scene is not None
         restored = next(node for node in window.scene.walk() if node.key == "magnetic-button")
         assert restored.bounds == Rect(120.0, 86.0, 220.0, 52.0)
