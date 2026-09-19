@@ -23,6 +23,10 @@ ROADMAP_PATH = ROOT / "ROADMAP.md"
 CARD_PATH = ROOT / "assets" / "readme" / "progress-card.svg"
 MINI_PATH = ROOT / "assets" / "readme" / "progress-mini.svg"
 TEMPLATE_PATH = ROOT / "assets" / "readme" / "progress-template.svg"
+README_PATH = ROOT / "README.md"
+ASCII_START = "<!-- SWIR-PYPI-PROGRESS:START -->"
+ASCII_END = "<!-- SWIR-PYPI-PROGRESS:END -->"
+ASCII_WIDTH = 30
 
 PROJECT = "SwirUI"
 CURRENT_SCOPE = "0.5 Alpha — Layout Engine"
@@ -107,6 +111,32 @@ def parse_progress(markdown: str) -> ProgressData:
         counter_label=COUNTER_LABEL,
     )
 
+
+def render_ascii_progress(data: ProgressData) -> str:
+    percentage = data.percentage or Decimal("0")
+    fraction = min(max(percentage / Decimal("100"), Decimal("0")), Decimal("1"))
+    filled = max(0, min(ASCII_WIDTH, int((fraction * ASCII_WIDTH).to_integral_value())))
+    bar = "#" * filled + "-" * (ASCII_WIDTH - filled)
+    counter = data.counter_text
+    return (
+        f"{ASCII_START}\n"
+        "```text\n"
+        f"SwirUI      [{bar}] {data.percentage_text}\n"
+        f"Scope       {counter}\n"
+        "```\n"
+        f"{ASCII_END}"
+    )
+
+
+def render_readme_with_ascii(readme: str, data: ProgressData) -> str:
+    pattern = re.compile(
+        rf"{re.escape(ASCII_START)}.*?{re.escape(ASCII_END)}",
+        re.DOTALL,
+    )
+    block = render_ascii_progress(data)
+    if not pattern.search(readme):
+        raise ValueError("README is missing the SWIR PyPI ASCII progress block")
+    return pattern.sub(lambda _match: block, readme, count=1)
 
 def _fill_width(track_width: Decimal, percentage: Decimal | None) -> Decimal:
     if percentage is None:
@@ -376,6 +406,7 @@ def expected_outputs(roadmap_text: str) -> dict[Path, str]:
 
 def check_outputs(root: Path = ROOT) -> list[str]:
     roadmap = (root / "ROADMAP.md").read_text(encoding="utf-8")
+    data = parse_progress(roadmap)
     expected = expected_outputs(roadmap)
     errors: list[str] = []
     for canonical_path, expected_content in expected.items():
@@ -391,15 +422,34 @@ def check_outputs(root: Path = ROOT) -> list[str]:
             _validate_xml(path.name, actual)
         except ValueError as exc:
             errors.append(str(exc))
+
+    readme_path = root / "README.md"
+    if not readme_path.exists():
+        errors.append("missing README.md")
+    else:
+        readme = readme_path.read_text(encoding="utf-8")
+        try:
+            expected_readme = render_readme_with_ascii(readme, data)
+        except ValueError as exc:
+            errors.append(str(exc))
+        else:
+            if readme != expected_readme:
+                errors.append("stale README.md PyPI ASCII progress block")
     return errors
 
 
 def write_outputs() -> None:
     roadmap = ROADMAP_PATH.read_text(encoding="utf-8")
+    data = parse_progress(roadmap)
     outputs = expected_outputs(roadmap)
     for path, content in outputs.items():
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8", newline="\n")
+
+    readme = README_PATH.read_text(encoding="utf-8")
+    expected_readme = render_readme_with_ascii(readme, data)
+    if readme != expected_readme:
+        README_PATH.write_text(expected_readme, encoding="utf-8", newline="\n")
 
 
 def main(argv: list[str] | None = None) -> int:
