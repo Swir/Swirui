@@ -60,6 +60,30 @@ def test_visual_rotation_is_applied_after_scale_and_translation() -> None:
     assert tile.bounds == Rect(20.0, 30.0, 120.0, 40.0)
 
 
+def test_rotated_clip_keeps_child_hit_testing_inside_exact_parent_quad() -> None:
+    parent = _SolidTile(
+        bounds=Rect(100.0, 90.0, 160.0, 80.0),
+        key="clip-parent",
+        clip_to_bounds=True,
+    )
+    child = _SolidTile(
+        bounds=Rect(220.0, 105.0, 90.0, 44.0),
+        key="clip-child",
+    )
+    parent.add(child)
+    parent.visual_rotation = math.pi * 0.25
+
+    scene = _scene_for(parent)
+    transform = scene.root.transform
+    inside = transform.transform_point(Point(240.0, 125.0))
+    clipped_out = transform.transform_point(Point(285.0, 125.0))
+
+    hit = scene.hit_test(inside)
+    assert hit is not None
+    assert hit.key == "clip-child"
+    assert scene.hit_test(clipped_out) is None
+
+
 def test_rotate_transition_samples_restores_and_keeps_layout_stable() -> None:
     tile = _SolidTile(bounds=Rect(40.0, 50.0, 100.0, 48.0), key="transition-tile")
     tile.visual_rotation = 0.25

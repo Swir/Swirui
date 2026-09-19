@@ -54,7 +54,13 @@ def test_rotate_transition_uses_persistent_native_affine_path_and_hit_testing() 
     tile = _SolidTile(
         bounds=Rect(190.0, 130.0, 220.0, 84.0),
         key="rotate-native-tile",
+        clip_to_bounds=True,
     )
+    child = _SolidTile(
+        bounds=Rect(360.0, 145.0, 100.0, 54.0),
+        key="rotate-clipped-child",
+    )
+    tile.add(child)
     runtime = mount(window, tile)
     authored_bounds = tile.bounds
 
@@ -84,12 +90,13 @@ def test_rotate_transition_uses_persistent_native_affine_path_and_hit_testing() 
         assert window.scene.has_affine_transforms is True
 
         root = window.scene.root
-        authored_inside = Point(
-            authored_bounds.x + 12.0,
-            authored_bounds.y + 12.0,
+        child_node = next(
+            node for node in window.scene.walk() if node.key == "rotate-clipped-child"
         )
-        visual_inside = root.transform.transform_point(authored_inside)
-        assert window.scene.hit_test(visual_inside) is root
+        visual_inside = root.transform.transform_point(Point(390.0, 160.0))
+        visual_clipped_out = root.transform.transform_point(Point(440.0, 160.0))
+        assert window.scene.hit_test(visual_inside) is child_node
+        assert window.scene.hit_test(visual_clipped_out) is None
 
         transition.advance(0.10)
         previous_frames = renderer.frames_rendered
