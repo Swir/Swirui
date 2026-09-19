@@ -1,6 +1,9 @@
 """Interactive retained DataGrid demo with thousands of virtualized rows."""
 
+from collections.abc import Mapping
+
 from swirui import App, Component, DataGrid, DataGridColumn, Label, Window, mount
+from swirui.core import Event
 from swirui.rendering import Color, Rect
 
 
@@ -46,10 +49,9 @@ def main() -> int:
         accessible_description="Virtualized retained table with 2500 rows.",
     )
 
-    def selection_changed(event: object) -> None:
-        data = getattr(event, "data", {})
-        row = data.get("row")
-        if isinstance(row, dict):
+    def selection_changed(event: Event) -> None:
+        row = event.data.get("row")
+        if isinstance(row, Mapping):
             status.text = f"Selected #{row['id']}: {row['task']} — {row['status']}"
 
     grid.on("selection_changed", selection_changed)
