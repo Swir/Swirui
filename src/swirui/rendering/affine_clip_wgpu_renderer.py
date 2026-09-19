@@ -20,11 +20,13 @@ from .affine_clipping import (
     triangulate_convex_polygon,
 )
 from .affine_wgpu_renderer import (
+    _DEFAULT_TEXT_COLOR,
     AffineImageInstance,
     AffineScenePayload,
     AffineShapeVertex,
+)
+from .affine_wgpu_renderer import (
     WgpuRenderer as _BaseAffineWgpuRenderer,
-    _DEFAULT_TEXT_COLOR,
 )
 from .geometry import Color, Point, Rect
 from .scene import ClipRegion, Scene, SceneNodeKind
@@ -239,14 +241,15 @@ class WgpuRenderer(_BaseAffineWgpuRenderer):
         scene: Scene,
         clips: tuple[ClipRegion, ...],
     ) -> tuple[Rect | None, tuple[ConvexPolygon, ...]]:
-        axis_clip: Rect | None = Rect(0.0, 0.0, scene.width, scene.height)
+        axis_clip = Rect(0.0, 0.0, scene.width, scene.height)
         convex_clips: list[ConvexPolygon] = []
         for transform, bounds in clips:
             if transform.is_axis_aligned:
                 transformed = transform.transform_rect_bounds(bounds)
-                axis_clip = axis_clip.intersection(transformed)
-                if axis_clip is None:
+                intersection = axis_clip.intersection(transformed)
+                if intersection is None:
                     return None, ()
+                axis_clip = intersection
             else:
                 convex_clips.append(transformed_rect_polygon(transform, bounds))
         return axis_clip, tuple(convex_clips)
