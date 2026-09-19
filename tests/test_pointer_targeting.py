@@ -253,7 +253,7 @@ def test_capture_handler_can_stop_component_pointer_propagation() -> None:
     app.stop()
 
 
-def test_consumed_pointer_press_routes_move_and_up_to_capture_outside_hit_target() -> None:
+def test_explicit_pointer_capture_routes_move_and_up_outside_hit_target() -> None:
     backend = NullPlatformBackend()
     app = App(platform_backend=backend, renderer=NullRenderer())
     window = Window(width=640, height=400)
@@ -268,11 +268,12 @@ def test_consumed_pointer_press_routes_move_and_up_to_capture_outside_hit_target
     routed: list[tuple[str, object]] = []
     window_moves: list[Event] = []
 
-    def consume_press(event: Event) -> None:
+    def capture_press(event: Event) -> None:
         routed.append((event.type, event.source))
+        window.capture_pointer(front)
         event.prevent_default()
 
-    front.on("pointer_down", consume_press)
+    front.on("pointer_down", capture_press)
     front.on("pointer_move", lambda event: routed.append((event.type, event.source)))
     front.on("pointer_up", lambda event: routed.append((event.type, event.source)))
     window.on("pointer_move", window_moves.append)
@@ -325,7 +326,7 @@ def test_focus_loss_releases_pointer_capture() -> None:
     app.start()
     assert window.native_handle is not None
 
-    front.on("pointer_down", lambda event: event.prevent_default())
+    front.on("pointer_down", lambda _event: window.capture_pointer(front))
     backend.post_event(_pointer_down(window.native_handle))
     assert app.process_events() == 1
     assert window.pointer_capture_component is front
