@@ -7,6 +7,7 @@ from typing import Protocol, runtime_checkable
 
 from swirui.core import Component, Event
 from swirui.core.state import schedule_reactive_update
+from swirui.rendering.affine import Affine2D
 from swirui.rendering.geometry import CornerRadius, Path2D, Point, Rect
 from swirui.rendering.scene import Scene, SceneNode, SceneNodeKind
 from swirui.window import Window
@@ -59,9 +60,10 @@ def compile_component_scene(
     logical viewport actually changes.
 
     Visual-only widget scale is applied around the compiled root node's center,
-    followed by visual-only translation. Both operations transform the complete
-    retained subtree after layout so painting, clipping and hit testing agree while
-    authored measurement and arrangement remain unchanged.
+    followed by visual-only translation and then retained affine rotation around
+    the resulting visual center. These operations transform the complete retained
+    subtree after layout so painting, clipping and hit testing agree while authored
+    measurement and arrangement remain unchanged.
     """
 
     viewport = Rect(0.0, 0.0, float(width), float(height))
@@ -123,6 +125,15 @@ def _compile_component(
             offset = component.visual_offset
             if offset.x != 0.0 or offset.y != 0.0:
                 _translate_scene_subtree(visual_node, offset.x, offset.y)
+            rotation = component.visual_rotation
+            if rotation != 0.0:
+                center = Point(
+                    visual_node.bounds.x + visual_node.bounds.width * 0.5,
+                    visual_node.bounds.y + visual_node.bounds.height * 0.5,
+                )
+                visual_node.transform = visual_node.transform.then(
+                    Affine2D.rotation(rotation, origin=center)
+                )
         return visual_node
 
     if not child_nodes:

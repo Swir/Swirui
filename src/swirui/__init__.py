@@ -56,6 +56,7 @@ from .interaction_animation import (
 )
 from .keyframes import Keyframe, KeyframeAnimation
 from .page_transition import PageTransition, PageTransitionDirection
+from .rotation_animation import RotateTransition
 from .shared_element_transition import SharedElementTransition
 from .transform_animation import (
     FadeTransition,
@@ -218,6 +219,7 @@ __all__ = [
     "ResponsiveLayoutSpec",
     "ResponsiveValue",
     "RevealTransition",
+    "RotateTransition",
     "Row",
     "ScaleTransition",
     "ScrollView",
