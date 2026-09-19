@@ -219,7 +219,7 @@ class WgpuRenderer(_CustomWgpuRenderer):
                     raise RuntimeError(
                         f"Scene image resource {resource_id!r} is not registered with WgpuRenderer."
                     )
-                geometry = (
+                geometry: ImageInstance = (
                     native_id,
                     self._scale(node.bounds.x, scale),
                     self._scale(node.bounds.y, scale),
@@ -231,7 +231,11 @@ class WgpuRenderer(_CustomWgpuRenderer):
                 if world_transform.is_identity:
                     images.append(geometry)
                 else:
-                    images.append((*geometry, self._physical_affine(world_transform, scale)))
+                    affine_geometry: AffineImageInstance = (
+                        *geometry,
+                        self._physical_affine(world_transform, scale),
+                    )
+                    images.append(affine_geometry)
                 continue
 
             if node.kind is not SceneNodeKind.PATH:
@@ -395,7 +399,10 @@ class WgpuRenderer(_CustomWgpuRenderer):
         return clip
 
     @staticmethod
-    def _physical_affine(transform: Affine2D, scale: float) -> tuple[float, ...]:
+    def _physical_affine(
+        transform: Affine2D,
+        scale: float,
+    ) -> tuple[float, float, float, float, float, float]:
         return (
             transform.m11,
             transform.m12,
