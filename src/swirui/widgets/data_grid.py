@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from swirui.core import AccessibilityRole, Event
 from swirui.platforms import PlatformEvent, PlatformEventKind, PointerButton
@@ -19,6 +19,7 @@ _VK_PRIOR = 0x21
 _VK_NEXT = 0x22
 _VK_UP = 0x26
 _VK_DOWN = 0x28
+_RESIZE_HIT_SLOP = 5.0
 
 _DEFAULT_BACKGROUND = Color.from_hex("#07111C")
 _DEFAULT_HEADER_BACKGROUND = Color.from_hex("#0A1D2B")
@@ -39,6 +40,8 @@ class DataGridColumn:
     width: float = 160.0
     min_width: float = 48.0
     max_width: float = math.inf
+    sortable: bool = True
+    resizable: bool = True
 
     def __post_init__(self) -> None:
         normalized_key = self.key.strip()
@@ -61,12 +64,12 @@ class DataGridColumn:
 
 
 class DataGrid(Widget):
-    """Focusable retained table with row virtualization and keyboard selection.
+    """Focusable retained table with row and column virtualization.
 
-    Rows are retained as immutable snapshots of mappings while only the visible
-    viewport is compiled to SceneGraph nodes. Selection and scrolling therefore
-    stay deterministic for large datasets without creating one scene subtree per
-    off-screen row.
+    Rows are retained as immutable snapshots while only viewport-intersecting
+    rows and columns are compiled to SceneGraph nodes. Stable sorting, column
+    resizing/reordering, keyboard selection and two-axis logical-DIP scrolling
+    therefore stay deterministic for large professional datasets.
     """
 
     def __init__(
@@ -103,7 +106,8 @@ class DataGrid(Widget):
             raise ValueError("DataGrid column keys must be unique.")
 
         self._columns = normalized_columns
-        self._rows = self._snapshot_rows(rows)
+        self._source_rows = self._snapshot_rows(rows)
+        self._rows = self._source_rows
         self._row_height = self._validate_positive(row_height, "row_height")
         self._header_height = self._validate_positive(header_height, "header_height")
         self._cell_padding = self._validate_non_negative(cell_padding, "cell_padding")
@@ -124,6 +128,12 @@ class DataGrid(Widget):
         self._grid_line = grid_line or _DEFAULT_GRID_LINE
         self._selected_index: int | None = None
         self._scroll_offset = 0.0
+        self._horizontal_scroll_offset = 0.0
+        self._sort_column_key: str | None = None
+        self._sort_descending = False
+        self._resizing_column_key: str | None = None
+        self._resize_origin_x = 0.0
+        self._resize_origin_width = 0.0
 
         super().__init__(
             bounds=bounds,
@@ -137,6 +147,8 @@ class DataGrid(Widget):
             accessible_description=accessible_description,
         )
         self.on("pointer_down", self._on_pointer_down)
+        self.on("pointer_move", self._on_pointer_move)
+        self.on("pointer_up", self._on_pointer_up)
         self.on("key_down", self._on_key_down)
 
     @property
@@ -162,6 +174,22 @@ class DataGrid(Widget):
         return self._effective_scroll_offset()
 
     @property
+    def horizontal_scroll_offset(self) -> float:
+        return self._effective_horizontal_scroll_offset()
+
+    @property
+    def content_width(self) -> float:
+        return sum(column.resolved_width for column in self._columns)
+
+    @property
+    def sort_column_key(self) -> str | None:
+        return self._sort_column_key
+
+    @property
+    def sort_descending(self) -> bool:
+        return self._sort_descending
+
+    @property
     def visible_row_range(self) -> range:
         """Return the row-index range that intersects the current viewport."""
 
@@ -174,15 +202,22 @@ class DataGrid(Widget):
         count = max(1, math.ceil(visible_height / self._row_height))
         return range(first, min(len(self._rows), first + count))
 
+    @property
+    def visible_column_keys(self) -> tuple[str, ...]:
+        """Return column keys currently intersecting the horizontal viewport."""
+
+        return tuple(column.key for column, _, _ in self._visible_columns())
+
     def set_rows(self, rows: Sequence[Mapping[str, object]]) -> DataGrid:
-        """Replace the row snapshot while keeping selection valid."""
+        """Replace the source-row snapshot while preserving active sort state."""
 
         normalized = self._snapshot_rows(rows)
-        if normalized == self._rows:
+        if normalized == self._source_rows:
             return self
-        self._rows = normalized
-        if self._selected_index is not None and self._selected_index >= len(self._rows):
-            self._selected_index = None
+        selected = self.selected_row
+        self._source_rows = normalized
+        self._rows = self._apply_sort(normalized)
+        self._selected_index = self._find_matching_row(self._rows, selected)
         self._scroll_offset = min(self._scroll_offset, self._max_scroll_offset())
         self.invalidate(reason="rows")
         return self
@@ -213,6 +248,94 @@ class DataGrid(Widget):
         )
         return self
 
+    def sort_by(self, column_key: str | None, *, descending: bool = False) -> DataGrid:
+        """Apply stable deterministic row sorting or restore source order with ``None``."""
+
+        selected = self.selected_row
+        if column_key is None:
+            normalized_key = None
+            normalized_descending = False
+        else:
+            column = self._column_by_key(column_key)
+            if not column.sortable:
+                raise ValueError(f"DataGrid column {column.key!r} is not sortable.")
+            normalized_key = column.key
+            normalized_descending = bool(descending)
+        if (
+            normalized_key == self._sort_column_key
+            and normalized_descending == self._sort_descending
+        ):
+            return self
+
+        self._sort_column_key = normalized_key
+        self._sort_descending = normalized_descending
+        self._rows = self._apply_sort(self._source_rows)
+        self._selected_index = self._find_matching_row(self._rows, selected)
+        self._scroll_offset = min(self._scroll_offset, self._max_scroll_offset())
+        self.invalidate(reason="sort")
+        self.emit(
+            "sort_changed",
+            column_key=self._sort_column_key,
+            descending=self._sort_descending,
+        )
+        return self
+
+    def toggle_sort(self, column_key: str) -> DataGrid:
+        """Cycle a sortable column through ascending, descending and source order."""
+
+        column = self._column_by_key(column_key)
+        if not column.sortable:
+            return self
+        if self._sort_column_key != column.key:
+            return self.sort_by(column.key)
+        if not self._sort_descending:
+            return self.sort_by(column.key, descending=True)
+        return self.sort_by(None)
+
+    def resize_column(self, column_key: str, width: float) -> DataGrid:
+        """Resize one column within its min/max constraints in logical DIPs."""
+
+        normalized_width = self._validate_positive(width, "column width")
+        index = self._column_index(column_key)
+        column = self._columns[index]
+        if not column.resizable:
+            raise ValueError(f"DataGrid column {column.key!r} is not resizable.")
+        resolved = min(max(normalized_width, column.min_width), column.max_width)
+        if resolved == column.resolved_width:
+            return self
+        columns = list(self._columns)
+        columns[index] = replace(column, width=resolved)
+        self._columns = tuple(columns)
+        self._horizontal_scroll_offset = min(
+            self._horizontal_scroll_offset,
+            self._max_horizontal_scroll_offset(),
+        )
+        self.invalidate(reason="column_width")
+        self.emit("column_resized", column_key=column.key, width=resolved)
+        return self
+
+    def move_column(self, column_key: str, new_index: int) -> DataGrid:
+        """Move one column to a new visual index without mutating row data."""
+
+        source_index = self._column_index(column_key)
+        target_index = int(new_index)
+        if not 0 <= target_index < len(self._columns):
+            raise IndexError("DataGrid column index is out of range.")
+        if source_index == target_index:
+            return self
+        columns = list(self._columns)
+        column = columns.pop(source_index)
+        columns.insert(target_index, column)
+        self._columns = tuple(columns)
+        self.invalidate(reason="column_order")
+        self.emit(
+            "columns_reordered",
+            column_key=column.key,
+            old_index=source_index,
+            new_index=target_index,
+        )
+        return self
+
     def scroll_by(self, delta: float) -> DataGrid:
         """Scroll vertically by logical DIPs and clamp to available content."""
 
@@ -220,6 +343,14 @@ class DataGrid(Widget):
         if not math.isfinite(normalized):
             raise ValueError("DataGrid scroll delta must be finite.")
         return self._set_scroll_offset(self._scroll_offset + normalized)
+
+    def scroll_horizontal_by(self, delta: float) -> DataGrid:
+        """Scroll columns horizontally by logical DIPs and clamp to content width."""
+
+        normalized = float(delta)
+        if not math.isfinite(normalized):
+            raise ValueError("DataGrid horizontal scroll delta must be finite.")
+        return self._set_horizontal_scroll_offset(self._horizontal_scroll_offset + normalized)
 
     def scroll_to_row(self, index: int) -> DataGrid:
         """Ensure one row is fully visible without changing selection."""
@@ -272,18 +403,20 @@ class DataGrid(Widget):
             clip_to_bounds=True,
             hit_testable=False,
         )
-        x = self.bounds.x
-        for column in self._columns:
-            width = column.resolved_width
+        for column, x, width in self._visible_columns():
             cell_bounds = Rect(x, self.bounds.y, width, self._header_height)
-            header.add(self._text_node(
-                key=f"{self.key}:header:{column.key}",
-                bounds=cell_bounds,
-                text=column.header,
-                color=self._header_foreground,
-                font_size=self._font_size,
-            ))
-            x += width
+            text = column.header
+            if self._sort_column_key == column.key:
+                text += " ▼" if self._sort_descending else " ▲"
+            header.add(
+                self._text_node(
+                    key=f"{self.key}:header:{column.key}",
+                    bounds=cell_bounds,
+                    text=text,
+                    color=self._header_foreground,
+                    font_size=self._font_size,
+                )
+            )
         root.add(header)
 
     def _append_visible_rows(self, root: SceneNode) -> None:
@@ -292,6 +425,7 @@ class DataGrid(Widget):
         if body_top >= body_bottom:
             return
         offset = self._effective_scroll_offset()
+        visible_columns = self._visible_columns()
         for index in self.visible_row_range:
             y = body_top + (index * self._row_height) - offset
             row_bounds = Rect(self.bounds.x, y, self.bounds.width, self._row_height)
@@ -311,10 +445,8 @@ class DataGrid(Widget):
                 clip_to_bounds=True,
                 hit_testable=False,
             )
-            x = self.bounds.x
             row = self._rows[index]
-            for column in self._columns:
-                width = column.resolved_width
+            for column, x, width in visible_columns:
                 cell_bounds = Rect(x, y, width, self._row_height)
                 cell = SceneNode(
                     key=f"{self.key}:row:{index}:cell:{column.key}",
@@ -324,32 +456,36 @@ class DataGrid(Widget):
                     clip_to_bounds=True,
                     hit_testable=False,
                 )
-                cell.add(self._text_node(
-                    key=f"{self.key}:row:{index}:text:{column.key}",
-                    bounds=cell_bounds,
-                    text=str(row.get(column.key, "")),
-                    color=self._foreground,
-                    font_size=self._font_size,
-                ))
+                cell.add(
+                    self._text_node(
+                        key=f"{self.key}:row:{index}:text:{column.key}",
+                        bounds=cell_bounds,
+                        text=str(row.get(column.key, "")),
+                        color=self._foreground,
+                        font_size=self._font_size,
+                    )
+                )
                 row_node.add(cell)
-                x += width
             root.add(row_node)
 
     def _append_column_separators(self, root: SceneNode) -> None:
-        x = self.bounds.x
+        x = self.bounds.x - self._effective_horizontal_scroll_offset()
+        left = self.bounds.x
+        right = self.bounds.x + self.bounds.width
         bottom = self.bounds.y + self.bounds.height
         for column in self._columns[:-1]:
             x += column.resolved_width
-            root.add(
-                SceneNode(
-                    key=f"{self.key}:separator:{column.key}",
-                    kind=SceneNodeKind.RECTANGLE,
-                    bounds=Rect(x, self.bounds.y, 1.0, max(0.0, bottom - self.bounds.y)),
-                    fill=self._grid_line,
-                    z_index=4,
-                    hit_testable=False,
+            if left <= x <= right:
+                root.add(
+                    SceneNode(
+                        key=f"{self.key}:separator:{column.key}",
+                        kind=SceneNodeKind.RECTANGLE,
+                        bounds=Rect(x, self.bounds.y, 1.0, max(0.0, bottom - self.bounds.y)),
+                        fill=self._grid_line,
+                        z_index=4,
+                        hit_testable=False,
+                    )
                 )
-            )
         header_line_y = min(bottom, self.bounds.y + self._header_height)
         root.add(
             SceneNode(
@@ -392,17 +528,63 @@ class DataGrid(Widget):
             not self.enabled
             or platform_event is None
             or platform_event.button is not PointerButton.LEFT
+            or platform_event.x is None
             or platform_event.y is None
         ):
             return
-        body_top = self.bounds.y + self._header_height
-        if platform_event.y < body_top or platform_event.y >= self.bounds.y + self.bounds.height:
+        if not self._contains_point(platform_event.x, platform_event.y):
             return
-        content_y = platform_event.y - body_top + self._effective_scroll_offset()
+
+        header_bottom = self.bounds.y + self._header_height
+        if platform_event.y < header_bottom:
+            resize_key = self._separator_hit(platform_event.x)
+            if resize_key is not None:
+                resize_column = self._column_by_key(resize_key)
+                if resize_column.resizable:
+                    self._resizing_column_key = resize_key
+                    self._resize_origin_x = platform_event.x
+                    self._resize_origin_width = resize_column.resolved_width
+                    event.prevent_default()
+                    return
+            header_column = self._column_at_x(platform_event.x)
+            if header_column is not None and header_column.sortable:
+                self.toggle_sort(header_column.key)
+                event.prevent_default()
+            return
+
+        if platform_event.y >= self.bounds.y + self.bounds.height:
+            return
+        content_y = platform_event.y - header_bottom + self._effective_scroll_offset()
         index = int(content_y // self._row_height)
         if 0 <= index < len(self._rows):
             self.select_row(index, ensure_visible=False)
             event.prevent_default()
+
+    def _on_pointer_move(self, event: Event) -> None:
+        if self._resizing_column_key is None:
+            return
+        platform_event = self._platform_event(event, PlatformEventKind.POINTER_MOVE)
+        if platform_event is None or platform_event.x is None:
+            return
+        column = self._column_by_key(self._resizing_column_key)
+        width = self._resize_origin_width + (platform_event.x - self._resize_origin_x)
+        self.resize_column(self._resizing_column_key, max(column.min_width, width))
+        event.prevent_default()
+
+    def _on_pointer_up(self, event: Event) -> None:
+        if self._resizing_column_key is None:
+            return
+        platform_event = self._platform_event(event, PlatformEventKind.POINTER_UP)
+        if platform_event is None:
+            return
+        column_key = self._resizing_column_key
+        self._resizing_column_key = None
+        self.emit(
+            "column_resize_finished",
+            column_key=column_key,
+            width=self._column_by_key(column_key).resolved_width,
+        )
+        event.prevent_default()
 
     def _on_key_down(self, event: Event) -> None:
         platform_event = self._platform_event(event, PlatformEventKind.KEY_DOWN)
@@ -432,6 +614,93 @@ class DataGrid(Widget):
         self.select_row(target, ensure_visible=True)
         event.prevent_default()
 
+    def _visible_columns(self) -> tuple[tuple[DataGridColumn, float, float], ...]:
+        offset = self._effective_horizontal_scroll_offset()
+        x = self.bounds.x - offset
+        left = self.bounds.x
+        right = self.bounds.x + self.bounds.width
+        visible: list[tuple[DataGridColumn, float, float]] = []
+        for column in self._columns:
+            width = column.resolved_width
+            column_right = x + width
+            if column_right > left and x < right:
+                visible.append((column, x, width))
+            x = column_right
+        return tuple(visible)
+
+    def _column_at_x(self, x: float) -> DataGridColumn | None:
+        content_x = x - self.bounds.x + self._effective_horizontal_scroll_offset()
+        cursor = 0.0
+        for column in self._columns:
+            cursor += column.resolved_width
+            if content_x < cursor:
+                return column
+        return None
+
+    def _separator_hit(self, x: float) -> str | None:
+        content_x = x - self.bounds.x + self._effective_horizontal_scroll_offset()
+        cursor = 0.0
+        for column in self._columns:
+            cursor += column.resolved_width
+            if abs(content_x - cursor) <= _RESIZE_HIT_SLOP:
+                return column.key
+        return None
+
+    def _column_by_key(self, column_key: str) -> DataGridColumn:
+        return self._columns[self._column_index(column_key)]
+
+    def _column_index(self, column_key: str) -> int:
+        normalized = str(column_key).strip()
+        for index, column in enumerate(self._columns):
+            if column.key == normalized:
+                return index
+        raise KeyError(f"Unknown DataGrid column: {column_key!r}")
+
+    def _apply_sort(
+        self,
+        rows: tuple[Mapping[str, object], ...],
+    ) -> tuple[Mapping[str, object], ...]:
+        column_key = self._sort_column_key
+        if column_key is None:
+            return rows
+        return tuple(
+            sorted(
+                rows,
+                key=lambda row: self._sort_value(row.get(column_key)),
+                reverse=self._sort_descending,
+            )
+        )
+
+    @staticmethod
+    def _sort_value(value: object) -> tuple[int, str, float]:
+        if isinstance(value, bool):
+            return (0, "", float(value))
+        if isinstance(value, (int, float)):
+            numeric = float(value)
+            if math.isnan(numeric):
+                return (3, "", 0.0)
+            return (0, "", numeric)
+        if isinstance(value, str):
+            return (1, value.casefold(), 0.0)
+        if value is None:
+            return (3, "", 0.0)
+        return (2, f"{type(value).__name__}:{value}", 0.0)
+
+    @staticmethod
+    def _find_matching_row(
+        rows: tuple[Mapping[str, object], ...],
+        selected: Mapping[str, object] | None,
+    ) -> int | None:
+        if selected is None:
+            return None
+        for index, row in enumerate(rows):
+            if row is selected:
+                return index
+        for index, row in enumerate(rows):
+            if row == selected:
+                return index
+        return None
+
     def _set_scroll_offset(self, value: float) -> DataGrid:
         normalized = min(max(0.0, float(value)), self._max_scroll_offset())
         if normalized == self._scroll_offset:
@@ -440,8 +709,19 @@ class DataGrid(Widget):
         self.invalidate(reason="scroll_offset")
         return self
 
+    def _set_horizontal_scroll_offset(self, value: float) -> DataGrid:
+        normalized = min(max(0.0, float(value)), self._max_horizontal_scroll_offset())
+        if normalized == self._horizontal_scroll_offset:
+            return self
+        self._horizontal_scroll_offset = normalized
+        self.invalidate(reason="horizontal_scroll_offset")
+        return self
+
     def _effective_scroll_offset(self) -> float:
         return min(self._scroll_offset, self._max_scroll_offset())
+
+    def _effective_horizontal_scroll_offset(self) -> float:
+        return min(self._horizontal_scroll_offset, self._max_horizontal_scroll_offset())
 
     def _body_height(self) -> float:
         return max(0.0, self.bounds.height - self._header_height)
@@ -449,6 +729,15 @@ class DataGrid(Widget):
     def _max_scroll_offset(self) -> float:
         content_height = len(self._rows) * self._row_height
         return max(0.0, content_height - self._body_height())
+
+    def _max_horizontal_scroll_offset(self) -> float:
+        return max(0.0, self.content_width - self.bounds.width)
+
+    def _contains_point(self, x: float, y: float) -> bool:
+        return (
+            self.bounds.x <= x < self.bounds.x + self.bounds.width
+            and self.bounds.y <= y < self.bounds.y + self.bounds.height
+        )
 
     @staticmethod
     def _snapshot_rows(rows: Sequence[Mapping[str, object]]) -> tuple[Mapping[str, object], ...]:
