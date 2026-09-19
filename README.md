@@ -27,7 +27,7 @@
 
 <img width="100%" src="assets/readme/progress-card.svg" alt="SwirUI project progress: 68.0% — 0.5 Alpha Layout Engine complete; 12 of 12 layout groups verified">
 
-**68% authoritative weighted project progress — 0.6 Alpha Reactive Runtime is complete; 0.7 Alpha Animation Engine is underway with 11 / 12 groups verified.**
+**68% authoritative weighted project progress — 0.6 Alpha Reactive Runtime and 0.7 Alpha Animation Engine are complete; 0.7 has 12 / 12 groups verified.**
 
 - `0.1 Alpha — Foundation` ✅
 - `0.2 Alpha — Native Window + First Renderer` ✅
@@ -35,11 +35,11 @@
 - `0.4 Alpha — Core Widgets` ✅
 - `0.5 Alpha — Layout Engine` ✅
 - `0.6 Alpha — Reactive Runtime` ✅
-- `0.7 Alpha — Animation Engine` 🚧 `11 / 12`
+- `0.7 Alpha — Animation Engine` ✅ `12 / 12`
 
-The published 68% value preserves the verified weighting documented in `ROADMAP.md` through completed 0.5. Completed 0.6 and verified 0.7 functionality are tracked by their milestone checklists until an explicit project-weighting extension is documented; later work is never double-counted or used to invent release readiness.
+The published 68% value preserves the verified weighting documented in `ROADMAP.md` through completed 0.5. Completed 0.6 and 0.7 functionality are tracked by their milestone checklists until an explicit project-weighting extension is documented; later work is never double-counted or used to invent release readiness.
 
-SwirUI remains **pre-alpha**. Public APIs may still change while the animation and professional-widget layers are developed. There is no public GitHub Release yet.
+SwirUI remains **pre-alpha**. Public APIs may still change while the professional-widget and later platform layers are developed. There is no public GitHub Release yet.
 
 ## Overview
 
@@ -47,7 +47,7 @@ SwirUI is being built as a complete Python desktop application framework rather 
 
 The Windows renderer uses a persistent per-window wgpu context and retained SceneGraph. Linux/X11 and macOS/Cocoa already provide real native window and input backends. GPU presentation on Linux/macOS and Wayland support remain future work and are not claimed as complete.
 
-The completed 0.5 layout layer provides content-aware intrinsic measurement, min/max constraints, responsive compact/desktop/ultrawide policies, adaptive navigation, dynamic typography, DPI-stable logical spacing and revision-aware layout caching. The completed 0.6 runtime adds computed state, async/persistent state, dynamic dependency tracking, batched transactions, reactive properties, bindings, observable collections, retained component lifecycle hooks and transaction-scoped minimal-update scheduling. The active 0.7 animation layer now includes elapsed-time tweens, analytical spring motion, inertial decay, serial/parallel composition, cancellation/chaining, hover/press/focus animation, blur/glow transitions, magnetic and particle effects, retained page/shared-element transitions, fade/slide/scale transforms, retained reveal/flip/morph transitions and window-scoped frame driving.
+The completed 0.5 layout layer provides content-aware intrinsic measurement, min/max constraints, responsive compact/desktop/ultrawide policies, adaptive navigation, dynamic typography, DPI-stable logical spacing and revision-aware layout caching. The completed 0.6 runtime adds computed state, async/persistent state, dynamic dependency tracking, batched transactions, reactive properties, bindings, observable collections, retained component lifecycle hooks and transaction-scoped minimal-update scheduling. The completed 0.7 animation layer adds elapsed-time tweens, analytical spring motion, inertial decay, serial/parallel composition, cancellation/chaining, hover/press/focus animation, blur/glow transitions, magnetic and particle effects, retained page/shared-element transitions, fade/slide/scale/rotate transforms, retained reveal/flip/morph transitions and window-scoped frame driving.
 
 ## Highlights
 
@@ -56,9 +56,9 @@ The completed 0.5 layout layer provides content-aware intrinsic measurement, min
 | Native windows | Direct Win32, X11 and Cocoa/AppKit backends without Tkinter, Qt or SDL |
 | GPU renderer | Persistent Rust/wgpu renderer context on Windows with retained scene submission |
 | Shapes | Anti-aliased rounded rectangles plus convex/concave `Path2D` geometry |
-| Text | Persistent shaped Unicode text through glyphon/cosmic-text |
+| Text | Persistent shaped Unicode text through glyphon/cosmic-text, including arbitrary-affine retained presentation through cached native rasters |
 | Images | Content-addressed RGBA GPU cache with aliases, telemetry and safe lifetime management |
-| Composition | Hierarchical clipping, cumulative opacity and painter-order retained composition |
+| Composition | Hierarchical clipping, cumulative opacity, exact affine convex clipping and painter-order retained composition |
 | HiDPI | Logical-DIP public geometry with physical-pixel native/GPU conversion |
 | Displays | Multi-monitor mapping, refresh discovery and 60/120/144+ Hz display-aware pacing |
 | Visual Engine | Gradients, shadows, glow, bloom, depth, parallax, reflections and adaptive lighting |
@@ -69,7 +69,7 @@ The completed 0.5 layout layer provides content-aware intrinsic measurement, min
 | Layout engine | Row/Column, Stack/Grid/Wrap, DockPanel/Flow/Overlay, ConstraintLayout, intrinsic sizing, min/max constraints and optimized retained reflow |
 | Responsive UI | Logical-DIP breakpoints, compact/desktop/ultrawide variants, adaptive navigation and `DynamicTypography` |
 | Reactive runtime | `State`, `ComputedState`, `AsyncState`, `PersistentState`, dependency tracking, transactions, bindings, observable collections and retained lifecycle hooks |
-| Animation runtime | Elapsed-time `Tween`, analytical spring/decay, serial/parallel composition, interaction/effect/particle helpers, page/shared-element transitions, fade/slide/scale and retained reveal/flip/morph transitions |
+| Animation runtime | Elapsed-time `Tween`, analytical spring/decay, serial/parallel composition, interaction/effect/particle helpers, page/shared-element transitions, fade/slide/scale/rotate and retained reveal/flip/morph transitions |
 | Performance | Adaptive visual-quality profiles plus retained effect/GPU caches and layout-preparation revision caching |
 | Accessibility | Semantic roles/tree, keyboard focus routing, keyboard-only traversal, checked state, numeric value/range and dialog/alert semantics |
 
@@ -110,6 +110,7 @@ python examples/page_transition_demo.py
 python examples/shared_element_transition_demo.py
 python examples/transform_animation_demo.py
 python examples/advanced_transform_animation_demo.py
+python examples/rotate_transition_demo.py
 ```
 
 ### Windows GPU development
@@ -195,7 +196,7 @@ intro = AnimationParallel(
 intro.advance(1.0 / 120.0)
 ```
 
-Animation primitives consume elapsed seconds rather than frame counts. Spring and inertial-decay sampling use closed-form equations, so samples at the same elapsed time remain deterministic across different frame partitions. Completion, cancellation, serial chaining and parallel composition preserve unused frame time where applicable. Page, shared-element and retained transform transitions use the same frame clock while applying visual-only retained-scene movement/scaling, so authored layout geometry remains stable.
+Animation primitives consume elapsed seconds rather than frame counts. Spring and inertial-decay sampling use closed-form equations, so samples at the same elapsed time remain deterministic across different frame partitions. Completion, cancellation, serial chaining and parallel composition preserve unused frame time where applicable. Page, shared-element and retained transform transitions use the same frame clock while applying visual-only retained-scene movement/scaling/rotation, so authored layout geometry remains stable.
 
 ### Retained layout example
 
@@ -252,6 +253,7 @@ examples/page_transition_demo.py
 examples/shared_element_transition_demo.py
 examples/transform_animation_demo.py
 examples/advanced_transform_animation_demo.py
+examples/rotate_transition_demo.py
 examples/core_widgets_demo.py
 examples/core_toggles_demo.py
 examples/range_progress_demo.py
@@ -298,7 +300,7 @@ Python Application API
         ├── responsive layout / adaptive navigation / dynamic typography
         ├── async/persistent state + bindings / observable collections
         ├── retained lifecycle + minimal-update scheduling
-        ├── elapsed-time animation + retained page/shared-element/transform transitions
+        ├── elapsed-time animation + retained page/shared-element/transform/rotate transitions
         ├── routed input + accessibility semantics
         └── runtime configuration + adaptive visual quality
         │
@@ -318,6 +320,7 @@ Renderer Layer
         │
         ├── persistent Windows wgpu context
         ├── rectangles / paths / shaped text / images
+        ├── exact affine geometry/image clipping + cached affine shaped-text rasters
         ├── blur / backdrop / glass / acrylic
         ├── gradients / depth / lighting / bloom / color filters
         ├── validated custom WGSL post-processing
@@ -345,8 +348,8 @@ Every significant runtime change is expected to preserve the existing quality ga
 - retained widget interaction, accessibility and real Win32 input/rendering coverage
 - intrinsic measurement, responsive reflow, adaptive navigation, dynamic typography and DPI-aware spacing coverage
 - reactive-runtime tests for dependencies, batching, computed chains, bindings, observable collections, async/persistent state, lifecycle and minimal-update scheduling
-- animation tests for frame-partition-independent timing, analytical spring/decay, cancellation, serial/parallel composition, page/shared-element transitions and retained reveal/flip/morph transforms
-- real Win32 + wgpu retained transition coverage with persistent per-window context reuse
+- animation tests for frame-partition-independent timing, analytical spring/decay, cancellation, serial/parallel composition, page/shared-element transitions and retained reveal/flip/morph/rotate transforms
+- real Win32 + wgpu retained transition coverage with persistent per-window context reuse, including arbitrary-affine shaped text
 - real custom-WGSL validation and persistent-runtime smoke coverage
 
 SwirUI does not claim performance superiority over other frameworks without reproducible measurements.
@@ -355,7 +358,7 @@ SwirUI does not claim performance superiority over other frameworks without repr
 
 The authoritative plan and its single roadmap progress graphic are in **[ROADMAP.md](ROADMAP.md)**.
 
-**0.6 Alpha — Reactive Runtime is complete. 0.7 Alpha — Animation Engine is underway with 11 / 12 groups verified.** Verified animation scope covers blur/glow transitions, spring/elastic/bounce behavior, physics animation, page/shared-element transitions, hover/press/focus animation, magnetic interactions, particle effects, fade/slide/scale, retained reveal/flip/morph transitions, frame-rate-independent timing and cancellation/chaining. Rotation remains the unverified capability preventing the final transform group from being credited. The project-wide weighted percentage intentionally remains 68% until the documented weighting model is explicitly extended. This does not imply beta or release readiness.
+**0.6 Alpha — Reactive Runtime and 0.7 Alpha — Animation Engine are complete.** All 12 animation groups are verified, including fade/slide/scale/rotate, blur/glow transitions, morph/flip/reveal, spring/elastic/bounce behavior, physics animation, page/shared-element transitions, hover/press/focus animation, magnetic interactions, particle effects, frame-rate-independent timing and cancellation/chaining. Rotation uses retained center-origin affine transforms; arbitrary-affine shaped text and transformed clips are covered by the native cosmic-text raster path plus the verified affine image/wgpu compositor. The project-wide weighted percentage intentionally remains 68% until the documented weighting model is explicitly extended. This does not imply beta or release readiness.
 
 ## Releases
 
