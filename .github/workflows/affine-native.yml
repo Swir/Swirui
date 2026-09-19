@@ -13,6 +13,10 @@ on:
       - "native/src/image.rs"
       - "native/src/images.wgsl"
       - "native/src/text.rs"
+      - "src/swirui/__init__.py"
+      - "src/swirui/rotation_animation.py"
+      - "src/swirui/widgets/base.py"
+      - "src/swirui/widgets/runtime.py"
       - "src/swirui/rendering/affine.py"
       - "src/swirui/rendering/affine_clipping.py"
       - "src/swirui/rendering/affine_wgpu_renderer.py"
@@ -28,9 +32,11 @@ on:
       - "tests/test_affine_path_renderer.py"
       - "tests/test_affine_image_clipping.py"
       - "tests/test_native_affine_contract.py"
+      - "tests/test_rotate_transition.py"
       - "tests/test_windows_affine_contract.py"
       - "tests/test_windows_affine_paths.py"
       - "tests/test_windows_affine_image_clipping.py"
+      - "tests/test_windows_rotate_transition.py"
       - ".github/workflows/affine-native.yml"
   pull_request:
     paths:
@@ -43,6 +49,10 @@ on:
       - "native/src/image.rs"
       - "native/src/images.wgsl"
       - "native/src/text.rs"
+      - "src/swirui/__init__.py"
+      - "src/swirui/rotation_animation.py"
+      - "src/swirui/widgets/base.py"
+      - "src/swirui/widgets/runtime.py"
       - "src/swirui/rendering/affine.py"
       - "src/swirui/rendering/affine_clipping.py"
       - "src/swirui/rendering/affine_wgpu_renderer.py"
@@ -58,9 +68,11 @@ on:
       - "tests/test_affine_path_renderer.py"
       - "tests/test_affine_image_clipping.py"
       - "tests/test_native_affine_contract.py"
+      - "tests/test_rotate_transition.py"
       - "tests/test_windows_affine_contract.py"
       - "tests/test_windows_affine_paths.py"
       - "tests/test_windows_affine_image_clipping.py"
+      - "tests/test_windows_rotate_transition.py"
       - ".github/workflows/affine-native.yml"
 
 permissions:
@@ -107,10 +119,10 @@ jobs:
           python -m pip install $wheel
 
       - name: Verify retained affine compositor contract
-        run: pytest tests/test_affine_clipping.py tests/test_affine_scene.py tests/test_affine_compositor_traversal.py tests/test_affine_path_renderer.py tests/test_affine_image_clipping.py -q
+        run: pytest tests/test_affine_clipping.py tests/test_affine_scene.py tests/test_affine_compositor_traversal.py tests/test_affine_path_renderer.py tests/test_affine_image_clipping.py tests/test_rotate_transition.py -q
 
       - name: Verify Python payload packing
         run: pytest tests/test_native_affine_contract.py -q
 
       - name: Verify real Python to native affine boundary
-        run: pytest tests/test_windows_affine_contract.py tests/test_windows_affine_paths.py tests/test_windows_affine_image_clipping.py -q
+        run: pytest tests/test_windows_affine_contract.py tests/test_windows_affine_paths.py tests/test_windows_affine_image_clipping.py tests/test_windows_rotate_transition.py -q

@@ -26,6 +26,7 @@ _LAYOUT_VISUAL_ONLY_INVALIDATIONS = frozenset(
         "pointer_leave",
         "pointer_up",
         "visual_offset",
+        "visual_rotation",
         "visual_scale",
         "z_index",
     }
@@ -68,11 +69,12 @@ class Widget(Component):
     authored size is retained separately so arrangement never destroys the
     widget's intrinsic measurement for a later reflow.
 
-    ``visual_offset`` translates the fully compiled visual subtree and
-    ``visual_scale`` uniformly scales it around the widget center without changing
-    authored or arranged layout geometry. They are suitable for animations and
-    interaction effects that must move painting and hit testing while leaving
-    measurement stable.
+    ``visual_offset`` translates the fully compiled visual subtree,
+    ``visual_scale`` uniformly scales it around the widget center and
+    ``visual_rotation`` rotates it around the same post-layout center without
+    changing authored or arranged layout geometry. They are suitable for
+    animations and interaction effects that must keep painting and hit testing in
+    lockstep while leaving measurement stable.
 
     Layout-affecting invalidations carry a monotonically increasing revision.
     The widget runtime uses that revision plus the logical viewport to skip
@@ -109,6 +111,7 @@ class Widget(Component):
         self._clip_to_bounds = bool(clip_to_bounds)
         self._visual_offset = Point()
         self._visual_scale = 1.0
+        self._visual_rotation = 0.0
         self._layout_constraints = LayoutConstraints()
         self._layout_grow = 0.0
         self._layout_revision = 0
@@ -203,6 +206,22 @@ class Widget(Component):
         self.invalidate(reason="visual_scale")
 
     @property
+    def visual_rotation(self) -> float:
+        """Return the visual-only counter-clockwise rotation in radians."""
+
+        return self._visual_rotation
+
+    @visual_rotation.setter
+    def visual_rotation(self, value: float) -> None:
+        normalized = float(value)
+        if not math.isfinite(normalized):
+            raise ValueError("visual_rotation must be finite.")
+        if normalized == self._visual_rotation:
+            return
+        self._visual_rotation = normalized
+        self.invalidate(reason="visual_rotation")
+
+    @property
     def layout_constraints(self) -> LayoutConstraints:
         return self._layout_constraints
 
@@ -264,6 +283,12 @@ class Widget(Component):
         """Set a uniform visual-only scale around this widget's center and return it."""
 
         self.visual_scale = scale
+        return self
+
+    def set_visual_rotation(self, radians: float = 0.0) -> Widget:
+        """Set a visual-only counter-clockwise rotation in radians and return this widget."""
+
+        self.visual_rotation = radians
         return self
 
     def intrinsic_size(self, available: Size | None = None) -> Size:
