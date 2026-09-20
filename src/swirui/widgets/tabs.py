@@ -384,7 +384,11 @@ class Tabs(Widget):
 
     def _last_enabled_index(self) -> int | None:
         return next(
-            (index for index in range(len(self._tabs) - 1, -1, -1) if not self._tabs[index].disabled),
+            (
+                index
+                for index in range(len(self._tabs) - 1, -1, -1)
+                if not self._tabs[index].disabled
+            ),
             None,
         )
 
