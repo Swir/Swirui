@@ -20,8 +20,8 @@ def main() -> int:
     )
     status = Label(
         (
-            "Click headers to sort, drag headers to reorder, drag separators to resize, "
-            "use ↑ ↓ Home End PageUp PageDown."
+            "Sort/reorder/resize headers, wheel to scroll, use arrows to navigate; "
+            "F2/Enter edits Task/Owner/Status, Enter commits, Esc cancels."
         ),
         bounds=Rect(32.0, 68.0, 850.0, 28.0),
         font_size=15.0,
@@ -48,14 +48,20 @@ def main() -> int:
         key="workloads",
         bounds=Rect(32.0, 112.0, 850.0, 470.0),
         row_height=34.0,
+        selection_mode="multiple",
+        editable_columns=("task", "owner", "status"),
         accessible_name="SwirUI workload table",
-        accessible_description="Virtualized retained table with 2500 rows.",
+        accessible_description="Virtualized retained editable table with 2500 rows.",
     )
 
     def selection_changed(event: Event) -> None:
         row = event.data.get("row")
         if isinstance(row, Mapping):
-            status.text = f"Selected #{row['id']}: {row['task']} — {row['status']}"
+            selected = event.data.get("indices", ())
+            status.text = (
+                f"Selected {len(selected)} row(s); active #{row['id']}: "
+                f"{row['task']} — {row['status']}"
+            )
 
     def sort_changed(event: Event) -> None:
         column_key = event.data.get("column_key")
@@ -71,9 +77,16 @@ def main() -> int:
             f"{event.data['old_index']} to {event.data['new_index']}."
         )
 
+    def cell_edit_committed(event: Event) -> None:
+        status.text = (
+            f"Edited row {event.data['row_index']}, "
+            f"{event.data['column_key']} = {event.data['value']!r}."
+        )
+
     grid.on("selection_changed", selection_changed)
     grid.on("sort_changed", sort_changed)
     grid.on("column_drag_finished", column_drag_finished)
+    grid.on("cell_edit_committed", cell_edit_committed)
     root.add(title, status, grid)
     mount(window, root)
     return app.run()

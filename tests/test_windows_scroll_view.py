@@ -124,7 +124,7 @@ def test_scroll_view_routes_scrolled_content_in_real_win32_wgpu_session() -> Non
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="DataGrid native smoke requires Windows")
-def test_datagrid_virtualization_and_keyboard_selection_in_real_win32_wgpu_session() -> None:
+def test_datagrid_virtualization_editing_and_keyboard_in_real_win32_wgpu_session() -> None:
     renderer = WgpuRenderer()
     backend = _isolated_backend()
     app = App("SwirUI DataGrid smoke", platform_backend=backend, renderer=renderer)
@@ -144,6 +144,8 @@ def test_datagrid_virtualization_and_keyboard_selection_in_real_win32_wgpu_sessi
         bounds=Rect(24.0, 24.0, 520.0, 240.0),
         row_height=30.0,
         header_height=40.0,
+        selection_mode="multiple",
+        editable_columns=("name", "status"),
     )
     runtime = mount(window, grid)
 
@@ -174,7 +176,7 @@ def test_datagrid_virtualization_and_keyboard_selection_in_real_win32_wgpu_sessi
         _send_click(
             user32,
             hwnd,
-            max(1, round(90.0 * window.scale)),
+            max(1, round(190.0 * window.scale)),
             max(1, round(82.0 * window.scale)),
         )
         app.process_events()
@@ -182,6 +184,31 @@ def test_datagrid_virtualization_and_keyboard_selection_in_real_win32_wgpu_sessi
         assert grid.selected_index == 0
         assert grid.selected_row is not None
         assert grid.selected_row["id"] == 199
+        assert grid.active_cell is not None
+        assert grid.active_cell[1] == "name"
+
+        _send_key(user32, hwnd, 0x71)
+        app.process_events()
+        assert grid.editing_cell == (0, "name", "Job 199")
+
+        user32.SendMessageW(ctypes.c_void_p(hwnd), 0x0102, ord("!"), 0)
+        app.process_events()
+        assert grid.editing_cell == (0, "name", "Job 199!")
+
+        app.invalidate(window)
+        assert app.render_pending(time.monotonic() + 1.0) == 1
+        assert renderer.persistent_context_count == initial_contexts
+        assert window.scene is not None
+        editor_text = next(
+            node for node in window.scene.walk() if node.key == "native-grid:editor:text"
+        )
+        assert editor_text.kind is SceneNodeKind.TEXT
+        assert editor_text.text == "Job 199!│"
+
+        _send_key(user32, hwnd, 0x0D)
+        app.process_events()
+        assert grid.is_editing is False
+        assert grid.rows[0]["name"] == "Job 199!"
 
         _send_key(user32, hwnd, 0x28)
         _send_key(user32, hwnd, 0x28)
