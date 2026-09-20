@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
     from .component import Component
@@ -35,6 +35,10 @@ class AccessibilityRole(StrEnum):
     RADIO = "radio"
     SLIDER = "slider"
     SWITCH = "switch"
+    TABLE = "table"
+    ROW = "row"
+    CELL = "cell"
+    COLUMN_HEADER = "column_header"
     TEXT = "text"
     TEXT_BOX = "text_box"
     TOOLTIP = "tooltip"
@@ -57,6 +61,12 @@ class AccessibilityNode:
     max_value: float | None = None
     value_text: str | None = None
     children: tuple[AccessibilityNode, ...] = ()
+    selected: bool | None = None
+    active: bool | None = None
+    row_index: int | None = None
+    column_index: int | None = None
+    row_count: int | None = None
+    column_count: int | None = None
 
     def find(self, key: str) -> AccessibilityNode | None:
         """Find a semantic node by stable component key."""
@@ -69,6 +79,20 @@ class AccessibilityNode:
         return None
 
 
+@runtime_checkable
+class _AccessibilitySnapshotProvider(Protocol):
+    """Internal hook for virtualized controls with semantic-only descendants."""
+
+    def accessibility_snapshot(
+        self,
+        *,
+        focused: Component | None = None,
+    ) -> AccessibilityNode:
+        """Return a complete semantic snapshot for this component."""
+
+        ...
+
+
 def build_accessibility_tree(
     root: Component | None,
     *,
@@ -78,6 +102,9 @@ def build_accessibility_tree(
 
     if root is None or not root.visible:
         return None
+
+    if isinstance(root, _AccessibilitySnapshotProvider):
+        return root.accessibility_snapshot(focused=focused)
 
     children = tuple(
         node

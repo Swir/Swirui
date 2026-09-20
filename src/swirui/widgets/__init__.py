@@ -4,7 +4,7 @@ from .badges import Badge, Chip
 from .base import LayoutConstraints, Widget
 from .button import Button, IconButton
 from .data_grid import DataGridColumn
-from .data_grid_selection import DataGrid
+from .data_grid_accessibility import DataGrid
 from .expander import Accordion, Expander
 from .input import Input, PasswordInput, TextArea
 from .layout import (
