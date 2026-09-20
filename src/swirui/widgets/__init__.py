@@ -3,6 +3,7 @@
 from .badges import Badge, Chip
 from .base import LayoutConstraints, Widget
 from .button import Button, IconButton
+from .command_surfaces import CommandItem, MenuBar, Ribbon, RibbonGroup, Toolbar
 from .data_grid import DataGridColumn
 from .data_grid_identity import DataGrid
 from .docking import DockPane, DockPosition, DockWorkspace
@@ -67,6 +68,7 @@ __all__ = [
     "Checkbox",
     "Chip",
     "Column",
+    "CommandItem",
     "ConstraintLayout",
     "ConstraintSpec",
     "CrossAxisAlignment",
@@ -95,6 +97,7 @@ __all__ = [
     "ListView",
     "ListViewSelectionMode",
     "MainAxisAlignment",
+    "MenuBar",
     "Modal",
     "NavigationItem",
     "NavigationMode",
@@ -114,6 +117,8 @@ __all__ = [
     "ResponsiveLayout",
     "ResponsiveLayoutSpec",
     "ResponsiveValue",
+    "Ribbon",
+    "RibbonGroup",
     "Row",
     "SceneChildPreparer",
     "SceneLayoutPreparer",
@@ -129,6 +134,7 @@ __all__ = [
     "Text",
     "TextArea",
     "Toast",
+    "Toolbar",
     "Tooltip",
     "TreeNode",
     "TreeView",
