@@ -4,7 +4,14 @@
 
 ## Project progress
 
-<img width="100%" src="assets/readme/progress-mini.svg" alt="SwirUI roadmap progress: 68.0% — 12 of 12 Layout Engine groups verified">
+<!-- SWIR-ROADMAP-ASCII-PROGRESS:START -->
+```text
+[##############------] 68.0%
+12 / 12 layout groups verified
+```
+<!-- SWIR-ROADMAP-ASCII-PROGRESS:END -->
+
+
 
 **Overall completion: 68%**
 
