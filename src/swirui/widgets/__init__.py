@@ -28,6 +28,7 @@ from .layout_advanced import (
 from .layout_panels import Grid, Stack, Wrap
 from .list_tree_view import ListItem, ListView, ListViewSelectionMode, TreeNode, TreeView
 from .navigation import AdaptiveNavigation, AdaptiveNavigationSpec, NavigationMode
+from .navigation_rail import NavigationItem, NavigationRail, Sidebar
 from .overlays import Dialog, Modal, Notification, Toast
 from .particles import ParticleField, ParticleSample
 from .progress import ProgressBar, ProgressRing
@@ -95,7 +96,9 @@ __all__ = [
     "ListViewSelectionMode",
     "MainAxisAlignment",
     "Modal",
+    "NavigationItem",
     "NavigationMode",
+    "NavigationRail",
     "Notification",
     "Overlay",
     "OverlayPlacement",
@@ -116,6 +119,7 @@ __all__ = [
     "SceneLayoutPreparer",
     "SceneRenderable",
     "ScrollView",
+    "Sidebar",
     "Slider",
     "SplitView",
     "Stack",
