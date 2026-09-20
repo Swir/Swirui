@@ -25,7 +25,14 @@
 
 ## Project Status
 
-<img width="100%" src="assets/readme/progress-card.svg" alt="SwirUI project progress: 68.0% — 0.5 Alpha Layout Engine complete; 12 of 12 layout groups verified">
+<!-- SWIR-ASCII-PROGRESS:START -->
+```text
+[##############------] 68.0%
+12 / 12 layout groups verified
+```
+<!-- SWIR-ASCII-PROGRESS:END -->
+
+
 
 **68% authoritative weighted project progress — 0.6 Alpha Reactive Runtime and 0.7 Alpha Animation Engine are complete; 0.7 has 12 / 12 groups verified.**
 
@@ -337,7 +344,7 @@ Every significant runtime change is expected to preserve the existing quality ga
 
 - Ruff and strict Mypy
 - pytest on Python 3.11–3.14
-- deterministic weighted progress-SVG verification against `ROADMAP.md`
+- deterministic ASCII progress verification against `ROADMAP.md`
 - retained-runtime performance budgets with JSON reports
 - `cargo check` and `cargo test`
 - Maturin / PyO3 native build
@@ -356,7 +363,7 @@ SwirUI does not claim performance superiority over other frameworks without repr
 
 ## Roadmap
 
-The authoritative plan and its single roadmap progress graphic are in **[ROADMAP.md](ROADMAP.md)**.
+The authoritative plan and its PyPI-safe ASCII progress bar are in **[ROADMAP.md](ROADMAP.md)**.
 
 **0.6 Alpha — Reactive Runtime and 0.7 Alpha — Animation Engine are complete.** All 12 animation groups are verified, including fade/slide/scale/rotate, blur/glow transitions, morph/flip/reveal, spring/elastic/bounce behavior, physics animation, page/shared-element transitions, hover/press/focus animation, magnetic interactions, particle effects, frame-rate-independent timing and cancellation/chaining. Rotation uses retained center-origin affine transforms; arbitrary-affine shaped text and transformed clips are covered by the native cosmic-text raster path plus the verified affine image/wgpu compositor. The project-wide weighted percentage intentionally remains 68% until the documented weighting model is explicitly extended. This does not imply beta or release readiness.
 
@@ -373,7 +380,7 @@ There is currently **no public GitHub Release** for SwirUI. Development remains 
 ```text
 Swirui/
 ├── .github/workflows/      # Python, Rust and native-platform CI
-├── assets/                 # SwirUI icon, README artwork and generated progress SVGs
+├── assets/                 # SwirUI icon and README artwork
 ├── benchmarks/             # reproducible performance budgets
 ├── docs/                   # architecture documentation
 ├── examples/               # native/runtime/GPU examples
