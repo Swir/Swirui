@@ -11,6 +11,10 @@ from swirui.platforms.windows import Win32PlatformBackend
 from swirui.rendering import Point, Rect, WgpuRenderer
 
 
+class _Point(ctypes.Structure):
+    _fields_ = [("x", ctypes.c_long), ("y", ctypes.c_long)]
+
+
 def _isolated_backend() -> Win32PlatformBackend:
     backend = Win32PlatformBackend()
     backend._class_name = f"SwirUI.MagneticInteraction.{id(backend):x}"
@@ -27,11 +31,34 @@ def _user32() -> Any:
         ctypes.c_ssize_t,
     ]
     user32.SendMessageW.restype = ctypes.c_ssize_t
+    user32.GetCursorPos.argtypes = [ctypes.POINTER(_Point)]
+    user32.GetCursorPos.restype = ctypes.c_bool
+    user32.ClientToScreen.argtypes = [ctypes.c_void_p, ctypes.POINTER(_Point)]
+    user32.ClientToScreen.restype = ctypes.c_bool
+    user32.SetCursorPos.argtypes = [ctypes.c_int, ctypes.c_int]
+    user32.SetCursorPos.restype = ctypes.c_bool
     return user32
 
 
 def _lparam(x: int, y: int) -> int:
     return ((y & 0xFFFF) << 16) | (x & 0xFFFF)
+
+
+def _cursor_position(user32: Any) -> tuple[int, int]:
+    point = _Point()
+    if not user32.GetCursorPos(ctypes.byref(point)):
+        pytest.fail("GetCursorPos failed before Win32 magnetic input injection.")
+    return (int(point.x), int(point.y))
+
+
+def _place_cursor_in_client(user32: Any, hwnd: int, x: int, y: int) -> None:
+    """Keep real cursor motion consistent with synthetic Win32 pointer messages."""
+
+    point = _Point(x, y)
+    if not user32.ClientToScreen(ctypes.c_void_p(hwnd), ctypes.byref(point)):
+        pytest.fail("ClientToScreen failed for Win32 magnetic input injection.")
+    if not user32.SetCursorPos(int(point.x), int(point.y)):
+        pytest.fail("SetCursorPos failed for Win32 magnetic input injection.")
 
 
 def _drain_native_events(app: App, *, max_rounds: int = 32) -> None:
@@ -96,6 +123,8 @@ def test_real_win32_pointer_moves_retained_subtree_in_persistent_wgpu_context() 
     runtime = mount(window, button)
     controller = AnimationController(app, window)
     magnetic = MagneticInteraction(controller, button)
+    user32: Any | None = None
+    original_cursor: tuple[int, int] | None = None
 
     try:
         app.start()
@@ -105,6 +134,7 @@ def test_real_win32_pointer_moves_retained_subtree_in_persistent_wgpu_context() 
         initial_contexts = renderer.persistent_context_count
         hwnd = window.native_handle.value
         user32 = _user32()
+        original_cursor = _cursor_position(user32)
         inside_x = max(1, round(330.0 * window.scale))
         inside_y = max(1, round(112.0 * window.scale))
 
@@ -116,6 +146,7 @@ def test_real_win32_pointer_moves_retained_subtree_in_persistent_wgpu_context() 
         assert target is not None
         assert target.key == "magnetic-button"
 
+        _place_cursor_in_client(user32, hwnd, inside_x, inside_y)
         user32.SendMessageW(ctypes.c_void_p(hwnd), 0x0200, 0, _lparam(inside_x, inside_y))
         _pump_until(app, lambda: magnetic.active)
         generation_before_move = runtime.generation
@@ -138,6 +169,7 @@ def test_real_win32_pointer_moves_retained_subtree_in_persistent_wgpu_context() 
         outside_y = inside_y
         offset_before_restore = button.visual_offset
         generation_before_restore = runtime.generation
+        _place_cursor_in_client(user32, hwnd, outside_x, outside_y)
         user32.SendMessageW(ctypes.c_void_p(hwnd), 0x0200, 0, _lparam(outside_x, outside_y))
         _pump_until(app, lambda: magnetic.target_offset == Point())
         controller.tick(magnetic.spec.max_duration)
@@ -159,3 +191,5 @@ def test_real_win32_pointer_moves_retained_subtree_in_persistent_wgpu_context() 
         magnetic.dispose()
         controller.dispose()
         app.stop()
+        if user32 is not None and original_cursor is not None:
+            user32.SetCursorPos(*original_cursor)
