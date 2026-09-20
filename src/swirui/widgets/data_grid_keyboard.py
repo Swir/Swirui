@@ -70,9 +70,7 @@ class DataGrid(_DataGrid):
             return self
 
         offset = self._effective_horizontal_scroll_offset()
-        if column_width >= viewport_width:
-            target = column_left
-        elif column_left < offset:
+        if column_width >= viewport_width or column_left < offset:
             target = column_left
         elif column_right > offset + viewport_width:
             target = column_right - viewport_width
