@@ -1,13 +1,15 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 
 from swirui import DataGrid, DataGridColumn
 from swirui.core import Event
 from swirui.rendering import Rect
 
+RowFilter = Callable[[Mapping[str, object]], bool]
 
-def _grid(*, row_filter=None) -> DataGrid:  # type: ignore[no-untyped-def]
+
+def _grid(*, row_filter: RowFilter | None = None) -> DataGrid:
     def parser(text: str, old_value: object) -> object:
         return int(text) if isinstance(old_value, int) else text
 
@@ -32,7 +34,7 @@ def _grid(*, row_filter=None) -> DataGrid:  # type: ignore[no-untyped-def]
     )
 
 
-def _qty_at_least(minimum: int):  # type: ignore[no-untyped-def]
+def _qty_at_least(minimum: int) -> RowFilter:
     def predicate(row: Mapping[str, object]) -> bool:
         value = row.get("qty")
         return isinstance(value, int) and value >= minimum
