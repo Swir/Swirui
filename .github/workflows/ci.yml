@@ -185,8 +185,8 @@ jobs:
       - name: Verify 0.2 integrated native gate
         run: pytest tests/test_windows_02_gate.py -q
 
-      - name: Verify retained core widgets and DataGrid filtering
-        run: pytest tests/test_windows_widgets.py tests/test_windows_scroll_view.py tests/test_windows_data_grid_filtering.py -q
+      - name: Verify retained professional widgets
+        run: pytest tests/test_windows_widgets.py tests/test_windows_scroll_view.py tests/test_windows_data_grid_filtering.py tests/test_windows_list_tree_view.py -q
 
       - name: Verify interaction animation on retained GPU path
         run: pytest tests/test_windows_interaction_animation.py -q
