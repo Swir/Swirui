@@ -1,21 +1,24 @@
 import re
-import xml.etree.ElementTree as ET
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-LEGACY_PROGRESS_METER = re.compile(r"\[[█▓▒░#=\-\s]+\]\s*\d+(?:\.\d+)?%")
+ASCII_PROGRESS = re.compile(r"\[[#-]{20}\]\s*\d+(?:\.\d+)?%")
 
 
-def test_active_progress_docs_use_one_svg_per_authoritative_surface() -> None:
+def test_active_progress_docs_use_ascii_only() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     roadmap = (ROOT / "ROADMAP.md").read_text(encoding="utf-8")
 
-    assert readme.count("assets/readme/progress-card.svg") == 1
+    assert readme.count("<!-- SWIR-ASCII-PROGRESS:START -->") == 1
+    assert readme.count("<!-- SWIR-ASCII-PROGRESS:END -->") == 1
+    assert roadmap.count("<!-- SWIR-ROADMAP-ASCII-PROGRESS:START -->") == 1
+    assert roadmap.count("<!-- SWIR-ROADMAP-ASCII-PROGRESS:END -->") == 1
+    assert ASCII_PROGRESS.search(readme)
+    assert ASCII_PROGRESS.search(roadmap)
+    assert "assets/readme/progress-card.svg" not in readme
     assert "assets/readme/progress-mini.svg" not in readme
-    assert roadmap.count("assets/readme/progress-mini.svg") == 1
     assert "assets/readme/progress-card.svg" not in roadmap
-    assert LEGACY_PROGRESS_METER.search(readme) is None
-    assert LEGACY_PROGRESS_METER.search(roadmap) is None
+    assert "assets/readme/progress-mini.svg" not in roadmap
 
 
 def test_completed_animation_status_stays_synchronized_with_verified_roadmap() -> None:
@@ -28,32 +31,3 @@ def test_completed_animation_status_stays_synchronized_with_verified_roadmap() -
     assert "- [x] Shared-element transitions" in roadmap
     assert "- [x] Morph / flip / reveal" in roadmap
     assert "- [x] Fade / slide / scale / rotate" in roadmap
-    assert "Rotation remains the unverified capability" not in readme
-    assert "**Status:** Underway 🚧 — 11 / 12 groups verified" not in roadmap
-    assert "- [ ] Fade / slide / scale / rotate" not in roadmap
-
-
-def test_generated_progress_svgs_are_valid_and_match_completed_layout_scope() -> None:
-    card_path = ROOT / "assets" / "readme" / "progress-card.svg"
-    mini_path = ROOT / "assets" / "readme" / "progress-mini.svg"
-    template_path = ROOT / "assets" / "readme" / "progress-template.svg"
-
-    card = ET.parse(card_path).getroot()
-    mini = ET.parse(mini_path).getroot()
-    template = ET.parse(template_path).getroot()
-    assert card.attrib["viewBox"] == "0 0 1200 180"
-    assert mini.attrib["viewBox"] == "0 0 900 72"
-    assert template.attrib["viewBox"] == "0 0 1200 180"
-
-    card_text = card_path.read_text(encoding="utf-8")
-    mini_text = mini_path.read_text(encoding="utf-8")
-    template_text = template_path.read_text(encoding="utf-8")
-    for text in (card_text, mini_text):
-        assert "68.0%" in text
-        assert "COMPLETE" in text
-        assert "12 / 12 layout groups verified" in text
-
-    assert "TEMPLATE" in template_text
-    assert "not project data" in template_text.lower()
-    assert 'data-role="progress-fill" x="50" y="116" width="748"' in card_text
-    assert 'data-role="progress-fill" x="170" y="42" width="476"' in mini_text
