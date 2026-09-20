@@ -50,7 +50,7 @@ def test_datagrid_validates_columns_and_snapshots_rows() -> None:
     source[0]["name"] = "Mutated"
 
     assert grid.rows[0]["name"] == "Original"
-    assert grid.accessibility_role is AccessibilityRole.LIST
+    assert grid.accessibility_role is AccessibilityRole.TABLE
     assert grid.focusable is True
 
 
