@@ -1,7 +1,7 @@
 import ctypes
 import sys
 import time
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from typing import Any
 
 import pytest
@@ -45,7 +45,7 @@ def _send_key(user32: Any, hwnd: int, key_code: int) -> None:
     user32.SendMessageW(ctypes.c_void_p(hwnd), 0x0101, key_code, 0)
 
 
-def _id_between(start: int, stop: int):
+def _id_between(start: int, stop: int) -> Callable[[Mapping[str, object]], bool]:
     def predicate(row: Mapping[str, object]) -> bool:
         value = row.get("id")
         return isinstance(value, int) and start <= value < stop
