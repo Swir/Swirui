@@ -559,12 +559,12 @@ class Ribbon(Widget):
             )
             root.add(tab_node)
 
-        group = self.selected_group
-        if group is None:
+        selected_group = self.selected_group
+        if selected_group is None:
             return root
         command_y = self.bounds.y + self._tab_height
         command_height = max(0.0, self.bounds.bottom - command_y)
-        for index, item in enumerate(group.items):
+        for index, item in enumerate(selected_group.items):
             cell = Rect(
                 self.bounds.x + index * self._command_width,
                 command_y,
@@ -730,13 +730,13 @@ class Ribbon(Widget):
         if group is None or not group.items:
             return
         if key_code in {_VK_UP, _VK_DOWN}:
-            target = _next_enabled(
+            next_target = _next_enabled(
                 group.items,
                 self._active_command_index,
                 -1 if key_code == _VK_UP else 1,
             )
-            if target is not None:
-                self._active_command_index = target
+            if next_target is not None:
+                self._active_command_index = next_target
                 self._sync_accessibility()
                 self.invalidate(reason="selection")
                 event.prevent_default()
