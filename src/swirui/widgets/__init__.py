@@ -49,6 +49,7 @@ from .scroll_view_routed import ScrollView
 from .slider import RangeSlider, Slider
 from .split_view import SplitView
 from .surfaces import Card, Frame, GlassCard, Panel
+from .tabs import TabItem, Tabs
 from .text import Label, Text
 from .toggle import Checkbox, RadioButton, Switch
 from .tooltip import Tooltip
@@ -115,6 +116,8 @@ __all__ = [
     "SplitView",
     "Stack",
     "Switch",
+    "TabItem",
+    "Tabs",
     "Text",
     "TextArea",
     "Toast",
