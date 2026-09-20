@@ -76,7 +76,8 @@ class DataGrid(_DataGrid):
             target = column_right - viewport_width
         else:
             return self
-        return self._set_horizontal_scroll_offset(target)
+        self._set_horizontal_scroll_offset(target)
+        return self
 
     def _set_active_column(self, column_key: str, *, ensure_visible: bool) -> None:
         normalized = self._column_by_key(column_key).key
