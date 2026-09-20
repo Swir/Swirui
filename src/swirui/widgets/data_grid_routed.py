@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 from swirui.core import Event
 
-from .data_grid_drag import DataGrid as _DataGrid
+from .data_grid_keyboard import DataGrid as _DataGrid
 from .scroll_events import routed_scroll_deltas, update_scroll_residual
 
 if TYPE_CHECKING:
