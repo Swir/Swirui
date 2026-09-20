@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from swirui import DataGrid, DataGridColumn, Window, mount
+from swirui import DataGrid, DataGridColumn, ScrollView, Window, mount
 from swirui.core import Event
 from swirui.platforms import NativeWindowHandle, PlatformEvent, PlatformEventKind
 from swirui.rendering import Rect
@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
 
-def _scroll_grid() -> DataGrid:
+def _scroll_grid(*, y: float = 20.0) -> DataGrid:
     return DataGrid(
         (
             DataGridColumn("id", "ID", width=120.0),
@@ -30,7 +30,7 @@ def _scroll_grid() -> DataGrid:
             for index in range(100)
         ),
         key="scroll-grid",
-        bounds=Rect(20.0, 20.0, 240.0, 130.0),
+        bounds=Rect(20.0, y, 240.0, 130.0),
         row_height=30.0,
         header_height=40.0,
     )
@@ -153,6 +153,80 @@ def test_datagrid_scroll_chains_at_boundaries_and_unsubscribes_on_unmount() -> N
     assert grid.scroll_offset == pytest.approx(48.0)
     assert len(forwarded) == 2
     unsubscribe()
+
+
+def test_nested_datagrid_uses_prepared_scene_hit_target_inside_scrolled_parent() -> None:
+    window = Window(width=480, height=240)
+    parent = ScrollView(
+        bounds=Rect(0.0, 0.0, 320.0, 180.0),
+        content_height=700.0,
+        scroll_y=160.0,
+    )
+    grid = _scroll_grid(y=220.0)
+    parent.add(grid)
+    runtime = mount(window, parent)
+    handle = NativeWindowHandle(1)
+
+    # The grid is authored at y=220, but the retained ScrollView presents it at
+    # y=60. Scroll hit testing must follow the prepared scene, not authored bounds.
+    window._apply_platform_event(
+        PlatformEvent(
+            PlatformEventKind.POINTER_SCROLL,
+            handle,
+            x=100.0,
+            y=90.0,
+            delta_y=24.0,
+        )
+    )
+
+    assert grid.scroll_offset == pytest.approx(24.0)
+    assert parent.scroll_y == pytest.approx(160.0)
+    runtime.unmount()
+
+
+def test_nested_datagrid_chains_only_unconsumed_delta_to_scrollview_and_window() -> None:
+    window = Window(width=480, height=240)
+    parent = ScrollView(
+        bounds=Rect(0.0, 0.0, 320.0, 180.0),
+        content_width=640.0,
+        content_height=720.0,
+    )
+    grid = _scroll_grid(y=560.0)
+    parent.add(grid)
+    runtime = mount(window, parent)
+    handle = NativeWindowHandle(1)
+
+    grid.scroll_by(100_000.0)
+    grid_max = grid.scroll_offset
+    grid.scroll_by(-12.0)
+    parent.scroll_to(y=parent.max_scroll_y - 20.0)
+
+    forwarded: list[Event] = []
+    unsubscribe: Callable[[], None] = window.on("pointer_scroll", forwarded.append)
+
+    window._apply_platform_event(
+        PlatformEvent(
+            PlatformEventKind.POINTER_SCROLL,
+            handle,
+            x=100.0,
+            y=80.0,
+            delta_y=48.0,
+        )
+    )
+
+    assert grid.scroll_offset == pytest.approx(grid_max)
+    assert parent.scroll_y == pytest.approx(parent.max_scroll_y)
+    assert len(forwarded) == 1
+    residual = forwarded[0].data["event"]
+    assert isinstance(residual, PlatformEvent)
+    assert residual.delta_x == 0.0
+    assert residual.delta_y == pytest.approx(16.0)
+    original = forwarded[0].data["original_event"]
+    assert isinstance(original, PlatformEvent)
+    assert original.delta_y == pytest.approx(48.0)
+
+    unsubscribe()
+    runtime.unmount()
 
 
 @pytest.mark.skipif(not sys.platform.startswith("linux"), reason="X11 normalization test")

@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import replace
 from typing import TYPE_CHECKING
 
 from swirui.core import Event
 from swirui.platforms import PlatformEvent, PlatformEventKind, PointerButton
 
 from .data_grid import DataGrid as _RetainedDataGrid
+from .scrolling import ScrollView
 
 if TYPE_CHECKING:
     from swirui.window import Window
@@ -16,6 +18,7 @@ if TYPE_CHECKING:
 _HEADER_DRAG_THRESHOLD = 6.0
 _HEADER_DRAG_EDGE_ZONE = 28.0
 _HEADER_DRAG_SCROLL_STEP = 36.0
+_SCROLL_EPSILON = 1e-9
 
 
 class DataGrid(_RetainedDataGrid):
@@ -71,15 +74,11 @@ class DataGrid(_RetainedDataGrid):
             return
 
         window = self.mounted_window
-        if (
-            window is None
-            or platform_event.x is None
-            or platform_event.y is None
-        ):
+        if window is None or platform_event.x is None or platform_event.y is None:
             return
         x = window.physical_to_logical(platform_event.x)
         y = window.physical_to_logical(platform_event.y)
-        if not self._contains_point(x, y):
+        if not self._is_visual_scroll_target(window, x=x, y=y):
             return
 
         delta_x = float(platform_event.delta_x)
@@ -90,15 +89,85 @@ class DataGrid(_RetainedDataGrid):
         if delta_x == 0.0 and delta_y == 0.0:
             return
 
+        remaining_x, remaining_y, consumed = self._consume_grid_scroll(
+            delta_x=delta_x,
+            delta_y=delta_y,
+        )
+        for ancestor in self._scroll_view_ancestors():
+            if self._scroll_exhausted(remaining_x, remaining_y):
+                break
+            before = (ancestor.scroll_x, ancestor.scroll_y)
+            ancestor.scroll_by(dx=remaining_x, dy=remaining_y)
+            after = (ancestor.scroll_x, ancestor.scroll_y)
+            consumed_x = after[0] - before[0]
+            consumed_y = after[1] - before[1]
+            if consumed_x != 0.0 or consumed_y != 0.0:
+                consumed = True
+            remaining_x = self._normalize_remaining(remaining_x - consumed_x)
+            remaining_y = self._normalize_remaining(remaining_y - consumed_y)
+
+        if consumed:
+            event.prevent_default()
+        if self._scroll_exhausted(remaining_x, remaining_y):
+            event.stop_propagation()
+            return
+
+        # Preserve only the unconsumed logical-DIP delta for later window
+        # listeners. The original immutable platform event remains available
+        # for diagnostics without allowing an outer fallback to double-scroll.
+        if consumed:
+            event.data.setdefault("original_event", platform_event)
+            event.data["event"] = replace(
+                platform_event,
+                delta_x=remaining_x,
+                delta_y=remaining_y,
+            )
+
+    def _is_visual_scroll_target(self, window: Window, *, x: float, y: float) -> bool:
+        scene = window.scene
+        if scene is None:
+            return self._contains_point(x, y)
+        return any(node.key == self.key for node in scene.hit_path_xy(x, y))
+
+    def _consume_grid_scroll(
+        self,
+        *,
+        delta_x: float,
+        delta_y: float,
+    ) -> tuple[float, float, bool]:
         before = (self.horizontal_scroll_offset, self.scroll_offset)
         if delta_x != 0.0:
             self.scroll_horizontal_by(delta_x)
         if delta_y != 0.0:
             self.scroll_by(delta_y)
         after = (self.horizontal_scroll_offset, self.scroll_offset)
-        if after != before:
-            event.prevent_default()
-            event.stop_propagation()
+        consumed_x = after[0] - before[0]
+        consumed_y = after[1] - before[1]
+        return (
+            self._normalize_remaining(delta_x - consumed_x),
+            self._normalize_remaining(delta_y - consumed_y),
+            consumed_x != 0.0 or consumed_y != 0.0,
+        )
+
+    def _scroll_view_ancestors(self) -> tuple[ScrollView, ...]:
+        ancestors: list[ScrollView] = []
+        current = self.parent
+        while current is not None:
+            if isinstance(current, ScrollView):
+                ancestors.append(current)
+            current = current.parent
+        return tuple(ancestors)
+
+    @staticmethod
+    def _normalize_remaining(value: float) -> float:
+        return 0.0 if abs(value) <= _SCROLL_EPSILON else value
+
+    @classmethod
+    def _scroll_exhausted(cls, delta_x: float, delta_y: float) -> bool:
+        return (
+            cls._normalize_remaining(delta_x) == 0.0
+            and cls._normalize_remaining(delta_y) == 0.0
+        )
 
     def _on_pointer_down(self, event: Event) -> None:
         platform_event = self._platform_event(event, PlatformEventKind.POINTER_DOWN)
