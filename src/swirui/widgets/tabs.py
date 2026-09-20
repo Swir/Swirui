@@ -315,11 +315,12 @@ class Tabs(Widget):
 
     def _sync_accessibility_value(self) -> None:
         selected = self.selected_tab
-        if selected is None:
+        index = self._selected_index
+        if selected is None or index is None:
             self.accessible_value_text = f"No tab selected of {len(self._tabs)}"
         else:
             self.accessible_value_text = (
-                f"{selected.label} selected, {self._selected_index + 1} of {len(self._tabs)}"
+                f"{selected.label} selected, {index + 1} of {len(self._tabs)}"
             )
 
     def _on_pointer_down(self, event: Event) -> None:
