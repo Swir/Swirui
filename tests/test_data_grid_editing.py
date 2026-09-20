@@ -106,9 +106,8 @@ def test_data_grid_edit_commit_preserves_multi_selection_and_resorts_row() -> No
     grid = _grid()
     grid.sort_by("name")
     grid.select_rows((0, 1), primary_index=0, ensure_visible=False)
-    grid.activate_cell(0, "name", ensure_visible=False)
 
-    grid.begin_edit()
+    grid.begin_edit(0, "name", ensure_visible=False)
     grid.set_edit_text("Zulu")
     grid.commit_edit()
 
