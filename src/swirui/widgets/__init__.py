@@ -5,6 +5,7 @@ from .base import LayoutConstraints, Widget
 from .button import Button, IconButton
 from .data_grid import DataGridColumn
 from .data_grid_identity import DataGrid
+from .docking import DockPane, DockPosition, DockWorkspace
 from .expander import Accordion, Expander
 from .input import Input, PasswordInput, TextArea
 from .layout import (
@@ -72,7 +73,10 @@ __all__ = [
     "DataGridColumn",
     "Dialog",
     "Dock",
+    "DockPane",
     "DockPanel",
+    "DockPosition",
+    "DockWorkspace",
     "DynamicTypography",
     "Expander",
     "Flow",
