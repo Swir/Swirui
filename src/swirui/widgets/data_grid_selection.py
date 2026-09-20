@@ -247,7 +247,7 @@ class DataGrid(_DataGrid):
             and platform_event.y is not None
             and platform_event.y >= self.bounds.y + self._header_height
         )
-        if use_modifiers:
+        if use_modifiers and platform_event is not None:
             self._pointer_extend_selection = bool(platform_event.shift)
             self._pointer_toggle_selection = bool(
                 (platform_event.ctrl or platform_event.meta) and not platform_event.shift
