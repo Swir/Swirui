@@ -11,6 +11,10 @@ from swirui.platforms.windows import Win32PlatformBackend
 from swirui.rendering import Rect, WgpuRenderer
 
 
+class _Point(ctypes.Structure):
+    _fields_ = [("x", ctypes.c_long), ("y", ctypes.c_long)]
+
+
 def _isolated_backend() -> Win32PlatformBackend:
     backend = Win32PlatformBackend()
     backend._class_name = f"SwirUI.InteractionAnimation.{id(backend):x}"
@@ -27,11 +31,41 @@ def _user32() -> Any:
         ctypes.c_ssize_t,
     ]
     user32.SendMessageW.restype = ctypes.c_ssize_t
+    user32.GetCursorPos.argtypes = [ctypes.POINTER(_Point)]
+    user32.GetCursorPos.restype = ctypes.c_bool
+    user32.ClientToScreen.argtypes = [ctypes.c_void_p, ctypes.POINTER(_Point)]
+    user32.ClientToScreen.restype = ctypes.c_bool
+    user32.SetCursorPos.argtypes = [ctypes.c_int, ctypes.c_int]
+    user32.SetCursorPos.restype = ctypes.c_bool
     return user32
 
 
 def _lparam(x: int, y: int) -> int:
     return ((y & 0xFFFF) << 16) | (x & 0xFFFF)
+
+
+def _cursor_position(user32: Any) -> tuple[int, int]:
+    point = _Point()
+    if not user32.GetCursorPos(ctypes.byref(point)):
+        pytest.fail("GetCursorPos failed before Win32 interaction injection.")
+    return (int(point.x), int(point.y))
+
+
+def _place_cursor_in_client(user32: Any, hwnd: int, x: int, y: int) -> None:
+    """Align the real hosted-runner cursor with the injected client coordinates.
+
+    ``SendMessageW(WM_MOUSEMOVE)`` alone does not move the operating-system cursor.
+    Windows can therefore enqueue a genuine pointer move at the runner's old cursor
+    location immediately after the synthetic message and undo the hover state. Moving
+    the real cursor first makes both native event sources agree while preserving the
+    real HWND routing path exercised by this smoke gate.
+    """
+
+    point = _Point(x, y)
+    if not user32.ClientToScreen(ctypes.c_void_p(hwnd), ctypes.byref(point)):
+        pytest.fail("ClientToScreen failed for Win32 interaction injection.")
+    if not user32.SetCursorPos(int(point.x), int(point.y)):
+        pytest.fail("SetCursorPos failed for Win32 interaction injection.")
 
 
 def _drain_native_events(app: App, *, max_rounds: int = 32) -> None:
@@ -93,6 +127,8 @@ def test_real_win32_pointer_animates_retained_button_in_persistent_wgpu_context(
     runtime = mount(window, button)
     controller = AnimationController(app, window)
     animator = InteractionAnimator(controller, button)
+    user32: Any | None = None
+    original_cursor: tuple[int, int] | None = None
 
     try:
         app.start()
@@ -102,6 +138,7 @@ def test_real_win32_pointer_animates_retained_button_in_persistent_wgpu_context(
         initial_contexts = renderer.persistent_context_count
         hwnd = window.native_handle.value
         user32 = _user32()
+        original_cursor = _cursor_position(user32)
         x = max(1, round(180.0 * window.scale))
         y = max(1, round(110.0 * window.scale))
 
@@ -113,6 +150,7 @@ def test_real_win32_pointer_animates_retained_button_in_persistent_wgpu_context(
         assert target is not None
         assert target.key == "animated-button"
 
+        _place_cursor_in_client(user32, hwnd, x, y)
         user32.SendMessageW(ctypes.c_void_p(hwnd), 0x0200, 0, _lparam(x, y))
         _pump_until(app, lambda: animator.phase.value == "hovered")
         controller.tick(0.10)
@@ -147,3 +185,5 @@ def test_real_win32_pointer_animates_retained_button_in_persistent_wgpu_context(
         animator.dispose()
         controller.dispose()
         app.stop()
+        if user32 is not None and original_cursor is not None:
+            user32.SetCursorPos(*original_cursor)
