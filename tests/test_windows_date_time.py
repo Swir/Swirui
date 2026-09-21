@@ -1,7 +1,8 @@
 import ctypes
 import sys
 import time
-from datetime import date, time as dt_time
+from datetime import date
+from datetime import time as dt_time
 from typing import Any
 
 import pytest

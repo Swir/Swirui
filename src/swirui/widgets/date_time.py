@@ -857,7 +857,11 @@ class TimePicker(_SegmentPicker):
         self._second_step = self._validate_step(second_step, "second_step")
         self._show_seconds = bool(show_seconds)
         self._value = self._normalize(value or time(0, 0))
-        segments = ("hour", "minute", "second") if self._show_seconds else ("hour", "minute")
+        segments = (
+            ("hour", "minute", "second")
+            if self._show_seconds
+            else ("hour", "minute")
+        )
         super().__init__(
             bounds=bounds,
             segments=segments,
@@ -937,10 +941,11 @@ class TimePicker(_SegmentPicker):
 
     def _normalize(self, value: time) -> time:
         minute = (value.minute // self._minute_step) * self._minute_step
-        if self._show_seconds:
-            second = (value.second // self._second_step) * self._second_step
-        else:
-            second = 0
+        second = (
+            value.second // self._second_step * self._second_step
+            if self._show_seconds
+            else 0
+        )
         return time(value.hour, minute, second, fold=value.fold)
 
     @staticmethod
