@@ -41,6 +41,7 @@ from .overlays import Dialog, Modal, Notification, Toast
 from .particles import ParticleField, ParticleSample
 from .progress import ProgressBar, ProgressRing
 from .property_grid import Inspector, PropertyEditorKind, PropertyGrid, PropertyItem
+from .radial_chart import DonutChart, PieChart
 from .responsive import (
     LayoutDirection,
     ResponsiveBreakpoints,
@@ -99,6 +100,7 @@ __all__ = [
     "DockPanel",
     "DockPosition",
     "DockWorkspace",
+    "DonutChart",
     "DynamicTypography",
     "Expander",
     "FileFilter",
@@ -134,6 +136,7 @@ __all__ = [
     "ParticleField",
     "ParticleSample",
     "PasswordInput",
+    "PieChart",
     "ProgressBar",
     "ProgressRing",
     "PropertyEditorKind",
