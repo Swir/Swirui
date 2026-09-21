@@ -126,7 +126,7 @@ class Component(EventEmitter):
         for child in children:
             if child is self:
                 raise ValueError("A component cannot be its own child.")
-            if child._contains(self):
+            if child._contains_component(self):
                 raise ValueError("Adding this child would create a component cycle.")
             if child.parent is self:
                 continue
@@ -202,7 +202,7 @@ class Component(EventEmitter):
     def find(self, key: str) -> Component | None:
         return next((component for component in self.walk() if component.key == key), None)
 
-    def _contains(self, target: Component) -> bool:
+    def _contains_component(self, target: Component) -> bool:
         return any(component is target for component in self.walk())
 
     def _mount(self, window: Window) -> None:
