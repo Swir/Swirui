@@ -4,6 +4,7 @@ from .badges import Badge, Chip
 from .base import LayoutConstraints, Widget
 from .button import Button, IconButton
 from .command_surfaces import CommandItem, MenuBar, Ribbon, RibbonGroup, Toolbar
+from .context_commands import CommandPalette, ContextMenu
 from .data_grid import DataGridColumn
 from .data_grid_identity import DataGrid
 from .docking import DockPane, DockPosition, DockWorkspace
@@ -69,8 +70,10 @@ __all__ = [
     "Chip",
     "Column",
     "CommandItem",
+    "CommandPalette",
     "ConstraintLayout",
     "ConstraintSpec",
+    "ContextMenu",
     "CrossAxisAlignment",
     "DataGrid",
     "DataGridColumn",
