@@ -1,5 +1,13 @@
 """Public retained core widgets for SwirUI."""
 
+from .advanced_charts import (
+    HeatmapCell,
+    HeatmapChart,
+    RadarChart,
+    ScatterChart,
+    ScatterPoint,
+    ScatterSeries,
+)
 from .badges import Badge, Chip
 from .bar_chart import BarChart
 from .base import LayoutConstraints, Widget
@@ -112,6 +120,8 @@ __all__ = [
     "Frame",
     "GlassCard",
     "Grid",
+    "HeatmapCell",
+    "HeatmapChart",
     "IconButton",
     "Input",
     "Insets",
@@ -142,6 +152,7 @@ __all__ = [
     "PropertyEditorKind",
     "PropertyGrid",
     "PropertyItem",
+    "RadarChart",
     "RadioButton",
     "RangeSlider",
     "ResponsiveBreakpoints",
@@ -151,6 +162,9 @@ __all__ = [
     "Ribbon",
     "RibbonGroup",
     "Row",
+    "ScatterChart",
+    "ScatterPoint",
+    "ScatterSeries",
     "SceneChildPreparer",
     "SceneLayoutPreparer",
     "SceneRenderable",
