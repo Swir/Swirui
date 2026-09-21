@@ -4,6 +4,20 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 LEGACY_PROGRESS_METER = re.compile(r"\[[█▓▒░#=\-\s]+\]\s*\d+(?:\.\d+)?%")
+PYPI_PROGRESS_START = "<!-- SWIR-PYPI-PROGRESS:START -->"
+PYPI_PROGRESS_END = "<!-- SWIR-PYPI-PROGRESS:END -->"
+
+
+def _readme_without_pypi_progress(readme: str) -> str:
+    assert readme.count(PYPI_PROGRESS_START) == 1
+    assert readme.count(PYPI_PROGRESS_END) == 1
+    start = readme.index(PYPI_PROGRESS_START)
+    end = readme.index(PYPI_PROGRESS_END, start) + len(PYPI_PROGRESS_END)
+    block = readme[start:end]
+    assert block.isascii()
+    assert "SwirUI      [####################----------] 68.0%" in block
+    assert "Scope       12 / 12 layout groups verified" in block
+    return readme[:start] + readme[end:]
 
 
 def test_active_progress_docs_use_one_svg_per_authoritative_surface() -> None:
@@ -14,7 +28,7 @@ def test_active_progress_docs_use_one_svg_per_authoritative_surface() -> None:
     assert "assets/readme/progress-mini.svg" not in readme
     assert roadmap.count("assets/readme/progress-mini.svg") == 1
     assert "assets/readme/progress-card.svg" not in roadmap
-    assert LEGACY_PROGRESS_METER.search(readme) is None
+    assert LEGACY_PROGRESS_METER.search(_readme_without_pypi_progress(readme)) is None
     assert LEGACY_PROGRESS_METER.search(roadmap) is None
 
 
