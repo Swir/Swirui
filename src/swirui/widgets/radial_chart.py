@@ -202,6 +202,7 @@ class _RadialChart(Widget):
             second = start_angle + sweep * (segment_index + 1) / segment_count
             outer_a = _polar(center, outer_radius, first)
             outer_b = _polar(center, outer_radius, second)
+            points: tuple[Point, ...]
             if inner_radius <= _EPSILON:
                 points = (center, outer_a, outer_b)
             else:
