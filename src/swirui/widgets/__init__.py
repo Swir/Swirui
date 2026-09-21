@@ -67,6 +67,13 @@ from .runtime import (
 from .scroll_runtime import WidgetRuntime, mount
 from .scroll_view_routed import ScrollView
 from .slider import RangeSlider, Slider
+from .specialized_charts import (
+    CandlestickChart,
+    CandlestickPoint,
+    GaugeChart,
+    TimelineChart,
+    TimelineChartItem,
+)
 from .split_view import SplitView
 from .surfaces import Card, Frame, GlassCard, Panel
 from .tabs import TabItem, Tabs
@@ -85,6 +92,8 @@ __all__ = [
     "BarChart",
     "Button",
     "Calendar",
+    "CandlestickChart",
+    "CandlestickPoint",
     "Card",
     "ChartPoint",
     "ChartSeries",
@@ -118,6 +127,7 @@ __all__ = [
     "FlowDirection",
     "FolderPicker",
     "Frame",
+    "GaugeChart",
     "GlassCard",
     "Grid",
     "HeatmapCell",
@@ -180,6 +190,8 @@ __all__ = [
     "TextArea",
     "TimePicker",
     "Timeline",
+    "TimelineChart",
+    "TimelineChartItem",
     "TimelineItem",
     "TimelineOrientation",
     "Toast",
