@@ -1,8 +1,10 @@
 """Public retained core widgets for SwirUI."""
 
 from .badges import Badge, Chip
+from .bar_chart import BarChart
 from .base import LayoutConstraints, Widget
 from .button import Button, IconButton
+from .charts import ChartPoint, ChartSeries
 from .color_picker import ColorChannel, ColorPicker
 from .command_surfaces import CommandItem, MenuBar, Ribbon, RibbonGroup, Toolbar
 from .context_commands import CommandPalette, ContextMenu
@@ -31,6 +33,7 @@ from .layout_advanced import (
     OverlayPlacement,
 )
 from .layout_panels import Grid, Stack, Wrap
+from .line_area_chart import AreaChart, LineChart
 from .list_tree_view import ListItem, ListView, ListViewSelectionMode, TreeNode, TreeView
 from .navigation import AdaptiveNavigation, AdaptiveNavigationSpec, NavigationMode
 from .navigation_rail import NavigationItem, NavigationRail, Sidebar
@@ -68,10 +71,14 @@ __all__ = [
     "Accordion",
     "AdaptiveNavigation",
     "AdaptiveNavigationSpec",
+    "AreaChart",
     "Badge",
+    "BarChart",
     "Button",
     "Calendar",
     "Card",
+    "ChartPoint",
+    "ChartSeries",
     "Checkbox",
     "Chip",
     "ColorChannel",
@@ -110,6 +117,7 @@ __all__ = [
     "Label",
     "LayoutConstraints",
     "LayoutDirection",
+    "LineChart",
     "ListItem",
     "ListView",
     "ListViewSelectionMode",
