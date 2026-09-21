@@ -7,6 +7,7 @@ from .command_surfaces import CommandItem, MenuBar, Ribbon, RibbonGroup, Toolbar
 from .context_commands import CommandPalette, ContextMenu
 from .data_grid import DataGridColumn
 from .data_grid_identity import DataGrid
+from .date_time import Calendar, DatePicker, TimePicker
 from .docking import DockPane, DockPosition, DockWorkspace
 from .expander import Accordion, Expander
 from .input import Input, PasswordInput, TextArea
@@ -67,6 +68,7 @@ __all__ = [
     "AdaptiveNavigationSpec",
     "Badge",
     "Button",
+    "Calendar",
     "Card",
     "Checkbox",
     "Chip",
@@ -79,6 +81,7 @@ __all__ = [
     "CrossAxisAlignment",
     "DataGrid",
     "DataGridColumn",
+    "DatePicker",
     "Dialog",
     "Dock",
     "DockPane",
@@ -140,11 +143,12 @@ __all__ = [
     "Switch",
     "TabItem",
     "Tabs",
+    "Text",
+    "TextArea",
+    "TimePicker",
     "Timeline",
     "TimelineItem",
     "TimelineOrientation",
-    "Text",
-    "TextArea",
     "Toast",
     "Toolbar",
     "Tooltip",
