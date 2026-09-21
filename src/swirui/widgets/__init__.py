@@ -75,6 +75,7 @@ from .specialized_charts import (
     TimelineChartItem,
 )
 from .split_view import SplitView
+from .streaming_charts import StreamingChartSeries, StreamingLineChart
 from .surfaces import Card, Frame, GlassCard, Panel
 from .tabs import TabItem, Tabs
 from .text import Label, Text
@@ -183,6 +184,8 @@ __all__ = [
     "Slider",
     "SplitView",
     "Stack",
+    "StreamingChartSeries",
+    "StreamingLineChart",
     "Switch",
     "TabItem",
     "Tabs",
