@@ -25,6 +25,15 @@
 
 ## Project Status
 
+<!-- SWIR-PYPI-PROGRESS:START -->
+```text
+SwirUI      [####################----------] 68.0%
+Scope       12 / 12 layout groups verified
+```
+<!-- SWIR-PYPI-PROGRESS:END -->
+
+> PyPI-safe text progress is the portable status view. The SVG below is an optional GitHub visual.
+
 <img width="100%" src="assets/readme/progress-card.svg" alt="SwirUI project progress: 68.0% — 0.5 Alpha Layout Engine complete; 12 of 12 layout groups verified">
 
 **68% authoritative weighted project progress — 0.6 Alpha Reactive Runtime and 0.7 Alpha Animation Engine are complete; 0.7 has 12 / 12 groups verified.**
