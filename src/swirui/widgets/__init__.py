@@ -3,6 +3,7 @@
 from .badges import Badge, Chip
 from .base import LayoutConstraints, Widget
 from .button import Button, IconButton
+from .color_picker import ColorChannel, ColorPicker
 from .command_surfaces import CommandItem, MenuBar, Ribbon, RibbonGroup, Toolbar
 from .context_commands import CommandPalette, ContextMenu
 from .data_grid import DataGridColumn
@@ -72,6 +73,8 @@ __all__ = [
     "Card",
     "Checkbox",
     "Chip",
+    "ColorChannel",
+    "ColorPicker",
     "Column",
     "CommandItem",
     "CommandPalette",
