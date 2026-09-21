@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import colorsys
-from typing import Literal, cast
+from typing import Literal
 
 from swirui.core import AccessibilityNode, AccessibilityRole, Component, Event
 from swirui.platforms import PlatformEvent, PlatformEventKind, PointerButton
