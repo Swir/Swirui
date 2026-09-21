@@ -1,4 +1,4 @@
-"""Retained cartesian data-visualization widgets for SwirUI."""
+"""Shared public data models for retained cartesian charts."""
 
 from __future__ import annotations
 
@@ -37,3 +37,22 @@ class ChartSeries:
     name: str
     points: Sequence[ChartPoint]
     color: Color | None = None
+
+    def __post_init__(self) -> None:
+        hash(self.key)
+        name = self.name.strip()
+        points = tuple(self.points)
+        if not name:
+            raise ValueError("ChartSeries name must not be empty.")
+        if not points:
+            raise ValueError("ChartSeries requires at least one point.")
+        keys: set[Hashable] = set()
+        for point in points:
+            if point.key in keys:
+                raise ValueError(f"Duplicate chart point key: {point.key!r}")
+            keys.add(point.key)
+        object.__setattr__(self, "name", name)
+        object.__setattr__(self, "points", points)
+
+
+__all__ = ["ChartPoint", "ChartSeries"]
