@@ -227,30 +227,44 @@ Retained interaction helpers cover hover/press/focus opacity transitions, animat
 
 ## 0.8 Beta — Professional Widgets
 
-- [ ] DataGrid / Table
-- [ ] TreeView / ListView
-- [ ] Virtualized collections
-- [ ] Tabs
-- [ ] Docking system
-- [ ] Sidebar / NavigationRail
-- [ ] Toolbar / Ribbon / MenuBar
-- [ ] ContextMenu / CommandPalette
-- [ ] PropertyGrid / Inspector
-- [ ] Timeline
-- [ ] Calendar / DatePicker / TimePicker
-- [ ] ColorPicker
-- [ ] FilePicker / FolderPicker
+**Status:** Complete ✅ — 13 / 13 groups verified
+
+- [x] DataGrid / Table
+- [x] TreeView / ListView
+- [x] Virtualized collections
+- [x] Tabs
+- [x] Docking system
+- [x] Sidebar / NavigationRail
+- [x] Toolbar / Ribbon / MenuBar
+- [x] ContextMenu / CommandPalette
+- [x] PropertyGrid / Inspector
+- [x] Timeline
+- [x] Calendar / DatePicker / TimePicker
+- [x] ColorPicker
+- [x] FilePicker / FolderPicker
+
+### Verified 0.8 closeout
+
+The Professional Widgets milestone is closed only from merged exact-head evidence. `DataGrid / Table` reached its integrated acceptance gate in PR #133 with CI #840 after the preceding retained editing, filtering, selection, accessibility, two-axis virtualization and native-input slices; `TreeView / ListView` and the named virtualized-collections capability were then accepted in PR #134 with CI #844, including 2,000-item viewport-bounded retained rendering. `Tabs` was accepted in PR #135 with CI #849, whose real Win32 + wgpu job completed the retained-professional-widgets verification path.
+
+Dedicated native gates then qualified the remaining groups before merge: Docking PR #136 / CI #851 / Docking Native Gate #1; Sidebar / NavigationRail PR #137 / CI #853 / Navigation Native Gate #1; Toolbar / Ribbon / MenuBar PR #138 / CI #856 / Command Surfaces Native Gate #2; ContextMenu / CommandPalette PR #139 / CI #858 / Context Commands Native Gate #1; PropertyGrid / Inspector PR #140 / CI #861 / Property Grid Native Gate #2; Timeline PR #141 / CI #865 / Timeline Native Gate #3; Calendar / DatePicker / TimePicker PR #142 / CI #869 / Date Time Native Gate #3; ColorPicker PR #143 / CI #873 / Color Picker Native Gate #3; and FilePicker / FolderPicker PR #144 / CI #878 / File Picker Native Gate #4. Completion applies only to the named 0.8 Professional Widgets milestone and does not by itself publish a Beta release.
+
+This checklist closeout synchronizes canonical roadmap truth with already-merged qualification evidence. It does not alter the authoritative weighted project percentage, which remains 68% because the approved weighting model has not been extended beyond completed 0.5 scope.
 
 ## Data Visualization
 
-- [ ] Line / area / bar charts
-- [ ] Pie / donut charts
+**Status:** In progress — 2 / 8 groups verified
+
+- [x] Line / area / bar charts
+- [x] Pie / donut charts
 - [ ] Scatter / heatmap / radar
 - [ ] Gauge / candlestick / timeline charts
 - [ ] Live and streaming data
 - [ ] GPU chart rendering
 - [ ] Interactive zoom and selection
 - [ ] Large-dataset optimization
+
+The already-merged chart packages are synchronized here without widening scope: PR #145 passed exact-head CI #883 plus Cartesian Charts Native Gate #4 for retained line/area/bar charts, and PR #146 passed exact-head CI #888 plus Radial Charts Native Gate #4 for retained pie/donut charts. No additional project-percentage points are claimed by this post-0.5 work.
 
 ## Media Engine
 
