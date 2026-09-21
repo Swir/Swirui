@@ -351,11 +351,11 @@ class HeatmapChart(Widget):
                 )
             )
         for cell_index, cell in enumerate(self.cells):
-            row = row_index[cell.row]
-            column = column_index[cell.column]
+            row_slot = row_index[cell.row]
+            column_slot = column_index[cell.column]
             bounds = Rect(
-                plot.x + column * cell_width + 1.0,
-                plot.y + row * cell_height + 1.0,
+                plot.x + column_slot * cell_width + 1.0,
+                plot.y + row_slot * cell_height + 1.0,
                 max(0.0, cell_width - 2.0),
                 max(0.0, cell_height - 2.0),
             )
