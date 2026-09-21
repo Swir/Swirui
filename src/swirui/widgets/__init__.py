@@ -11,6 +11,7 @@ from .data_grid_identity import DataGrid
 from .date_time import Calendar, DatePicker, TimePicker
 from .docking import DockPane, DockPosition, DockWorkspace
 from .expander import Accordion, Expander
+from .file_picker import FileFilter, FilePicker, FilePickerEntry, FolderPicker
 from .input import Input, PasswordInput, TextArea
 from .layout import (
     Column,
@@ -93,8 +94,12 @@ __all__ = [
     "DockWorkspace",
     "DynamicTypography",
     "Expander",
+    "FileFilter",
+    "FilePicker",
+    "FilePickerEntry",
     "Flow",
     "FlowDirection",
+    "FolderPicker",
     "Frame",
     "GlassCard",
     "Grid",
