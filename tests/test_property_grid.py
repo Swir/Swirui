@@ -76,6 +76,8 @@ def test_property_grid_boolean_read_only_scene_and_accessibility() -> None:
 
     grid.begin_edit("id")
     assert grid.editing_item is None
+    assert grid.selected_item is not None
+    assert grid.selected_item.key == "id"
     with pytest.raises(PermissionError, match="read-only"):
         grid.set_value("id", "replacement")
 
@@ -84,7 +86,7 @@ def test_property_grid_boolean_read_only_scene_and_accessibility() -> None:
     assert "General / Visible" in texts
     assert "False" in texts
     assert "Metadata / Object ID" in texts
-    assert any(node.key == "inspector:row:1:accent" for node in scene.walk())
+    assert any(node.key == "inspector:row:3:accent" for node in scene.walk())
 
     snapshot = grid.accessibility_snapshot(focused=grid)
     assert snapshot.role is AccessibilityRole.TABLE
@@ -92,9 +94,10 @@ def test_property_grid_boolean_read_only_scene_and_accessibility() -> None:
     assert snapshot.row_count == 4
     assert snapshot.column_count == 2
     assert snapshot.children[1].role is AccessibilityRole.ROW
-    assert snapshot.children[1].selected is True
+    assert snapshot.children[1].selected is False
     assert snapshot.children[1].children[1].role is AccessibilityRole.CELL
     assert snapshot.children[1].children[1].value_text == "False"
+    assert snapshot.children[3].selected is True
     assert snapshot.children[3].children[1].enabled is False
     assert snapshot.name == "Inspector"
 
