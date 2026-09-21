@@ -269,7 +269,10 @@ class _RadialChart(Widget):
         return series
 
     @staticmethod
-    def _validate_colors(colors: Sequence[Color] | None, point_count: int) -> tuple[Color, ...] | None:
+    def _validate_colors(
+        colors: Sequence[Color] | None,
+        point_count: int,
+    ) -> tuple[Color, ...] | None:
         if colors is None:
             return None
         normalized = tuple(colors)
