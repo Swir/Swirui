@@ -34,6 +34,7 @@ from .navigation_rail import NavigationItem, NavigationRail, Sidebar
 from .overlays import Dialog, Modal, Notification, Toast
 from .particles import ParticleField, ParticleSample
 from .progress import ProgressBar, ProgressRing
+from .property_grid import Inspector, PropertyEditorKind, PropertyGrid, PropertyItem
 from .responsive import (
     LayoutDirection,
     ResponsiveBreakpoints,
@@ -93,6 +94,7 @@ __all__ = [
     "IconButton",
     "Input",
     "Insets",
+    "Inspector",
     "Label",
     "LayoutConstraints",
     "LayoutDirection",
@@ -114,6 +116,9 @@ __all__ = [
     "PasswordInput",
     "ProgressBar",
     "ProgressRing",
+    "PropertyEditorKind",
+    "PropertyGrid",
+    "PropertyItem",
     "RadioButton",
     "RangeSlider",
     "ResponsiveBreakpoints",
