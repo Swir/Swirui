@@ -38,7 +38,7 @@ def test_pie_chart_builds_retained_gpu_path_segments_and_legend() -> None:
     assert "pie:slice:3:segment:0" in keys
     assert "pie:legend:0:swatch" in keys
     assert "pie:legend:3:label" in keys
-    assert len(paths) == 48
+    assert len(paths) == 50
     assert chart.total == pytest.approx(100.0)
 
 
