@@ -199,7 +199,13 @@ class CartesianChart(Widget):
         for index in range(5):
             fraction = index / 4.0
             y = plot.bottom - fraction * plot.height
-            root.add(rectangle_node(f"{self.key}:grid:{index}", Rect(plot.x, y, plot.width, 1.0), GRID))
+            root.add(
+                rectangle_node(
+                    f"{self.key}:grid:{index}",
+                    Rect(plot.x, y, plot.width, 1.0),
+                    GRID,
+                )
+            )
             root.add(
                 text_node(
                     f"{self.key}:y:{index}",
@@ -211,7 +217,13 @@ class CartesianChart(Widget):
         root.add(rectangle_node(f"{self.key}:axis:y", Rect(plot.x, plot.y, 1.0, plot.height), TEXT))
         baseline_value = 0.0 if low <= 0.0 <= high else low
         baseline = self.value_y(baseline_value, plot, low, high)
-        root.add(rectangle_node(f"{self.key}:axis:x", Rect(plot.x, baseline, plot.width, 1.0), TEXT))
+        root.add(
+            rectangle_node(
+                f"{self.key}:axis:x",
+                Rect(plot.x, baseline, plot.width, 1.0),
+                TEXT,
+            )
+        )
 
     @staticmethod
     def _validate_series(series: Sequence[ChartSeries]) -> tuple[ChartSeries, ...]:
