@@ -1,0 +1,64 @@
+name: Color Picker Native Gate
+
+on:
+  pull_request:
+    paths:
+      - "src/swirui/widgets/color_picker.py"
+      - "src/swirui/widgets/__init__.py"
+      - "src/swirui/__init__.py"
+      - "tests/test_color_picker.py"
+      - "tests/test_windows_color_picker.py"
+      - "examples/color_picker_demo.py"
+      - ".github/workflows/color-picker-native.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "src/swirui/widgets/color_picker.py"
+      - "src/swirui/widgets/__init__.py"
+      - "src/swirui/__init__.py"
+      - "tests/test_color_picker.py"
+      - "tests/test_windows_color_picker.py"
+      - "examples/color_picker_demo.py"
+      - ".github/workflows/color-picker-native.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  windows-color-picker:
+    name: ColorPicker / Win32 + wgpu / Python 3.14
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+
+      - name: Set up stable Rust
+        run: rustup toolchain install stable --profile minimal && rustup default stable
+
+      - name: Install Python tools
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]" maturin==1.15.0
+
+      - name: Check native core on Windows
+        run: cargo check --manifest-path native/Cargo.toml --all-targets
+
+      - name: Build PyO3 extension
+        working-directory: native
+        run: maturin build --release --interpreter python --out ../dist-native
+
+      - name: Install PyO3 extension
+        shell: pwsh
+        run: |
+          $wheel = (Get-ChildItem dist-native\*.whl | Select-Object -First 1).FullName
+          python -m pip install $wheel
+
+      - name: Verify retained ColorPicker
+        run: pytest tests/test_color_picker.py tests/test_windows_color_picker.py -q
