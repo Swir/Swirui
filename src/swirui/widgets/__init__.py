@@ -56,6 +56,7 @@ from .split_view import SplitView
 from .surfaces import Card, Frame, GlassCard, Panel
 from .tabs import TabItem, Tabs
 from .text import Label, Text
+from .timeline import Timeline, TimelineItem, TimelineOrientation
 from .toggle import Checkbox, RadioButton, Switch
 from .tooltip import Tooltip
 from .typography import DynamicTypography
@@ -139,6 +140,9 @@ __all__ = [
     "Switch",
     "TabItem",
     "Tabs",
+    "Timeline",
+    "TimelineItem",
+    "TimelineOrientation",
     "Text",
     "TextArea",
     "Toast",
