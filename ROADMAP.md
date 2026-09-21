@@ -253,18 +253,18 @@ This checklist closeout synchronizes canonical roadmap truth with already-merged
 
 ## Data Visualization
 
-**Status:** In progress — 2 / 8 groups verified
+**Status:** In progress — 3 / 8 groups verified
 
 - [x] Line / area / bar charts
 - [x] Pie / donut charts
-- [ ] Scatter / heatmap / radar
+- [x] Scatter / heatmap / radar
 - [ ] Gauge / candlestick / timeline charts
 - [ ] Live and streaming data
 - [ ] GPU chart rendering
 - [ ] Interactive zoom and selection
 - [ ] Large-dataset optimization
 
-The already-merged chart packages are synchronized here without widening scope: PR #145 passed exact-head CI #883 plus Cartesian Charts Native Gate #4 for retained line/area/bar charts, and PR #146 passed exact-head CI #888 plus Radial Charts Native Gate #4 for retained pie/donut charts. No additional project-percentage points are claimed by this post-0.5 work.
+The merged chart packages are synchronized here without widening scope: PR #145 passed exact-head CI #883 plus Cartesian Charts Native Gate #4 for retained line/area/bar charts; PR #146 passed exact-head CI #888 plus Radial Charts Native Gate #4 for retained pie/donut charts; and PR #148 passed exact-head CI #894 plus Advanced Charts Native Gate #3 for retained scatter/heatmap/radar charts. The PR #148 merge commit also passed main CI #895. No additional project-percentage points are claimed by this post-0.5 work.
 
 ## Media Engine
 
