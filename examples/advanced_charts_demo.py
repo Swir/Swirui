@@ -14,7 +14,6 @@ from swirui import (
 )
 from swirui.rendering import Rect
 
-
 app = App("SwirUI advanced charts")
 window = app.add_window(Window(title="Scatter / Heatmap / Radar", width=920, height=820))
 
