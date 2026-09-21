@@ -6,7 +6,7 @@ import math
 
 from swirui.rendering import Rect, SceneNode
 
-from .cartesian_chart import CartesianChart, EPSILON, rectangle_node, text_node
+from .cartesian_chart import EPSILON, CartesianChart, rectangle_node, text_node
 
 
 class BarChart(CartesianChart):
