@@ -7,7 +7,7 @@ from collections.abc import Sequence
 
 from swirui.rendering import Color, Path2D, Point, Rect, SceneNode, SceneNodeKind
 
-from .cartesian_chart import CartesianChart, EPSILON, rectangle_node
+from .cartesian_chart import EPSILON, CartesianChart, rectangle_node
 
 
 class LineChart(CartesianChart):
