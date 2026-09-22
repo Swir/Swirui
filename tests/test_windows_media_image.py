@@ -33,4 +33,4 @@ def test_native_decodes_static_raster_gif_and_svg() -> None:
     width, height, rgba = native.decode_svg_rgba(SVG_RED, 4, 4)
     assert (width, height) == (4, 4)
     assert len(rgba) == 64
-    assert rgba[0:4] == [255, 0, 0, 255]
+    assert rgba[0:4] == bytes((255, 0, 0, 255))
