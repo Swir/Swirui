@@ -12,7 +12,7 @@ from .badges import Badge, Chip
 from .bar_chart import BarChart
 from .base import LayoutConstraints, Widget
 from .button import Button, IconButton
-from .charts import ChartPoint, ChartSeries
+from .charts import ChartPoint, ChartSelection, ChartSeries, ChartViewport
 from .color_picker import ColorChannel, ColorPicker
 from .command_surfaces import CommandItem, MenuBar, Ribbon, RibbonGroup, Toolbar
 from .context_commands import CommandPalette, ContextMenu
@@ -97,7 +97,9 @@ __all__ = [
     "CandlestickPoint",
     "Card",
     "ChartPoint",
+    "ChartSelection",
     "ChartSeries",
+    "ChartViewport",
     "Checkbox",
     "Chip",
     "ColorChannel",
