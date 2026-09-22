@@ -5,10 +5,9 @@ import types
 
 import pytest
 
-import swirui
-import swirui.media as media
-import swirui.rendering as rendering
-
+from swirui.media import decode_lottie
+from swirui.rendering import Rect
+from swirui.widgets.lottie import Lottie
 
 LOTTIE = b'{"v":"5.7.4","fr":30,"ip":0,"op":30,"w":20,"h":10,"layers":[{"ty":1}]}'
 
@@ -48,12 +47,14 @@ def fake_native() -> types.SimpleNamespace:
 
 
 def test_lottie_is_exported_from_public_api() -> None:
-    assert swirui.Lottie.__name__ == "Lottie"
+    from swirui import Lottie as PublicLottie
+
+    assert PublicLottie is Lottie
 
 
 def test_lottie_timing_loops_and_clamps(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setitem(sys.modules, "_swirui_native", fake_native())
-    composition = media.decode_lottie(LOTTIE)
+    composition = decode_lottie(LOTTIE)
 
     assert composition.duration_ms == pytest.approx(1000.0)
     assert composition.frame_for_elapsed(500.0) == pytest.approx(15.0)
@@ -63,13 +64,13 @@ def test_lottie_timing_loops_and_clamps(monkeypatch: pytest.MonkeyPatch) -> None
 
 def test_lottie_widget_registers_and_rebinds_frames(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setitem(sys.modules, "_swirui_native", fake_native())
-    composition = media.decode_lottie(LOTTIE)
+    composition = decode_lottie(LOTTIE)
     renderer = Renderer()
-    widget = swirui.Lottie(
+    widget = Lottie(
         composition,
         renderer,
         "demo:lottie",
-        bounds=rendering.Rect(0.0, 0.0, 200.0, 100.0),
+        bounds=Rect(0.0, 0.0, 200.0, 100.0),
         render_width=40,
         render_height=20,
     )
@@ -91,7 +92,7 @@ def test_lottie_widget_registers_and_rebinds_frames(monkeypatch: pytest.MonkeyPa
 
 def test_lottie_rejects_invalid_elapsed_time(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setitem(sys.modules, "_swirui_native", fake_native())
-    composition = media.decode_lottie(LOTTIE)
+    composition = decode_lottie(LOTTIE)
 
     with pytest.raises(ValueError, match="non-negative"):
         composition.frame_for_elapsed(-1.0)
