@@ -219,7 +219,7 @@ class LargeDatasetCartesianChart(CartesianChart):
 
         low, high = viewport.y_min, viewport.y_max
         nearest: tuple[float, int, int] | None = None
-        for series_index, series in enumerate(self.series):
+        for series_index in range(len(self.series)):
             visible_start, visible_end = self.visible_index_bounds(series_index, overscan=0)
             start = max(visible_start, center_index - radius)
             end = min(visible_end, center_index + radius)

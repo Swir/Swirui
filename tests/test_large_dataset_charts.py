@@ -54,7 +54,12 @@ def test_large_chart_zoom_keeps_projection_bounded_and_selection_exact() -> None
 
     chart.zoom(20.0, anchor_x=0.5, anchor_y=0.5)
     indices = chart.render_indices(0)
-    selected_index = round((chart.viewport.x_min + chart.viewport.x_max) / 2.0)
+    y_center = (chart.viewport.y_min + chart.viewport.y_max) / 2.0
+    visible_start, visible_end = chart.visible_index_bounds(0, overscan=0)
+    selected_index = min(
+        range(visible_start, visible_end + 1),
+        key=lambda index: abs(series.points[index].value - y_center),
+    )
     position = chart.point_position(
         0,
         selected_index,
