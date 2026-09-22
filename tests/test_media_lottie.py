@@ -5,9 +5,9 @@ import types
 
 import pytest
 
-from swirui import Lottie
 from swirui.media import decode_lottie
 from swirui.rendering import Rect
+from swirui.widgets.lottie import Lottie
 
 
 LOTTIE = b'{"v":"5.7.4","fr":30,"ip":0,"op":30,"w":20,"h":10,"layers":[{"ty":1}]}'
@@ -45,6 +45,12 @@ def fake_native() -> types.SimpleNamespace:
         parse_lottie_metadata=lambda data: (20, 10, 30.0, 0.0, 30.0, 1),
         render_lottie_frame_rgba=render,
     )
+
+
+def test_lottie_is_exported_from_public_api() -> None:
+    from swirui import Lottie as PublicLottie
+
+    assert PublicLottie is Lottie
 
 
 def test_lottie_timing_loops_and_clamps(monkeypatch: pytest.MonkeyPatch) -> None:
