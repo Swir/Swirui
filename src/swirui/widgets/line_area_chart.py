@@ -7,10 +7,11 @@ from collections.abc import Sequence
 
 from swirui.rendering import Color, Path2D, Point, Rect, SceneNode, SceneNodeKind
 
-from .cartesian_chart import EPSILON, CartesianChart, rectangle_node
+from .cartesian_chart import EPSILON, rectangle_node
+from .large_dataset_chart import LargeDatasetCartesianChart
 
 
-class LineChart(CartesianChart):
+class LineChart(LargeDatasetCartesianChart):
     """Multi-series line chart rendered through retained GPU path primitives."""
 
     chart_kind = "line"
@@ -18,14 +19,17 @@ class LineChart(CartesianChart):
     def add_data_nodes(self, root: SceneNode, plot: Rect, low: float, high: float) -> None:
         for series_index, series in enumerate(self.series):
             color = self.series_color(series_index)
-            points = tuple(
-                Point(
-                    self.x_position(index, len(series.points), plot),
-                    self.value_y(point.value, plot, low, high),
+            indexed_points = tuple(
+                (
+                    index,
+                    Point(
+                        self.x_position(index, len(series.points), plot),
+                        self.value_y(series.points[index].value, plot, low, high),
+                    ),
                 )
-                for index, point in enumerate(series.points)
+                for index in self.render_indices(series_index)
             )
-            add_line_series(root, self.key, series_index, points, color)
+            add_line_series(root, self.key, series_index, indexed_points, color)
 
 
 class AreaChart(LineChart):
@@ -38,49 +42,60 @@ class AreaChart(LineChart):
         baseline = self.value_y(0.0, plot, low, high)
         for series_index, series in enumerate(self.series):
             color = self.series_color(series_index)
-            points = tuple(
-                Point(
-                    self.x_position(index, len(series.points), plot),
-                    self.value_y(point.value, plot, low, high),
+            indexed_points = tuple(
+                (
+                    index,
+                    Point(
+                        self.x_position(index, len(series.points), plot),
+                        self.value_y(series.points[index].value, plot, low, high),
+                    ),
                 )
-                for index, point in enumerate(series.points)
+                for index in self.render_indices(series_index)
             )
-            for index, (start, end) in enumerate(zip(points, points[1:], strict=False)):
+            for (start_index, start), (end_index, end) in zip(
+                indexed_points,
+                indexed_points[1:],
+                strict=False,
+            ):
                 add_area_segment(
                     root,
                     self.key,
                     series_index,
-                    index,
+                    start_index,
                     start,
                     end,
-                    series.points[index].value,
-                    series.points[index + 1].value,
+                    series.points[start_index].value,
+                    series.points[end_index].value,
                     baseline,
                     color.with_alpha(0.25),
                 )
-            add_line_series(root, self.key, series_index, points, color)
+            add_line_series(root, self.key, series_index, indexed_points, color)
 
 
 def add_line_series(
     root: SceneNode,
     chart_key: str,
     series_index: int,
-    points: tuple[Point, ...],
+    indexed_points: tuple[tuple[int, Point], ...],
     color: Color,
 ) -> None:
-    for index, (start, end) in enumerate(zip(points, points[1:], strict=False)):
+    for (start_index, start), (_end_index, end) in zip(
+        indexed_points,
+        indexed_points[1:],
+        strict=False,
+    ):
         node = segment_node(
-            f"{chart_key}:series:{series_index}:line:{index}",
+            f"{chart_key}:series:{series_index}:line:{start_index}",
             start,
             end,
             color,
         )
         if node is not None:
             root.add(node)
-    for index, point in enumerate(points):
+    for point_index, point in indexed_points:
         root.add(
             rectangle_node(
-                f"{chart_key}:series:{series_index}:point:{index}",
+                f"{chart_key}:series:{series_index}:point:{point_index}",
                 Rect(point.x - 3.5, point.y - 3.5, 7.0, 7.0),
                 color,
                 radius=3.5,

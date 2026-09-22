@@ -2,21 +2,19 @@
 
 from __future__ import annotations
 
-import math
-
 from swirui.rendering import Point, Rect, SceneNode
 
-from .cartesian_chart import EPSILON, CartesianChart, rectangle_node, text_node
+from .cartesian_chart import EPSILON, rectangle_node, text_node
+from .large_dataset_chart import LargeDatasetCartesianChart
 
 
-class BarChart(CartesianChart):
+class BarChart(LargeDatasetCartesianChart):
     """Grouped multi-series bar chart rendered with retained rectangles."""
 
     include_zero = True
     chart_kind = "bar"
 
     def add_data_nodes(self, root: SceneNode, plot: Rect, low: float, high: float) -> None:
-        category_count = max(len(series.points) for series in self.series)
         slot = self._category_slot_width(plot)
         group_width = slot * 0.72
         bar_step = group_width / len(self.series)
@@ -24,9 +22,8 @@ class BarChart(CartesianChart):
         baseline = self.value_y(0.0, plot, low, high)
         for series_index, series in enumerate(self.series):
             color = self.series_color(series_index)
-            for point_index, point in enumerate(series.points):
-                if not self.index_visible(point_index):
-                    continue
+            for point_index in self.render_indices(series_index):
+                point = series.points[point_index]
                 center = self._category_center(point_index, plot)
                 center += (series_index + 0.5) * bar_step - group_width / 2.0
                 value_y = self.value_y(point.value, plot, low, high)
@@ -41,17 +38,12 @@ class BarChart(CartesianChart):
                         radius=min(3.0, bar_width / 4.0),
                     )
                 )
-        del category_count
 
     def add_category_labels(self, root: SceneNode, plot: Rect) -> None:
         reference = self.series[0].points
         slot = self._category_slot_width(plot)
-        stride = max(1, math.ceil(len(reference) / 8))
-        for index, point in enumerate(reference):
-            if not self.index_visible(index):
-                continue
-            if index % stride and index != len(reference) - 1:
-                continue
+        for index in self.visible_label_indices(0):
+            point = reference[index]
             center = self._category_center(index, plot)
             root.add(
                 text_node(
