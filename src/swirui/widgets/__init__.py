@@ -22,6 +22,7 @@ from .date_time import Calendar, DatePicker, TimePicker
 from .docking import DockPane, DockPosition, DockWorkspace
 from .expander import Accordion, Expander
 from .file_picker import FileFilter, FilePicker, FilePickerEntry, FolderPicker
+from .image import Image, ImageFit
 from .input import Input, PasswordInput, TextArea
 from .layout import (
     Column,
@@ -136,6 +137,8 @@ __all__ = [
     "HeatmapCell",
     "HeatmapChart",
     "IconButton",
+    "Image",
+    "ImageFit",
     "Input",
     "Insets",
     "Inspector",

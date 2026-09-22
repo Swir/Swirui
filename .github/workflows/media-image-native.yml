@@ -1,0 +1,84 @@
+name: Media Image Native Gate
+
+on:
+  pull_request:
+    paths:
+      - "native/Cargo.toml"
+      - "native/src/lib.rs"
+      - "native/src/media.rs"
+      - "src/swirui/media.py"
+      - "src/swirui/widgets/image.py"
+      - "src/swirui/widgets/__init__.py"
+      - "src/swirui/__init__.py"
+      - "tests/test_media_image.py"
+      - "tests/test_windows_media_image.py"
+      - "examples/media_image_demo.py"
+      - ".github/workflows/media-image-native.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "native/Cargo.toml"
+      - "native/src/lib.rs"
+      - "native/src/media.rs"
+      - "src/swirui/media.py"
+      - "src/swirui/widgets/image.py"
+      - "src/swirui/widgets/__init__.py"
+      - "src/swirui/__init__.py"
+      - "tests/test_media_image.py"
+      - "tests/test_windows_media_image.py"
+      - "examples/media_image_demo.py"
+      - ".github/workflows/media-image-native.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  windows-media-image:
+    name: Image / SVG / GIF / Win32 + wgpu / Python 3.14
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+
+      - name: Set up stable Rust
+        run: rustup toolchain install stable --profile minimal && rustup default stable
+
+      - name: Install Python tools
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]" maturin==1.15.0
+
+      - name: Check native media core on Windows
+        run: cargo check --manifest-path native/Cargo.toml --all-targets
+
+      - name: Test native media core
+        run: cargo test --manifest-path native/Cargo.toml media --lib
+
+      - name: Build PyO3 extension
+        working-directory: native
+        run: maturin build --release --interpreter python --out ../dist-native
+
+      - name: Install PyO3 extension
+        shell: pwsh
+        run: |
+          $wheel = (Get-ChildItem dist-native\*.whl | Select-Object -First 1).FullName
+          python -m pip install $wheel
+
+      - name: Verify Image SVG GIF media package
+        run: pytest tests/test_media_image.py tests/test_windows_media_image.py -q --junitxml=media-image-pytest.xml
+
+      - name: Upload media image pytest diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: media-image-pytest-${{ github.run_id }}
+          path: media-image-pytest.xml
+          if-no-files-found: ignore
+          retention-days: 7
