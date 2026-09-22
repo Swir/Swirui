@@ -44,6 +44,7 @@ from .layout_advanced import (
 from .layout_panels import Grid, Stack, Wrap
 from .line_area_chart import AreaChart, LineChart
 from .list_tree_view import ListItem, ListView, ListViewSelectionMode, TreeNode, TreeView
+from .lottie import Lottie
 from .navigation import AdaptiveNavigation, AdaptiveNavigationSpec, NavigationMode
 from .navigation_rail import NavigationItem, NavigationRail, Sidebar
 from .overlays import Dialog, Modal, Notification, Toast
@@ -149,6 +150,7 @@ __all__ = [
     "ListItem",
     "ListView",
     "ListViewSelectionMode",
+    "Lottie",
     "MainAxisAlignment",
     "MenuBar",
     "Modal",

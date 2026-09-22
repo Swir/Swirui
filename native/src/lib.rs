@@ -100,6 +100,22 @@ fn decode_svg_rgba(
     media::decode_svg_rgba(&data, width, height).map_err(PyValueError::new_err)
 }
 
+#[pyfunction]
+fn parse_lottie_metadata(data: Vec<u8>) -> PyResult<media::LottieMetadata> {
+    media::parse_lottie_metadata(&data).map_err(PyValueError::new_err)
+}
+
+#[pyfunction]
+#[pyo3(signature = (data, frame, width=None, height=None))]
+fn render_lottie_frame_rgba(
+    data: Vec<u8>,
+    frame: f64,
+    width: Option<u32>,
+    height: Option<u32>,
+) -> PyResult<(u32, u32, Vec<u8>)> {
+    media::render_lottie_frame_rgba(&data, frame, width, height).map_err(PyValueError::new_err)
+}
+
 fn backend_names(backends: wgpu::Backends) -> Vec<&'static str> {
     let candidates = [
         (wgpu::Backends::DX12, "dx12"),
@@ -126,6 +142,8 @@ fn _swirui_native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(decode_image_rgba, module)?)?;
     module.add_function(wrap_pyfunction!(decode_gif_rgba_frames, module)?)?;
     module.add_function(wrap_pyfunction!(decode_svg_rgba, module)?)?;
+    module.add_function(wrap_pyfunction!(parse_lottie_metadata, module)?)?;
+    module.add_function(wrap_pyfunction!(render_lottie_frame_rgba, module)?)?;
     module.add_function(wrap_pyfunction!(clear_win32_surface, module)?)?;
     module.add_function(wrap_pyfunction!(draw_rectangles_win32_surface, module)?)?;
     #[cfg(target_os = "windows")]

@@ -6,6 +6,7 @@ import importlib
 import os
 from dataclasses import dataclass
 from enum import StrEnum
+from math import isfinite
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -152,6 +153,112 @@ class ImageAsset:
         return tuple(resource_ids)
 
 
+@dataclass(frozen=True, slots=True)
+class LottieComposition:
+    """Validated Lottie composition rendered frame-by-frame by the Rust core.
+
+    The native renderer currently supports solid layers and flat rectangle/ellipse
+    shape layers with fill, position, anchor, scale and opacity keyframes. Unknown
+    Lottie layer types remain isolated rather than being mis-rendered.
+    """
+
+    data: bytes
+    width: int
+    height: int
+    frame_rate: float
+    in_point: float
+    out_point: float
+    layer_count: int
+
+    def __post_init__(self) -> None:
+        if not self.data:
+            raise ValueError("Lottie composition data cannot be empty.")
+        if self.width <= 0 or self.height <= 0:
+            raise ValueError("Lottie dimensions must be greater than zero.")
+        if not isfinite(self.frame_rate) or self.frame_rate <= 0.0:
+            raise ValueError("Lottie frame_rate must be finite and positive.")
+        if not isfinite(self.in_point) or not isfinite(self.out_point):
+            raise ValueError("Lottie frame bounds must be finite.")
+        if self.out_point <= self.in_point:
+            raise ValueError("Lottie out_point must be greater than in_point.")
+        if self.layer_count < 0:
+            raise ValueError("Lottie layer_count cannot be negative.")
+
+    @property
+    def duration_frames(self) -> float:
+        return self.out_point - self.in_point
+
+    @property
+    def duration_ms(self) -> float:
+        return self.duration_frames / self.frame_rate * 1000.0
+
+    def frame_for_elapsed(self, elapsed_ms: float, *, loop: bool = True) -> float:
+        """Map elapsed milliseconds to a deterministic composition frame."""
+
+        if not isfinite(elapsed_ms) or elapsed_ms < 0.0:
+            raise ValueError("elapsed_ms must be finite and non-negative.")
+        offset = elapsed_ms / 1000.0 * self.frame_rate
+        if loop:
+            offset %= self.duration_frames
+            return self.in_point + offset
+        return min(self.in_point + offset, max(self.in_point, self.out_point - 1e-9))
+
+    def render_frame(
+        self,
+        frame: float,
+        *,
+        width: int | None = None,
+        height: int | None = None,
+    ) -> ImageFrame:
+        """Rasterize one composition frame through the bounded native core."""
+
+        if not isfinite(frame):
+            raise ValueError("frame must be finite.")
+        if width is not None and width <= 0:
+            raise ValueError("width must be greater than zero.")
+        if height is not None and height <= 0:
+            raise ValueError("height must be greater than zero.")
+        native = _native_module()
+        frame_width, frame_height, rgba = native.render_lottie_frame_rgba(
+            self.data, float(frame), width, height
+        )
+        return ImageFrame(int(frame_width), int(frame_height), bytes(rgba))
+
+    def render_at(
+        self,
+        elapsed_ms: float,
+        *,
+        loop: bool = True,
+        width: int | None = None,
+        height: int | None = None,
+    ) -> ImageFrame:
+        """Rasterize the frame selected by elapsed playback time."""
+
+        return self.render_frame(
+            self.frame_for_elapsed(elapsed_ms, loop=loop),
+            width=width,
+            height=height,
+        )
+
+    def register_at(
+        self,
+        renderer: ImageResourceRegistrar,
+        resource_id: str,
+        elapsed_ms: float,
+        *,
+        loop: bool = True,
+        width: int | None = None,
+        height: int | None = None,
+    ) -> ImageFrame:
+        """Render and transactionally rebind one logical GPU image resource."""
+
+        if not resource_id.strip():
+            raise ValueError("resource_id cannot be empty.")
+        frame = self.render_at(elapsed_ms, loop=loop, width=width, height=height)
+        renderer.register_image_rgba(resource_id, frame.width, frame.height, frame.rgba)
+        return frame
+
+
 def decode_image(
     data: bytes | bytearray | memoryview,
     *,
@@ -207,6 +314,33 @@ def load_image(
     data = source.read_bytes()
     hint = source.suffix.lower().removeprefix(".") or None
     return decode_image(data, format_hint=hint, width=width, height=height)
+
+
+def decode_lottie(data: bytes | bytearray | memoryview) -> LottieComposition:
+    """Validate Lottie JSON and expose native metadata through a Python-first API."""
+
+    payload = bytes(data)
+    if not payload:
+        raise ValueError("Lottie data cannot be empty.")
+    native = _native_module()
+    width, height, frame_rate, in_point, out_point, layer_count = native.parse_lottie_metadata(
+        payload
+    )
+    return LottieComposition(
+        payload,
+        int(width),
+        int(height),
+        float(frame_rate),
+        float(in_point),
+        float(out_point),
+        int(layer_count),
+    )
+
+
+def load_lottie(path: str | os.PathLike[str]) -> LottieComposition:
+    """Load a local Bodymovin/Lottie JSON composition."""
+
+    return decode_lottie(Path(path).read_bytes())
 
 
 def _native_module() -> Any:
@@ -267,7 +401,10 @@ __all__ = [
     "ImageAsset",
     "ImageFrame",
     "ImageResourceRegistrar",
+    "LottieComposition",
     "MediaFormat",
     "decode_image",
+    "decode_lottie",
     "load_image",
+    "load_lottie",
 ]
