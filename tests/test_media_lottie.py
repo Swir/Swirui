@@ -5,9 +5,9 @@ import types
 
 import pytest
 
+from swirui import Lottie
 from swirui.media import decode_lottie
 from swirui.rendering import Rect
-from swirui.widgets.lottie import Lottie
 
 
 LOTTIE = b'{"v":"5.7.4","fr":30,"ip":0,"op":30,"w":20,"h":10,"layers":[{"ty":1}]}'
