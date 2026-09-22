@@ -3,7 +3,6 @@ from __future__ import annotations
 from swirui import BarChart, ChartPoint, ChartSeries, LineChart
 from swirui.rendering import Rect
 
-
 POINT_COUNT = 100_000
 
 

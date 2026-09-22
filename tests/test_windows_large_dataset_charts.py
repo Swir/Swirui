@@ -7,7 +7,6 @@ from swirui import App, ChartPoint, ChartSeries, LineChart, Window, mount
 from swirui.platforms.windows import Win32PlatformBackend
 from swirui.rendering import Rect, WgpuRenderer
 
-
 POINTS = 50_000
 RENDER_BUDGET = 384
 
