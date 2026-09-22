@@ -7,7 +7,7 @@ import pytest
 
 from swirui.media import decode_lottie
 from swirui.rendering import Rect
-from swirui.widgets import Lottie
+from swirui.widgets.lottie import Lottie
 
 
 LOTTIE = b'{"v":"5.7.4","fr":30,"ip":0,"op":30,"w":20,"h":10,"layers":[{"ty":1}]}'
@@ -28,12 +28,18 @@ class Renderer:
 
 
 def fake_native() -> SimpleNamespace:
-    def render(data: bytes, frame: float, width: int | None, height: int | None) -> tuple[int, int, bytes]:
+    def render(
+        data: bytes,
+        frame: float,
+        width: int | None,
+        height: int | None,
+    ) -> tuple[int, int, bytes]:
         _ = data
         target_width = width or 20
         target_height = height or 10
         shade = int(frame) % 255
-        return target_width, target_height, bytes((shade, 0, 0, 255)) * (target_width * target_height)
+        rgba = bytes((shade, 0, 0, 255)) * (target_width * target_height)
+        return target_width, target_height, rgba
 
     return SimpleNamespace(
         parse_lottie_metadata=lambda data: (20, 10, 30.0, 0.0, 30.0, 1),

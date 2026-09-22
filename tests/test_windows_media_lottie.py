@@ -4,7 +4,10 @@ import sys
 
 import pytest
 
-pytestmark = pytest.mark.skipif(sys.platform != "win32", reason="native Lottie gate is Windows-only")
+pytestmark = pytest.mark.skipif(
+    sys.platform != "win32",
+    reason="native Lottie gate is Windows-only",
+)
 
 
 LOTTIE_SOLID = br'''{
