@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import importlib
+from collections.abc import Iterable
 from dataclasses import dataclass
 from math import isfinite
-from typing import Any, Iterable
+from typing import Any
 
 from .media import ImageFrame, ImageResourceRegistrar
 
