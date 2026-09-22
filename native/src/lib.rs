@@ -11,6 +11,7 @@ mod color_filter;
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 mod custom_effect;
 mod image;
+mod media;
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 mod postprocess;
 mod renderer;
@@ -79,6 +80,26 @@ fn rasterize_text_rgba(
     )
 }
 
+#[pyfunction]
+fn decode_image_rgba(data: Vec<u8>) -> PyResult<(u32, u32, Vec<u8>)> {
+    media::decode_image_rgba(&data).map_err(PyValueError::new_err)
+}
+
+#[pyfunction]
+fn decode_gif_rgba_frames(data: Vec<u8>) -> PyResult<Vec<media::DecodedFrame>> {
+    media::decode_gif_rgba_frames(&data).map_err(PyValueError::new_err)
+}
+
+#[pyfunction]
+#[pyo3(signature = (data, width=None, height=None))]
+fn decode_svg_rgba(
+    data: Vec<u8>,
+    width: Option<u32>,
+    height: Option<u32>,
+) -> PyResult<(u32, u32, Vec<u8>)> {
+    media::decode_svg_rgba(&data, width, height).map_err(PyValueError::new_err)
+}
+
 fn backend_names(backends: wgpu::Backends) -> Vec<&'static str> {
     let candidates = [
         (wgpu::Backends::DX12, "dx12"),
@@ -102,6 +123,9 @@ fn _swirui_native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(validate_custom_shader_wgsl, module)?)?;
     module.add_function(wrap_pyfunction!(validate_affine_transform, module)?)?;
     module.add_function(wrap_pyfunction!(rasterize_text_rgba, module)?)?;
+    module.add_function(wrap_pyfunction!(decode_image_rgba, module)?)?;
+    module.add_function(wrap_pyfunction!(decode_gif_rgba_frames, module)?)?;
+    module.add_function(wrap_pyfunction!(decode_svg_rgba, module)?)?;
     module.add_function(wrap_pyfunction!(clear_win32_surface, module)?)?;
     module.add_function(wrap_pyfunction!(draw_rectangles_win32_surface, module)?)?;
     #[cfg(target_os = "windows")]
