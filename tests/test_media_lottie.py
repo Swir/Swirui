@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import sys
-from types import SimpleNamespace
+import types
 
 import pytest
 
@@ -27,7 +27,7 @@ class Renderer:
         self.calls.append((resource_id, width, height, bytes(rgba)))
 
 
-def fake_native() -> SimpleNamespace:
+def fake_native() -> types.SimpleNamespace:
     def render(
         data: bytes,
         frame: float,
@@ -41,7 +41,7 @@ def fake_native() -> SimpleNamespace:
         rgba = bytes((shade, 0, 0, 255)) * (target_width * target_height)
         return target_width, target_height, rgba
 
-    return SimpleNamespace(
+    return types.SimpleNamespace(
         parse_lottie_metadata=lambda data: (20, 10, 30.0, 0.0, 30.0, 1),
         render_lottie_frame_rgba=render,
     )
