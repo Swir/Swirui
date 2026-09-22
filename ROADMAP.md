@@ -253,7 +253,7 @@ This checklist closeout synchronizes canonical roadmap truth with already-merged
 
 ## Data Visualization
 
-**Status:** In progress — 6 / 8 groups verified
+**Status:** In progress — 7 / 8 groups verified
 
 - [x] Line / area / bar charts
 - [x] Pie / donut charts
@@ -261,10 +261,10 @@ This checklist closeout synchronizes canonical roadmap truth with already-merged
 - [x] Gauge / candlestick / timeline charts
 - [x] Live and streaming data
 - [x] GPU chart rendering
-- [ ] Interactive zoom and selection
+- [x] Interactive zoom and selection
 - [ ] Large-dataset optimization
 
-The merged chart packages are synchronized here without widening scope: PR #145 passed exact-head CI #883 plus Cartesian Charts Native Gate #4 for retained line/area/bar charts; PR #146 passed exact-head CI #888 plus Radial Charts Native Gate #4 for retained pie/donut charts; PR #148 passed exact-head CI #894 plus Advanced Charts Native Gate #3 for retained scatter/heatmap/radar charts; PR #150 passed exact-head CI #900 plus Specialized Charts Native Gate #1 for retained gauge/candlestick/timeline charts; PR #152 passed exact-head CI #904 plus Streaming Charts Native Gate #1 for bounded live/streaming data before merge, with main CI #905 also passing afterward; and PR #154 passed exact-head CI #908 plus GPU Charts Native Gate #1 before merge, qualifying cross-family retained chart submission through one persistent Win32 + wgpu context. No additional project-percentage points are claimed by this post-0.5 work. This synchronization credits only the already-merged GPU chart rendering gate and opens no additional Data Visualization, media, or advanced-component scope.
+The merged chart packages are synchronized here without widening scope: PR #145 passed exact-head CI #883 plus Cartesian Charts Native Gate #4 for retained line/area/bar charts; PR #146 passed exact-head CI #888 plus Radial Charts Native Gate #4 for retained pie/donut charts; PR #148 passed exact-head CI #894 plus Advanced Charts Native Gate #3 for retained scatter/heatmap/radar charts; PR #150 passed exact-head CI #900 plus Specialized Charts Native Gate #1 for retained gauge/candlestick/timeline charts; PR #152 passed exact-head CI #904 plus Streaming Charts Native Gate #1 for bounded live/streaming data before merge, with main CI #905 also passing afterward; PR #154 passed exact-head CI #908 plus GPU Charts Native Gate #1 before merge, qualifying cross-family retained chart submission through one persistent Win32 + wgpu context; and PR #156 passed exact-head CI #912 plus Interactive Charts Native Gate #1 before merge, qualifying anchored wheel/keyboard zoom, pointer/keyboard point selection, accessibility state and retained viewport-aware rendering. No additional project-percentage points are claimed by this post-0.5 work. This synchronization credits only the already-merged interactive chart gate and opens no additional Data Visualization, media, or advanced-component scope.
 
 ## Media Engine
 
