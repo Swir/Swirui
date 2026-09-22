@@ -1,0 +1,71 @@
+name: Large Dataset Charts Native Gate
+
+on:
+  pull_request:
+    paths:
+      - "src/swirui/widgets/large_dataset_chart.py"
+      - "src/swirui/widgets/line_area_chart.py"
+      - "src/swirui/widgets/bar_chart.py"
+      - "tests/test_large_dataset_charts.py"
+      - "tests/test_windows_large_dataset_charts.py"
+      - "examples/large_dataset_charts_demo.py"
+      - "benchmarks/large_dataset_charts.py"
+      - ".github/workflows/large-dataset-charts-native.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "src/swirui/widgets/large_dataset_chart.py"
+      - "src/swirui/widgets/line_area_chart.py"
+      - "src/swirui/widgets/bar_chart.py"
+      - "tests/test_large_dataset_charts.py"
+      - "tests/test_windows_large_dataset_charts.py"
+      - "examples/large_dataset_charts_demo.py"
+      - "benchmarks/large_dataset_charts.py"
+      - ".github/workflows/large-dataset-charts-native.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  windows-large-dataset-charts:
+    name: Large Dataset Charts / Win32 + wgpu / Python 3.14
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+
+      - name: Set up stable Rust
+        run: rustup toolchain install stable --profile minimal && rustup default stable
+
+      - name: Install Python tools
+        run: >-
+          python -m pip install --upgrade pip &&
+          python -m pip install -e ".[dev]" maturin==1.15.0
+
+      - name: Check native core on Windows
+        run: cargo check --manifest-path native/Cargo.toml --all-targets
+
+      - name: Build PyO3 extension
+        working-directory: native
+        run: maturin build --release --interpreter python --out ../dist-native
+
+      - name: Install PyO3 extension
+        shell: pwsh
+        run: |
+          $wheel = (Get-ChildItem dist-native\*.whl | Select-Object -First 1).FullName
+          python -m pip install $wheel
+
+      - name: Verify bounded large-dataset retained charts
+        run: >-
+          pytest tests/test_cartesian_charts.py tests/test_chart_interaction.py
+          tests/test_large_dataset_charts.py tests/test_windows_large_dataset_charts.py -q
+
+      - name: Exercise 100k-point benchmark
+        run: python benchmarks/large_dataset_charts.py
