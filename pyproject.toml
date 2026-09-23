@@ -41,6 +41,14 @@ Roadmap = "https://github.com/Swir/Swirui/blob/main/ROADMAP.md"
 [tool.hatch.build.targets.wheel]
 packages = ["src/swirui"]
 
+[tool.maturin]
+manifest-path = "native/Cargo.toml"
+bindings = "pyo3"
+module-name = "swirui._swirui_native"
+python-source = "src"
+features = ["extension-module"]
+strip = true
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra --strict-markers --strict-config"

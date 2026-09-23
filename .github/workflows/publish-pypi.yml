@@ -4,7 +4,6 @@ on:
   pull_request:
     paths:
       - "pyproject.toml"
-      - "native/pyproject.toml"
       - "native/Cargo.toml"
       - "native/src/**"
       - "src/swirui/**"
@@ -13,7 +12,9 @@ on:
     branches: [main]
     paths:
       - "pyproject.toml"
-      - "native/pyproject.toml"
+      - "native/Cargo.toml"
+      - "native/src/**"
+      - "src/swirui/**"
       - ".github/workflows/publish-pypi.yml"
   workflow_dispatch:
 
@@ -39,12 +40,16 @@ jobs:
           import tomllib
 
           root = tomllib.loads(pathlib.Path("pyproject.toml").read_text(encoding="utf-8"))
-          native = tomllib.loads(pathlib.Path("native/pyproject.toml").read_text(encoding="utf-8"))
           expected = ("swirui", "0.1.0a1")
           assert (root["project"]["name"], root["project"]["version"]) == expected
-          assert (native["project"]["name"], native["project"]["version"]) == expected
-          assert root["project"]["requires-python"] == native["project"]["requires-python"]
-          print(f"Verified {expected[0]} {expected[1]}")
+          assert root["project"]["requires-python"] == ">=3.11"
+
+          maturin = root["tool"]["maturin"]
+          assert maturin["manifest-path"] == "native/Cargo.toml"
+          assert maturin["module-name"] == "swirui._swirui_native"
+          assert maturin["python-source"] == "src"
+          assert maturin["bindings"] == "pyo3"
+          print(f"Verified {expected[0]} {expected[1]} mixed-wheel contract")
 
   build-python:
     name: Build portable Python distribution
@@ -115,7 +120,7 @@ jobs:
           $wheel = (Get-ChildItem dist-native\swirui-0.1.0a1-*.whl | Select-Object -First 1).FullName
           if (-not $wheel) { throw "SwirUI native wheel was not produced." }
           python -m pip install --force-reinstall --no-deps $wheel
-          python -c "import swirui, _swirui_native; from swirui import App, CandlestickChart, DataGrid, WgpuRenderer; assert swirui.__version__ == '0.1.0a1'; assert _swirui_native.core_version() == '0.1.0-alpha.1'; assert App and CandlestickChart and DataGrid and WgpuRenderer; print('native mixed wheel OK')"
+          python -c "import swirui, _swirui_native; from swirui import App, CandlestickChart, DataGrid; from swirui.rendering import WgpuRenderer; assert swirui.__version__ == '0.1.0a1'; assert _swirui_native.core_version() == '0.1.0-alpha.1'; assert App and CandlestickChart and DataGrid and WgpuRenderer; print('native mixed wheel OK')"
 
       - name: Upload native artifact
         uses: actions/upload-artifact@v4
