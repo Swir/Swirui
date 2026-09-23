@@ -6,6 +6,9 @@
 
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 mod affine;
+mod audio;
+#[cfg(target_os = "windows")]
+mod audio_output;
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 mod color_filter;
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
@@ -24,6 +27,8 @@ use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use renderer::{clear_win32_surface, draw_rectangles_win32_surface};
 
+#[cfg(target_os = "windows")]
+use audio_output::PyAudioOutput;
 #[cfg(target_os = "windows")]
 use renderer::PyWin32GpuRenderer;
 
@@ -140,6 +145,32 @@ fn video_frame_index(
         .map_err(PyValueError::new_err)
 }
 
+#[pyfunction]
+fn validate_audio_pcm16(
+    sample_rate: u32,
+    channels: u16,
+    pcm16: Vec<u8>,
+) -> PyResult<audio::AudioMetadata> {
+    audio::validate_audio_pcm16(sample_rate, channels, &pcm16).map_err(PyValueError::new_err)
+}
+
+#[pyfunction]
+#[pyo3(signature = (elapsed_ms, sample_rate, frame_count, loop_audio=true))]
+fn audio_frame_index(
+    elapsed_ms: f64,
+    sample_rate: u32,
+    frame_count: usize,
+    loop_audio: bool,
+) -> PyResult<usize> {
+    audio::audio_frame_index(elapsed_ms, sample_rate, frame_count, loop_audio)
+        .map_err(PyValueError::new_err)
+}
+
+#[pyfunction]
+fn native_audio_output_supported() -> bool {
+    cfg!(target_os = "windows")
+}
+
 fn backend_names(backends: wgpu::Backends) -> Vec<&'static str> {
     let candidates = [
         (wgpu::Backends::DX12, "dx12"),
@@ -170,8 +201,13 @@ fn _swirui_native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(render_lottie_frame_rgba, module)?)?;
     module.add_function(wrap_pyfunction!(validate_video_rgba_frames, module)?)?;
     module.add_function(wrap_pyfunction!(video_frame_index, module)?)?;
+    module.add_function(wrap_pyfunction!(validate_audio_pcm16, module)?)?;
+    module.add_function(wrap_pyfunction!(audio_frame_index, module)?)?;
+    module.add_function(wrap_pyfunction!(native_audio_output_supported, module)?)?;
     module.add_function(wrap_pyfunction!(clear_win32_surface, module)?)?;
     module.add_function(wrap_pyfunction!(draw_rectangles_win32_surface, module)?)?;
+    #[cfg(target_os = "windows")]
+    module.add_class::<PyAudioOutput>()?;
     #[cfg(target_os = "windows")]
     module.add_class::<PyWin32GpuRenderer>()?;
     Ok(())
