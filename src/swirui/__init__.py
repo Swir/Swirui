@@ -200,10 +200,13 @@ from .widgets import (
     TreeView,
     VideoPlayer,
     ViewportClass,
+    Waveform,
+    WaveformEnvelope,
     Widget,
     WidgetRuntime,
     Wrap,
     mount,
+    waveform_envelope_pcm16,
 )
 from .window import Window
 
@@ -377,6 +380,8 @@ __all__ = [
     "VideoPlayer",
     "ViewportClass",
     "VisualQuality",
+    "Waveform",
+    "WaveformEnvelope",
     "Widget",
     "WidgetRuntime",
     "Window",
@@ -395,5 +400,6 @@ __all__ = [
     "spring_state",
     "state_transaction",
     "tween_state",
+    "waveform_envelope_pcm16",
 ]
 __version__ = "0.1.0a1"
