@@ -76,7 +76,7 @@ Progress is based on implemented and verified roadmap work. Ideas, mockups and u
 - [x] GPU adapter/device/queue creation
 - [x] Verified clear → submit → present to a real SwirUI HWND
 - [x] ABI3 PyO3 native wheel build for Python 3.11+
-- [x] SceneGraph rectangle submission to the GPU renderer
+- [x] Python SceneGraph rectangle submission to the GPU renderer
 - [x] Instanced filled-rectangle GPU pipeline
 - [x] Single draw call for a batch of rectangle instances
 - [x] Persistent wgpu renderer context per window
@@ -268,7 +268,7 @@ The merged chart packages are synchronized here without widening scope: PR #145 
 
 ## Media Engine
 
-**Status:** In progress — 6 / 8 groups verified
+**Status:** In progress — 7 / 8 groups verified
 
 - [x] Image / SVG / GIF
 - [x] Lottie
@@ -276,10 +276,10 @@ The merged chart packages are synchronized here without widening scope: PR #145 
 - [x] AudioPlayer
 - [x] CameraView
 - [x] Microphone input
-- [ ] Waveform
+- [x] Waveform
 - [ ] Spectrum visualizer
 
-`Image / SVG / GIF` is credited only from merged qualification evidence: PR #160 passed exact-head CI #925 and Media Image Native Gate #4 before merge, then the resulting `main` head passed CI #926 and Media Image Native Gate #5. `Lottie` is credited only from merged qualification evidence: PR #162 passed exact-head CI #935 and Media Lottie Native Gate #7 before merge, then the resulting `main` head passed CI #936 and Media Lottie Native Gate #8. `VideoPlayer` is credited only from merged qualification evidence: PR #164 passed exact-head CI #940 and Media Video Native Gate #2 before merge, then the resulting `main` head passed CI #941 and Media Video Native Gate #3. `AudioPlayer` is credited from the complete merged qualification chain: PR #166 passed exact-head CI #944 and Media Audio Native Gate #1 before merge; the merged AudioPlayer head passed Media Audio Native Gate #2; after main CI #945 exposed an unrelated Win32 scheduler timing regression, hotfix PR #167 passed exact-head CI #946 and the resulting `main` head passed CI #947. `CameraView` is credited only from the complete merged qualification chain: PR #169 passed exact-head CI #950 and Media Camera Native Gate #1 before merge, then the resulting `main` head passed CI #951 and Media Camera Native Gate #2. `Microphone input` is credited only from the complete merged qualification chain: PR #171 passed exact-head CI #954 and Media Microphone Native Gate #1 before merge, then the resulting `main` head passed CI #955 and Media Microphone Native Gate #2. The authoritative weighted project percentage remains 68%; this post-0.5 checklist synchronization does not invent additional weighted points.
+`Image / SVG / GIF` is credited only from merged qualification evidence: PR #160 passed exact-head CI #925 and Media Image Native Gate #4 before merge, then the resulting `main` head passed CI #926 and Media Image Native Gate #5. `Lottie` is credited only from merged qualification evidence: PR #162 passed exact-head CI #935 and Media Lottie Native Gate #7 before merge, then the resulting `main` head passed CI #936 and Media Lottie Native Gate #8. `VideoPlayer` is credited only from merged qualification evidence: PR #164 passed exact-head CI #940 and Media Video Native Gate #2 before merge, then the resulting `main` head passed CI #941 and Media Video Native Gate #3. `AudioPlayer` is credited from the complete merged qualification chain: PR #166 passed exact-head CI #944 and Media Audio Native Gate #1 before merge; the merged AudioPlayer head passed Media Audio Native Gate #2; after main CI #945 exposed an unrelated Win32 scheduler timing regression, hotfix PR #167 passed exact-head CI #946 and the resulting `main` head passed CI #947. `CameraView` is credited only from the complete merged qualification chain: PR #169 passed exact-head CI #950 and Media Camera Native Gate #1 before merge, then the resulting `main` head passed CI #951 and Media Camera Native Gate #2. `Microphone input` is credited only from the complete merged qualification chain: PR #171 passed exact-head CI #954 and Media Microphone Native Gate #1 before merge, then the resulting `main` head passed CI #955 and Media Microphone Native Gate #2. `Waveform` is credited only from merged qualification evidence: PR #174 passed exact-head CI #971 and Media Waveform Native Gate #4 before merge, then the resulting `main` head passed CI #972 and Media Waveform Native Gate #5. The authoritative weighted project percentage remains 68%; this post-0.5 checklist synchronization does not invent additional weighted points.
 
 ## Advanced Application Components
 
