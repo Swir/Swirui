@@ -16,7 +16,7 @@
 ![Windows](https://img.shields.io/badge/Windows-Win32%20GPU-02050A?style=for-the-badge&logo=windows11&logoColor=62E5FF)
 
 [![CI](https://img.shields.io/github/actions/workflow/status/Swir/Swirui/ci.yml?branch=main&style=flat-square&label=CI&color=0088FF)](https://github.com/Swir/Swirui/actions/workflows/ci.yml)
-![Status](https://img.shields.io/badge/status-pre--alpha-0088FF?style=flat-square)
+![Status](https://img.shields.io/badge/status-alpha-0088FF?style=flat-square)
 ![Progress](https://img.shields.io/badge/project%20progress-68%25-0088FF?style=flat-square)
 
 </div>
@@ -36,7 +36,7 @@ Scope       12 / 12 layout groups verified
 
 <img width="100%" src="assets/readme/progress-card.svg" alt="SwirUI project progress: 68.0% — 0.5 Alpha Layout Engine complete; 12 of 12 layout groups verified">
 
-**68% authoritative weighted project progress — 0.6 Alpha Reactive Runtime and 0.7 Alpha Animation Engine are complete; 0.7 has 12 / 12 groups verified.**
+**68% authoritative weighted project progress — 0.8 Beta Professional Widgets is complete at 13 / 13 groups; Media Engine is 6 / 8 groups verified.**
 
 - `0.1 Alpha — Foundation` ✅
 - `0.2 Alpha — Native Window + First Renderer` ✅
@@ -45,10 +45,12 @@ Scope       12 / 12 layout groups verified
 - `0.5 Alpha — Layout Engine` ✅
 - `0.6 Alpha — Reactive Runtime` ✅
 - `0.7 Alpha — Animation Engine` ✅ `12 / 12`
+- `0.8 Beta — Professional Widgets` ✅ `13 / 13`
+- `Media Engine` 🚧 `6 / 8`
 
-The published 68% value preserves the verified weighting documented in `ROADMAP.md` through completed 0.5. Completed 0.6 and 0.7 functionality are tracked by their milestone checklists until an explicit project-weighting extension is documented; later work is never double-counted or used to invent release readiness.
+The published 68% value preserves the verified weighting documented in `ROADMAP.md` through completed 0.5. Completed later milestone functionality is tracked by its canonical checklist until an explicit project-weighting extension is documented; later work is never double-counted or used to invent project progress.
 
-SwirUI remains **pre-alpha**. Public APIs may still change while the professional-widget and later platform layers are developed. There is no public GitHub Release yet.
+SwirUI is currently **alpha**. The first public prerelease, `v0.1.0a1`, is published on PyPI and GitHub. Public APIs may still change while later roadmap gates are developed.
 
 ## Overview
 
@@ -83,6 +85,14 @@ The completed 0.5 layout layer provides content-aware intrinsic measurement, min
 | Accessibility | Semantic roles/tree, keyboard focus routing, keyboard-only traversal, checked state, numeric value/range and dialog/alert semantics |
 
 ## Quick Start
+
+### Published alpha
+
+```powershell
+python -m pip install "swirui==0.1.0a1"
+```
+
+The release includes a portable Python wheel and source distribution, plus the verified Windows x86-64 ABI3 wheel containing the Rust + wgpu + PyO3 native core.
 
 ### Python development environment
 
@@ -367,12 +377,14 @@ SwirUI does not claim performance superiority over other frameworks without repr
 
 The authoritative plan and its single roadmap progress graphic are in **[ROADMAP.md](ROADMAP.md)**.
 
-**0.6 Alpha — Reactive Runtime and 0.7 Alpha — Animation Engine are complete.** All 12 animation groups are verified, including fade/slide/scale/rotate, blur/glow transitions, morph/flip/reveal, spring/elastic/bounce behavior, physics animation, page/shared-element transitions, hover/press/focus animation, magnetic interactions, particle effects, frame-rate-independent timing and cancellation/chaining. Rotation uses retained center-origin affine transforms; arbitrary-affine shaped text and transformed clips are covered by the native cosmic-text raster path plus the verified affine image/wgpu compositor. The project-wide weighted percentage intentionally remains 68% until the documented weighting model is explicitly extended. This does not imply beta or release readiness.
+**0.8 Beta — Professional Widgets is complete at 13 / 13 groups, and Media Engine is currently 6 / 8 groups verified.** The Media Engine credit includes the merged Image/SVG/GIF, Lottie, VideoPlayer, AudioPlayer, CameraView and Microphone input qualification chains. The project-wide weighted percentage intentionally remains 68% until the documented weighting model is explicitly extended. The named 0.8 roadmap milestone being complete does not imply that a Beta package release has been published; the current public package is the `0.1.0a1` alpha prerelease.
 
 ## Releases
 
-There is currently **no public GitHub Release** for SwirUI. Development remains source-first while the pre-alpha gates are being completed.
+**SwirUI v0.1.0a1** is the first public alpha prerelease. It is published to PyPI and GitHub after the release metadata, portable distribution, Windows Rust + wgpu + PyO3 ABI3 wheel, trusted-publishing and GitHub-prerelease gates all passed.
 
+- PyPI: **[swirui 0.1.0a1](https://pypi.org/project/swirui/0.1.0a1/)**
+- GitHub prerelease: **[v0.1.0a1](https://github.com/Swir/Swirui/releases/tag/v0.1.0a1)**
 - Development history: **[CHANGELOG.md](CHANGELOG.md)**
 - Full roadmap: **[ROADMAP.md](ROADMAP.md)**
 - CI status: **[GitHub Actions](https://github.com/Swir/Swirui/actions)**
