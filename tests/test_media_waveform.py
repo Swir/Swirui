@@ -53,7 +53,9 @@ def fake_native() -> types.SimpleNamespace:
     )
 
 
-def test_waveform_native_envelope_is_bounded_and_bucketed(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_waveform_native_envelope_is_bounded_and_bucketed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setitem(sys.modules, "_swirui_native", fake_native())
     envelope = waveform_envelope_pcm16(
         pcm16(-32768, -16384, 0, 16384, 32767, 0),
@@ -69,7 +71,9 @@ def test_waveform_native_envelope_is_bounded_and_bucketed(monkeypatch: pytest.Mo
     assert envelope[2].maximum < 1.0
 
 
-def test_waveform_accepts_audio_and_microphone_sources(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_waveform_accepts_audio_and_microphone_sources(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setitem(sys.modules, "_swirui_native", fake_native())
     payload = pcm16(-32768, 0, 16384, 32767)
     audio = AudioClip(1_000, 1, payload)
@@ -92,7 +96,9 @@ def test_waveform_accepts_audio_and_microphone_sources(monkeypatch: pytest.Monke
     assert widget.accessible_value_text == "No waveform data"
 
 
-def test_waveform_handles_resize_without_reprocessing_source(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_waveform_handles_resize_without_reprocessing_source(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setitem(sys.modules, "_swirui_native", fake_native())
     widget = Waveform(bounds=Rect(0.0, 0.0, 120.0, 40.0), buckets=4)
     widget.set_envelope(

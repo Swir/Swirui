@@ -72,7 +72,7 @@ jobs:
       - name: Install PyO3 extension
         shell: pwsh
         run: |
-          $wheel = (Get-ChildItem dist-native\\*.whl | Select-Object -First 1).FullName
+          $wheel = (Get-ChildItem dist-native\*.whl | Select-Object -First 1).FullName
           python -m pip install $wheel
 
       - name: Verify waveform package
