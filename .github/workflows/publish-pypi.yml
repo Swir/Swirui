@@ -115,7 +115,7 @@ jobs:
           $wheel = (Get-ChildItem dist-native\swirui-0.1.0a1-*.whl | Select-Object -First 1).FullName
           if (-not $wheel) { throw "SwirUI native wheel was not produced." }
           python -m pip install --force-reinstall --no-deps $wheel
-          python -c "import swirui, _swirui_native; assert swirui.__version__ == '0.1.0a1'; assert _swirui_native.core_version() == '0.1.0-alpha.1'; print('native wheel OK')"
+          python -c "import swirui, _swirui_native; from swirui import App, CandlestickChart, DataGrid, WgpuRenderer; assert swirui.__version__ == '0.1.0a1'; assert _swirui_native.core_version() == '0.1.0-alpha.1'; assert App and CandlestickChart and DataGrid and WgpuRenderer; print('native mixed wheel OK')"
 
       - name: Upload native artifact
         uses: actions/upload-artifact@v4
@@ -193,8 +193,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          if gh release view v0.1.0a1 >/dev/null 2>&1; then
-            gh release upload v0.1.0a1 dist/* --clobber
+          if gh release view v0.1.0a1 --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            gh release upload v0.1.0a1 dist/* --repo "${{ github.repository }}" --clobber
           else
             gh release create v0.1.0a1 dist/* \
               --repo "${{ github.repository }}" \
