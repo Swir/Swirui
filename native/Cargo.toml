@@ -28,6 +28,7 @@ usvg = "0.45.1"
 wgpu = "30.0.1"
 
 [target.'cfg(target_os = "windows")'.dependencies]
+nokhwa = { version = "0.10.11", default-features = false, features = ["decoding", "input-msmf"] }
 rodio = { version = "0.22.2", default-features = false, features = ["playback"] }
 
 [lints.rust]

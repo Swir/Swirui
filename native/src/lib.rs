@@ -9,6 +9,9 @@ mod affine;
 mod audio;
 #[cfg(target_os = "windows")]
 mod audio_output;
+mod camera;
+#[cfg(target_os = "windows")]
+mod camera_capture;
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 mod color_filter;
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
@@ -29,6 +32,8 @@ use renderer::{clear_win32_surface, draw_rectangles_win32_surface};
 
 #[cfg(target_os = "windows")]
 use audio_output::PyAudioOutput;
+#[cfg(target_os = "windows")]
+use camera_capture::PyCameraCapture;
 #[cfg(target_os = "windows")]
 use renderer::PyWin32GpuRenderer;
 
@@ -171,6 +176,32 @@ fn native_audio_output_supported() -> bool {
     cfg!(target_os = "windows")
 }
 
+#[pyfunction]
+fn validate_camera_rgba_frame(
+    width: u32,
+    height: u32,
+    frame: Vec<u8>,
+) -> PyResult<camera::CameraFrameMetadata> {
+    camera::validate_camera_rgba_frame(width, height, &frame).map_err(PyValueError::new_err)
+}
+
+#[pyfunction]
+fn native_camera_capture_supported() -> bool {
+    cfg!(target_os = "windows")
+}
+
+#[pyfunction]
+fn list_camera_devices() -> PyResult<Vec<(u32, String, String)>> {
+    #[cfg(target_os = "windows")]
+    {
+        camera_capture::list_camera_devices()
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        Ok(Vec::new())
+    }
+}
+
 fn backend_names(backends: wgpu::Backends) -> Vec<&'static str> {
     let candidates = [
         (wgpu::Backends::DX12, "dx12"),
@@ -204,10 +235,15 @@ fn _swirui_native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(validate_audio_pcm16, module)?)?;
     module.add_function(wrap_pyfunction!(audio_frame_index, module)?)?;
     module.add_function(wrap_pyfunction!(native_audio_output_supported, module)?)?;
+    module.add_function(wrap_pyfunction!(validate_camera_rgba_frame, module)?)?;
+    module.add_function(wrap_pyfunction!(native_camera_capture_supported, module)?)?;
+    module.add_function(wrap_pyfunction!(list_camera_devices, module)?)?;
     module.add_function(wrap_pyfunction!(clear_win32_surface, module)?)?;
     module.add_function(wrap_pyfunction!(draw_rectangles_win32_surface, module)?)?;
     #[cfg(target_os = "windows")]
     module.add_class::<PyAudioOutput>()?;
+    #[cfg(target_os = "windows")]
+    module.add_class::<PyCameraCapture>()?;
     #[cfg(target_os = "windows")]
     module.add_class::<PyWin32GpuRenderer>()?;
     Ok(())

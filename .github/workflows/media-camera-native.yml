@@ -1,0 +1,91 @@
+name: Media Camera Native Gate
+
+on:
+  pull_request:
+    paths:
+      - "native/Cargo.toml"
+      - "native/src/lib.rs"
+      - "native/src/camera.rs"
+      - "native/src/camera_capture.rs"
+      - "src/swirui/camera.py"
+      - "src/swirui/widgets/camera_view.py"
+      - "src/swirui/widgets/__init__.py"
+      - "src/swirui/__init__.py"
+      - "tests/test_media_camera.py"
+      - "tests/test_windows_media_camera.py"
+      - "benchmarks/media_camera_frame.py"
+      - "examples/media_camera_demo.py"
+      - ".github/workflows/media-camera-native.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "native/Cargo.toml"
+      - "native/src/lib.rs"
+      - "native/src/camera.rs"
+      - "native/src/camera_capture.rs"
+      - "src/swirui/camera.py"
+      - "src/swirui/widgets/camera_view.py"
+      - "src/swirui/widgets/__init__.py"
+      - "src/swirui/__init__.py"
+      - "tests/test_media_camera.py"
+      - "tests/test_windows_media_camera.py"
+      - "benchmarks/media_camera_frame.py"
+      - "examples/media_camera_demo.py"
+      - ".github/workflows/media-camera-native.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  windows-media-camera:
+    name: CameraView / Media Foundation / Win32 / Python 3.14
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+
+      - name: Set up stable Rust
+        run: rustup toolchain install stable --profile minimal && rustup default stable
+
+      - name: Install Python tools
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]" maturin==1.15.0
+
+      - name: Check native camera core on Windows
+        run: cargo check --manifest-path native/Cargo.toml --all-targets
+
+      - name: Test bounded native camera frame core
+        run: cargo test --manifest-path native/Cargo.toml camera --lib
+
+      - name: Build PyO3 extension
+        working-directory: native
+        run: maturin build --release --interpreter python --out ../dist-native
+
+      - name: Install PyO3 extension
+        shell: pwsh
+        run: |
+          $wheel = (Get-ChildItem dist-native\*.whl | Select-Object -First 1).FullName
+          python -m pip install $wheel
+
+      - name: Verify CameraView package
+        run: pytest tests/test_media_camera.py tests/test_windows_media_camera.py -q --junitxml=media-camera-pytest.xml
+
+      - name: Benchmark native frame validation
+        run: python benchmarks/media_camera_frame.py
+
+      - name: Upload CameraView diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: media-camera-pytest-${{ github.run_id }}
+          path: media-camera-pytest.xml
+          if-no-files-found: ignore
+          retention-days: 7
