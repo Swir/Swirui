@@ -32,7 +32,7 @@ Roadmap = "https://github.com/Swir/Swirui/blob/main/ROADMAP.md"
 
 [tool.maturin]
 bindings = "pyo3"
-module-name = "_swirui_native"
+module-name = "swirui._swirui_native"
 python-source = "../src"
 python-packages = ["swirui"]
 features = ["extension-module"]
