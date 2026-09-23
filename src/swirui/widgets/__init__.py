@@ -87,6 +87,7 @@ from .toggle import Checkbox, RadioButton, Switch
 from .tooltip import Tooltip
 from .typography import DynamicTypography
 from .video_player import VideoPlayer
+from .waveform import Waveform, WaveformEnvelope, waveform_envelope_pcm16
 
 __all__ = [
     "Accordion",
@@ -214,9 +215,12 @@ __all__ = [
     "TreeView",
     "VideoPlayer",
     "ViewportClass",
+    "Waveform",
+    "WaveformEnvelope",
     "Widget",
     "WidgetRuntime",
     "Wrap",
     "compile_component_scene",
     "mount",
+    "waveform_envelope_pcm16",
 ]
