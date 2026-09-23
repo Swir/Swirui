@@ -85,6 +85,7 @@ from .timeline import Timeline, TimelineItem, TimelineOrientation
 from .toggle import Checkbox, RadioButton, Switch
 from .tooltip import Tooltip
 from .typography import DynamicTypography
+from .video_player import VideoPlayer
 
 __all__ = [
     "Accordion",
@@ -209,6 +210,7 @@ __all__ = [
     "Tooltip",
     "TreeNode",
     "TreeView",
+    "VideoPlayer",
     "ViewportClass",
     "Widget",
     "WidgetRuntime",

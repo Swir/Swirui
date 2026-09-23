@@ -18,6 +18,7 @@ mod renderer;
 mod shader_validation;
 mod shape;
 mod text;
+mod video;
 
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
@@ -116,6 +117,29 @@ fn render_lottie_frame_rgba(
     media::render_lottie_frame_rgba(&data, frame, width, height).map_err(PyValueError::new_err)
 }
 
+#[pyfunction]
+fn validate_video_rgba_frames(
+    width: u32,
+    height: u32,
+    frame_rate: f64,
+    frames: Vec<Vec<u8>>,
+) -> PyResult<video::VideoMetadata> {
+    video::validate_video_rgba_frames(width, height, frame_rate, &frames)
+        .map_err(PyValueError::new_err)
+}
+
+#[pyfunction]
+#[pyo3(signature = (elapsed_ms, frame_rate, frame_count, loop_video=true))]
+fn video_frame_index(
+    elapsed_ms: f64,
+    frame_rate: f64,
+    frame_count: usize,
+    loop_video: bool,
+) -> PyResult<usize> {
+    video::video_frame_index(elapsed_ms, frame_rate, frame_count, loop_video)
+        .map_err(PyValueError::new_err)
+}
+
 fn backend_names(backends: wgpu::Backends) -> Vec<&'static str> {
     let candidates = [
         (wgpu::Backends::DX12, "dx12"),
@@ -144,6 +168,8 @@ fn _swirui_native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(decode_svg_rgba, module)?)?;
     module.add_function(wrap_pyfunction!(parse_lottie_metadata, module)?)?;
     module.add_function(wrap_pyfunction!(render_lottie_frame_rgba, module)?)?;
+    module.add_function(wrap_pyfunction!(validate_video_rgba_frames, module)?)?;
+    module.add_function(wrap_pyfunction!(video_frame_index, module)?)?;
     module.add_function(wrap_pyfunction!(clear_win32_surface, module)?)?;
     module.add_function(wrap_pyfunction!(draw_rectangles_win32_surface, module)?)?;
     #[cfg(target_os = "windows")]
