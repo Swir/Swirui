@@ -34,6 +34,5 @@ Roadmap = "https://github.com/Swir/Swirui/blob/main/ROADMAP.md"
 bindings = "pyo3"
 module-name = "swirui._swirui_native"
 python-source = "../src"
-python-packages = ["swirui"]
 features = ["extension-module"]
 strip = true
