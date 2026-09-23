@@ -1,0 +1,205 @@
+name: Publish PyPI Alpha
+
+on:
+  pull_request:
+    paths:
+      - "pyproject.toml"
+      - "native/pyproject.toml"
+      - "native/Cargo.toml"
+      - "native/src/**"
+      - "src/swirui/**"
+      - ".github/workflows/publish-pypi.yml"
+  push:
+    branches: [main]
+    paths:
+      - "pyproject.toml"
+      - "native/pyproject.toml"
+      - ".github/workflows/publish-pypi.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-pypi-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  metadata:
+    name: Release metadata contract
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify package identity and version
+        shell: python
+        run: |
+          import pathlib
+          import tomllib
+
+          root = tomllib.loads(pathlib.Path("pyproject.toml").read_text(encoding="utf-8"))
+          native = tomllib.loads(pathlib.Path("native/pyproject.toml").read_text(encoding="utf-8"))
+          expected = ("swirui", "0.1.0a1")
+          assert (root["project"]["name"], root["project"]["version"]) == expected
+          assert (native["project"]["name"], native["project"]["version"]) == expected
+          assert root["project"]["requires-python"] == native["project"]["requires-python"]
+          print(f"Verified {expected[0]} {expected[1]}")
+
+  build-python:
+    name: Build portable Python distribution
+    needs: metadata
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Build wheel and sdist
+        run: |
+          python -m pip install --upgrade pip build
+          python -m build --outdir dist
+
+      - name: Smoke-test portable wheel
+        shell: bash
+        run: |
+          python -m pip install --force-reinstall dist/swirui-0.1.0a1-py3-none-any.whl
+          python - <<'PY'
+          import swirui
+          assert swirui.__version__ == "0.1.0a1"
+          print("portable wheel:", swirui.__version__)
+          PY
+
+      - name: Upload portable artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: pypi-portable
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 14
+
+  build-windows-native:
+    name: Build Windows Rust + wgpu + PyO3 wheel
+    needs: metadata
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Set up stable Rust
+        run: rustup toolchain install stable --profile minimal && rustup default stable
+
+      - name: Install Maturin
+        run: python -m pip install --upgrade pip maturin==1.15.0
+
+      - name: Build ABI3 native wheel
+        run: >-
+          maturin build
+          --release
+          --manifest-path native/Cargo.toml
+          --interpreter python
+          --out dist-native
+
+      - name: Install and verify native wheel
+        shell: pwsh
+        run: |
+          $wheel = (Get-ChildItem dist-native\swirui-0.1.0a1-*.whl | Select-Object -First 1).FullName
+          if (-not $wheel) { throw "SwirUI native wheel was not produced." }
+          python -m pip install --force-reinstall --no-deps $wheel
+          python -c "import swirui, _swirui_native; assert swirui.__version__ == '0.1.0a1'; assert _swirui_native.core_version() == '0.1.0-alpha.1'; print('native wheel OK')"
+
+      - name: Upload native artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pypi-windows-native
+          path: dist-native/swirui-0.1.0a1-*.whl
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    name: Publish swirui 0.1.0a1 to PyPI
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    needs: [build-python, build-windows-native]
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Download portable artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: pypi-portable
+          path: dist
+
+      - name: Download Windows native artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: pypi-windows-native
+          path: dist
+
+      - name: Inspect release payload
+        run: |
+          ls -lah dist
+          python - <<'PY'
+          from pathlib import Path
+          files = sorted(path.name for path in Path("dist").iterdir())
+          assert any(name.endswith("py3-none-any.whl") for name in files), files
+          assert any("win_amd64.whl" in name for name in files), files
+          assert any(name.endswith(".tar.gz") for name in files), files
+          assert all(name.startswith("swirui-0.1.0a1") for name in files), files
+          print("\n".join(files))
+          PY
+
+      - name: Publish with trusted publishing
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/
+          skip-existing: true
+          verbose: true
+
+  github-release:
+    name: Create GitHub prerelease v0.1.0a1
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download portable artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: pypi-portable
+          path: dist
+
+      - name: Download Windows native artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: pypi-windows-native
+          path: dist
+
+      - name: Create or update prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          if gh release view v0.1.0a1 >/dev/null 2>&1; then
+            gh release upload v0.1.0a1 dist/* --clobber
+          else
+            gh release create v0.1.0a1 dist/* \
+              --repo "${{ github.repository }}" \
+              --target "${{ github.sha }}" \
+              --title "SwirUI v0.1.0a1" \
+              --prerelease \
+              --generate-notes
+          fi
