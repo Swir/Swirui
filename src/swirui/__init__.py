@@ -1,5 +1,18 @@
 """Public package API for SwirUI."""
 
+import importlib as _importlib
+import sys as _sys
+from contextlib import suppress as _suppress
+
+# Maturin installs the ABI3 extension inside the public package. Register the
+# historical top-level import name as a compatibility alias so existing SwirUI
+# internals and pre-alpha callers keep working while distribution stays one wheel.
+with _suppress(ImportError):
+    _sys.modules.setdefault(
+        "_swirui_native",
+        _importlib.import_module("._swirui_native", __name__),
+    )
+
 from .animation import (
     AnimationController,
     AnimationParallel,

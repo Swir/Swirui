@@ -6,6 +6,10 @@ The project uses semantic versioning where practical during pre-alpha developmen
 
 ## [Unreleased]
 
+_No unreleased changes yet._
+
+## [0.1.0a1] - 2026-09-23
+
 ### Added
 - Initial project architecture and package metadata.
 - Public project roadmap with real progress tracking.
