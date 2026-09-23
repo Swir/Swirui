@@ -55,7 +55,9 @@ def waveform_envelope_pcm16(
         raise ValueError(f"buckets must be in the range [1, {_MAX_BUCKETS}].")
     payload = bytes(pcm16)
     raw = _native_module().waveform_envelope_pcm16(channel_count, payload, bucket_count)
-    return tuple(WaveformEnvelope(float(minimum), float(maximum)) for minimum, maximum in raw)
+    return tuple(
+        WaveformEnvelope(float(minimum), float(maximum)) for minimum, maximum in raw
+    )
 
 
 class Waveform(Widget):
@@ -151,7 +153,11 @@ class Waveform(Widget):
             raise ValueError("duration_ms must be finite and non-negative.")
         if channels < 0 or channels > 8:
             raise ValueError("channels must be in the range [0, 8].")
-        if normalized == self._envelope and duration_ms == self._duration_ms and channels == self._channels:
+        if (
+            normalized == self._envelope
+            and duration_ms == self._duration_ms
+            and channels == self._channels
+        ):
             return self
         self._envelope = normalized
         self._duration_ms = float(duration_ms)
