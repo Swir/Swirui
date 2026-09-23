@@ -268,18 +268,18 @@ The merged chart packages are synchronized here without widening scope: PR #145 
 
 ## Media Engine
 
-**Status:** In progress — 4 / 8 groups verified
+**Status:** In progress — 5 / 8 groups verified
 
 - [x] Image / SVG / GIF
 - [x] Lottie
 - [x] VideoPlayer
 - [x] AudioPlayer
-- [ ] CameraView
+- [x] CameraView
 - [ ] Microphone input
 - [ ] Waveform
 - [ ] Spectrum visualizer
 
-`Image / SVG / GIF` is credited only from merged qualification evidence: PR #160 passed exact-head CI #925 and Media Image Native Gate #4 before merge, then the resulting `main` head passed CI #926 and Media Image Native Gate #5. `Lottie` is credited only from merged qualification evidence: PR #162 passed exact-head CI #935 and Media Lottie Native Gate #7 before merge, then the resulting `main` head passed CI #936 and Media Lottie Native Gate #8. `VideoPlayer` is credited only from merged qualification evidence: PR #164 passed exact-head CI #940 and Media Video Native Gate #2 before merge, then the resulting `main` head passed CI #941 and Media Video Native Gate #3. `AudioPlayer` is credited from the complete merged qualification chain: PR #166 passed exact-head CI #944 and Media Audio Native Gate #1 before merge; the merged AudioPlayer head passed Media Audio Native Gate #2; after main CI #945 exposed an unrelated Win32 scheduler timing regression, hotfix PR #167 passed exact-head CI #946 and the resulting `main` head passed CI #947. The authoritative weighted project percentage remains 68%; this post-0.5 checklist synchronization does not invent additional weighted points.
+`Image / SVG / GIF` is credited only from merged qualification evidence: PR #160 passed exact-head CI #925 and Media Image Native Gate #4 before merge, then the resulting `main` head passed CI #926 and Media Image Native Gate #5. `Lottie` is credited only from merged qualification evidence: PR #162 passed exact-head CI #935 and Media Lottie Native Gate #7 before merge, then the resulting `main` head passed CI #936 and Media Lottie Native Gate #8. `VideoPlayer` is credited only from merged qualification evidence: PR #164 passed exact-head CI #940 and Media Video Native Gate #2 before merge, then the resulting `main` head passed CI #941 and Media Video Native Gate #3. `AudioPlayer` is credited from the complete merged qualification chain: PR #166 passed exact-head CI #944 and Media Audio Native Gate #1 before merge; the merged AudioPlayer head passed Media Audio Native Gate #2; after main CI #945 exposed an unrelated Win32 scheduler timing regression, hotfix PR #167 passed exact-head CI #946 and the resulting `main` head passed CI #947. `CameraView` is credited only from the complete merged qualification chain: PR #169 passed exact-head CI #950 and Media Camera Native Gate #1 before merge, then the resulting `main` head passed CI #951 and Media Camera Native Gate #2. The authoritative weighted project percentage remains 68%; this post-0.5 checklist synchronization does not invent additional weighted points.
 
 ## Advanced Application Components
 
