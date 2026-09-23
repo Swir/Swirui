@@ -268,18 +268,18 @@ The merged chart packages are synchronized here without widening scope: PR #145 
 
 ## Media Engine
 
-**Status:** In progress — 2 / 8 groups verified
+**Status:** In progress — 3 / 8 groups verified
 
 - [x] Image / SVG / GIF
 - [x] Lottie
-- [ ] VideoPlayer
+- [x] VideoPlayer
 - [ ] AudioPlayer
 - [ ] CameraView
 - [ ] Microphone input
 - [ ] Waveform
 - [ ] Spectrum visualizer
 
-`Image / SVG / GIF` is credited only from merged qualification evidence: PR #160 passed exact-head CI #925 and Media Image Native Gate #4 before merge, then the resulting `main` head passed CI #926 and Media Image Native Gate #5. `Lottie` is credited only from merged qualification evidence: PR #162 passed exact-head CI #935 and Media Lottie Native Gate #7 before merge, then the resulting `main` head passed CI #936 and Media Lottie Native Gate #8. The authoritative weighted project percentage remains 68%; this post-0.5 checklist synchronization does not invent additional weighted points.
+`Image / SVG / GIF` is credited only from merged qualification evidence: PR #160 passed exact-head CI #925 and Media Image Native Gate #4 before merge, then the resulting `main` head passed CI #926 and Media Image Native Gate #5. `Lottie` is credited only from merged qualification evidence: PR #162 passed exact-head CI #935 and Media Lottie Native Gate #7 before merge, then the resulting `main` head passed CI #936 and Media Lottie Native Gate #8. `VideoPlayer` is credited only from merged qualification evidence: PR #164 passed exact-head CI #940 and Media Video Native Gate #2 before merge, then the resulting `main` head passed CI #941 and Media Video Native Gate #3. The authoritative weighted project percentage remains 68%; this post-0.5 checklist synchronization does not invent additional weighted points.
 
 ## Advanced Application Components
 
