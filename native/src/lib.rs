@@ -28,6 +28,7 @@ mod shader_validation;
 mod shape;
 mod text;
 mod video;
+mod waveform;
 
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
@@ -234,6 +235,16 @@ fn list_microphone_devices() -> PyResult<Vec<(u32, String, bool)>> {
     }
 }
 
+#[pyfunction]
+fn waveform_envelope_pcm16(
+    channels: u16,
+    pcm16: Vec<u8>,
+    bucket_count: usize,
+) -> PyResult<Vec<waveform::WaveformBucket>> {
+    waveform::waveform_envelope_pcm16(channels, &pcm16, bucket_count)
+        .map_err(PyValueError::new_err)
+}
+
 fn backend_names(backends: wgpu::Backends) -> Vec<&'static str> {
     let candidates = [
         (wgpu::Backends::DX12, "dx12"),
@@ -273,6 +284,7 @@ fn _swirui_native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(validate_microphone_pcm16, module)?)?;
     module.add_function(wrap_pyfunction!(native_microphone_input_supported, module)?)?;
     module.add_function(wrap_pyfunction!(list_microphone_devices, module)?)?;
+    module.add_function(wrap_pyfunction!(waveform_envelope_pcm16, module)?)?;
     module.add_function(wrap_pyfunction!(clear_win32_surface, module)?)?;
     module.add_function(wrap_pyfunction!(draw_rectangles_win32_surface, module)?)?;
     #[cfg(target_os = "windows")]
