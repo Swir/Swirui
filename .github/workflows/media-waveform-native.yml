@@ -1,0 +1,91 @@
+name: Media Waveform Native Gate
+
+on:
+  pull_request:
+    paths:
+      - "native/Cargo.toml"
+      - "native/src/lib.rs"
+      - "native/src/waveform.rs"
+      - "src/swirui/audio.py"
+      - "src/swirui/microphone.py"
+      - "src/swirui/widgets/waveform.py"
+      - "src/swirui/widgets/__init__.py"
+      - "src/swirui/__init__.py"
+      - "tests/test_media_waveform.py"
+      - "tests/test_windows_media_waveform.py"
+      - "benchmarks/media_waveform_envelope.py"
+      - "examples/media_waveform_demo.py"
+      - ".github/workflows/media-waveform-native.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "native/Cargo.toml"
+      - "native/src/lib.rs"
+      - "native/src/waveform.rs"
+      - "src/swirui/audio.py"
+      - "src/swirui/microphone.py"
+      - "src/swirui/widgets/waveform.py"
+      - "src/swirui/widgets/__init__.py"
+      - "src/swirui/__init__.py"
+      - "tests/test_media_waveform.py"
+      - "tests/test_windows_media_waveform.py"
+      - "benchmarks/media_waveform_envelope.py"
+      - "examples/media_waveform_demo.py"
+      - ".github/workflows/media-waveform-native.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  windows-media-waveform:
+    name: Waveform / Rust envelope / wgpu retained scene / Python 3.14
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+
+      - name: Set up stable Rust
+        run: rustup toolchain install stable --profile minimal && rustup default stable
+
+      - name: Install Python tools
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]" maturin==1.15.0
+
+      - name: Check native waveform core on Windows
+        run: cargo check --manifest-path native/Cargo.toml --all-targets
+
+      - name: Test native waveform reduction
+        run: cargo test --manifest-path native/Cargo.toml waveform --lib
+
+      - name: Build PyO3 extension
+        working-directory: native
+        run: maturin build --release --interpreter python --out ../dist-native
+
+      - name: Install PyO3 extension
+        shell: pwsh
+        run: |
+          $wheel = (Get-ChildItem dist-native\\*.whl | Select-Object -First 1).FullName
+          python -m pip install $wheel
+
+      - name: Verify waveform package
+        run: pytest tests/test_media_waveform.py tests/test_windows_media_waveform.py -q --junitxml=media-waveform-pytest.xml
+
+      - name: Benchmark native waveform envelope
+        run: python benchmarks/media_waveform_envelope.py
+
+      - name: Upload waveform diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: media-waveform-pytest-${{ github.run_id }}
+          path: media-waveform-pytest.xml
+          if-no-files-found: ignore
+          retention-days: 7
