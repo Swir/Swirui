@@ -50,6 +50,15 @@ def _send_key(user32: Any, hwnd: int, key_code: int) -> None:
     user32.SendMessageW(ctypes.c_void_p(hwnd), 0x0101, key_code, 0)
 
 
+def _render_due_frame(app: App) -> int:
+    """Advance only to the scheduler's real next deadline for deterministic smoke tests."""
+
+    now = time.monotonic()
+    wait = app.seconds_until_next_frame(now)
+    assert wait is not None
+    return app.render_pending(now + wait + 1.0e-6)
+
+
 @pytest.mark.skipif(sys.platform != "win32", reason="ScrollView native smoke requires Windows")
 def test_scroll_view_routes_scrolled_content_in_real_win32_wgpu_session() -> None:
     renderer = WgpuRenderer()
@@ -107,7 +116,7 @@ def test_scroll_view_routes_scrolled_content_in_real_win32_wgpu_session() -> Non
         assert len(clicks) == 1
 
         app.invalidate(window)
-        assert app.render_pending(time.monotonic() + 1.0) == 1
+        assert _render_due_frame(app) == 1
         assert renderer.persistent_context_count == initial_contexts
         assert window.scene is not None
         viewport_node = next(
@@ -196,7 +205,7 @@ def test_datagrid_virtualization_editing_and_keyboard_in_real_win32_wgpu_session
         assert grid.editing_cell == (0, "name", "Job 199!")
 
         app.invalidate(window)
-        assert app.render_pending(time.monotonic() + 1.0) == 1
+        assert _render_due_frame(app) == 1
         assert renderer.persistent_context_count == initial_contexts
         assert window.scene is not None
         editor_text = next(
@@ -223,7 +232,7 @@ def test_datagrid_virtualization_editing_and_keyboard_in_real_win32_wgpu_session
         assert 199 in grid.visible_row_range
 
         app.invalidate(window)
-        assert app.render_pending(time.monotonic() + 1.0) == 1
+        assert _render_due_frame(app) == 1
         assert renderer.persistent_context_count == initial_contexts
         assert window.scene is not None
         row_nodes = [
