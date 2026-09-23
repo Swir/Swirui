@@ -166,8 +166,8 @@ class Waveform(Widget):
         self.invalidate(reason="waveform_data")
         return self
 
-    def clear(self) -> Waveform:
-        return self.set_envelope((), duration_ms=0.0, channels=0)
+    def clear(self) -> None:
+        self.set_envelope((), duration_ms=0.0, channels=0)
 
     def build_scene_node(self) -> SceneNode:
         root = SceneNode(
