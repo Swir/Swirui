@@ -340,10 +340,9 @@ class Autocomplete(Input):
             return
         count = len(self._suggestions)
         index = self._selected_suggestion_index
-        if index < 0:
-            index = 0 if direction > 0 else count - 1
-        else:
-            index = (index + direction) % count
+        index = (
+            0 if direction > 0 else count - 1
+        ) if index < 0 else (index + direction) % count
         if index == self._selected_suggestion_index:
             return
         self._selected_suggestion_index = index
@@ -379,10 +378,9 @@ class Autocomplete(Input):
         candidates: list[str] = list(self._items)
         if self._provider is not None:
             provided = self._provider(self._value, self._caret)
-            if provided is not None:
-                candidates.extend(
-                    str(item) for item in islice(provided, _MAX_PROVIDER_SCAN)
-                )
+            candidates.extend(
+                str(item) for item in islice(provided, _MAX_PROVIDER_SCAN)
+            )
 
         suggestions: list[str] = []
         seen: set[str] = set()
