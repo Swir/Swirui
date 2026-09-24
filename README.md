@@ -36,7 +36,7 @@ Scope       12 / 12 layout groups verified
 
 <img width="100%" src="assets/readme/progress-card.svg" alt="SwirUI project progress: 68.0% — 0.5 Alpha Layout Engine complete; 12 of 12 layout groups verified">
 
-**68% authoritative weighted project progress — 0.8 Beta Professional Widgets is complete at 13 / 13 groups; Media Engine is 7 / 8 groups verified.**
+**68% authoritative weighted project progress — 0.8 Beta Professional Widgets is complete at 13 / 13 groups; Media Engine is complete at 8 / 8 groups verified.**
 
 - `0.1 Alpha — Foundation` ✅
 - `0.2 Alpha — Native Window + First Renderer` ✅
@@ -46,7 +46,7 @@ Scope       12 / 12 layout groups verified
 - `0.6 Alpha — Reactive Runtime` ✅
 - `0.7 Alpha — Animation Engine` ✅ `12 / 12`
 - `0.8 Beta — Professional Widgets` ✅ `13 / 13`
-- `Media Engine` 🚧 `7 / 8`
+- `Media Engine` ✅ `8 / 8`
 
 The published 68% value preserves the verified weighting documented in `ROADMAP.md` through completed 0.5. Completed later milestone functionality is tracked by its canonical checklist until an explicit project-weighting extension is documented; later work is never double-counted or used to invent project progress.
 
@@ -377,7 +377,7 @@ SwirUI does not claim performance superiority over other frameworks without repr
 
 The authoritative plan and its single roadmap progress graphic are in **[ROADMAP.md](ROADMAP.md)**.
 
-**0.8 Beta — Professional Widgets is complete at 13 / 13 groups, and Media Engine is currently 7 / 8 groups verified.** The Media Engine credit includes the merged Image/SVG/GIF, Lottie, VideoPlayer, AudioPlayer, CameraView, Microphone input and Waveform qualification chains. The project-wide weighted percentage intentionally remains 68% until the documented weighting model is explicitly extended. The named 0.8 roadmap milestone being complete does not imply that a Beta package release has been published; the current public package is the `0.1.0a1` alpha prerelease.
+**0.8 Beta — Professional Widgets is complete at 13 / 13 groups, and Media Engine is complete at 8 / 8 groups verified.** The Media Engine credit includes the merged Image/SVG/GIF, Lottie, VideoPlayer, AudioPlayer, CameraView, Microphone input, Waveform and Spectrum visualizer qualification chains. The project-wide weighted percentage intentionally remains 68% until the documented weighting model is explicitly extended. The named 0.8 roadmap milestone being complete does not imply that a Beta package release has been published; the current public package is the `0.1.0a1` alpha prerelease.
 
 ## Releases
 
