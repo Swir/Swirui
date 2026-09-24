@@ -7,8 +7,9 @@ import keyword
 import math
 import token as token_module
 import tokenize
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Any
 
 from swirui.core import Event
 from swirui.platforms import PlatformEventKind
@@ -501,10 +502,7 @@ class CodeEditor(TextArea):
                         if current == quote and not escaped:
                             end += 1
                             break
-                        if current == "\\" and not escaped:
-                            escaped = True
-                        else:
-                            escaped = False
+                        escaped = current == "\\" and not escaped
                         end += 1
                     probe = end
                     while probe < len(line) and line[probe].isspace():

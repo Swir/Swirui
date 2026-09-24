@@ -267,7 +267,12 @@ def test_syntax_highlighting_is_viewport_bounded_for_large_python_document() -> 
 
     assert syntax_nodes
     assert len(syntax_nodes) <= 64
-    assert all(5_000 <= int(node.key.split(":syntax:", 1)[1].split(":", 1)[0]) <= 5_012 for node in syntax_nodes)
+    assert all(
+        5_000
+        <= int(node.key.split(":syntax:", 1)[1].split(":", 1)[0])
+        <= 5_012
+        for node in syntax_nodes
+    )
     assert len(list(scene.walk())) <= 96
 
 
