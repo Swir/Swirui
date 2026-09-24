@@ -14,6 +14,7 @@ from .base import LayoutConstraints, Widget
 from .button import Button, IconButton
 from .camera_view import CameraView
 from .charts import ChartPoint, ChartSelection, ChartSeries, ChartViewport
+from .code_editor import CodeEditor
 from .color_picker import ColorChannel, ColorPicker
 from .command_surfaces import CommandItem, MenuBar, Ribbon, RibbonGroup, Toolbar
 from .context_commands import CommandPalette, ContextMenu
@@ -110,6 +111,7 @@ __all__ = [
     "ChartViewport",
     "Checkbox",
     "Chip",
+    "CodeEditor",
     "ColorChannel",
     "ColorPicker",
     "Column",
