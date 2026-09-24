@@ -178,6 +178,7 @@ from .widgets import (
     ScrollView,
     Sidebar,
     Slider,
+    SpectrumVisualizer,
     SplitView,
     Stack,
     StreamingChartSeries,
@@ -206,6 +207,7 @@ from .widgets import (
     WidgetRuntime,
     Wrap,
     mount,
+    spectrum_magnitudes_pcm16,
     waveform_envelope_pcm16,
 )
 from .window import Window
@@ -354,6 +356,7 @@ __all__ = [
     "Sidebar",
     "SlideTransition",
     "Slider",
+    "SpectrumVisualizer",
     "SplitView",
     "SpringAnimation",
     "Stack",
@@ -397,6 +400,7 @@ __all__ = [
     "ease_out_elastic",
     "linear",
     "mount",
+    "spectrum_magnitudes_pcm16",
     "spring_state",
     "state_transaction",
     "tween_state",
