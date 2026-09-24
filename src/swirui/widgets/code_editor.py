@@ -1,8 +1,13 @@
-"""Retained source-code editor surface with gutter, indentation and bounded history."""
+"""Retained source-code editor with bounded history and syntax highlighting."""
 
 from __future__ import annotations
 
+import io
+import keyword
 import math
+import token as token_module
+import tokenize
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
@@ -25,6 +30,63 @@ _DEFAULT_GUTTER_FOREGROUND = Color.from_hex("#718797")
 _DEFAULT_GUTTER_ACTIVE = Color.from_hex("#62E5FF")
 _DEFAULT_GUTTER_SEPARATOR = Color.from_hex("#153247")
 _DEFAULT_CURRENT_LINE = Color.from_hex("#0D2233")
+_DEFAULT_SYNTAX_COLORS = {
+    "keyword": Color.from_hex("#62E5FF"),
+    "definition": Color.from_hex("#82AAFF"),
+    "string": Color.from_hex("#A6E3A1"),
+    "number": Color.from_hex("#F5C76E"),
+    "comment": Color.from_hex("#718797"),
+    "decorator": Color.from_hex("#C792EA"),
+    "operator": Color.from_hex("#89DDFF"),
+    "literal": Color.from_hex("#FF8CCF"),
+    "key": Color.from_hex("#7FDBFF"),
+}
+_PYTHON_LITERALS = frozenset({"True", "False", "None", "NotImplemented", "Ellipsis"})
+_HIGHLIGHTED_OPERATORS = frozenset(
+    {
+        "+",
+        "-",
+        "*",
+        "/",
+        "//",
+        "%",
+        "**",
+        "=",
+        "==",
+        "!=",
+        "<",
+        ">",
+        "<=",
+        ">=",
+        "->",
+        ":=",
+        "|",
+        "&",
+        "^",
+        "~",
+        "<<",
+        ">>",
+        "+=",
+        "-=",
+        "*=",
+        "/=",
+        "//=",
+        "%=",
+        "**=",
+        "|=",
+        "&=",
+        "^=",
+        "<<=",
+        ">>=",
+    }
+)
+_PYTHON_STRING_TOKENS = {token_module.STRING}
+for _token_name in ("FSTRING_START", "FSTRING_MIDDLE", "FSTRING_END"):
+    _token_value = getattr(token_module, _token_name, None)
+    if isinstance(_token_value, int):
+        _PYTHON_STRING_TOKENS.add(_token_value)
+
+_MAX_HIGHLIGHT_NODES_PER_FRAME = 512
 
 
 @dataclass(frozen=True, slots=True)
@@ -35,13 +97,20 @@ class _EditorSnapshot:
     scroll_offset: float
 
 
+@dataclass(frozen=True, slots=True)
+class _SyntaxSpan:
+    start: int
+    end: int
+    kind: str
+
+
 class CodeEditor(TextArea):
     """Python-first retained code editor built on SwirUI's shaped-text path.
 
-    This gate intentionally owns editor mechanics only: multiline editing,
-    line numbers, current-line presentation, indentation, undo/redo and
-    viewport-bounded scrolling. Language-aware syntax highlighting remains a
-    separate roadmap deliverable.
+    Editor mechanics stay application-neutral while optional syntax highlighting
+    provides built-in Python and JSON lexers. Highlighting is cached per source
+    value and only materializes retained text overlays for visible rows, keeping
+    scene complexity bounded by the viewport rather than document length.
     """
 
     def __init__(
@@ -57,6 +126,9 @@ class CodeEditor(TextArea):
         insert_spaces: bool = True,
         show_line_numbers: bool = True,
         undo_limit: int = 200,
+        syntax_highlighting: bool = True,
+        language: str | None = None,
+        syntax_colors: Mapping[str, Color] | None = None,
         gutter_background: Color | None = None,
         gutter_foreground: Color | None = None,
         gutter_active_foreground: Color | None = None,
@@ -74,6 +146,12 @@ class CodeEditor(TextArea):
         self._insert_spaces = bool(insert_spaces)
         self._show_line_numbers = bool(show_line_numbers)
         self._undo_limit = self._validate_undo_limit(undo_limit)
+        self._syntax_highlighting = bool(syntax_highlighting)
+        self._language = self._normalize_language(language)
+        self._syntax_colors = self._validate_syntax_colors(syntax_colors)
+        self._syntax_cache_value: str | None = None
+        self._syntax_cache_language: str | None = None
+        self._syntax_cache: dict[int, tuple[_SyntaxSpan, ...]] = {}
         self._gutter_background = gutter_background or _DEFAULT_GUTTER_BACKGROUND
         self._gutter_foreground = gutter_foreground or _DEFAULT_GUTTER_FOREGROUND
         self._gutter_active_foreground = (
@@ -129,6 +207,33 @@ class CodeEditor(TextArea):
         self._clamp_scroll_offset()
         self._sync_editor_accessibility()
         self.invalidate(reason="line_numbers")
+
+    @property
+    def syntax_highlighting(self) -> bool:
+        return self._syntax_highlighting
+
+    @syntax_highlighting.setter
+    def syntax_highlighting(self, value: bool) -> None:
+        normalized = bool(value)
+        if normalized == self._syntax_highlighting:
+            return
+        self._syntax_highlighting = normalized
+        self._sync_editor_accessibility()
+        self.invalidate(reason="syntax_highlighting")
+
+    @property
+    def language(self) -> str | None:
+        return self._language
+
+    @language.setter
+    def language(self, value: str | None) -> None:
+        normalized = self._normalize_language(value)
+        if normalized == self._language:
+            return
+        self._language = normalized
+        self._clear_syntax_cache()
+        self._sync_editor_accessibility()
+        self.invalidate(reason="syntax_language")
 
     @property
     def line_count(self) -> int:
@@ -227,6 +332,15 @@ class CodeEditor(TextArea):
             )
             root.children.insert(0, highlight)
 
+        if self._syntax_highlighting and self._language is not None and self._value:
+            self._add_syntax_highlights(
+                root,
+                content=content,
+                first_line=first_line,
+                visible_lines=visible_lines,
+                line_height=line_height,
+            )
+
         if self._show_line_numbers:
             self._add_gutter(
                 root,
@@ -239,6 +353,234 @@ class CodeEditor(TextArea):
 
         self._sync_editor_accessibility()
         return root
+
+    def _add_syntax_highlights(
+        self,
+        root: SceneNode,
+        *,
+        content: Rect,
+        first_line: int,
+        visible_lines: int,
+        line_height: float,
+    ) -> None:
+        syntax_lines = self._syntax_lines()
+        source_lines = self._value.split("\n")
+        char_width = self._estimated_char_width()
+        visible_columns = max(1, int(content.width / char_width) + 2)
+        stop = min(len(source_lines), first_line + visible_lines)
+        node_count = 0
+
+        for line_index in range(first_line, stop):
+            line = source_lines[line_index]
+            y = content.y + ((line_index - first_line) * line_height)
+            for span_index, span in enumerate(syntax_lines.get(line_index, ())):
+                if node_count >= _MAX_HIGHLIGHT_NODES_PER_FRAME:
+                    return
+                if span.start >= visible_columns:
+                    break
+                span_end = min(span.end, visible_columns, len(line))
+                if span_end <= span.start:
+                    continue
+                text = line[span.start:span_end]
+                if not text:
+                    continue
+                x = content.x + (span.start * char_width)
+                if x >= content.right:
+                    continue
+                width = min(
+                    max(char_width * 0.45, len(text) * char_width),
+                    max(0.0, content.right - x),
+                )
+                if width <= 0.0:
+                    continue
+                root.add(
+                    SceneNode(
+                        key=(
+                            f"{self.key}:syntax:{line_index + 1}:"
+                            f"{span_index}:{span.kind}"
+                        ),
+                        kind=SceneNodeKind.TEXT,
+                        bounds=Rect(
+                            x,
+                            y,
+                            width,
+                            min(line_height, max(0.0, content.bottom - y)),
+                        ),
+                        z_index=1,
+                        fill=self._syntax_colors[span.kind],
+                        text=text,
+                        font_size=self._font_size,
+                        font_family=self._font_family,
+                        hit_testable=False,
+                    )
+                )
+                node_count += 1
+
+    def _syntax_lines(self) -> dict[int, tuple[_SyntaxSpan, ...]]:
+        if (
+            self._syntax_cache_value == self._value
+            and self._syntax_cache_language == self._language
+        ):
+            return self._syntax_cache
+
+        if self._language == "python":
+            parsed = self._parse_python_syntax(self._value)
+        elif self._language == "json":
+            parsed = self._parse_json_syntax(self._value)
+        else:
+            parsed = {}
+        self._syntax_cache_value = self._value
+        self._syntax_cache_language = self._language
+        self._syntax_cache = parsed
+        return parsed
+
+    @classmethod
+    def _parse_python_syntax(cls, source: str) -> dict[int, tuple[_SyntaxSpan, ...]]:
+        lines = source.split("\n")
+        spans: dict[int, list[_SyntaxSpan]] = {}
+        expect_definition = False
+        expect_decorator = False
+
+        try:
+            stream = tokenize.generate_tokens(io.StringIO(source).readline)
+            for info in stream:
+                kind: str | None = None
+                if info.type == token_module.NAME:
+                    if expect_definition:
+                        kind = "definition"
+                        expect_definition = False
+                    elif expect_decorator:
+                        kind = "decorator"
+                        expect_decorator = False
+                    elif info.string in _PYTHON_LITERALS:
+                        kind = "literal"
+                    elif cls._is_python_keyword(info.string):
+                        kind = "keyword"
+                        expect_definition = info.string in {"def", "class"}
+                elif info.type in _PYTHON_STRING_TOKENS:
+                    kind = "string"
+                elif info.type == token_module.NUMBER:
+                    kind = "number"
+                elif info.type == tokenize.COMMENT:
+                    kind = "comment"
+                elif info.type == token_module.OP:
+                    if info.string == "@":
+                        kind = "decorator"
+                        expect_decorator = True
+                    elif info.string in _HIGHLIGHTED_OPERATORS:
+                        kind = "operator"
+
+                if kind is not None:
+                    cls._append_multiline_span(
+                        spans,
+                        lines,
+                        info.start,
+                        info.end,
+                        kind,
+                    )
+        except (tokenize.TokenError, IndentationError):
+            # Editing frequently produces temporarily incomplete source. Keep all
+            # successfully emitted tokens instead of turning that into an error.
+            pass
+
+        return {line: tuple(items) for line, items in spans.items()}
+
+    @classmethod
+    def _parse_json_syntax(cls, source: str) -> dict[int, tuple[_SyntaxSpan, ...]]:
+        parsed: dict[int, tuple[_SyntaxSpan, ...]] = {}
+        for line_index, line in enumerate(source.split("\n")):
+            spans: list[_SyntaxSpan] = []
+            index = 0
+            while index < len(line):
+                character = line[index]
+                if character in {'"', "'"}:
+                    quote = character
+                    end = index + 1
+                    escaped = False
+                    while end < len(line):
+                        current = line[end]
+                        if current == quote and not escaped:
+                            end += 1
+                            break
+                        escaped = current == "\\" and not escaped
+                        end += 1
+                    probe = end
+                    while probe < len(line) and line[probe].isspace():
+                        probe += 1
+                    kind = "key" if probe < len(line) and line[probe] == ":" else "string"
+                    spans.append(_SyntaxSpan(index, end, kind))
+                    index = end
+                    continue
+
+                if character.isdigit() or (
+                    character == "-"
+                    and index + 1 < len(line)
+                    and line[index + 1].isdigit()
+                ):
+                    end = index + 1
+                    while end < len(line) and line[end] in "0123456789+-.eE":
+                        end += 1
+                    spans.append(_SyntaxSpan(index, end, "number"))
+                    index = end
+                    continue
+
+                literal = next(
+                    (
+                        value
+                        for value in ("true", "false", "null")
+                        if line.startswith(value, index)
+                        and cls._json_word_boundary(line, index + len(value))
+                    ),
+                    None,
+                )
+                if literal is not None:
+                    spans.append(_SyntaxSpan(index, index + len(literal), "literal"))
+                    index += len(literal)
+                    continue
+
+                index += 1
+
+            if spans:
+                parsed[line_index] = tuple(spans)
+        return parsed
+
+    @staticmethod
+    def _append_multiline_span(
+        spans: dict[int, list[_SyntaxSpan]],
+        lines: list[str],
+        start: tuple[int, int],
+        end: tuple[int, int],
+        kind: str,
+    ) -> None:
+        start_row, start_column = start
+        end_row, end_column = end
+        first = max(0, start_row - 1)
+        last = min(len(lines) - 1, end_row - 1)
+        for line_index in range(first, last + 1):
+            span_start = start_column if line_index == first else 0
+            span_end = end_column if line_index == last else len(lines[line_index])
+            span_start = max(0, min(span_start, len(lines[line_index])))
+            span_end = max(span_start, min(span_end, len(lines[line_index])))
+            if span_end > span_start:
+                spans.setdefault(line_index, []).append(
+                    _SyntaxSpan(span_start, span_end, kind)
+                )
+
+    @staticmethod
+    def _is_python_keyword(value: str) -> bool:
+        if keyword.iskeyword(value):
+            return True
+        is_softkeyword = getattr(keyword, "issoftkeyword", None)
+        return bool(is_softkeyword is not None and is_softkeyword(value))
+
+    @staticmethod
+    def _json_word_boundary(line: str, index: int) -> bool:
+        return index >= len(line) or not (line[index].isalnum() or line[index] == "_")
+
+    def _clear_syntax_cache(self) -> None:
+        self._syntax_cache_value = None
+        self._syntax_cache_language = None
+        self._syntax_cache = {}
 
     def _add_gutter(
         self,
@@ -578,10 +920,47 @@ class CodeEditor(TextArea):
         caret_line = self._line_index_for_position(self._caret, line_starts)
         column = self._caret - line_starts[caret_line]
         visible_start, visible_end = self.visible_line_range
+        syntax = ""
+        if self._syntax_highlighting and self._language is not None:
+            syntax = f"; syntax {self._language}"
         self.accessible_value_text = (
             f"{self.line_count} lines; caret line {caret_line + 1}, column {column + 1}; "
-            f"visible lines {visible_start}-{visible_end}"
+            f"visible lines {visible_start}-{visible_end}{syntax}"
         )
+
+    @staticmethod
+    def _normalize_language(value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = str(value).strip().lower()
+        if normalized in {"", "plain", "text", "none"}:
+            return None
+        aliases = {
+            "py": "python",
+            "python": "python",
+            "json": "json",
+        }
+        try:
+            return aliases[normalized]
+        except KeyError as exc:
+            raise ValueError(
+                "language must be one of: python, py, json, plain, text, none."
+            ) from exc
+
+    @staticmethod
+    def _validate_syntax_colors(
+        value: Mapping[str, Color] | None,
+    ) -> dict[str, Color]:
+        colors = dict(_DEFAULT_SYNTAX_COLORS)
+        if value is None:
+            return colors
+        for kind, color in value.items():
+            if kind not in colors:
+                raise ValueError(f"unknown syntax color kind: {kind!r}")
+            if not isinstance(color, Color):
+                raise TypeError("syntax color values must be Color instances.")
+            colors[kind] = color
+        return colors
 
     @staticmethod
     def _validate_tab_size(value: int) -> int:

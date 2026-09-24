@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from swirui import AccessibilityRole, CodeEditor
 from swirui.platforms import NativeWindowHandle, PlatformEvent, PlatformEventKind
-from swirui.rendering.geometry import Rect
+from swirui.rendering.geometry import Color, Rect
 from swirui.rendering.scene import SceneNodeKind
 
 _WINDOW = NativeWindowHandle(1)
@@ -26,6 +26,14 @@ def _event(
         shift=shift,
         ctrl=ctrl,
     )
+
+
+def _syntax_nodes(editor: CodeEditor):
+    return [
+        node
+        for node in editor.build_scene_node().walk()
+        if node.kind is SceneNodeKind.TEXT and ":syntax:" in node.key
+    ]
 
 
 def test_code_editor_renders_gutter_current_line_and_accessibility() -> None:
@@ -180,6 +188,106 @@ def test_code_editor_can_hide_line_numbers_without_losing_editing_surface() -> N
     assert editor.value.endswith("\ngamma")
 
 
+def test_python_syntax_highlighting_colors_core_tokens_and_multiline_strings() -> None:
+    source = (
+        "@decorator\n"
+        "def render(value: int = 42):\n"
+        "    text = \"\"\"alpha\n"
+        "beta\"\"\"\n"
+        "    return True  # ready\n"
+    )
+    editor = CodeEditor(
+        source,
+        bounds=Rect(0.0, 0.0, 760.0, 260.0),
+        language="python",
+    )
+    nodes = _syntax_nodes(editor)
+    texts = {node.text for node in nodes}
+    kinds = {node.key.rsplit(":", 1)[-1] for node in nodes}
+
+    assert {"decorator", "def", "render", "42", "return", "True", "# ready"} <= texts
+    assert "beta\"\"\"" in texts
+    assert {"decorator", "keyword", "definition", "number", "string", "literal", "comment"} <= kinds
+    assert "syntax python" in (editor.accessible_value_text or "")
+
+
+def test_json_syntax_highlighting_distinguishes_keys_values_and_literals() -> None:
+    editor = CodeEditor(
+        '{"name": "SwirUI", "ready": true, "count": 68}',
+        bounds=Rect(0.0, 0.0, 760.0, 120.0),
+        language="json",
+    )
+    nodes = _syntax_nodes(editor)
+    by_text = {node.text: node.key.rsplit(":", 1)[-1] for node in nodes}
+
+    assert by_text['"name"'] == "key"
+    assert by_text['"SwirUI"'] == "string"
+    assert by_text['"ready"'] == "key"
+    assert by_text["true"] == "literal"
+    assert by_text["68"] == "number"
+
+
+def test_syntax_highlighting_can_toggle_change_language_and_override_colors() -> None:
+    custom_keyword = Color.from_hex("#FFFFFF")
+    editor = CodeEditor(
+        "def build():\n    return None",
+        bounds=Rect(0.0, 0.0, 540.0, 160.0),
+        language="py",
+        syntax_colors={"keyword": custom_keyword},
+    )
+    keyword_nodes = [
+        node for node in _syntax_nodes(editor) if node.key.endswith(":keyword")
+    ]
+    assert keyword_nodes
+    assert all(node.fill == custom_keyword for node in keyword_nodes)
+    assert editor.language == "python"
+
+    editor.syntax_highlighting = False
+    assert not _syntax_nodes(editor)
+    editor.syntax_highlighting = True
+    editor.language = "json"
+    editor.value = '{"ok": false}'
+    assert any(node.text == "false" for node in _syntax_nodes(editor))
+
+
+def test_syntax_highlighting_is_viewport_bounded_for_large_python_document() -> None:
+    document = "\n".join(
+        f"def generated_{index:05d}(): return {index}" for index in range(10_000)
+    )
+    editor = CodeEditor(
+        document,
+        bounds=Rect(0.0, 0.0, 720.0, 150.0),
+        font_size=10.0,
+        padding=6.0,
+        language="python",
+    )
+    editor.scroll_to_line(5_000)
+    scene = editor.build_scene_node()
+    syntax_nodes = [node for node in scene.walk() if ":syntax:" in node.key]
+
+    assert syntax_nodes
+    assert len(syntax_nodes) <= 64
+    assert all(
+        5_000
+        <= int(node.key.split(":syntax:", 1)[1].split(":", 1)[0])
+        <= 5_012
+        for node in syntax_nodes
+    )
+    assert len(list(scene.walk())) <= 96
+
+
+def test_incomplete_python_source_keeps_successful_highlights_without_raising() -> None:
+    editor = CodeEditor(
+        "def unfinished(\n    value = \"open",
+        bounds=Rect(0.0, 0.0, 620.0, 180.0),
+        language="python",
+    )
+    nodes = _syntax_nodes(editor)
+
+    assert any(node.text == "def" for node in nodes)
+    assert any(node.text == "unfinished" for node in nodes)
+
+
 def test_code_editor_rejects_invalid_configuration() -> None:
     bounds = Rect(0.0, 0.0, 400.0, 160.0)
 
@@ -196,3 +304,10 @@ def test_code_editor_rejects_invalid_configuration() -> None:
         assert "undo_limit" in str(exc)
     else:
         raise AssertionError("undo_limit=0 should fail")
+
+    try:
+        CodeEditor(bounds=bounds, language="javascript")
+    except ValueError as exc:
+        assert "language" in str(exc)
+    else:
+        raise AssertionError("unsupported language should fail")

@@ -1,4 +1,4 @@
-"""Professional CodeEditor demo without syntax-highlighting scope expansion."""
+"""Professional CodeEditor demo with retained Python syntax highlighting."""
 
 from __future__ import annotations
 
@@ -19,13 +19,16 @@ def build_app() -> App:
         source,
         bounds=Rect(24.0, 24.0, 880.0, 520.0),
         accessible_name="SwirUI source editor",
+        language="python",
     )
     editor.scroll_to_line(1)
     scene = editor.build_scene_node()
+    syntax_nodes = sum(1 for node in scene.walk() if ":syntax:" in node.key)
 
     print(
         "CodeEditor "
         f"lines={editor.line_count}, visible={editor.visible_line_range}, "
+        f"syntax_nodes={syntax_nodes}, "
         f"retained_nodes={sum(1 for _ in scene.walk())}"
     )
     print(editor.accessible_value_text)
