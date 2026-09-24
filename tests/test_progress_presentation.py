@@ -38,18 +38,19 @@ def test_verified_roadmap_summary_stays_synchronized_with_canonical_docs() -> No
 
     assert (
         "68% authoritative weighted project progress — 0.8 Beta Professional Widgets "
-        "is complete at 13 / 13 groups; Media Engine is 7 / 8 groups verified."
+        "is complete at 13 / 13 groups; Media Engine is complete at 8 / 8 groups verified."
         in readme
     )
     assert "- `0.7 Alpha — Animation Engine` ✅ `12 / 12`" in readme
     assert "- `0.8 Beta — Professional Widgets` ✅ `13 / 13`" in readme
-    assert "- `Media Engine` 🚧 `7 / 8`" in readme
+    assert "- `Media Engine` ✅ `8 / 8`" in readme
     assert "**Status:** Complete ✅ — 12 / 12 groups verified" in roadmap
     assert "**Status:** Complete ✅ — 13 / 13 groups verified" in roadmap
-    assert "**Status:** In progress — 7 / 8 groups verified" in roadmap
+    assert "**Status:** Complete ✅ — 8 / 8 groups verified" in roadmap
     assert "- [x] Microphone input" in roadmap
     assert "- [x] Waveform" in roadmap
-    assert "- [ ] Spectrum visualizer" in roadmap
+    assert "- [x] Spectrum visualizer" in roadmap
+    assert "**Status:** In progress — 7 / 8 groups verified" not in roadmap
     assert "Rotation remains the unverified capability" not in readme
     assert "**Status:** Underway 🚧 — 11 / 12 groups verified" not in roadmap
     assert "- [ ] Fade / slide / scale / rotate" not in roadmap
