@@ -283,7 +283,9 @@ The merged chart packages are synchronized here without widening scope: PR #145 
 
 ## Advanced Application Components
 
-- [ ] Terminal
+**Status:** In progress — 1 / 11 groups verified
+
+- [x] Terminal
 - [ ] Code editor
 - [ ] Syntax highlighting
 - [ ] Autocomplete
@@ -294,6 +296,10 @@ The merged chart packages are synchronized here without widening scope: PR #145 
 - [ ] JSON / log / hex viewers
 - [ ] File explorer
 - [ ] Settings framework
+
+### Verified Advanced Application Components slice
+
+`Terminal` is credited only from merged qualification evidence: PR #178 passed exact-head CI #981 and Terminal Native Gate #2 before merge, then the resulting `main` head `7cb13b7` passed CI #982 and Terminal Native Gate #3. The retained Python-first terminal provides bounded scrollback, editable command input, history navigation, ANSI SGR foreground colors, focus/accessibility integration and viewport virtualization while leaving command execution application-owned. The authoritative weighted project percentage remains 68%; this post-0.5 checklist synchronization does not invent additional weighted points.
 
 ## 2D / 3D
 
