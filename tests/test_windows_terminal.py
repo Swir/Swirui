@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import importlib
 import sys
 
 import pytest
@@ -13,7 +12,8 @@ pytestmark = pytest.mark.skipif(sys.platform != "win32", reason="Windows-native 
 
 
 def test_terminal_compiles_retained_text_with_installed_native_core() -> None:
-    native = importlib.import_module("swirui._swirui_native")
+    import _swirui_native as native
+
     assert native.core_version()
     assert native.enabled_backends()
 
