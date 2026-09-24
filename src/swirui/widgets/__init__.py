@@ -82,6 +82,7 @@ from .split_view import SplitView
 from .streaming_charts import StreamingChartSeries, StreamingLineChart
 from .surfaces import Card, Frame, GlassCard, Panel
 from .tabs import TabItem, Tabs
+from .terminal import Terminal
 from .text import Label, Text
 from .timeline import Timeline, TimelineItem, TimelineOrientation
 from .toggle import Checkbox, RadioButton, Switch
@@ -202,6 +203,7 @@ __all__ = [
     "Switch",
     "TabItem",
     "Tabs",
+    "Terminal",
     "Text",
     "TextArea",
     "TimePicker",
