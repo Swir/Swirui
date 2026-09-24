@@ -26,6 +26,7 @@ mod postprocess;
 mod renderer;
 mod shader_validation;
 mod shape;
+mod spectrum;
 mod text;
 mod video;
 mod waveform;
@@ -245,6 +246,16 @@ fn waveform_envelope_pcm16(
         .map_err(PyValueError::new_err)
 }
 
+#[pyfunction]
+fn spectrum_magnitudes_pcm16(
+    channels: u16,
+    pcm16: Vec<u8>,
+    bin_count: usize,
+) -> PyResult<Vec<f32>> {
+    spectrum::spectrum_magnitudes_pcm16(channels, &pcm16, bin_count)
+        .map_err(PyValueError::new_err)
+}
+
 fn backend_names(backends: wgpu::Backends) -> Vec<&'static str> {
     let candidates = [
         (wgpu::Backends::DX12, "dx12"),
@@ -285,6 +296,7 @@ fn _swirui_native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(native_microphone_input_supported, module)?)?;
     module.add_function(wrap_pyfunction!(list_microphone_devices, module)?)?;
     module.add_function(wrap_pyfunction!(waveform_envelope_pcm16, module)?)?;
+    module.add_function(wrap_pyfunction!(spectrum_magnitudes_pcm16, module)?)?;
     module.add_function(wrap_pyfunction!(clear_win32_surface, module)?)?;
     module.add_function(wrap_pyfunction!(draw_rectangles_win32_surface, module)?)?;
     #[cfg(target_os = "windows")]

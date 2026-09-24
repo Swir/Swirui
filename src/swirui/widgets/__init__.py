@@ -77,6 +77,7 @@ from .specialized_charts import (
     TimelineChart,
     TimelineChartItem,
 )
+from .spectrum import SpectrumVisualizer, spectrum_magnitudes_pcm16
 from .split_view import SplitView
 from .streaming_charts import StreamingChartSeries, StreamingLineChart
 from .surfaces import Card, Frame, GlassCard, Panel
@@ -193,6 +194,7 @@ __all__ = [
     "ScrollView",
     "Sidebar",
     "Slider",
+    "SpectrumVisualizer",
     "SplitView",
     "Stack",
     "StreamingChartSeries",
@@ -222,5 +224,6 @@ __all__ = [
     "Wrap",
     "compile_component_scene",
     "mount",
+    "spectrum_magnitudes_pcm16",
     "waveform_envelope_pcm16",
 ]
