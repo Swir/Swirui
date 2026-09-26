@@ -164,6 +164,18 @@ def test_autocomplete_case_sensitive_matching_and_focus_loss() -> None:
     assert not control.suggestions_open
 
 
+def test_autocomplete_case_insensitive_matching_excludes_current_identity() -> None:
+    control = Autocomplete(
+        "swirui",
+        bounds=Rect(0.0, 0.0, 320.0, 44.0),
+        items=("SwirUI", "SwirEngine", "SWIRUI"),
+        case_sensitive=False,
+    )
+    control.emit("focus_gained")
+
+    assert control.suggestions == ()
+
+
 def test_autocomplete_rejects_invalid_configuration() -> None:
     bounds = Rect(0.0, 0.0, 320.0, 44.0)
 
