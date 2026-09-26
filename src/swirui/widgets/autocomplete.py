@@ -375,6 +375,9 @@ class Autocomplete(Input):
             return ()
 
         normalized_prefix = prefix if self._case_sensitive else prefix.casefold()
+        current_identity = (
+            self._value if self._case_sensitive else self._value.casefold()
+        )
         candidates: list[str] = list(self._items)
         if self._provider is not None:
             provided = self._provider(self._value, self._caret)
@@ -392,7 +395,7 @@ class Autocomplete(Input):
             if identity in seen:
                 continue
             seen.add(identity)
-            if normalized == self._value:
+            if identity == current_identity:
                 continue
             comparable = normalized if self._case_sensitive else normalized.casefold()
             if normalized_prefix and not comparable.startswith(normalized_prefix):
