@@ -2,12 +2,23 @@ from __future__ import annotations
 
 import pytest
 
+from swirui import Autocomplete as PublicAutocomplete
+from swirui import AutocompleteProvider as PublicAutocompleteProvider
 from swirui.platforms import NativeWindowHandle, PlatformEvent, PlatformEventKind
 from swirui.rendering.geometry import Rect
 from swirui.rendering.scene import SceneNodeKind
-from swirui.widgets.autocomplete import Autocomplete
+from swirui.widgets import Autocomplete as WidgetsAutocomplete
+from swirui.widgets import AutocompleteProvider as WidgetsAutocompleteProvider
+from swirui.widgets.autocomplete import Autocomplete, AutocompleteProvider
 
 _WINDOW = NativeWindowHandle(1)
+
+
+def test_autocomplete_public_api_exports_retained_component() -> None:
+    assert PublicAutocomplete is Autocomplete
+    assert WidgetsAutocomplete is Autocomplete
+    assert PublicAutocompleteProvider is AutocompleteProvider
+    assert WidgetsAutocompleteProvider is AutocompleteProvider
 
 
 def _event(
