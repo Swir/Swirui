@@ -5,8 +5,6 @@ on:
     paths:
       - "src/swirui/__init__.py"
       - "src/swirui/widgets/__init__.py"
-      - "src/swirui/__init__.py"
-      - "src/swirui/widgets/__init__.py"
       - "src/swirui/widgets/autocomplete.py"
       - "tests/test_autocomplete.py"
       - "tests/test_windows_autocomplete.py"
@@ -17,6 +15,8 @@ on:
     branches:
       - main
     paths:
+      - "src/swirui/__init__.py"
+      - "src/swirui/widgets/__init__.py"
       - "src/swirui/widgets/autocomplete.py"
       - "tests/test_autocomplete.py"
       - "tests/test_windows_autocomplete.py"
