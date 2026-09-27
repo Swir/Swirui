@@ -306,10 +306,13 @@ class Autocomplete(Input):
                 event.prevent_default()
                 return
 
-            if key in (_VK_RETURN, _VK_TAB) and self.selected_suggestion is not None:
-                if self._accept_selected_suggestion(input_event=event):
-                    event.prevent_default()
-                    return
+            if (
+                key in (_VK_RETURN, _VK_TAB)
+                and self.selected_suggestion is not None
+                and self._accept_selected_suggestion(input_event=event)
+            ):
+                event.prevent_default()
+                return
 
             if key == _VK_ESCAPE and self._suggestions_open:
                 self.close_suggestions()
