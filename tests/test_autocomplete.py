@@ -95,6 +95,35 @@ def test_autocomplete_keyboard_selection_accepts_suggestion() -> None:
     assert control.selected_suggestion is None
 
 
+def test_autocomplete_read_only_does_not_swallow_unaccepted_tab() -> None:
+    control = Autocomplete(
+        "sw",
+        bounds=Rect(0.0, 0.0, 360.0, 44.0),
+        items=("SwirUI", "SwirEngine"),
+        read_only=True,
+    )
+    accepted: list[str] = []
+    control.on(
+        "suggestion_accepted",
+        lambda event: accepted.append(str(event.data["suggestion"])),
+    )
+    control.emit("focus_gained")
+    control.emit(
+        "key_down",
+        event=_event(PlatformEventKind.KEY_DOWN, key_code=0x28),
+    )
+
+    tab = control.emit(
+        "key_down",
+        event=_event(PlatformEventKind.KEY_DOWN, key_code=0x09),
+    )
+
+    assert not tab.default_prevented
+    assert control.value == "sw"
+    assert accepted == []
+    assert control.suggestions_open
+
+
 def test_autocomplete_ctrl_space_forces_open_and_escape_closes() -> None:
     control = Autocomplete(
         "",
