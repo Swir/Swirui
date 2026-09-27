@@ -108,7 +108,7 @@ class Autocomplete(Input):
         if normalized == self._items:
             return
         self._items = normalized
-        self.refresh_suggestions()
+        self._refresh_if_active()
 
     @property
     def provider(self) -> AutocompleteProvider | None:
@@ -120,7 +120,7 @@ class Autocomplete(Input):
         if normalized is self._provider:
             return
         self._provider = normalized
-        self.refresh_suggestions()
+        self._refresh_if_active()
 
     @property
     def suggestions(self) -> tuple[str, ...]:
@@ -335,8 +335,12 @@ class Autocomplete(Input):
         self._sync_autocomplete_accessibility()
 
     def _on_value_changed(self, _event: Event) -> None:
-        self.refresh_suggestions()
+        self._refresh_if_active()
         self._sync_autocomplete_accessibility()
+
+    def _refresh_if_active(self) -> None:
+        if self._focused or self._suggestions_open:
+            self.refresh_suggestions()
 
     def _move_suggestion_selection(self, direction: int) -> None:
         if not self._suggestions:

@@ -205,6 +205,29 @@ def test_autocomplete_case_insensitive_matching_excludes_current_identity() -> N
     assert control.suggestions == ()
 
 
+def test_autocomplete_programmatic_changes_stay_closed_while_unfocused() -> None:
+    control = Autocomplete(
+        "sw",
+        bounds=Rect(0.0, 0.0, 320.0, 44.0),
+        items=("SwirUI", "SwirEngine"),
+    )
+    control.emit("focus_gained")
+    assert control.suggestions_open
+
+    control.emit("focus_lost")
+    assert not control.suggestions_open
+
+    control.value = "s"
+    control.items = ("SwirUI", "SwirPhotoClean")
+    control.provider = lambda value, caret: (f"{value}-{caret}",)
+
+    assert not control.suggestions_open
+
+    control.emit("focus_gained")
+    assert control.suggestions == ("SwirUI", "SwirPhotoClean", "s-1")
+    assert control.suggestions_open
+
+
 def test_autocomplete_rejects_invalid_configuration() -> None:
     bounds = Rect(0.0, 0.0, 320.0, 44.0)
 
