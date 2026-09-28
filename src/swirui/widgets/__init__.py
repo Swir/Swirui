@@ -8,6 +8,7 @@ from .advanced_charts import (
     ScatterPoint,
     ScatterSeries,
 )
+from .autocomplete import Autocomplete, AutocompleteProvider
 from .badges import Badge, Chip
 from .bar_chart import BarChart
 from .base import LayoutConstraints, Widget
@@ -97,6 +98,8 @@ __all__ = [
     "AdaptiveNavigation",
     "AdaptiveNavigationSpec",
     "AreaChart",
+    "Autocomplete",
+    "AutocompleteProvider",
     "Badge",
     "BarChart",
     "Button",
