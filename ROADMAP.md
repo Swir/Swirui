@@ -283,12 +283,12 @@ The merged chart packages are synchronized here without widening scope: PR #145 
 
 ## Advanced Application Components
 
-**Status:** In progress — 3 / 11 groups verified
+**Status:** In progress — 4 / 11 groups verified
 
 - [x] Terminal
 - [x] Code editor
 - [x] Syntax highlighting
-- [ ] Autocomplete
+- [x] Autocomplete
 - [ ] Minimap
 - [ ] Markdown viewer
 - [ ] PDF viewer
@@ -304,6 +304,8 @@ The merged chart packages are synchronized here without widening scope: PR #145 
 `Code editor` is credited only from merged qualification evidence: PR #180 passed exact-head CI #985 and Code Editor Native Gate #1 before merge, then the resulting `main` head `f8241e69` passed CI #986 and Code Editor Native Gate #2. The retained Python-first editor provides a line-number gutter, current-line presentation, tab/Shift+Tab indentation, bounded undo/redo, PageUp/PageDown navigation, routed wheel scrolling and viewport-bounded large-document rendering without claiming the separate Syntax highlighting, Autocomplete or Minimap gates.
 
 `Syntax highlighting` is credited only from merged qualification evidence: PR #182 passed exact-head CI #990, Code Editor Native Gate #4 and Syntax Highlighting Native Gate #2 before merge, then the resulting `main` head `a57151e` passed CI #991, Code Editor Native Gate #5 and Syntax Highlighting Native Gate #3. The retained editor now provides viewport-bounded Python/JSON highlighting with configurable syntax colors, multiline-string handling, cached token spans and incomplete-source tolerance without claiming the separate Autocomplete or Minimap gates.
+
+`Autocomplete` is credited only from merged qualification evidence: PR #184 passed exact-head CI #1002 and Autocomplete Native Gate #9 before merge, then the resulting `main` head `d4fa60f` passed CI #1003 and Autocomplete Native Gate #10. The retained Python-first input provides bounded static/provider suggestions, keyboard-first completion navigation and acceptance, focus-scoped popup behavior, read-only key semantics, accessibility status and retained rendering without claiming the separate Minimap gate.
 
 The authoritative weighted project percentage remains 68%; this post-0.5 checklist synchronization does not invent additional weighted points.
 
