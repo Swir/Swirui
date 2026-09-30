@@ -23,6 +23,7 @@ def test_code_editor_compiles_retained_gutter_syntax_and_text_with_native_core()
         font_family="Consolas",
         accessible_name="Windows code editor",
         language="python",
+        show_minimap=True,
     )
     editor.select(len("from swirui import App\n\n"), len("from swirui import App\n\n"))
     scene = editor.build_scene_node()
@@ -35,5 +36,8 @@ def test_code_editor_compiles_retained_gutter_syntax_and_text_with_native_core()
     assert any(node.text == "from" and node.key.endswith(":keyword") for node in syntax_nodes)
     assert any(node.text == '"Editor"' and node.key.endswith(":string") for node in syntax_nodes)
     assert any(node.key.endswith(":current-line") for node in scene.walk())
+    assert any(":minimap:bucket:" in node.key for node in scene.walk())
+    assert any(node.key.endswith(":minimap:viewport") for node in scene.walk())
     assert "caret line 3" in (editor.accessible_value_text or "")
     assert "syntax python" in (editor.accessible_value_text or "")
+    assert "minimap on" in (editor.accessible_value_text or "")
