@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from swirui.core import Event
-from swirui.platforms import PlatformEventKind
+from swirui.platforms import PlatformEventKind, PointerButton
 from swirui.rendering.geometry import Color, Rect
 from swirui.rendering.scene import SceneNode, SceneNodeKind
 
@@ -30,6 +30,12 @@ _DEFAULT_GUTTER_FOREGROUND = Color.from_hex("#718797")
 _DEFAULT_GUTTER_ACTIVE = Color.from_hex("#62E5FF")
 _DEFAULT_GUTTER_SEPARATOR = Color.from_hex("#153247")
 _DEFAULT_CURRENT_LINE = Color.from_hex("#0D2233")
+_DEFAULT_MINIMAP_BACKGROUND = Color.from_hex("#071019")
+_DEFAULT_MINIMAP_FOREGROUND = Color.from_hex("#355E73")
+_DEFAULT_MINIMAP_VIEWPORT = Color.from_hex("#1E5F78")
+_DEFAULT_MINIMAP_SEPARATOR = Color.from_hex("#163447")
+_MAX_MINIMAP_BUCKETS = 96
+_MINIMAP_ROW_HEIGHT = 2.0
 _DEFAULT_SYNTAX_COLORS = {
     "keyword": Color.from_hex("#62E5FF"),
     "definition": Color.from_hex("#82AAFF"),
@@ -134,6 +140,12 @@ class CodeEditor(TextArea):
         gutter_active_foreground: Color | None = None,
         gutter_separator: Color | None = None,
         current_line_background: Color | None = None,
+        show_minimap: bool = False,
+        minimap_width: float = 72.0,
+        minimap_background: Color | None = None,
+        minimap_foreground: Color | None = None,
+        minimap_viewport: Color | None = None,
+        minimap_separator: Color | None = None,
         gutter_padding: float = 8.0,
         min_gutter_width: float = 42.0,
         font_size: float = 15.0,
@@ -159,6 +171,16 @@ class CodeEditor(TextArea):
         )
         self._gutter_separator = gutter_separator or _DEFAULT_GUTTER_SEPARATOR
         self._current_line_background = current_line_background or _DEFAULT_CURRENT_LINE
+        self._show_minimap = bool(show_minimap)
+        self._minimap_width = self._validate_positive(minimap_width, "minimap_width")
+        self._minimap_background = minimap_background or _DEFAULT_MINIMAP_BACKGROUND
+        self._minimap_foreground = minimap_foreground or _DEFAULT_MINIMAP_FOREGROUND
+        self._minimap_viewport = minimap_viewport or _DEFAULT_MINIMAP_VIEWPORT
+        self._minimap_separator = minimap_separator or _DEFAULT_MINIMAP_SEPARATOR
+        self._minimap_dragging = False
+        self._minimap_cache_value: str | None = None
+        self._minimap_cache_bucket_count = 0
+        self._minimap_cache: tuple[tuple[float, float], ...] = ()
         self._gutter_padding = self._validate_non_negative(
             gutter_padding, "gutter_padding"
         )
@@ -184,6 +206,9 @@ class CodeEditor(TextArea):
             **kwargs,
         )
         self.on("pointer_scroll", self._on_pointer_scroll)
+        self.on("pointer_move", self._on_minimap_pointer_move)
+        self.on("pointer_up", self._on_minimap_pointer_up)
+        self.on("focus_lost", self._on_minimap_focus_lost)
         self._sync_editor_accessibility()
 
     @property
@@ -207,6 +232,35 @@ class CodeEditor(TextArea):
         self._clamp_scroll_offset()
         self._sync_editor_accessibility()
         self.invalidate(reason="line_numbers")
+
+    @property
+    def show_minimap(self) -> bool:
+        return self._show_minimap
+
+    @show_minimap.setter
+    def show_minimap(self, value: bool) -> None:
+        normalized = bool(value)
+        if normalized == self._show_minimap:
+            return
+        self._show_minimap = normalized
+        if not normalized:
+            self._minimap_dragging = False
+        self._clamp_scroll_offset()
+        self._sync_editor_accessibility()
+        self.invalidate(reason="minimap_visibility")
+
+    @property
+    def minimap_width(self) -> float:
+        return self._minimap_width
+
+    @minimap_width.setter
+    def minimap_width(self, value: float) -> None:
+        normalized = self._validate_positive(value, "minimap_width")
+        if math.isclose(normalized, self._minimap_width, abs_tol=1e-9):
+            return
+        self._minimap_width = normalized
+        self._clamp_scroll_offset()
+        self.invalidate(reason="minimap_width")
 
     @property
     def syntax_highlighting(self) -> bool:
@@ -350,6 +404,9 @@ class CodeEditor(TextArea):
                 caret_line=caret_line,
                 line_height=line_height,
             )
+
+        if self._show_minimap:
+            self._add_minimap(root)
 
         self._sync_editor_accessibility()
         return root
@@ -651,13 +708,195 @@ class CodeEditor(TextArea):
                 )
             )
 
+    def _add_minimap(self, root: SceneNode) -> None:
+        bounds = self._minimap_bounds()
+        if bounds.width <= 0.0 or bounds.height <= 0.0:
+            return
+
+        root.add(
+            SceneNode(
+                key=f"{self.key}:minimap:background",
+                kind=SceneNodeKind.RECTANGLE,
+                bounds=bounds,
+                z_index=3,
+                fill=self._minimap_background,
+                hit_testable=False,
+            )
+        )
+        root.add(
+            SceneNode(
+                key=f"{self.key}:minimap:separator",
+                kind=SceneNodeKind.RECTANGLE,
+                bounds=Rect(bounds.x, bounds.y, min(1.0, bounds.width), bounds.height),
+                z_index=4,
+                fill=self._minimap_separator,
+                hit_testable=False,
+            )
+        )
+
+        buckets = self._minimap_buckets(bounds)
+        if buckets:
+            row_height = bounds.height / len(buckets)
+            inner_x = bounds.x + min(3.0, bounds.width)
+            usable_width = max(0.0, bounds.width - 6.0)
+            for index, (indent_ratio, width_ratio) in enumerate(buckets):
+                if width_ratio <= 0.0 or usable_width <= 0.0:
+                    continue
+                x = inner_x + (usable_width * indent_ratio)
+                width = min(
+                    max(1.0, usable_width * width_ratio),
+                    max(0.0, bounds.right - x - 2.0),
+                )
+                if width <= 0.0:
+                    continue
+                root.add(
+                    SceneNode(
+                        key=f"{self.key}:minimap:bucket:{index}",
+                        kind=SceneNodeKind.RECTANGLE,
+                        bounds=Rect(
+                            x,
+                            bounds.y + (index * row_height),
+                            width,
+                            max(1.0, min(row_height, _MINIMAP_ROW_HEIGHT)),
+                        ),
+                        z_index=4,
+                        fill=self._minimap_foreground,
+                        hit_testable=False,
+                    )
+                )
+
+        capacity = self._visible_line_capacity()
+        first = self._first_visible_line_index(capacity)
+        total = max(1, self.line_count)
+        viewport_y = bounds.y + ((first / total) * bounds.height)
+        viewport_height = max(4.0, (min(capacity, total) / total) * bounds.height)
+        viewport_height = min(bounds.height, viewport_height)
+        viewport_y = min(max(bounds.y, viewport_y), max(bounds.y, bounds.bottom - viewport_height))
+        root.add(
+            SceneNode(
+                key=f"{self.key}:minimap:viewport",
+                kind=SceneNodeKind.RECTANGLE,
+                bounds=Rect(bounds.x, viewport_y, bounds.width, viewport_height),
+                z_index=5,
+                fill=self._minimap_viewport,
+                hit_testable=False,
+            )
+        )
+
+    def _minimap_buckets(self, bounds: Rect) -> tuple[tuple[float, float], ...]:
+        bucket_count = min(
+            self.line_count,
+            _MAX_MINIMAP_BUCKETS,
+            max(1, int(bounds.height / _MINIMAP_ROW_HEIGHT)),
+        )
+        if (
+            self._minimap_cache_value == self._value
+            and self._minimap_cache_bucket_count == bucket_count
+        ):
+            return self._minimap_cache
+
+        lines = self._value.split("\n")
+        total = max(1, len(lines))
+        buckets: list[tuple[float, float]] = []
+        max_columns = 120.0
+        for index in range(bucket_count):
+            start = (index * total) // bucket_count
+            stop = max(start + 1, ((index + 1) * total) // bucket_count)
+            sample = [line for line in lines[start:stop] if line.strip()]
+            if not sample:
+                buckets.append((0.0, 0.0))
+                continue
+            indent = min(len(line) - len(line.lstrip(" \t")) for line in sample)
+            longest = max(len(line.rstrip()) for line in sample)
+            indent_ratio = min(float(indent), max_columns * 0.35) / max_columns
+            width_ratio = min(max(1.0, float(longest - indent)), max_columns) / max_columns
+            buckets.append((indent_ratio, width_ratio))
+
+        self._minimap_cache_value = self._value
+        self._minimap_cache_bucket_count = bucket_count
+        self._minimap_cache = tuple(buckets)
+        return self._minimap_cache
+
+    def _minimap_bounds(self) -> Rect:
+        content = super()._content_bounds()
+        if not self._show_minimap:
+            return Rect(content.right, content.y, 0.0, content.height)
+        gutter = self._gutter_width() if self._show_line_numbers else 0.0
+        minimum_editor_width = self._estimated_char_width() * 4.0
+        available = max(0.0, content.width - gutter - minimum_editor_width)
+        width = min(self._minimap_width, available)
+        return Rect(content.right - width, content.y, width, content.height)
+
+    def _scroll_minimap_to_y(self, y: float) -> bool:
+        bounds = self._minimap_bounds()
+        if bounds.height <= 0.0:
+            return False
+        ratio = min(1.0, max(0.0, (float(y) - bounds.y) / bounds.height))
+        capacity = self._visible_line_capacity()
+        max_start = max(0, self.line_count - capacity)
+        target_start = int(round(ratio * max_start))
+        return self.scroll_to_line(target_start + 1)
+
+    def _on_pointer_down(self, event: Event) -> None:
+        native = self._platform_event(event, PlatformEventKind.POINTER_DOWN)
+        if (
+            self.enabled
+            and self._show_minimap
+            and native is not None
+            and native.button is PointerButton.LEFT
+            and native.x is not None
+            and native.y is not None
+        ):
+            bounds = self._minimap_bounds()
+            if (
+                bounds.width > 0.0
+                and bounds.x <= native.x <= bounds.right
+                and bounds.y <= native.y <= bounds.bottom
+            ):
+                self._minimap_dragging = True
+                self._scroll_minimap_to_y(native.y)
+                event.prevent_default()
+                return
+        super()._on_pointer_down(event)
+
+    def _on_minimap_pointer_move(self, event: Event) -> None:
+        native = self._platform_event(event, PlatformEventKind.POINTER_MOVE)
+        if (
+            self.enabled
+            and self._minimap_dragging
+            and native is not None
+            and native.y is not None
+        ):
+            self._scroll_minimap_to_y(native.y)
+            event.prevent_default()
+
+    def _on_minimap_pointer_up(self, event: Event) -> None:
+        native = self._platform_event(event, PlatformEventKind.POINTER_UP)
+        if (
+            native is None
+            or native.button is not PointerButton.LEFT
+            or not self._minimap_dragging
+        ):
+            return
+        if self.enabled and native.y is not None:
+            self._scroll_minimap_to_y(native.y)
+        self._minimap_dragging = False
+        event.prevent_default()
+        self.invalidate(reason="minimap_pointer_up")
+
+    def _on_minimap_focus_lost(self, _event: Event) -> None:
+        if self._minimap_dragging:
+            self._minimap_dragging = False
+            self.invalidate(reason="minimap_focus_lost")
+
     def _content_bounds(self) -> Rect:
         content = super()._content_bounds()
         gutter = self._gutter_width() if self._show_line_numbers else 0.0
+        minimap = self._minimap_bounds().width if self._show_minimap else 0.0
         return Rect(
             content.x + gutter,
             content.y,
-            max(0.0, content.width - gutter),
+            max(0.0, content.width - gutter - minimap),
             content.height,
         )
 
@@ -923,9 +1162,10 @@ class CodeEditor(TextArea):
         syntax = ""
         if self._syntax_highlighting and self._language is not None:
             syntax = f"; syntax {self._language}"
+        minimap = "; minimap on" if self._show_minimap else ""
         self.accessible_value_text = (
             f"{self.line_count} lines; caret line {caret_line + 1}, column {column + 1}; "
-            f"visible lines {visible_start}-{visible_end}{syntax}"
+            f"visible lines {visible_start}-{visible_end}{syntax}{minimap}"
         )
 
     @staticmethod
