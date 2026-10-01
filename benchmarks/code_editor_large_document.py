@@ -22,6 +22,8 @@ def main() -> None:
         font_size=13.0,
         padding=8.0,
         language="python",
+        show_minimap=True,
+        minimap_width=84.0,
     )
     editor.scroll_to_line(LINES // 2)
 
@@ -29,6 +31,7 @@ def main() -> None:
     max_nodes = 0
     max_line_number_nodes = 0
     max_syntax_nodes = 0
+    max_minimap_nodes = 0
     for _ in range(FRAMES):
         scene = editor.build_scene_node()
         nodes = list(scene.walk())
@@ -45,20 +48,30 @@ def main() -> None:
             max_syntax_nodes,
             sum(1 for node in nodes if ":syntax:" in node.key),
         )
+        max_minimap_nodes = max(
+            max_minimap_nodes,
+            sum(1 for node in nodes if ":minimap:" in node.key),
+        )
     elapsed = perf_counter() - start
 
     # Retained work must track visible rows/tokens, not the entire source file.
-    if max_nodes > 256 or max_line_number_nodes > 48 or max_syntax_nodes > 192:
+    if (
+        max_nodes > 384
+        or max_line_number_nodes > 48
+        or max_syntax_nodes > 192
+        or max_minimap_nodes > 99
+    ):
         raise RuntimeError(
-            "CodeEditor syntax virtualization regression: "
+            "CodeEditor minimap virtualization regression: "
             f"max_nodes={max_nodes}, line_numbers={max_line_number_nodes}, "
-            f"syntax_nodes={max_syntax_nodes}"
+            f"syntax_nodes={max_syntax_nodes}, minimap_nodes={max_minimap_nodes}"
         )
 
     print(
         f"CodeEditor syntax viewport: {LINES} lines, {FRAMES} scene builds, "
         f"{elapsed * 1000.0 / FRAMES:.3f} ms/frame, "
-        f"max_nodes={max_nodes}, syntax_nodes={max_syntax_nodes}"
+        f"max_nodes={max_nodes}, syntax_nodes={max_syntax_nodes}, "
+        f"minimap_nodes={max_minimap_nodes}"
     )
 
 

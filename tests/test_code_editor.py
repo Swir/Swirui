@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from swirui import AccessibilityRole, CodeEditor
-from swirui.platforms import NativeWindowHandle, PlatformEvent, PlatformEventKind
+from swirui.platforms import NativeWindowHandle, PlatformEvent, PlatformEventKind, PointerButton
 from swirui.rendering.geometry import Color, Rect
 from swirui.rendering.scene import SceneNodeKind
 
@@ -14,6 +14,9 @@ def _event(
     key_code: int | None = None,
     text: str | None = None,
     delta_y: float = 0.0,
+    x: float | None = None,
+    y: float | None = None,
+    button: PointerButton | None = None,
     shift: bool = False,
     ctrl: bool = False,
 ) -> PlatformEvent:
@@ -23,6 +26,9 @@ def _event(
         key_code=key_code,
         text=text,
         delta_y=delta_y,
+        x=x,
+        y=y,
+        button=button,
         shift=shift,
         ctrl=ctrl,
     )
@@ -286,6 +292,104 @@ def test_incomplete_python_source_keeps_successful_highlights_without_raising() 
 
     assert any(node.text == "def" for node in nodes)
     assert any(node.text == "unfinished" for node in nodes)
+
+
+def test_code_editor_minimap_is_bounded_for_large_documents_and_accessible() -> None:
+    document = "\n".join(
+        f"    value_{index:05d} = {index}" if index % 3 else ""
+        for index in range(20_000)
+    )
+    editor = CodeEditor(
+        document,
+        bounds=Rect(0.0, 0.0, 900.0, 320.0),
+        font_size=11.0,
+        padding=6.0,
+        show_minimap=True,
+        minimap_width=84.0,
+    )
+
+    editor.scroll_to_line(10_000)
+    scene = editor.build_scene_node()
+    nodes = list(scene.walk())
+    minimap_nodes = [node for node in nodes if ":minimap:" in node.key]
+    bucket_nodes = [node for node in minimap_nodes if ":minimap:bucket:" in node.key]
+
+    assert f"{editor.key}:minimap:background" in {node.key for node in minimap_nodes}
+    assert f"{editor.key}:minimap:viewport" in {node.key for node in minimap_nodes}
+    assert len(bucket_nodes) <= 96
+    assert len(minimap_nodes) <= 99
+    assert editor._content_bounds().right <= editor._minimap_bounds().x
+    assert "minimap on" in (editor.accessible_value_text or "")
+    assert editor.visible_line_range[0] == 10_000
+
+
+def test_code_editor_minimap_click_and_drag_scroll_without_moving_caret() -> None:
+    document = "\n".join(f"line {index:04d}" for index in range(1_000))
+    editor = CodeEditor(
+        document,
+        bounds=Rect(0.0, 0.0, 760.0, 240.0),
+        font_size=12.0,
+        show_minimap=True,
+    )
+    editor.select(7, 7)
+    caret_before = editor.caret_index
+    minimap = editor._minimap_bounds()
+    x = minimap.x + (minimap.width * 0.5)
+
+    down = editor.emit(
+        "pointer_down",
+        event=_event(
+            PlatformEventKind.POINTER_DOWN,
+            x=x,
+            y=minimap.y + (minimap.height * 0.80),
+            button=PointerButton.LEFT,
+        ),
+    )
+    assert down.default_prevented
+    assert editor.caret_index == caret_before
+    assert editor.first_visible_line > 700
+
+    move = editor.emit(
+        "pointer_move",
+        event=_event(
+            PlatformEventKind.POINTER_MOVE,
+            x=x,
+            y=minimap.y + (minimap.height * 0.20),
+        ),
+    )
+    assert move.default_prevented
+    assert editor.caret_index == caret_before
+    assert 100 < editor.first_visible_line < 300
+
+    up = editor.emit(
+        "pointer_up",
+        event=_event(
+            PlatformEventKind.POINTER_UP,
+            x=x,
+            y=minimap.y + (minimap.height * 0.20),
+            button=PointerButton.LEFT,
+        ),
+    )
+    assert up.default_prevented
+    assert editor.caret_index == caret_before
+
+
+def test_code_editor_minimap_can_toggle_without_changing_document_state() -> None:
+    editor = CodeEditor(
+        "alpha\nbeta\ngamma",
+        bounds=Rect(0.0, 0.0, 540.0, 180.0),
+        show_minimap=False,
+    )
+    editor.select(8, 8)
+    before = (editor.value, editor.caret_index, editor.visible_line_range)
+
+    assert all(":minimap:" not in node.key for node in editor.build_scene_node().walk())
+    editor.show_minimap = True
+    assert any(":minimap:viewport" in node.key for node in editor.build_scene_node().walk())
+    editor.show_minimap = False
+
+    assert (editor.value, editor.caret_index, editor.visible_line_range) == before
+    assert "minimap on" not in (editor.accessible_value_text or "")
 
 
 def test_code_editor_rejects_invalid_configuration() -> None:
