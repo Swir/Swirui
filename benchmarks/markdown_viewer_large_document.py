@@ -1,0 +1,36 @@
+from __future__ import annotations
+
+from time import perf_counter
+
+from swirui import MarkdownViewer
+from swirui.rendering.geometry import Rect
+
+
+def main() -> None:
+    source = "\n\n".join(
+        f"## Entry {index}\nSafe local Markdown line {index}." for index in range(20_000)
+    )
+    started = perf_counter()
+    viewer = MarkdownViewer(
+        source,
+        bounds=Rect(0.0, 0.0, 720.0, 360.0),
+        max_blocks=45_000,
+        max_chars=2_500_000,
+        max_scene_nodes=96,
+    )
+    scene = viewer.build_scene_node()
+    elapsed_ms = (perf_counter() - started) * 1000.0
+
+    assert viewer.block_count == 40_000
+    assert viewer.content_height > viewer.bounds.height
+    assert len(scene.children) <= 96
+    viewer.scroll_to(viewer.max_scroll_y)
+    assert len(viewer.build_scene_node().children) <= 96
+    print(
+        f"markdown_viewer_20k_entries elapsed_ms={elapsed_ms:.1f} "
+        f"scene_nodes={len(scene.children)} blocks={viewer.block_count}"
+    )
+
+
+if __name__ == "__main__":
+    main()
