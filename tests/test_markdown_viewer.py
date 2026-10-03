@@ -68,6 +68,7 @@ def test_markdown_viewer_supports_headings_lists_quotes_and_code() -> None:
     assert any("Heading" in text for text in texts)
     assert any("first" in text for text in texts)
     assert any("quoted" in text for text in texts)
+    assert any(node.kind is SceneNodeKind.TEXT and node.text == "quoted" and node.bounds.x > scene.bounds.x for node in scene.walk())
     assert any("print('safe text')" in text for text in texts)
     assert viewer.block_count == 5
 
