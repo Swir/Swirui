@@ -22,6 +22,7 @@ def main() -> None:
     elapsed_ms = (perf_counter() - started) * 1000.0
 
     assert viewer.block_count == 40_000
+    assert not viewer.truncated
     assert viewer.content_height > viewer.bounds.height
     assert len(scene.children) <= 96
     viewer.scroll_to(viewer.max_scroll_y)
