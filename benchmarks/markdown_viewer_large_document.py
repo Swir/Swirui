@@ -19,6 +19,7 @@ def main() -> None:
         max_scene_nodes=96,
     )
     scene = viewer.build_scene_node()
+    assert scene.clip_to_bounds
     elapsed_ms = (perf_counter() - started) * 1000.0
 
     assert viewer.block_count == 40_000
