@@ -4,6 +4,7 @@ from time import perf_counter
 
 from swirui import MarkdownViewer
 from swirui.rendering.geometry import Rect
+from swirui.rendering.scene import SceneNodeKind
 
 
 def main() -> None:
@@ -20,6 +21,7 @@ def main() -> None:
     )
     scene = viewer.build_scene_node()
     assert scene.clip_to_bounds
+    assert scene.kind is SceneNodeKind.RECTANGLE
     elapsed_ms = (perf_counter() - started) * 1000.0
 
     assert viewer.block_count == 40_000
