@@ -25,9 +25,20 @@ def main() -> None:
     assert viewer.content_height > viewer.bounds.height
     assert len(scene.children) <= 96
     viewer.scroll_to(viewer.max_scroll_y)
-    assert len(viewer.build_scene_node().children) <= 96
+    bottom_started = perf_counter()
+    bottom_scene = viewer.build_scene_node()
+    bottom_render_ms = (perf_counter() - bottom_started) * 1000.0
+    assert len(bottom_scene.children) <= 96
+
+    repeat_started = perf_counter()
+    for _ in range(50):
+        assert len(viewer.build_scene_node().children) <= 96
+    repeat_bottom_ms = (perf_counter() - repeat_started) * 1000.0
+
     print(
         f"markdown_viewer_20k_entries elapsed_ms={elapsed_ms:.1f} "
+        f"bottom_render_ms={bottom_render_ms:.3f} "
+        f"repeat_bottom_50_ms={repeat_bottom_ms:.1f} "
         f"scene_nodes={len(scene.children)} blocks={viewer.block_count}"
     )
 
