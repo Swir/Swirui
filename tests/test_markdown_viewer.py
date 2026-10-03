@@ -45,6 +45,7 @@ def test_markdown_viewer_sanitizes_remote_media_links_and_raw_markup() -> None:
     assert scene.hit_testable
     assert scene.clip_to_bounds
     assert all(node.kind is not SceneNodeKind.IMAGE for node in scene.walk())
+    assert all("<" not in (node.text or "") for node in scene.walk())
 
 
 def test_markdown_viewer_supports_headings_lists_quotes_and_code() -> None:
