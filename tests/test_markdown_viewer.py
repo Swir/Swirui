@@ -42,6 +42,7 @@ def test_markdown_viewer_sanitizes_remote_media_links_and_raw_markup() -> None:
     assert "[image: remote image]" in viewer.sanitized_text
 
     scene = viewer.build_scene_node()
+    assert scene.hit_testable
     assert scene.clip_to_bounds
     assert all(node.kind is not SceneNodeKind.IMAGE for node in scene.walk())
 
