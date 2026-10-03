@@ -28,6 +28,7 @@ def main() -> None:
     assert not viewer.truncated
     assert viewer.content_height > viewer.bounds.height
     assert len(scene.children) <= 96
+    assert len({child.key for child in scene.children}) == len(scene.children)
     viewer.scroll_to(viewer.max_scroll_y)
     bottom_started = perf_counter()
     bottom_scene = viewer.build_scene_node()
