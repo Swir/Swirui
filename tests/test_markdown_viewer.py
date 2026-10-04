@@ -259,3 +259,11 @@ def test_markdown_replacement_resets_scroll_and_accessibility_state() -> None:
     assert viewer.block_count == 2
     assert viewer.accessible_value == 0.0
     assert "2 markdown blocks" in (viewer.accessible_value_text or "")
+
+
+def test_markdown_viewer_empty_document_has_no_rendered_children() -> None:
+    viewer = MarkdownViewer("", bounds=Rect(0.0, 0.0, 320.0, 120.0))
+    scene = viewer.build_scene_node()
+
+    assert viewer.block_count == 0
+    assert not scene.children
