@@ -38,6 +38,7 @@ def main() -> None:
     repeat_started = perf_counter()
     for _ in range(50):
         assert len(viewer.build_scene_node().children) <= 96
+    assert viewer.block_count == 40_000
     repeat_bottom_ms = (perf_counter() - repeat_started) * 1000.0
 
     print(
