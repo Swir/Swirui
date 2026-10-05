@@ -144,6 +144,8 @@ class MarkdownViewer(Widget):
     @property
     def content_height(self) -> float:
         self._ensure_layout()
+        if not self._lines:
+            return 0.0
         return self._content_height + (2.0 * self._padding)
 
     @property
@@ -345,6 +347,11 @@ class MarkdownViewer(Widget):
         if self._layout_width is not None and math.isclose(
             width, self._layout_width, abs_tol=1e-9
         ):
+            return
+        if width <= 0.0:
+            self._layout_width = width
+            self._lines = ()
+            self._content_height = 0.0
             return
         lines: list[_Line] = []
         y = 0.0
