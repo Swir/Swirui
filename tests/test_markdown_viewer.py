@@ -108,9 +108,13 @@ def test_markdown_viewer_reflows_when_width_changes_and_clamps_scroll() -> None:
 
     viewer.scroll_to(10_000_000.0)
     assert viewer.scroll_y == viewer.max_scroll_y
+    previous_max_scroll_y = viewer.max_scroll_y
     viewer.bounds = Rect(0.0, 0.0, 900.0, 500.0)
     viewer.build_scene_node()
     assert 0.0 <= viewer.scroll_y <= viewer.max_scroll_y
+    assert viewer.max_scroll_y < previous_max_scroll_y
+    assert viewer.accessible_value == viewer.scroll_y
+    assert viewer.accessible_max_value == viewer.max_scroll_y
 
 
 def test_markdown_viewer_reports_input_limits_without_unbounded_state() -> None:
@@ -126,6 +130,20 @@ def test_markdown_viewer_reports_input_limits_without_unbounded_state() -> None:
     assert viewer.truncated
     assert viewer.accessible_value_text is not None
     assert "truncated" in viewer.accessible_value_text
+
+
+def test_markdown_viewer_max_chars_boundary_retains_exact_prefix() -> None:
+    source = "a" * 80
+    viewer = MarkdownViewer(
+        source,
+        bounds=Rect(0.0, 0.0, 320.0, 120.0),
+        max_chars=64,
+    )
+
+    assert viewer.markdown == source[:64]
+    assert viewer.truncated
+    assert len(viewer.markdown) == 64
+    assert viewer.block_count == 1
 
 
 def test_markdown_viewer_preserves_code_indentation_and_repeated_spaces() -> None:
@@ -209,6 +227,17 @@ def test_markdown_viewer_pointer_scroll_consumes_then_bubbles_at_boundary() -> N
     assert viewer.scroll_y == 48.0
     assert scroll.data["remaining_scroll_delta_y"] == 0.0
 
+    viewer.scroll_to(viewer.max_scroll_y - 24.0)
+    partial = viewer.emit(
+        "pointer_scroll",
+        event=_event(PlatformEventKind.POINTER_SCROLL, delta_y=72.0),
+    )
+    assert partial.default_prevented
+    assert viewer.scroll_y == viewer.max_scroll_y
+    assert viewer.accessible_value == viewer.max_scroll_y
+    assert viewer.accessible_max_value == viewer.max_scroll_y
+    assert partial.data["remaining_scroll_delta_y"] == 48.0
+
     viewer.scroll_to(viewer.max_scroll_y)
     boundary = viewer.emit(
         "pointer_scroll",
@@ -253,11 +282,15 @@ def test_markdown_replacement_resets_scroll_and_accessibility_state() -> None:
     )
     viewer.scroll_to(viewer.max_scroll_y)
     assert viewer.scroll_y > 0.0
+    previous_max_scroll_y = viewer.max_scroll_y
 
     viewer.markdown = "# Replacement\n\nshort document"
     assert viewer.scroll_y == 0.0
     assert viewer.block_count == 2
     assert viewer.accessible_value == 0.0
+    assert viewer.max_scroll_y < previous_max_scroll_y
+    assert viewer.accessible_max_value == viewer.max_scroll_y
+    assert f"scroll 0 of {viewer.max_scroll_y:.0f} DIPs" in (viewer.accessible_value_text or "")
     assert "2 markdown blocks" in (viewer.accessible_value_text or "")
 
 
@@ -267,3 +300,23 @@ def test_markdown_viewer_empty_document_has_no_rendered_children() -> None:
 
     assert viewer.block_count == 0
     assert not scene.children
+
+
+def test_markdown_viewer_scene_budget_keeps_code_and_quote_pairs_atomic() -> None:
+    fence = chr(96) * 3
+    viewer = MarkdownViewer(
+        f"{fence}text\ncode line\n{fence}\n\n> quote line\n\nplain tail",
+        bounds=Rect(0.0, 0.0, 480.0, 360.0),
+        max_scene_nodes=9,
+    )
+    scene = viewer.build_scene_node()
+    nodes = list(scene.children)
+
+    decoration_indexes = [
+        index
+        for index, node in enumerate(nodes)
+        if ":code-bg:" in node.key or ":quote:" in node.key
+    ]
+    for index in decoration_indexes:
+        assert index + 1 < len(nodes)
+        assert nodes[index + 1].kind is SceneNodeKind.TEXT
