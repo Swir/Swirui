@@ -283,14 +283,14 @@ The merged chart packages are synchronized here without widening scope: PR #145 
 
 ## Advanced Application Components
 
-**Status:** In progress — 5 / 11 groups verified
+**Status:** In progress — 6 / 11 groups verified
 
 - [x] Terminal
 - [x] Code editor
 - [x] Syntax highlighting
 - [x] Autocomplete
 - [x] Minimap
-- [ ] Markdown viewer
+- [x] Markdown viewer
 - [ ] PDF viewer
 - [ ] WebView
 - [ ] JSON / log / hex viewers
@@ -304,6 +304,8 @@ The merged chart packages are synchronized here without widening scope: PR #145 
 `Code editor` is credited only from merged qualification evidence: PR #180 passed exact-head CI #985 and Code Editor Native Gate #1 before merge, then the resulting `main` head `f8241e69` passed CI #986 and Code Editor Native Gate #2. The retained Python-first editor provides a line-number gutter, current-line presentation, tab/Shift+Tab indentation, bounded undo/redo, PageUp/PageDown navigation, routed wheel scrolling and viewport-bounded large-document rendering without claiming the separate Syntax highlighting, Autocomplete or Minimap gates.
 
 `Minimap` is credited only from merged qualification evidence: PR #186 merged from exact head `95b9017b3c6270a3aac59ef8492ed46c7513b35a` after CI #1006 and Code Editor Native Gate #14 completed successfully; the resulting `main` head `0aa0401a038de671c29c27ce32fbc8476b9c1a06` then passed CI #1007 and Code Editor Native Gate #15. This roadmap synchronization records already-merged evidence only and does not change the authoritative weighted project percentage, which remains 68%.
+
+`Markdown viewer` is credited only from merged qualification evidence: PR #188 merged from exact head `d637330de2ac4d64ae8951b6c0a5df4b32e8790f` as `8ce9ec0a416245180ce32a00050f479f4d779c38` after CI #1013 and Markdown Viewer Native Gate #4 completed successfully; the resulting `main` head then passed post-merge CI #1014 and Markdown Viewer Native Gate #5. The retained Python-first viewer keeps Markdown rendering local and sanitized, bounds scene work for large documents, preserves scroll/accessibility behavior, and eliminates empty or zero-inner-width ghost scroll ranges. This roadmap synchronization records merged evidence only and keeps the authoritative weighted project percentage at 68%.
 
 `Syntax highlighting` is credited only from merged qualification evidence: PR #182 passed exact-head CI #990, Code Editor Native Gate #4 and Syntax Highlighting Native Gate #2 before merge, then the resulting `main` head `a57151e` passed CI #991, Code Editor Native Gate #5 and Syntax Highlighting Native Gate #3. The retained editor now provides viewport-bounded Python/JSON highlighting with configurable syntax colors, multiline-string handling, cached token spans and incomplete-source tolerance without claiming the separate Autocomplete or Minimap gates.
 
