@@ -5,7 +5,6 @@ from swirui.rendering.geometry import Rect
 from swirui.rendering.scene import SceneNodeKind
 from swirui.widgets.markdown_viewer import MarkdownViewer
 
-
 _WINDOW = NativeWindowHandle(1)
 
 
@@ -300,10 +299,26 @@ def test_markdown_replacement_resets_scroll_and_accessibility_state() -> None:
 
 
 def test_markdown_viewer_empty_document_has_no_rendered_children() -> None:
-    viewer = MarkdownViewer("", bounds=Rect(0.0, 0.0, 320.0, 120.0))
+    viewer = MarkdownViewer("", bounds=Rect(0.0, 0.0, 320.0, 20.0))
     scene = viewer.build_scene_node()
 
     assert viewer.block_count == 0
+    assert viewer.max_scroll_y == 0.0
+    assert viewer.accessible_max_value == 0.0
+    assert not scene.children
+
+
+def test_markdown_viewer_zero_inner_width_has_no_scroll_or_rendered_children() -> None:
+    viewer = MarkdownViewer(
+        "visible markdown content",
+        bounds=Rect(0.0, 0.0, 20.0, 20.0),
+    )
+    scene = viewer.build_scene_node()
+
+    assert viewer.block_count == 1
+    assert viewer.content_height == 0.0
+    assert viewer.max_scroll_y == 0.0
+    assert viewer.accessible_max_value == 0.0
     assert not scene.children
 
 
