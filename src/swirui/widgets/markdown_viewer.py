@@ -195,7 +195,8 @@ class MarkdownViewer(Widget):
             y = top + line.y - self._scroll_y
             if y + line.height <= top:
                 continue
-            if y >= bottom or emitted >= self._max_scene_nodes:
+            required_nodes = 2 if line.kind in {"code", "quote"} else 1
+            if y >= bottom or emitted + required_nodes > self._max_scene_nodes:
                 break
             x = left + line.indent
             width = max(0.0, right - x)
@@ -210,8 +211,6 @@ class MarkdownViewer(Widget):
                     )
                 )
                 emitted += 1
-                if emitted >= self._max_scene_nodes:
-                    break
             elif line.kind == "quote":
                 root.add(
                     SceneNode(
@@ -223,8 +222,6 @@ class MarkdownViewer(Widget):
                     )
                 )
                 emitted += 1
-                if emitted >= self._max_scene_nodes:
-                    break
             root.add(
                 SceneNode(
                     key=f"{self.key}:text:{index}",
