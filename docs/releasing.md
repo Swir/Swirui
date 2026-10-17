@@ -1,6 +1,6 @@
 # Release qualification and publication
 
-The Windows desktop beta candidate is `0.1.0b1`, with its bounded scope defined
+The Windows desktop beta version is `0.1.0b1`, with its bounded scope defined
 in [beta.md](beta.md). A passing local build does not complete the full roadmap
 or establish a new GitHub CI result. Do not publish a stable release until its
 agreed scope and release gates are complete. The previous `0.1.0a1` is already

@@ -1,8 +1,13 @@
 # Windows desktop beta: 0.1.0b1
 
 The beta is a usable, deliberately bounded desktop release, separate from the
-full roadmap. Canonical roadmap completion remains 68%. The version is a
-candidate until its exact commit passes qualification and publication succeeds.
+full roadmap. Canonical roadmap completion remains 68%. See the
+[release page](https://github.com/Swir/Swirui/releases/tag/v0.1.0b1) for publication
+status, installation files and the actual qualification run.
+
+On supported Windows/Python, install with
+`python -m pip install --only-binary=:all: swirui==0.1.0b1`, then run
+`python -m swirui doctor` and `python -m swirui demo`.
 
 ## Supported scope
 
