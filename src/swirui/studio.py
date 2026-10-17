@@ -78,23 +78,44 @@ class PreviewPane(Panel):
     def prepare_layout(self, viewport: Rect) -> None:
         self._set_layout_bounds(viewport)
         inset = 28.0
+        origin_x, origin_y = viewport.x, viewport.y
         sidebar = min(170.0, max(130.0, viewport.width * 0.22))
-        self.selection._set_layout_bounds(Rect(inset, inset, min(170, sidebar), 28))
-        self.grid_hint._set_layout_bounds(
-            Rect(inset, max(inset, viewport.bottom - 54), sidebar - 18, 22)
+        self.selection._set_layout_bounds(
+            Rect(origin_x + inset, origin_y + inset, min(170, sidebar), 28)
         )
-        self.brand._set_layout_bounds(Rect(inset, 76, sidebar - 20, 38))
-        self.nav._set_layout_bounds(Rect(inset, 144, sidebar - 26, 180))
-        card_x = inset + sidebar
-        card_width = max(0.0, viewport.width - card_x - inset)
+        self.grid_hint._set_layout_bounds(
+            Rect(
+                origin_x + inset,
+                max(origin_y + inset, viewport.bottom - 54),
+                sidebar - 18,
+                22,
+            )
+        )
+        self.brand._set_layout_bounds(
+            Rect(origin_x + inset, origin_y + 76, sidebar - 20, 38)
+        )
+        self.nav._set_layout_bounds(
+            Rect(origin_x + inset, origin_y + 144, sidebar - 26, 180)
+        )
+        card_x = origin_x + inset + sidebar
+        card_y = origin_y + inset
+        card_width = max(0.0, viewport.right - card_x - inset)
         card_height = max(0.0, viewport.height - inset * 2)
-        self.card._set_layout_bounds(Rect(card_x, inset, card_width, card_height))
-        self.eyebrow._set_layout_bounds(Rect(card_x + 28, inset + 34, card_width - 56, 24))
-        self.headline._set_layout_bounds(Rect(card_x + 28, inset + 74, card_width - 56, 74))
-        self.subtitle._set_layout_bounds(Rect(card_x + 28, inset + 158, card_width - 56, 50))
-        self.metrics._set_layout_bounds(Rect(card_x + 28, inset + 236, card_width - 56, 104))
+        self.card._set_layout_bounds(Rect(card_x, card_y, card_width, card_height))
+        self.eyebrow._set_layout_bounds(
+            Rect(card_x + 28, card_y + 34, card_width - 56, 24)
+        )
+        self.headline._set_layout_bounds(
+            Rect(card_x + 28, card_y + 74, card_width - 56, 74)
+        )
+        self.subtitle._set_layout_bounds(
+            Rect(card_x + 28, card_y + 158, card_width - 56, 50)
+        )
+        self.metrics._set_layout_bounds(
+            Rect(card_x + 28, card_y + 236, card_width - 56, 104)
+        )
         self.action._set_layout_bounds(
-            Rect(card_x + 28, inset + 362, min(220, card_width - 56), 46)
+            Rect(card_x + 28, card_y + 362, min(220, card_width - 56), 46)
         )
 
     def select(self, key: str) -> None:
@@ -285,7 +306,7 @@ class ShowcaseEditor(Panel):
             open=False,
             accessible_name="Showcase commands",
         )
-        self.palette.on("dismissed", lambda _: self.dialog.dismiss())
+        self.palette.on("dismissed", self._dismiss_palette)
         self.dialog.on("dismissed", self._command_dismissed)
         self.add(
             self.title,
@@ -392,6 +413,9 @@ class ShowcaseEditor(Panel):
         self.dialog.show()
         if self.mounted_window:
             self.mounted_window.focus_component(self.palette)
+
+    def _dismiss_palette(self, _event: Event) -> None:
+        self.dialog.dismiss()
 
     def _command_dismissed(self, event: Event) -> None:
         if event.source is self.dialog and self.mounted_window:
