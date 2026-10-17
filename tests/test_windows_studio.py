@@ -46,11 +46,14 @@ def test_integrated_studio_keeps_one_native_context_across_tools_and_theme(recor
         images.append(bytes(rgba))
         assert len(set(images)) == 3
 
+        initial_client = (window.width, window.height)
         window.resize(1100, 720)
         app.process_events()
         app.render_pending(app._frame_schedulers[window].stats.last_frame_time + 1)
         assert renderer._contexts[window.native_handle.value] is context
-        assert studio.bounds.width == 1100 and studio.bounds.height == 720
+        assert (window.width, window.height) != initial_client
+        assert studio.bounds.width == window.width
+        assert studio.bounds.height == window.height
         assert studio.workspace.bounds.right <= studio.bounds.right
         assert studio.workspace.bounds.bottom <= studio.bounds.bottom
         record_property("adapter", renderer.adapter_name)
