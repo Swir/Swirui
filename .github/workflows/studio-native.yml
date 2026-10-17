@@ -98,11 +98,12 @@ jobs:
       - name: Check native core on Windows
         run: cargo check --manifest-path native/Cargo.toml --all-targets
 
-      - name: Build PyO3 extension
-        working-directory: native
-        run: maturin build --release --interpreter python --out ../dist-native
+      - name: Build complete native SwirUI wheel
+        run: >-
+          maturin build --release --locked --manifest-path native/Cargo.toml
+          --interpreter python --out dist-native
 
-      - name: Install PyO3 extension for checkout tests
+      - name: Install native SwirUI wheel for checkout tests
         shell: pwsh
         run: |
           $wheel = (Get-ChildItem dist-native\*.whl | Select-Object -First 1).FullName
