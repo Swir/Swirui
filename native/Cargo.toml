@@ -1,6 +1,6 @@
 [package]
 name = "swirui-native"
-version = "0.1.0-alpha.1"
+version = "0.1.0-beta.1"
 edition = "2024"
 description = "Native GPU core for the SwirUI Python framework"
 license = "MIT"

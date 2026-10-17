@@ -16,7 +16,7 @@
 ![Windows](https://img.shields.io/badge/Windows-Win32%20GPU-02050A?style=for-the-badge&logo=windows11&logoColor=62E5FF)
 
 [![CI](https://img.shields.io/github/actions/workflow/status/Swir/Swirui/ci.yml?branch=main&style=flat-square&label=CI&color=0088FF)](https://github.com/Swir/Swirui/actions/workflows/ci.yml)
-![Status](https://img.shields.io/badge/status-alpha-0088FF?style=flat-square)
+![Status](https://img.shields.io/badge/status-Windows%20beta%20candidate-0088FF?style=flat-square)
 ![Progress](https://img.shields.io/badge/project%20progress-68%25-0088FF?style=flat-square)
 
 </div>
@@ -50,7 +50,10 @@ Scope       12 / 12 layout groups verified
 
 The published 68% value preserves the verified weighting documented in `ROADMAP.md` through completed 0.5. Completed later milestone functionality is tracked by its canonical checklist until an explicit project-weighting extension is documented; later work is never double-counted or used to invent project progress.
 
-SwirUI is currently **alpha**. The first public prerelease, `v0.1.0a1`, is published on PyPI and GitHub. Public APIs may still change while later roadmap gates are developed.
+This checkout prepares the **Windows desktop beta candidate 0.1.0b1**.
+The latest published release is still the `0.1.0a1` alpha on PyPI and GitHub.
+Beta scope and release readiness are separate from full roadmap completion;
+public APIs may still change before 1.0.
 
 ## Overview
 
@@ -85,6 +88,33 @@ The completed 0.5 layout layer provides content-aware intrinsic measurement, min
 | Accessibility | Semantic roles/tree, keyboard focus routing, keyboard-only traversal, checked state, numeric value/range and dialog/alert semantics |
 
 ## Quick Start
+
+### Windows desktop beta — 0.1.0b1 candidate
+
+This beta targets **Windows x64 with 64-bit CPython 3.11–3.14**. Its native wheel
+includes the Rust/wgpu core, so users do not need Rust or a repository checkout.
+The candidate is available from the release-qualification artifacts on its PR;
+it is not on PyPI until a matching GitHub release successfully publishes it.
+
+Install the downloaded `swirui-0.1.0b1-cp311-abi3-win_amd64.whl` in a fresh environment:
+
+```powershell
+py -3.13 -m venv .venv
+.venv\Scripts\python -m pip install .\swirui-0.1.0b1-cp311-abi3-win_amd64.whl
+.venv\Scripts\python -m swirui doctor
+.venv\Scripts\python -m swirui demo
+```
+
+The packaged gallery lets you switch dark/light appearance, glass/acrylic/solid
+materials and perspective layers while preserving your edits. It resizes down
+to an 800 × 600 logical client area. `python -m swirui demo --smoke-test` opens,
+renders and closes the gallery, reporting the actual adapter/backend.
+
+After publication, the installation command will be
+`python -m pip install --only-binary=:all: swirui==0.1.0b1`.
+The portable wheel supports Python models and tooling; it does not provide
+equivalent GPU desktop rendering on Linux/macOS. See the
+[beta scope and limitations](docs/beta.md) before adopting this prerelease.
 
 ### Visual system preview (this checkout)
 

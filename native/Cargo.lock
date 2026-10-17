@@ -1868,7 +1868,7 @@ dependencies = [
 
 [[package]]
 name = "swirui-native"
-version = "0.1.0-alpha.1"
+version = "0.1.0-beta.1"
 dependencies = [
  "cpal 0.16.0",
  "glyphon",

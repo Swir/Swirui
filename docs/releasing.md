@@ -1,9 +1,10 @@
 # Release qualification and publication
 
-The repository is still alpha. A passing local build does not complete the full
-roadmap or establish a new GitHub CI result. Do not publish a stable release until
-its agreed scope and release gates are complete. The current version remains
-`0.1.0a1`; it is already published and must not be reused for changed files.
+The Windows desktop beta candidate is `0.1.0b1`, with its bounded scope defined
+in [beta.md](beta.md). A passing local build does not complete the full roadmap
+or establish a new GitHub CI result. Do not publish a stable release until its
+agreed scope and release gates are complete. The previous `0.1.0a1` is already
+published and must not be reused for changed files.
 
 The `publish-pypi.yml` workflow now qualifies pull requests, main pushes and
 manual runs without publishing. A **published GitHub Release** triggers publication

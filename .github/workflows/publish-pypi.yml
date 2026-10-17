@@ -106,6 +106,26 @@ jobs:
         env:
           SWIRUI_TEST_CLIPBOARD: "1"
         run: python -m pytest --junitxml=native-results.xml -o junit_family=legacy
+      - name: Verify first launch in a clean environment outside the checkout
+        shell: pwsh
+        run: |
+          $wheel = (Get-ChildItem dist-native/*.whl).FullName
+          $cleanEnv = Join-Path $env:RUNNER_TEMP "swirui-beta-clean"
+          python -m venv $cleanEnv
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $cleanPython = Join-Path $cleanEnv "Scripts/python.exe"
+          & $cleanPython -m pip install --no-deps $wheel
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $env:PYTHONPATH = $null
+          Push-Location $env:RUNNER_TEMP
+          try {
+            & $cleanPython -m swirui --version
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            & $cleanPython -m swirui doctor --json
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            & $cleanPython -m swirui demo --smoke-test
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          } finally { Pop-Location }
       - uses: actions/upload-artifact@v4
         if: always()
         with:

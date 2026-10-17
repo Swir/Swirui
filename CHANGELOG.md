@@ -2,9 +2,18 @@
 
 All notable changes to SwirUI will be documented in this file.
 
-The project uses semantic versioning where practical during pre-alpha development. Breaking API changes may occur before 1.0.
+The project uses semantic versioning where practical during development. Breaking API changes may occur before 1.0.
 
-## [Unreleased]
+## [0.1.0b1] - Unreleased beta candidate
+
+This release targets Windows x64 desktop applications on CPython 3.11–3.14.
+It does not complete the full roadmap or claim Linux/macOS GPU support.
+
+- Packaged interactive `python -m swirui demo` with resizable material/theme
+  controls, editable input, preserved state and bounded perspective layers.
+- `python -m swirui doctor` reports unsupported platforms, missing/broken native
+  installation and version mismatch; the demo smoke test verifies real rendering.
+- Clean-install qualification runs the packaged CLI and demo outside the checkout.
 
 ### Added
 - Custom SurfaceStyle and ThemeSurface for inherited glass/acrylic, bounded
