@@ -1,6 +1,6 @@
 from swirui import FUTURE_LIGHT
 from swirui import __main__ as cli
-from swirui import studio as studio_module
+from swirui import studio_suite as studio_module
 from swirui.rendering import Rect
 from swirui.studio import Studio
 
