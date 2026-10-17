@@ -20,6 +20,11 @@ def test_showcase_unifies_design_code_inspector_and_console():
         assert pane(editor, "explorer").dock == "left"
         assert pane(editor, "inspector").dock == "right"
         assert pane(editor, "console").dock == "bottom"
+        assert editor.preview.bounds.x > 0
+        assert editor.preview.selection.bounds.x >= editor.preview.bounds.x
+        assert editor.preview.card.bounds.x >= editor.preview.bounds.x
+        assert editor.preview.card.bounds.right <= editor.preview.bounds.right
+        assert editor.preview.card.bounds.bottom <= editor.preview.bounds.bottom
         assert editor.hierarchy.selected_node is not None
         assert editor.hierarchy.selected_node.key == "hero"
         assert editor.preview.selected_key == "hero"
