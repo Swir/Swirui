@@ -1,5 +1,4 @@
 import sys
-import time
 
 import pytest
 
@@ -83,7 +82,10 @@ def test_color_filter_reuses_real_persistent_wgpu_pipeline() -> None:
         updated_filter = ColorFilter.hue_rotate(110.0).then(ColorFilter.saturation(1.3))
         renderer.set_color_filter(updated_filter)
         app.invalidate(window)
-        assert app.render_pending(time.monotonic() + 1.0) == 1
+        scheduler = app._frame_schedulers[window]
+        last_frame = scheduler.stats.last_frame_time
+        assert last_frame is not None
+        assert app.render_pending(last_frame + 2.0 * scheduler.frame_interval) == 1
 
         assert renderer.frames_rendered == 2
         assert renderer._contexts[native_handle.value] is first_context
@@ -92,7 +94,10 @@ def test_color_filter_reuses_real_persistent_wgpu_pipeline() -> None:
 
         renderer.set_color_filter(None)
         app.invalidate(window)
-        assert app.render_pending(time.monotonic() + 1.0) == 1
+        scheduler = app._frame_schedulers[window]
+        last_frame = scheduler.stats.last_frame_time
+        assert last_frame is not None
+        assert app.render_pending(last_frame + 2.0 * scheduler.frame_interval) == 1
         assert context.color_filter_enabled is False
         assert context.color_filter_generation == first_generation
     finally:

@@ -9,6 +9,7 @@ from swirui.rendering.effects import DropShadow
 from swirui.rendering.geometry import Color, CornerRadius, Point, Rect
 from swirui.rendering.materials import FrostedGlass
 from swirui.rendering.scene import SceneNode, SceneNodeKind
+from swirui.theme import Theme
 
 from .base import Widget
 
@@ -44,11 +45,15 @@ def _inset_radius(radius: CornerRadius, inset: float) -> CornerRadius:
 class Panel(Widget):
     """Retained visual container with optional border and child clipping."""
 
+    _default_background = _PANEL_BACKGROUND
+    _default_border = _PANEL_BORDER
+
     def __init__(
         self,
         *,
         bounds: Rect,
         key: str | None = None,
+        theme: Theme | None = None,
         background: Color | None = None,
         border_color: Color | None = None,
         border_width: float = 0.0,
@@ -59,8 +64,12 @@ class Panel(Widget):
         accessible_name: str | None = None,
         accessible_description: str | None = None,
     ) -> None:
-        self._background = background or _PANEL_BACKGROUND
-        self._border_color = border_color or _PANEL_BORDER
+        self._background = background or (
+            theme.surface_color("surface") if theme else self._default_background
+        )
+        self._border_color = border_color or (
+            theme.surface_color("border") if theme else self._default_border
+        )
         self._border_width = self._validate_non_negative(border_width, "border_width")
         radius = self._validate_non_negative(corner_radius, "corner_radius")
         self._corner_radius = CornerRadius.uniform(radius)
@@ -74,6 +83,14 @@ class Panel(Widget):
             accessible_name=accessible_name,
             accessible_description=accessible_description,
         )
+        self._bind_theme(
+            theme,
+            {
+                "_background": ("surface", "surface", self._default_background),
+                "_border_color": ("surface", "border", self._default_border),
+            },
+            {"_background": background, "_border_color": border_color},
+        )
 
     @property
     def background(self) -> Color:
@@ -81,6 +98,7 @@ class Panel(Widget):
 
     @background.setter
     def background(self, value: Color) -> None:
+        self._theme_overrides["_background"] = value
         if value == self._background:
             return
         self._background = value
@@ -92,6 +110,7 @@ class Panel(Widget):
 
     @border_color.setter
     def border_color(self, value: Color) -> None:
+        self._theme_overrides["_border_color"] = value
         if value == self._border_color:
             return
         self._border_color = value
@@ -167,6 +186,7 @@ class Frame(Panel):
         *,
         bounds: Rect,
         key: str | None = None,
+        theme: Theme | None = None,
         border_color: Color | None = None,
         border_width: float = 1.0,
         corner_radius: float = 8.0,
@@ -179,6 +199,7 @@ class Frame(Panel):
         super().__init__(
             bounds=bounds,
             key=key,
+            theme=theme,
             background=_TRANSPARENT,
             border_color=border_color,
             border_width=border_width,
@@ -194,11 +215,15 @@ class Frame(Panel):
 class Card(Panel):
     """Elevated retained content card built from the verified shadow/rectangle path."""
 
+    _default_background = _CARD_BACKGROUND
+    _default_border = _CARD_BORDER
+
     def __init__(
         self,
         *,
         bounds: Rect,
         key: str | None = None,
+        theme: Theme | None = None,
         background: Color | None = None,
         border_color: Color | None = None,
         border_width: float = 1.0,
@@ -213,8 +238,9 @@ class Card(Panel):
         super().__init__(
             bounds=bounds,
             key=key,
-            background=background or _CARD_BACKGROUND,
-            border_color=border_color or _CARD_BORDER,
+            theme=theme,
+            background=background,
+            border_color=border_color,
             border_width=border_width,
             corner_radius=corner_radius,
             clip_to_bounds=False,
@@ -258,12 +284,14 @@ class GlassCard(Widget):
         *,
         bounds: Rect,
         key: str | None = None,
+        theme: Theme | None = None,
         material: FrostedGlass | None = None,
         opacity: float = 1.0,
         z_index: int = 0,
         accessible_name: str | None = None,
         accessible_description: str | None = None,
     ) -> None:
+        self._authored_material = material
         self._material = material or FrostedGlass()
         super().__init__(
             bounds=bounds,
@@ -275,6 +303,26 @@ class GlassCard(Widget):
             accessible_name=accessible_name,
             accessible_description=accessible_description,
         )
+        self._bind_theme(theme, {})
+        self._resolve_material(self.effective_theme)
+
+    def on_theme_changed(self, previous: Theme | None, current: Theme | None) -> None:
+        super().on_theme_changed(previous, current)
+        self._resolve_material(current)
+
+    def _resolve_material(self, theme: Theme | None) -> None:
+        if self._authored_material is not None:
+            self._material = self._authored_material
+        elif theme is None:
+            self._material = FrostedGlass()
+        else:
+            tint = theme.surface_color("surface")
+            border = theme.surface_color("border")
+            self._material = FrostedGlass(
+                tint=Color(tint.r, tint.g, tint.b, tint.a * 0.66),
+                border_color=Color(border.r, border.g, border.b, border.a * 0.6),
+                corner_radius=CornerRadius.uniform(theme.control_radius),
+            )
 
     @property
     def material(self) -> FrostedGlass:
@@ -282,6 +330,7 @@ class GlassCard(Widget):
 
     @material.setter
     def material(self, value: FrostedGlass) -> None:
+        self._authored_material = value
         if value == self._material:
             return
         self._material = value

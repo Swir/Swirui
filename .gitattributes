@@ -1,0 +1,2 @@
+# Match Python sources byte-for-byte in Linux portable and Windows native wheels.
+* text=auto eol=lf

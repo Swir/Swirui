@@ -146,9 +146,11 @@ def test_textarea_accepts_newlines_scrolls_to_caret_and_renders_selection() -> N
     window.focus_component(area)
 
     assert window.scene is not None
-    focused_text = _node(window.scene, "notes:text")
-    assert "four" in (focused_text.text or "")
-    assert "one" not in (focused_text.text or "")
+    focused_text = "\n".join(
+        node.text or "" for node in window.scene.walk() if node.key.startswith("notes:text:")
+    )
+    assert "four" in focused_text
+    assert "one" not in focused_text
 
     area.select(4, 7)
     assert window.scene is not None
@@ -161,7 +163,7 @@ def test_textarea_accepts_newlines_scrolls_to_caret_and_renders_selection() -> N
     _send(window, PlatformEventKind.TEXT_INPUT, text="\nfive")
     assert area.value.endswith("four\nfive")
     assert window.scene is not None
-    assert "five" in (_node(window.scene, "notes:text").text or "")
+    assert any(node.text == "five" for node in window.scene.walk())
 
     _send(window, PlatformEventKind.KEY_DOWN, key_code=0x26)
     assert area.caret_index < len(area.value)

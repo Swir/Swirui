@@ -10,6 +10,7 @@ from swirui.core import AccessibilityRole, Event
 from swirui.platforms import PlatformEvent, PlatformEventKind, PointerButton
 from swirui.rendering.geometry import Color, CornerRadius, Rect
 from swirui.rendering.scene import SceneNode, SceneNodeKind
+from swirui.theme import Theme
 
 from .base import Widget
 
@@ -79,12 +80,13 @@ class DataGrid(Widget):
         *,
         bounds: Rect,
         key: str | None = None,
+        theme: Theme | None = None,
         row_height: float = 36.0,
         header_height: float = 40.0,
         cell_padding: float = 10.0,
         font_size: float = 14.0,
-        font_family: str = "Segoe UI",
-        corner_radius: float = 8.0,
+        font_family: str | None = None,
+        corner_radius: float | None = None,
         background: Color | None = None,
         header_background: Color | None = None,
         row_background: Color | None = None,
@@ -112,10 +114,12 @@ class DataGrid(Widget):
         self._header_height = self._validate_positive(header_height, "header_height")
         self._cell_padding = self._validate_non_negative(cell_padding, "cell_padding")
         self._font_size = self._validate_positive(font_size, "font_size")
-        self._font_family = str(font_family).strip()
+        self._font_family = "Segoe UI" if font_family is None else str(font_family).strip()
         if not self._font_family:
             raise ValueError("font_family must not be empty.")
-        self._corner_radius = self._validate_non_negative(corner_radius, "corner_radius")
+        self._corner_radius = self._validate_non_negative(
+            8.0 if corner_radius is None else corner_radius, "corner_radius"
+        )
         self._background = background or _DEFAULT_BACKGROUND
         self._header_background = header_background or _DEFAULT_HEADER_BACKGROUND
         self._row_background = row_background or _DEFAULT_ROW_BACKGROUND
@@ -146,6 +150,38 @@ class DataGrid(Widget):
             accessible_name=accessible_name,
             accessible_description=accessible_description,
         )
+        self._bind_theme(
+            theme,
+            {
+                "_background": ("surface", "surface", _DEFAULT_BACKGROUND),
+                "_foreground": ("text", "text", _DEFAULT_FOREGROUND),
+                "_header_background": ("surface", "raised", _DEFAULT_HEADER_BACKGROUND),
+                "_row_background": ("surface", "surface", _DEFAULT_ROW_BACKGROUND),
+                "_alternate_row_background": (
+                    "surface",
+                    "raised",
+                    _DEFAULT_ALTERNATE_ROW_BACKGROUND,
+                ),
+                "_selected_background": ("surface", "selection", _DEFAULT_SELECTED_BACKGROUND),
+                "_header_foreground": ("text", "text", _DEFAULT_HEADER_FOREGROUND),
+                "_grid_line": ("surface", "border", _DEFAULT_GRID_LINE),
+                "_font_family": ("token", "font_family", "Segoe UI"),
+                "_corner_radius": ("token", "control_radius", 8.0),
+            },
+            {
+                "_background": background,
+                "_foreground": foreground,
+                "_header_background": header_background,
+                "_row_background": row_background,
+                "_alternate_row_background": alternate_row_background,
+                "_selected_background": selected_background,
+                "_header_foreground": header_foreground,
+                "_grid_line": grid_line,
+                "_font_family": self._font_family if font_family is not None else None,
+                "_corner_radius": corner_radius,
+            },
+        )
+        self._enable_theme_focus_frame()
         self.on("pointer_down", self._on_pointer_down)
         self.on("pointer_move", self._on_pointer_move)
         self.on("pointer_up", self._on_pointer_up)
@@ -382,6 +418,7 @@ class DataGrid(Widget):
             clip_to_bounds=True,
             hit_testable=self.enabled,
         )
+        self._add_theme_focus_frame(root)
         self._append_header(root)
         self._append_visible_rows(root)
         self._append_column_separators(root)

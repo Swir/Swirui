@@ -15,6 +15,7 @@ from swirui.core import Event
 from swirui.platforms import PlatformEventKind, PointerButton
 from swirui.rendering.geometry import Color, Rect
 from swirui.rendering.scene import SceneNode, SceneNodeKind
+from swirui.theme import ColorRole, Theme
 
 from .input import TextArea
 from .scroll_events import routed_scroll_deltas, update_scroll_residual
@@ -46,6 +47,17 @@ _DEFAULT_SYNTAX_COLORS = {
     "operator": Color.from_hex("#89DDFF"),
     "literal": Color.from_hex("#FF8CCF"),
     "key": Color.from_hex("#7FDBFF"),
+}
+_SYNTAX_THEME_ROLES: dict[str, ColorRole] = {
+    "keyword": "accent",
+    "definition": "focus",
+    "string": "success",
+    "number": "warning",
+    "comment": "muted",
+    "decorator": "accent",
+    "operator": "text",
+    "literal": "accent",
+    "key": "focus",
 }
 _PYTHON_LITERALS = frozenset({"True", "False", "None", "NotImplemented", "Ellipsis"})
 _HIGHLIGHTED_OPERATORS = frozenset(
@@ -149,7 +161,7 @@ class CodeEditor(TextArea):
         gutter_padding: float = 8.0,
         min_gutter_width: float = 42.0,
         font_size: float = 15.0,
-        font_family: str = "Cascadia Mono",
+        font_family: str | None = None,
         accessible_name: str | None = "Code editor",
         accessible_description: str | None = None,
         **kwargs: Any,
@@ -161,6 +173,7 @@ class CodeEditor(TextArea):
         self._syntax_highlighting = bool(syntax_highlighting)
         self._language = self._normalize_language(language)
         self._syntax_colors = self._validate_syntax_colors(syntax_colors)
+        self._syntax_color_overrides = dict(syntax_colors or {})
         self._syntax_cache_value: str | None = None
         self._syntax_cache_language: str | None = None
         self._syntax_cache: dict[int, tuple[_SyntaxSpan, ...]] = {}
@@ -205,11 +218,47 @@ class CodeEditor(TextArea):
             accessible_description=accessible_description,
             **kwargs,
         )
+        self._bind_theme(
+            self.theme,
+            {
+                **self._theme_styles,
+                "_font_family": ("token", "monospace_family", "Cascadia Mono"),
+                "_gutter_background": ("surface", "canvas", _DEFAULT_GUTTER_BACKGROUND),
+                "_gutter_foreground": ("text", "muted", _DEFAULT_GUTTER_FOREGROUND),
+                "_gutter_active_foreground": ("text", "accent", _DEFAULT_GUTTER_ACTIVE),
+                "_gutter_separator": ("surface", "border", _DEFAULT_GUTTER_SEPARATOR),
+                "_current_line_background": ("surface", "hover", _DEFAULT_CURRENT_LINE),
+                "_minimap_background": ("surface", "canvas", _DEFAULT_MINIMAP_BACKGROUND),
+                "_minimap_foreground": ("surface", "muted", _DEFAULT_MINIMAP_FOREGROUND),
+                "_minimap_viewport": ("surface", "selection", _DEFAULT_MINIMAP_VIEWPORT),
+                "_minimap_separator": ("surface", "border", _DEFAULT_MINIMAP_SEPARATOR),
+            },
+            {
+                **self._theme_overrides,
+                "_gutter_background": gutter_background,
+                "_gutter_foreground": gutter_foreground,
+                "_gutter_active_foreground": gutter_active_foreground,
+                "_gutter_separator": gutter_separator,
+                "_current_line_background": current_line_background,
+                "_minimap_background": minimap_background,
+                "_minimap_foreground": minimap_foreground,
+                "_minimap_viewport": minimap_viewport,
+                "_minimap_separator": minimap_separator,
+            },
+        )
         self.on("pointer_scroll", self._on_pointer_scroll)
         self.on("pointer_move", self._on_minimap_pointer_move)
         self.on("pointer_up", self._on_minimap_pointer_up)
         self.on("focus_lost", self._on_minimap_focus_lost)
         self._sync_editor_accessibility()
+
+    def _apply_theme_values(self, theme: Theme | None) -> None:
+        super()._apply_theme_values(theme)
+        self._syntax_colors = (
+            {kind: theme.text_color(role) for kind, role in _SYNTAX_THEME_ROLES.items()}
+            if theme is not None else dict(_DEFAULT_SYNTAX_COLORS)
+        )
+        self._syntax_colors.update(self._syntax_color_overrides)
 
     @property
     def tab_size(self) -> int:
@@ -420,17 +469,30 @@ class CodeEditor(TextArea):
         visible_lines: int,
         line_height: float,
     ) -> None:
+        window = self.mounted_window
+        if window is not None and getattr(window._text_shaper, "supports_color_spans", False):
+            self._color_shaped_lines(root, content)
+            return
+        overlay = SceneNode(key=f"{self.key}:syntax-viewport", kind=SceneNodeKind.GROUP,
+                            bounds=content, clip_to_bounds=True, hit_testable=False, z_index=1)
+        root.add(overlay)
         syntax_lines = self._syntax_lines()
+        line_starts = self._line_starts()
         source_lines = self._value.split("\n")
         char_width = self._estimated_char_width()
-        visible_columns = max(1, int(content.width / char_width) + 2)
+        visible_columns = max(1, int((content.width + self._horizontal_offset) / char_width) + 2)
         stop = min(len(source_lines), first_line + visible_lines)
         node_count = 0
 
         for line_index in range(first_line, stop):
             line = source_lines[line_index]
             y = content.y + ((line_index - first_line) * line_height)
-            for span_index, span in enumerate(syntax_lines.get(line_index, ())):
+            ranges = (
+                _SyntaxSpan(a, b, span.kind)
+                for span in syntax_lines.get(line_index, ())
+                for a, b in self._unselected_syntax_ranges(span, line_starts[line_index])
+            )
+            for span_index, span in enumerate(ranges):
                 if node_count >= _MAX_HIGHLIGHT_NODES_PER_FRAME:
                     return
                 if span.start >= visible_columns:
@@ -441,7 +503,7 @@ class CodeEditor(TextArea):
                 text = line[span.start:span_end]
                 if not text:
                     continue
-                x = content.x + (span.start * char_width)
+                x = content.x + (span.start * char_width) - self._horizontal_offset
                 if x >= content.right:
                     continue
                 width = min(
@@ -450,7 +512,7 @@ class CodeEditor(TextArea):
                 )
                 if width <= 0.0:
                     continue
-                root.add(
+                overlay.add(
                     SceneNode(
                         key=(
                             f"{self.key}:syntax:{line_index + 1}:"
@@ -472,6 +534,49 @@ class CodeEditor(TextArea):
                     )
                 )
                 node_count += 1
+
+    def _color_shaped_lines(self, root: SceneNode, content: Rect) -> None:
+        syntax = self._syntax_lines()
+        line_starts = self._line_starts()
+        remaining = _MAX_HIGHLIGHT_NODES_PER_FRAME
+        prefix = f"{self.key}:text:"
+        for node in root.walk():
+            if node.kind is not SceneNodeKind.TEXT or not node.key.startswith(prefix):
+                continue
+            index = int(node.key[len(prefix):])
+            layout = self._multiline_layout(node.text or "")
+            visible = [(a, b) for a, b, left, right in layout.segments
+                       if node.bounds.x + right > content.x
+                       and node.bounds.x + left < content.right]
+            if not visible:
+                continue
+            first_character = min(a for a, _ in visible)
+            last_character = max(b for _, b in visible)
+            colors = []
+            for span in syntax.get(index, ()):
+                if not remaining:
+                    break
+                if span.end <= first_character or span.start >= last_character:
+                    continue
+                # Selected text uses the input foreground for readable contrast.
+                # Split color ranges, never the shaped text or glyph geometry.
+                for start, end in self._unselected_syntax_ranges(span, line_starts[index]):
+                    if not remaining:
+                        break
+                    colors.append((start, end, self._syntax_colors[span.kind]))
+                    remaining -= 1
+            node.text_spans = tuple(colors)
+
+    def _unselected_syntax_ranges(
+        self, span: _SyntaxSpan, line_start: int
+    ) -> tuple[tuple[int, int], ...]:
+        if self._theme is None or self.selection_start == self.selection_end:
+            return ((span.start, span.end),)
+        start = max(span.start, self.selection_start - line_start)
+        end = min(span.end, self.selection_end - line_start)
+        if start >= end:
+            return ((span.start, span.end),)
+        return tuple((a, b) for a, b in ((span.start, start), (end, span.end)) if a < b)
 
     def _syntax_lines(self) -> dict[int, tuple[_SyntaxSpan, ...]]:
         if (
@@ -676,13 +781,13 @@ class CodeEditor(TextArea):
             )
         )
 
-        char_width = self._estimated_char_width()
         stop = min(self.line_count, first_line + visible_lines)
         for line_index in range(first_line, stop):
             label = str(line_index + 1)
+            layout = self._multiline_layout(label)
             x = max(
                 self.bounds.x + self._gutter_padding,
-                gutter_right - self._gutter_padding - (len(label) * char_width),
+                gutter_right - self._gutter_padding - layout.width,
             )
             y = content.y + ((line_index - first_line) * line_height)
             root.add(
@@ -692,7 +797,7 @@ class CodeEditor(TextArea):
                     bounds=Rect(
                         x,
                         y,
-                        max(0.0, gutter_right - x - self._gutter_padding),
+                        layout.width,
                         min(line_height, max(0.0, content.bottom - y)),
                     ),
                     z_index=4,
@@ -728,15 +833,16 @@ class CodeEditor(TextArea):
                 key=f"{self.key}:minimap:separator",
                 kind=SceneNodeKind.RECTANGLE,
                 bounds=Rect(bounds.x, bounds.y, min(1.0, bounds.width), bounds.height),
-                z_index=4,
+                z_index=6,
                 fill=self._minimap_separator,
                 hit_testable=False,
             )
         )
 
         buckets = self._minimap_buckets(bounds)
+        document_height = min(bounds.height, self.line_count * _MINIMAP_ROW_HEIGHT)
         if buckets:
-            row_height = bounds.height / len(buckets)
+            row_height = document_height / len(buckets)
             inner_x = bounds.x + min(3.0, bounds.width)
             usable_width = max(0.0, bounds.width - 6.0)
             for index, (indent_ratio, width_ratio) in enumerate(buckets):
@@ -759,7 +865,7 @@ class CodeEditor(TextArea):
                             width,
                             max(1.0, min(row_height, _MINIMAP_ROW_HEIGHT)),
                         ),
-                        z_index=4,
+                        z_index=5,
                         fill=self._minimap_foreground,
                         hit_testable=False,
                     )
@@ -768,16 +874,19 @@ class CodeEditor(TextArea):
         capacity = self._visible_line_capacity()
         first = self._first_visible_line_index(capacity)
         total = max(1, self.line_count)
-        viewport_y = bounds.y + ((first / total) * bounds.height)
-        viewport_height = max(4.0, (min(capacity, total) / total) * bounds.height)
-        viewport_height = min(bounds.height, viewport_height)
-        viewport_y = min(max(bounds.y, viewport_y), max(bounds.y, bounds.bottom - viewport_height))
+        viewport_y = bounds.y + ((first / total) * document_height)
+        viewport_height = min(
+            document_height, max(4.0, (min(capacity, total) / total) * document_height)
+        )
+        viewport_y = min(
+            max(bounds.y, viewport_y), bounds.y + document_height - viewport_height
+        )
         root.add(
             SceneNode(
                 key=f"{self.key}:minimap:viewport",
                 kind=SceneNodeKind.RECTANGLE,
                 bounds=Rect(bounds.x, viewport_y, bounds.width, viewport_height),
-                z_index=5,
+                z_index=4,
                 fill=self._minimap_viewport,
                 hit_testable=False,
             )
@@ -829,9 +938,10 @@ class CodeEditor(TextArea):
 
     def _scroll_minimap_to_y(self, y: float) -> bool:
         bounds = self._minimap_bounds()
-        if bounds.height <= 0.0:
+        document_height = min(bounds.height, self.line_count * _MINIMAP_ROW_HEIGHT)
+        if document_height <= 0.0:
             return False
-        ratio = min(1.0, max(0.0, (float(y) - bounds.y) / bounds.height))
+        ratio = min(1.0, max(0.0, (float(y) - bounds.y) / document_height))
         capacity = self._visible_line_capacity()
         max_start = max(0, self.line_count - capacity)
         target_start = int(round(ratio * max_start))
@@ -902,7 +1012,7 @@ class CodeEditor(TextArea):
 
     def _gutter_width(self) -> float:
         digits = len(str(max(1, self.line_count)))
-        natural = (digits * self._estimated_char_width()) + (2.0 * self._gutter_padding)
+        natural = self._multiline_layout("9" * digits).width + (2.0 * self._gutter_padding)
         return max(self._min_gutter_width, natural)
 
     def _visible_line_capacity(self) -> int:
@@ -959,11 +1069,15 @@ class CodeEditor(TextArea):
         self._clamp_scroll_offset(capacity)
 
     def _move_caret(self, index: int, *, extend: bool) -> None:
+        previous_offset = self._scroll_offset
         super()._move_caret(index, extend=extend)
         self._ensure_caret_visible()
         self._sync_editor_accessibility()
+        if previous_offset != self._scroll_offset:
+            self.invalidate(reason="editor_scroll")
 
     def _replace_selection(self, text: str, *, input_event: Event) -> None:
+        previous_offset = self._scroll_offset
         before = self._capture_snapshot()
         old_value = self._value
         super()._replace_selection(text, input_event=input_event)
@@ -974,6 +1088,8 @@ class CodeEditor(TextArea):
             self._redo_stack.clear()
         self._ensure_caret_visible()
         self._sync_editor_accessibility()
+        if previous_offset != self._scroll_offset:
+            self.invalidate(reason="editor_scroll")
 
     def _on_key_down(self, event: Event) -> None:
         platform_event = self._platform_event(event, PlatformEventKind.KEY_DOWN)
@@ -1042,17 +1158,7 @@ class CodeEditor(TextArea):
         )
 
     def _move_page(self, direction: int, *, extend: bool) -> None:
-        line_starts = self._line_starts()
-        current_line = self._line_index_for_position(self._caret, line_starts)
-        column = self._caret - line_starts[current_line]
-        capacity = self._visible_line_capacity()
-        target_line = max(
-            0,
-            min(current_line + (direction * capacity), len(line_starts) - 1),
-        )
-        target_start = line_starts[target_line]
-        target_end = self._line_end(target_start)
-        self._move_caret(min(target_start + column, target_end), extend=extend)
+        self._move_vertical(direction * self._visible_line_capacity(), extend=extend)
 
     def _indent(self, event: Event) -> None:
         if self.selection_start != self.selection_end:

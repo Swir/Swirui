@@ -11,6 +11,7 @@ from swirui.core import AccessibilityNode, AccessibilityRole, Component, Event
 from swirui.platforms import PlatformEvent, PlatformEventKind, PointerButton
 from swirui.rendering.geometry import Color, CornerRadius, Rect
 from swirui.rendering.scene import SceneNode, SceneNodeKind
+from swirui.theme import Theme
 
 from .base import Widget
 
@@ -84,11 +85,12 @@ class ListView(Widget):
         *,
         bounds: Rect,
         key: str | None = None,
+        theme: Theme | None = None,
         item_height: float = 40.0,
         cell_padding: float = 10.0,
         font_size: float = 14.0,
-        font_family: str = "Segoe UI",
-        corner_radius: float = 8.0,
+        font_family: str | None = None,
+        corner_radius: float | None = None,
         background: Color | None = None,
         row_background: Color | None = None,
         alternate_row_background: Color | None = None,
@@ -109,10 +111,12 @@ class ListView(Widget):
         self._item_height = self._validate_positive(item_height, "item_height")
         self._cell_padding = self._validate_non_negative(cell_padding, "cell_padding")
         self._font_size = self._validate_positive(font_size, "font_size")
-        self._font_family = str(font_family).strip()
+        self._font_family = "Segoe UI" if font_family is None else str(font_family).strip()
         if not self._font_family:
             raise ValueError("font_family must not be empty.")
-        self._corner_radius = self._validate_non_negative(corner_radius, "corner_radius")
+        self._corner_radius = self._validate_non_negative(
+            8.0 if corner_radius is None else corner_radius, "corner_radius"
+        )
         self._background = background or _DEFAULT_BACKGROUND
         self._row_background = row_background or _DEFAULT_ROW_BACKGROUND
         self._alternate_row_background = (
@@ -137,6 +141,34 @@ class ListView(Widget):
             accessible_name=accessible_name,
             accessible_description=accessible_description,
         )
+        self._bind_theme(
+            theme,
+            {
+                "_background": ("surface", "surface", _DEFAULT_BACKGROUND),
+                "_foreground": ("text", "text", _DEFAULT_FOREGROUND),
+                "_row_background": ("surface", "surface", _DEFAULT_ROW_BACKGROUND),
+                "_alternate_row_background": (
+                    "surface",
+                    "raised",
+                    _DEFAULT_ALTERNATE_ROW_BACKGROUND,
+                ),
+                "_selected_background": ("surface", "selection", _DEFAULT_SELECTED_BACKGROUND),
+                "_secondary_foreground": ("text", "muted", _DEFAULT_SECONDARY),
+                "_font_family": ("token", "font_family", "Segoe UI"),
+                "_corner_radius": ("token", "control_radius", 8.0),
+            },
+            {
+                "_background": background,
+                "_foreground": foreground,
+                "_row_background": row_background,
+                "_alternate_row_background": alternate_row_background,
+                "_selected_background": selected_background,
+                "_secondary_foreground": secondary_foreground,
+                "_font_family": self._font_family if font_family is not None else None,
+                "_corner_radius": corner_radius,
+            },
+        )
+        self._enable_theme_focus_frame()
         self.on("pointer_down", self._on_pointer_down)
         self.on("key_down", self._on_key_down)
         self._sync_accessibility_value()
@@ -239,9 +271,7 @@ class ListView(Widget):
                 if not self._items[item_index].disabled
             }
             primary = (
-                normalized
-                if self._items[normalized].key in selected_keys
-                else self._selected_index
+                normalized if self._items[normalized].key in selected_keys else self._selected_index
             )
         elif toggle:
             selected_keys = set(self._selected_keys)
@@ -281,9 +311,7 @@ class ListView(Widget):
         if not enabled:
             return self.clear_selection()
         primary = (
-            enabled[0]
-            if primary_index is None
-            else self._normalize_required_index(primary_index)
+            enabled[0] if primary_index is None else self._normalize_required_index(primary_index)
         )
         if primary not in enabled:
             raise ValueError("primary_index must reference an enabled selected item.")
@@ -302,9 +330,7 @@ class ListView(Widget):
             return self.clear_selection()
         primary = self._selected_index
         if primary is None or self._items[primary].key not in enabled:
-            primary = next(
-                index for index, item in enumerate(self._items) if item.key in enabled
-            )
+            primary = next(index for index, item in enumerate(self._items) if item.key in enabled)
         return self._apply_selection(
             enabled,
             primary_index=primary,
@@ -349,6 +375,7 @@ class ListView(Widget):
             clip_to_bounds=True,
             hit_testable=self.enabled,
         )
+        self._add_theme_focus_frame(root)
         offset = self.scroll_offset
         for index in self.visible_item_range:
             item = self._items[index]
@@ -373,10 +400,25 @@ class ListView(Widget):
             )
             prefix = self._row_prefix(index)
             indent = self._row_indent(index)
+            secondary_width = (
+                min(
+                    max(80.0, row_bounds.width * 0.35),
+                    max(0.0, row_bounds.width - 2.0 * self._cell_padding),
+                )
+                if item.secondary
+                else 0.0
+            )
             label_bounds = Rect(
                 row_bounds.x + self._cell_padding + indent,
                 row_bounds.y,
-                max(0.0, row_bounds.width - (2.0 * self._cell_padding) - indent),
+                max(
+                    0.0,
+                    row_bounds.width
+                    - (2.0 * self._cell_padding)
+                    - indent
+                    - secondary_width
+                    - (self._cell_padding if item.secondary else 0.0),
+                ),
                 row_bounds.height,
             )
             row.add(
@@ -384,15 +426,13 @@ class ListView(Widget):
                     key=f"{self.key}:row:{index}:label",
                     bounds=label_bounds,
                     text=f"{prefix}{item.label}",
-                    color=self._foreground if not item.disabled else self._secondary_foreground,
+                    color=self._foreground
+                    if self.enabled and not item.disabled
+                    else self._secondary_foreground,
                     font_size=self._font_size,
                 )
             )
             if item.secondary:
-                secondary_width = min(
-                    max(80.0, row_bounds.width * 0.35),
-                    max(0.0, row_bounds.width - 2.0 * self._cell_padding),
-                )
                 secondary_bounds = Rect(
                     row_bounds.x + row_bounds.width - secondary_width - self._cell_padding,
                     row_bounds.y,
@@ -404,7 +444,11 @@ class ListView(Widget):
                         key=f"{self.key}:row:{index}:secondary",
                         bounds=secondary_bounds,
                         text=item.secondary,
-                        color=self._secondary_foreground,
+                        color=self._foreground
+                        if self._theme
+                        and selected
+                        and "_secondary_foreground" not in self._theme_overrides
+                        else self._secondary_foreground,
                         font_size=max(10.0, self._font_size - 1.0),
                     )
                 )
@@ -643,9 +687,7 @@ class ListView(Widget):
         origin: int,
         selected_keys: set[Hashable],
     ) -> int | None:
-        candidates = [
-            index for index, item in enumerate(self._items) if item.key in selected_keys
-        ]
+        candidates = [index for index, item in enumerate(self._items) if item.key in selected_keys]
         if not candidates:
             return None
         return min(candidates, key=lambda index: (abs(index - origin), index))
@@ -672,9 +714,7 @@ class ListView(Widget):
         seen: set[Hashable] = set()
         for item in normalized:
             if item.key in seen:
-                raise ValueError(
-                    f"ListView item keys must be unique; duplicate {item.key!r}."
-                )
+                raise ValueError(f"ListView item keys must be unique; duplicate {item.key!r}.")
             seen.add(item.key)
         return normalized
 
@@ -715,13 +755,14 @@ class TreeView(ListView):
         *,
         bounds: Rect,
         key: str | None = None,
+        theme: Theme | None = None,
         expanded_keys: Sequence[Hashable] = (),
         indent_width: float = 20.0,
         item_height: float = 40.0,
         cell_padding: float = 10.0,
         font_size: float = 14.0,
-        font_family: str = "Segoe UI",
-        corner_radius: float = 8.0,
+        font_family: str | None = None,
+        corner_radius: float | None = None,
         background: Color | None = None,
         row_background: Color | None = None,
         alternate_row_background: Color | None = None,
@@ -743,6 +784,7 @@ class TreeView(ListView):
             self._list_items(self._tree_rows),
             bounds=bounds,
             key=key,
+            theme=theme,
             item_height=item_height,
             cell_padding=cell_padding,
             font_size=font_size,

@@ -220,6 +220,7 @@ def _clone_tree(node: SceneNode, source_root: str, target_root: str) -> SceneNod
         corner_radius=node.corner_radius,
         path=node.path,
         text=node.text,
+        text_spans=node.text_spans,
         font_size=node.font_size,
         font_family=node.font_family,
         resource_id=node.resource_id,

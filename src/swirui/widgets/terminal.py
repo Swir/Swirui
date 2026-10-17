@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass
 
 from swirui.core import AccessibilityRole, Event
 from swirui.platforms import PlatformEvent, PlatformEventKind, PointerButton
 from swirui.rendering.geometry import Color, CornerRadius, Rect
 from swirui.rendering.scene import SceneNode, SceneNodeKind
+from swirui.theme import Theme
 
 from .base import Widget
 
@@ -48,10 +50,19 @@ _ANSI_COLORS = {
 }
 
 
+_ANSI_LIGHT_COLORS = {
+    code: Color.from_hex(value) for code, value in {
+        31: "#A9273D", 32: "#146F52", 33: "#805100", 34: "#3158A5",
+        35: "#7049D3", 36: "#006A78", 91: "#BA2843", 92: "#087443",
+        93: "#875600", 94: "#3852B5", 95: "#923D9E", 96: "#006B85",
+    }.items()
+}
+
+
 @dataclass(frozen=True, slots=True)
 class _TerminalSpan:
     text: str
-    color: Color
+    color: int | None
 
 
 class Terminal(Widget):
@@ -76,9 +87,11 @@ class Terminal(Widget):
         prompt_color: Color | None = None,
         caret_color: Color | None = None,
         font_size: float = 15.0,
-        font_family: str = "Cascadia Mono",
+        font_family: str | None = None,
+        theme: Theme | None = None,
+        ansi_colors: Mapping[int, Color] | None = None,
         padding: float = 10.0,
-        corner_radius: float = 7.0,
+        corner_radius: float | None = None,
         opacity: float = 1.0,
         z_index: int = 0,
         accessible_name: str | None = "Terminal",
@@ -93,11 +106,15 @@ class Terminal(Widget):
         self._prompt_color = prompt_color or _DEFAULT_PROMPT
         self._caret_color = caret_color or _DEFAULT_CARET
         self._font_size = self._validate_positive(font_size, "font_size")
-        self._font_family = self._validate_font_family(font_family)
+        self._font_family = self._validate_font_family(
+            "Cascadia Mono" if font_family is None else font_family
+        )
         self._padding = self._validate_non_negative(padding, "padding")
-        self._corner_radius = self._validate_non_negative(corner_radius, "corner_radius")
+        self._corner_radius = self._validate_non_negative(
+            7.0 if corner_radius is None else corner_radius, "corner_radius"
+        )
         self._lines: list[list[_TerminalSpan]] = [[]]
-        self._ansi_color = self._foreground
+        self._ansi_color: int | None = None
         self._ansi_pending = ""
         self._input = ""
         self._caret = 0
@@ -115,6 +132,30 @@ class Terminal(Widget):
             accessible_name=accessible_name,
             accessible_description=accessible_description,
         )
+        self._ansi_overrides = dict(ansi_colors or {})
+        for code, color in self._ansi_overrides.items():
+            if code not in _ANSI_COLORS:
+                raise ValueError(f"Unsupported ANSI foreground code: {code!r}")
+            if not isinstance(color, Color):
+                raise TypeError("ANSI foreground overrides must be Color values.")
+        self._bind_theme(
+            theme,
+            {
+                "_background": ("surface", "surface", _DEFAULT_BACKGROUND),
+                "_foreground": ("text", "text", _DEFAULT_FOREGROUND),
+                "_prompt_color": ("text", "accent", _DEFAULT_PROMPT),
+                "_caret_color": ("surface", "focus", _DEFAULT_CARET),
+                "_font_family": ("token", "monospace_family", "Cascadia Mono"),
+                "_corner_radius": ("token", "control_radius", 7.0),
+            },
+            {
+                "_background": background, "_foreground": foreground,
+                "_prompt_color": prompt_color, "_caret_color": caret_color,
+                "_font_family": self._font_family if font_family is not None else None,
+                "_corner_radius": corner_radius,
+            },
+        )
+        self._enable_theme_focus_frame()
         self.on("pointer_down", self._on_pointer_down)
         self.on("key_down", self._on_key_down)
         self.on("text_input", self._on_text_input)
@@ -208,7 +249,7 @@ class Terminal(Widget):
         """Clear terminal scrollback without shadowing ``Component.clear``."""
 
         self._lines = [[]]
-        self._ansi_color = self._foreground
+        self._ansi_color = None
         self._ansi_pending = ""
         self._sync_accessibility()
         self.invalidate(reason="terminal_clear_buffer")
@@ -247,6 +288,7 @@ class Terminal(Widget):
             clip_to_bounds=True,
             hit_testable=self.enabled,
         )
+        self._add_theme_focus_frame(root)
         content = self._content_bounds()
         if content.width <= 0.0 or content.height <= 0.0:
             return root
@@ -284,6 +326,21 @@ class Terminal(Widget):
         )
         return root
 
+    def _output_color(self, code: int | None) -> Color:
+        if code is None:
+            return self._foreground
+        if code in self._ansi_overrides:
+            return self._ansi_overrides[code]
+        if self._theme is None:
+            return _ANSI_COLORS[code]
+        if code in (30, 37, 90, 97):
+            return self._theme.text_color("muted" if code in (30, 90) else "text")
+        luminance = sum(channel * weight for channel, weight in zip(
+            (self._background.r, self._background.g, self._background.b),
+            (0.2126, 0.7152, 0.0722), strict=True
+        ))
+        return (_ANSI_LIGHT_COLORS if luminance > 0.4 else _ANSI_COLORS)[code]
+
     def _add_output_line(
         self,
         root: SceneNode,
@@ -311,7 +368,7 @@ class Terminal(Widget):
                     kind=SceneNodeKind.TEXT,
                     bounds=Rect(x, y, max(0.0, content.right - x), line_height),
                     z_index=1,
-                    fill=span.color,
+                    fill=self._output_color(span.color),
                     text=visible,
                     font_size=self._font_size,
                     font_family=self._font_family,
@@ -427,9 +484,9 @@ class Terminal(Widget):
         ]
         for code in codes:
             if code in (0, 39):
-                self._ansi_color = self._foreground
+                self._ansi_color = None
             elif code in _ANSI_COLORS:
-                self._ansi_color = _ANSI_COLORS[code]
+                self._ansi_color = code
 
     def _trim_scrollback(self) -> None:
         trailing_cursor_line = bool(len(self._lines) > 1 and not self._lines[-1])
@@ -446,6 +503,8 @@ class Terminal(Widget):
         return self._lines
 
     def _on_pointer_down(self, event: Event) -> None:
+        if event.source is not self or event.default_prevented:
+            return
         platform_event = self._platform_event(event, PlatformEventKind.POINTER_DOWN)
         if (
             self.enabled
@@ -456,6 +515,8 @@ class Terminal(Widget):
             self.invalidate(reason="terminal_pointer")
 
     def _on_key_down(self, event: Event) -> None:
+        if event.source is not self or event.default_prevented:
+            return
         platform_event = self._platform_event(event, PlatformEventKind.KEY_DOWN)
         if not self.enabled or platform_event is None or platform_event.key_code is None:
             return
@@ -491,6 +552,8 @@ class Terminal(Widget):
         event.prevent_default()
 
     def _on_text_input(self, event: Event) -> None:
+        if event.source is not self or event.default_prevented:
+            return
         if not self.enabled:
             return
         platform_event = self._platform_event(event, PlatformEventKind.TEXT_INPUT)

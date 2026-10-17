@@ -1,7 +1,6 @@
 """Rendering contracts and backend-neutral primitives."""
 
 from .affine import Affine2D
-from .affine_text_wgpu_renderer import WgpuRenderer
 from .backdrop import BackdropBlur
 from .base import NullRenderer, Renderer
 from .bloom import Bloom
@@ -22,6 +21,7 @@ from .gradients import GradientStop, LinearGradient, MeshGradient, RadialGradien
 from .lighting import AdaptiveLighting
 from .materials import Acrylic, FrostedGlass
 from .noise import Noise
+from .ordered_wgpu_renderer import WgpuRenderer
 from .reflections import Reflection
 from .scene import Scene, SceneNode, SceneNodeKind
 from .scheduler import FrameScheduler, FrameStats

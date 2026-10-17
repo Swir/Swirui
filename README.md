@@ -16,7 +16,7 @@
 ![Windows](https://img.shields.io/badge/Windows-Win32%20GPU-02050A?style=for-the-badge&logo=windows11&logoColor=62E5FF)
 
 [![CI](https://img.shields.io/github/actions/workflow/status/Swir/Swirui/ci.yml?branch=main&style=flat-square&label=CI&color=0088FF)](https://github.com/Swir/Swirui/actions/workflows/ci.yml)
-![Status](https://img.shields.io/badge/status-alpha-0088FF?style=flat-square)
+![Status](https://img.shields.io/badge/status-Windows%20beta%20candidate-0088FF?style=flat-square)
 ![Progress](https://img.shields.io/badge/project%20progress-68%25-0088FF?style=flat-square)
 
 </div>
@@ -50,7 +50,10 @@ Scope       12 / 12 layout groups verified
 
 The published 68% value preserves the verified weighting documented in `ROADMAP.md` through completed 0.5. Completed later milestone functionality is tracked by its canonical checklist until an explicit project-weighting extension is documented; later work is never double-counted or used to invent project progress.
 
-SwirUI is currently **alpha**. The first public prerelease, `v0.1.0a1`, is published on PyPI and GitHub. Public APIs may still change while later roadmap gates are developed.
+This checkout prepares the **Windows desktop beta candidate 0.1.0b1**.
+The latest published release is still the `0.1.0a1` alpha on PyPI and GitHub.
+Beta scope and release readiness are separate from full roadmap completion;
+public APIs may still change before 1.0.
 
 ## Overview
 
@@ -85,6 +88,267 @@ The completed 0.5 layout layer provides content-aware intrinsic measurement, min
 | Accessibility | Semantic roles/tree, keyboard focus routing, keyboard-only traversal, checked state, numeric value/range and dialog/alert semantics |
 
 ## Quick Start
+
+### Windows desktop beta — 0.1.0b1 candidate
+
+This beta targets **Windows x64 with 64-bit CPython 3.11–3.14**. Its native wheel
+includes the Rust/wgpu core, so users do not need Rust or a repository checkout.
+The candidate is available from the release-qualification artifacts on its PR;
+it is not on PyPI until a matching GitHub release successfully publishes it.
+
+Install the downloaded `swirui-0.1.0b1-cp311-abi3-win_amd64.whl` in a fresh environment:
+
+```powershell
+py -3.13 -m venv .venv
+.venv\Scripts\python -m pip install .\swirui-0.1.0b1-cp311-abi3-win_amd64.whl
+.venv\Scripts\python -m swirui doctor
+.venv\Scripts\python -m swirui demo
+```
+
+The packaged gallery lets you switch dark/light appearance, glass/acrylic/solid
+materials and perspective layers while preserving your edits. It resizes down
+to an 800 × 600 logical client area. `python -m swirui demo --smoke-test` opens,
+renders and closes the gallery, reporting the actual adapter/backend.
+
+After publication, the installation command will be
+`python -m pip install --only-binary=:all: swirui==0.1.0b1`.
+The portable wheel supports Python models and tooling; it does not provide
+equivalent GPU desktop rendering on Linux/macOS. See the
+[beta scope and limitations](docs/beta.md) before adopting this prerelease.
+
+### Visual system preview (this checkout)
+
+Core controls accept an explicit, immutable `Theme`. Share one theme across a
+window or use independent themes for different windows. Semantic swatches keep
+surfaces, text, focus rings and button states consistent; explicit widget color,
+font and radius arguments still take precedence.
+
+```python
+from dataclasses import replace
+from swirui import Button, ButtonVariant, Input, Palette, Theme
+from swirui.rendering import Rect
+
+theme = Theme(palette=replace(Palette(), accent="#82DEED"))
+save = Button("Save changes", bounds=Rect(24, 80, 180, 44),
+              theme=theme, variant=ButtonVariant.PRIMARY)
+name = Input(bounds=Rect(24, 24, 280, 44), placeholder="Project name", theme=theme)
+```
+
+Supported controls include buttons, text inputs, labels, checkboxes, radio
+buttons, switches, sliders, panels/cards, progress indicators, badges/chips,
+tooltips, expanders, split panes, dialogs and notifications. Components inherit the nearest
+ancestor theme unless they set their own `theme`. Assigning `None` restores
+inheritance; `effective_theme` reports the resolved value. Explicit color, font
+and radius overrides continue to win. Unthemed trees retain their legacy defaults.
+
+```python
+from swirui import FUTURE_DARK, FUTURE_LIGHT, Button, Panel
+from swirui.rendering import Rect
+
+root = Panel(bounds=Rect(0, 0, 600, 400), theme=FUTURE_DARK)
+root.add(Button("Save", bounds=Rect(24, 24, 160, 44)))
+root.theme = FUTURE_LIGHT
+```
+
+Runtime changes update the same controls in a single retained transaction;
+text, selection, focus, values and editor undo history remain intact. Children
+added or moved later resolve their new scope automatically. Custom components
+can override `on_theme_changed(previous, current)`; widget subclasses should
+call `super().on_theme_changed(...)` to retain built-in style bindings.
+Custom appearances can be shared as versioned JSON `ThemePackage` files with
+multiple variants, complete palettes and tokens. Load with `ThemePackage.load(path)`
+and assign `root.theme = package.default` or `package.themes["day"]`. The
+[theme-package guide](docs/theme-packages.md) covers authoring, validation and
+atomic saves. Try Aurora with
+`python examples/workbench_gallery.py --theme-package examples/themes/aurora.swirui-theme.json`.
+`ThemeController(window)` follows the Windows application color preference and
+supports explicit system/light/dark choices, custom theme pairs and an explicit
+fallback on unsupported backends. It preserves local scopes and editing state;
+see [system appearance](docs/system-appearance.md) and run
+`python examples/appearance_gallery.py` for a native preview.
+Connect an `AnimationController` to opt into appearance transitions. Nine built-in
+presets include Neon Blue, Neon Green, Matrix, Cyberpunk, OLED, Minimal and
+Professional alongside Future Dark/Light. Try `python examples/theme_gallery.py`;
+see [presets and motion](docs/theme-presets.md) for reduced motion and interpolation
+behavior. Linux/macOS synchronization remains unimplemented. Direct theme assignment
+continues to apply immediately.
+
+### Build your own appearance
+
+Your application can define its own palette, typography, materials and depth.
+`SurfaceStyle` adds glass/acrylic, shadow, accent glow and decorative perspective
+layers; `ThemeSurface` inherits them while its child controls remain editable.
+
+```python
+from dataclasses import replace
+from swirui import NEON_BLUE, SurfaceStyle, ThemePackage, ThemeSurface
+from swirui.rendering import Rect
+
+my_theme = replace(
+    NEON_BLUE,
+    palette=replace(NEON_BLUE.palette, accent="#85F5E3"),
+    surface_style=SurfaceStyle(
+        kind="glass", blur_radius=28, elevation=14,
+        glow_radius=20, depth_layers=3, tilt_y=-12,
+    ),
+)
+surface = ThemeSurface(bounds=Rect(40, 40, 420, 260), theme=my_theme)
+ThemePackage("My appearance", {"main": my_theme}, "main").save("my-theme.json")
+```
+
+Try `python examples/custom_theme_gallery.py` or load
+[Ocean Studio](examples/themes/ocean-studio.swirui-theme.json).
+The [custom-material guide](docs/custom-material-themes.md) covers local overrides,
+portable sharing and rendering limits. Perspective layers provide a dimensional
+UI treatment; a full 3D model viewport remains on the roadmap.
+
+### Release preparation
+
+The [release workflow](.github/workflows/publish-pypi.yml) qualifies candidate
+packages and publishes only for a matching GitHub Release after its checks pass.
+It validates versions, tests the installed Windows native wheel, checks identical
+Python sources across distributions and uses PyPI Trusted Publishing.
+See [release instructions](docs/releasing.md). These local candidate changes are
+not yet published; they do not constitute a stable release or new remote CI evidence.
+
+Notification colors use `accent`, `success`, `warning` and `error` palette roles.
+An unauthored `GlassCard` material follows the inherited surface, border and
+radius tokens; supplying or assigning a `FrostedGlass` material preserves that
+explicit material across theme changes. Transparent scroll containers propagate
+their scope without adding an opaque background. Advanced professional and media
+widgets are not all theme-aware yet. `NavigationRail`/`Sidebar`, `Tabs`,
+`ListView`/`TreeView` and the public layered `DataGrid` now follow runtime palettes,
+fonts and radius tokens, with bounded keyboard-focus outlines. Theme changes
+preserve active pages, hidden-page content, expansion, multi-selection, filters,
+sorting, scrolling and cell-edit buffers. Explicit style overrides retain priority.
+Tab headers handle arrows/Home/End only while the header owns keyboard focus;
+page controls and nested tabs keep their own navigation keys.
+`Toolbar`, `MenuBar`, `Ribbon`, `ContextMenu` and `CommandPalette` also inherit
+runtime colors, fonts and radii, with focus outlines. Keyboard navigation reveals
+overflow commands within bounded scene viewports; palette `max_visible_rows`
+limits the result viewport, not searchable/navigable results. Only visible rows
+(including partially clipped boundary rows) are compiled. Query text retains spaces
+during typing, while matching uses case-insensitive words. Command navigation
+respects child focus and prevented defaults. Popups reserve a separate shortcut
+column, and short command strips place shortcuts beside labels.
+Context menus and palettes support fractional wheel/trackpad motion, scrollbar
+track clicks and captured thumb dragging. `scroll_by(delta)` and `scroll_offset`
+use logical pixels. Scrolling preserves the active command; keyboard navigation
+reveals it again. Unconsumed wheel motion can bubble to enclosing scroll surfaces.
+The palette reuses the `Input` editing model: Left/Right, Shift selection,
+Backspace/Delete, Ctrl+A/C/X/V, `caret_index`, `selected_text` and `select()` work
+on the query. Home/End retain result navigation; Ctrl+Home/End moves to query
+boundaries and Shift+Home/End extends selection. Clipboard failures emit
+`clipboard_error` without losing selected text. Pasted line breaks/tabs become
+word separators. Theme changes preserve query, caret, selection and scroll position.
+
+After building and installing the native wheel from this checkout, run
+`python examples/swirui_studio.py` for the native visual playground. Switch
+between Future Dark and Future Light, change accent, card title, corner radius
+and glass depth, or replay the finite animation.
+`python examples/core_gallery.py` opens an interactive core-control gallery:
+adjust progress, select a chip, collapse text input, resize a split pane, explore
+status colors, focus a tooltip and open a dialog while switching modes. Both
+examples are demonstrations, not the planned visual application editor.
+Once keyboard focus enters a `Modal`/`Dialog`, Tab and Shift+Tab wrap through
+available content instead of reaching controls behind it. The application still
+chooses initial focus when opening and restores focus when dismissing; the gallery
+demonstrates both steps. Controls that consume Tab themselves retain that behavior.
+Pointer coordinates inside modal content follow its dialog-local coordinate space,
+including nested dialogs and pointer capture; the original logical window event
+remains available as `event.data["window_event"]` on routed pointer events.
+`python examples/workspace_gallery.py` demonstrates the professional controls with
+a filterable/editable sample portfolio, 2,000 virtualized assets, a retained file
+tree and synchronized sidebar/tab navigation. Ctrl+K opens a modal command palette
+with page navigation, theme switching and asset bookmarks; Enter invokes and
+Escape closes, restoring focus to the command launcher. Sample data stays local in memory.
+This interactive showcase is not the future visual application editor.
+
+`python examples/text_editing_gallery.py` opens Compose, an editable notes/code
+showcase with an idea-completion popup and live light/dark appearance switching.
+`CodeEditor` inherits its gutter, current-line, minimap and syntax colors; partial
+`syntax_colors` overrides remain fixed while other token colors follow the theme.
+Selected code uses the input foreground so syntax colors do not reduce selection
+contrast. `Theme(monospace_family="Consolas")` changes editor typography independently
+of the normal `font_family`; an explicit editor font still takes precedence.
+`Autocomplete` inherits popup surfaces, selection colors, font and radius without
+re-running its provider or changing its query, selected suggestion or input selection.
+
+`python examples/picker_gallery.py` opens Details, a synchronized calendar/date/time
+and color-picker showcase. All four controls inherit palettes, fonts, radius and
+keyboard-focus styling. Explicit `font_family` values remain fixed across theme changes.
+ColorPicker values, HSV channels and HEX are encoded sRGB; preview and track shapes
+convert to the renderer's linear RGB, preserving alpha. Checkerboards show transparency,
+and dragging a channel continues outside the control until release or loss of capture.
+
+`python examples/workbench_gallery.py` combines a docked code editor, notes, inspector
+and local command console. PropertyGrid/Inspector and DockWorkspace inherit normal
+fonts and palettes; Terminal uses `monospace_family`. Theme switches retain unfinished
+property edits, pane contents, command drafts and history. Terminal scrollback stores
+ANSI foreground identities so old output can adapt to light/dark surfaces. Its 16
+supported foreground codes can be overridden with `ansi_colors={31: Color(...)}`;
+these colors use encoded sRGB, like text. DockWorkspace itself accepts Left/Right
+and Home/End to activate panes when it has keyboard focus. The example interprets
+only `help`, `status` and `clear` in Python and never executes shell commands.
+
+The current native core preserves painter order between interleaved primitive
+types in ordinary scenes, including glass boundaries. Older native wheels and
+affine-transform scenes use the established renderer path. The diagnostic
+native context's `read_scene_rgba()` returns the offscreen RGBA scene before final
+whole-frame post-processing; it is not a desktop screenshot API.
+
+### Text editing geometry (this checkout)
+
+With the current native wgpu core, `Input`, `PasswordInput` and command queries
+use the renderer's font discovery and cosmic-text shaping for caret positions,
+selection spans and pointer placement. Long lines scroll in pixels inside a
+content clip; the complete string is preserved so scrolling does not reshape
+kerning or ligatures. Geometry is measured at the current physical font size
+and converted back to logical coordinates. Password geometry receives only
+mask characters. A control retains only its latest layout; color-only theme
+changes and moving the caret do not trigger another shaping pass.
+
+`TextArea` and `CodeEditor` also use shaped per-line carets, selection and clicks.
+Each logical line stays intact inside the content clip; long lines scroll
+horizontally to the caret instead of wrapping independently of editing geometry.
+Up/Down and code-editor PageUp/PageDown preserve the desired visual column
+across short lines. The multiline cache is bounded to 128 entries and 65,536
+source characters, while document line indexing is reused until the value changes.
+There is no soft-wrap editing mode yet.
+
+The current native core accepts `SceneNode.text_spans` as ordered, disjoint
+`(start, end, Color)` ranges using Python character indexes. Code highlighting
+colors complete shaped lines instead of drawing additional copies of tokens;
+GPU text, cached affine rasterization and effect copies preserve these colors.
+At most 4096 spans per scene node and 512 visible editor spans per frame are used.
+Older cores retain legacy editor overlays and reject explicitly supplied rich
+text nodes. Run `python examples/text_editing_gallery.py` for editable notes and code.
+
+Headless, portable and older native cores retain deterministic estimated widths.
+This is not complete IME,
+grapheme-aware keyboard navigation or bidirectional cursor-affinity support.
+The native single-line geometry API bounds each request to 1 MiB of UTF-8,
+a 1024-byte font-family name and a physical font size of at most 16384 pixels.
+
+### Text clipboard (this checkout)
+
+On Windows, `Input`, `PasswordInput`, `TextArea`, `Autocomplete` and `CodeEditor`
+handle Ctrl+C, Ctrl+X and Ctrl+V through the owning window. Copy and cut are
+disabled for password fields. Read-only controls permit copy, and a failed cut
+leaves the text and selection intact. Paste respects maximum length, preserves
+multiline indentation and participates in the code editor's undo history.
+
+Applications can call `window.get_clipboard_text()` and
+`window.set_clipboard_text(text)` directly. A missing native provider or a busy
+clipboard raises `ClipboardError`; control shortcuts report a `clipboard_error`
+event with `operation` and `error` instead of interrupting the UI loop.
+
+For headless tests, supply `Window(clipboard=MemoryClipboard())` with
+`MemoryClipboard` imported from `swirui`. This explicitly uses isolated memory,
+not the system clipboard. Native Linux/macOS providers, non-text formats and
+terminal selection exchange remain unimplemented. The opt-in Windows clipboard
+test uses `SWIRUI_TEST_CLIPBOARD=1` and replaces clipboard contents with known
+test text; it does not inspect previous clipboard contents.
 
 ### Published alpha
 

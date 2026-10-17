@@ -7,6 +7,7 @@ import math
 from swirui.core import AccessibilityRole
 from swirui.rendering.geometry import Color, CornerRadius, Path2D, Point, Rect
 from swirui.rendering.scene import SceneNode, SceneNodeKind
+from swirui.theme import Theme
 
 from .base import Widget
 
@@ -39,6 +40,10 @@ def _format_percent(progress: float) -> str:
 class _ProgressWidget(Widget):
     """Shared bounded progress state and accessibility semantics."""
 
+    _track: Color
+    _fill: Color
+    _disabled: Color
+
     def __init__(
         self,
         *,
@@ -47,6 +52,7 @@ class _ProgressWidget(Widget):
         minimum: float,
         maximum: float,
         key: str | None,
+        theme: Theme | None,
         opacity: float,
         z_index: int,
         accessible_name: str | None,
@@ -63,6 +69,15 @@ class _ProgressWidget(Widget):
             accessibility_role=AccessibilityRole.PROGRESS_BAR,
             accessible_name=accessible_name,
             accessible_description=accessible_description,
+        )
+        self._bind_theme(
+            theme,
+            {
+                "_track": ("surface", "border", _TRACK),
+                "_fill": ("surface", "accent", _FILL),
+                "_disabled": ("surface", "disabled", _DISABLED),
+            },
+            {},
         )
         self._sync_accessibility()
 
@@ -111,6 +126,7 @@ class ProgressBar(_ProgressWidget):
         minimum: float = 0.0,
         maximum: float = 100.0,
         key: str | None = None,
+        theme: Theme | None = None,
         opacity: float = 1.0,
         z_index: int = 0,
         accessible_name: str | None = None,
@@ -118,6 +134,7 @@ class ProgressBar(_ProgressWidget):
     ) -> None:
         super().__init__(
             bounds=bounds,
+            theme=theme,
             value=value,
             minimum=minimum,
             maximum=maximum,
@@ -136,7 +153,7 @@ class ProgressBar(_ProgressWidget):
             bounds=self.bounds,
             opacity=self.opacity,
             z_index=self.z_index,
-            fill=_TRACK if self.enabled else _DISABLED,
+            fill=self._track if self.enabled else self._disabled,
             corner_radius=CornerRadius.uniform(radius),
             hit_testable=False,
         )
@@ -153,7 +170,7 @@ class ProgressBar(_ProgressWidget):
                         self.bounds.height,
                     ),
                     z_index=1,
-                    fill=_FILL if self.enabled else _DISABLED,
+                    fill=self._fill if self.enabled else self._disabled,
                     corner_radius=CornerRadius.uniform(min(radius, fill_width / 2.0)),
                     hit_testable=False,
                 )
@@ -174,6 +191,7 @@ class ProgressRing(_ProgressWidget):
         thickness: float = 6.0,
         segments: int = 48,
         key: str | None = None,
+        theme: Theme | None = None,
         opacity: float = 1.0,
         z_index: int = 0,
         accessible_name: str | None = None,
@@ -188,6 +206,7 @@ class ProgressRing(_ProgressWidget):
         self._segments = int(segments)
         super().__init__(
             bounds=bounds,
+            theme=theme,
             value=value,
             minimum=minimum,
             maximum=maximum,
@@ -246,9 +265,9 @@ class ProgressRing(_ProgressWidget):
             else:
                 path = Path2D.polygon(outer_a, outer_b, Point(center_x, center_y))
             active = index < active_segments
-            color = _FILL if active and self.enabled else _TRACK
+            color = self._fill if active and self.enabled else self._track
             if not self.enabled:
-                color = _DISABLED
+                color = self._disabled
             root.add(
                 SceneNode(
                     key=f"{self.key}:segment:{index}",

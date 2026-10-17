@@ -135,19 +135,23 @@ class WgpuRenderer(_BaseAffineWgpuRenderer):
                     continue
                 text_fill = node.fill or _DEFAULT_TEXT_COLOR
                 texts.append(
-                    (
-                        node.text,
-                        self._scale(text_bounds.x, scale),
-                        self._scale(text_bounds.y, scale),
-                        self._scale(text_bounds.width, scale),
-                        self._scale(text_bounds.height, scale),
-                        self._scale(transformed_font_size, scale),
-                        text_fill.r,
-                        text_fill.g,
-                        text_fill.b,
-                        text_fill.a * effective_opacity,
-                        node.font_family,
-                        self._clip_tuple(clip, scale),
+                    self._color_text_instance(
+                        (
+                            node.text,
+                            self._scale(text_bounds.x, scale),
+                            self._scale(text_bounds.y, scale),
+                            self._scale(text_bounds.width, scale),
+                            self._scale(text_bounds.height, scale),
+                            self._scale(transformed_font_size, scale),
+                            text_fill.r,
+                            text_fill.g,
+                            text_fill.b,
+                            text_fill.a * effective_opacity,
+                            node.font_family,
+                            self._clip_tuple(clip, scale),
+                        ),
+                        node,
+                        effective_opacity,
                     )
                 )
                 continue

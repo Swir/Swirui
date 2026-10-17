@@ -6,6 +6,13 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 
+class ColorScheme(StrEnum):
+    """The operating system's preferred application color scheme."""
+
+    LIGHT = "light"
+    DARK = "dark"
+
+
 class PlatformEventKind(StrEnum):
     """Operating-system events normalized for the framework runtime."""
 
@@ -13,6 +20,7 @@ class PlatformEventKind(StrEnum):
     RESIZE = "resize"
     DPI_CHANGED = "dpi_changed"
     DISPLAY_CHANGED = "display_changed"
+    SYSTEM_APPEARANCE_CHANGED = "system_appearance_changed"
     FOCUS = "focus"
     POINTER_MOVE = "pointer_move"
     POINTER_DOWN = "pointer_down"

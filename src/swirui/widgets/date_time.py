@@ -9,6 +9,7 @@ from swirui.core import AccessibilityNode, AccessibilityRole, Component, Event
 from swirui.platforms import PlatformEvent, PlatformEventKind, PointerButton
 from swirui.rendering.geometry import Color, CornerRadius, Rect
 from swirui.rendering.scene import SceneNode, SceneNodeKind
+from swirui.theme import Theme
 
 from .base import Widget
 
@@ -100,7 +101,41 @@ def _shift_days(value: date, days: int) -> date:
         return date.max if days > 0 else date.min
 
 
-class Calendar(Widget):
+class _DateTimeWidget(Widget):
+    _background: Color
+    _surface: Color
+    _selected: Color
+    _foreground: Color
+    _muted: Color
+    _accent: Color
+    _selected_foreground: Color
+    _disabled: Color
+    _border: Color
+    _corner_radius: float
+    _font_family: str
+
+    def _bind_picker_theme(self, theme: Theme | None, font_family: str | None) -> None:
+        self._bind_theme(
+            theme,
+            {
+                "_background": ("surface", "surface", _BACKGROUND),
+                "_surface": ("surface", "raised", _SURFACE),
+                "_selected": ("surface", "selection", _SELECTED),
+                "_foreground": ("text", "text", _FOREGROUND),
+                "_muted": ("text", "muted", _MUTED),
+                "_accent": ("text", "accent", _ACCENT),
+                "_selected_foreground": ("text", "text", _ACCENT),
+                "_disabled": ("text", "disabled_text", _DISABLED),
+                "_border": ("surface", "border", _BORDER),
+                "_corner_radius": ("token", "control_radius", 8.0),
+                "_font_family": ("token", "font_family", "Segoe UI"),
+            },
+            {"_font_family": self._font_family if font_family is not None else None},
+        )
+        self._enable_theme_focus_frame()
+
+
+class Calendar(_DateTimeWidget):
     """Focusable six-week month calendar with bounded date selection."""
 
     _HEADER_HEIGHT = 42.0
@@ -116,7 +151,8 @@ class Calendar(Widget):
         max_date: date | None = None,
         first_weekday: int = 0,
         key: str | None = None,
-        font_family: str = "Segoe UI",
+        font_family: str | None = None,
+        theme: Theme | None = None,
         opacity: float = 1.0,
         z_index: int = 0,
         accessible_name: str = "Calendar",
@@ -130,7 +166,9 @@ class Calendar(Widget):
         self._selected_date = self._clamp(initial)
         month_seed = displayed_month or self._selected_date
         self._displayed_month = date(month_seed.year, month_seed.month, 1)
-        self._font_family = self._validate_family(font_family)
+        self._font_family = self._validate_family(
+            font_family if font_family is not None else "Segoe UI"
+        )
         super().__init__(
             bounds=bounds,
             key=key,
@@ -142,6 +180,7 @@ class Calendar(Widget):
             accessible_name=accessible_name,
             accessible_description=accessible_description,
         )
+        self._bind_picker_theme(theme, font_family)
         self.on("pointer_down", self._on_pointer_down)
         self.on("key_down", self._on_key_down)
         self._sync_accessibility()
@@ -233,8 +272,8 @@ class Calendar(Widget):
             bounds=self.bounds,
             opacity=self.opacity,
             z_index=self.z_index,
-            fill=_BACKGROUND,
-            corner_radius=CornerRadius.uniform(8.0),
+            fill=self._background,
+            corner_radius=CornerRadius.uniform(self._corner_radius),
             clip_to_bounds=True,
             hit_testable=self.enabled,
         )
@@ -248,7 +287,12 @@ class Calendar(Widget):
                     self.bounds.width,
                     self._HEADER_HEIGHT,
                 ),
-                fill=_SURFACE,
+                fill=self._surface,
+                corner_radius=CornerRadius(
+                    min(self._corner_radius, self._HEADER_HEIGHT, self.bounds.width / 2),
+                    min(self._corner_radius, self._HEADER_HEIGHT, self.bounds.width / 2),
+                    0, 0,
+                ),
                 z_index=1,
                 hit_testable=False,
             )
@@ -265,7 +309,7 @@ class Calendar(Widget):
                 ),
                 title,
                 15.0,
-                _FOREGROUND,
+                self._foreground,
                 self._font_family,
             )
         )
@@ -275,7 +319,7 @@ class Calendar(Widget):
                 Rect(self.bounds.x + 12.0, self.bounds.y + 10.0, 24.0, 22.0),
                 "‹",
                 20.0,
-                _ACCENT,
+                self._accent,
                 self._font_family,
             )
         )
@@ -285,7 +329,7 @@ class Calendar(Widget):
                 Rect(self.bounds.right - 36.0, self.bounds.y + 10.0, 24.0, 22.0),
                 "›",
                 20.0,
-                _ACCENT,
+                self._accent,
                 self._font_family,
             )
         )
@@ -304,7 +348,7 @@ class Calendar(Widget):
                     ),
                     weekday,
                     11.0,
-                    _MUTED,
+                    self._muted,
                     self._font_family,
                 )
             )
@@ -323,20 +367,20 @@ class Calendar(Widget):
                             max(0.0, cell.width - 6.0),
                             max(0.0, cell.height - 6.0),
                         ),
-                        fill=_SELECTED,
-                        corner_radius=CornerRadius.uniform(6.0),
+                        fill=self._selected,
+                        corner_radius=CornerRadius.uniform(max(0.0, self._corner_radius - 2.0)),
                         z_index=2,
                         hit_testable=False,
                     )
                 )
-            if not self._selectable(current):
-                color = _DISABLED
+            if not self.enabled or not self._selectable(current):
+                color = self._disabled
             elif selected:
-                color = _ACCENT
+                color = self._selected_foreground
             elif current.month != self._displayed_month.month:
-                color = _MUTED
+                color = self._muted
             else:
-                color = _FOREGROUND
+                color = self._foreground
             root.add(
                 _text(
                     f"{self.key}:cell:{index}:label",
@@ -352,6 +396,7 @@ class Calendar(Widget):
                     self._font_family,
                 )
             )
+        self._add_theme_focus_frame(root)
         return root
 
     def accessibility_snapshot(
@@ -393,6 +438,8 @@ class Calendar(Widget):
         )
 
     def _on_pointer_down(self, event: Event) -> None:
+        if event.source is not self or event.default_prevented:
+            return
         platform = _platform_event(event, PlatformEventKind.POINTER_DOWN)
         if not self._valid_pointer(platform):
             return
@@ -423,6 +470,8 @@ class Calendar(Widget):
             event.prevent_default()
 
     def _on_key_down(self, event: Event) -> None:
+        if event.source is not self or event.default_prevented:
+            return
         platform = _platform_event(event, PlatformEventKind.KEY_DOWN)
         if platform is None or not self.enabled:
             return
@@ -510,7 +559,7 @@ class Calendar(Widget):
         return normalized
 
 
-class _SegmentPicker(Widget):
+class _SegmentPicker(_DateTimeWidget):
     """Shared retained segmented-picker interaction and rendering contract."""
 
     def __init__(
@@ -520,7 +569,8 @@ class _SegmentPicker(Widget):
         segments: tuple[str, ...],
         active_segment: int,
         key: str | None,
-        font_family: str,
+        font_family: str | None,
+        theme: Theme | None,
         opacity: float,
         z_index: int,
         accessible_name: str,
@@ -528,7 +578,9 @@ class _SegmentPicker(Widget):
     ) -> None:
         self._segments = segments
         self._active_segment = active_segment
-        self._font_family = Calendar._validate_family(font_family)
+        self._font_family = Calendar._validate_family(
+            font_family if font_family is not None else "Segoe UI"
+        )
         super().__init__(
             bounds=bounds,
             key=key,
@@ -540,6 +592,7 @@ class _SegmentPicker(Widget):
             accessible_name=accessible_name,
             accessible_description=accessible_description,
         )
+        self._bind_picker_theme(theme, font_family)
         self.on("pointer_down", self._on_pointer_down)
         self.on("key_down", self._on_key_down)
 
@@ -554,8 +607,8 @@ class _SegmentPicker(Widget):
             bounds=self.bounds,
             opacity=self.opacity,
             z_index=self.z_index,
-            fill=_BACKGROUND,
-            corner_radius=CornerRadius.uniform(8.0),
+            fill=self._background,
+            corner_radius=CornerRadius.uniform(self._corner_radius),
             clip_to_bounds=True,
             hit_testable=self.enabled,
         )
@@ -580,8 +633,8 @@ class _SegmentPicker(Widget):
                             max(0.0, cell.width - 6.0),
                             max(0.0, cell.height - 6.0),
                         ),
-                        fill=_SELECTED,
-                        corner_radius=CornerRadius.uniform(6.0),
+                        fill=self._selected,
+                        corner_radius=CornerRadius.uniform(max(0.0, self._corner_radius - 2.0)),
                         z_index=2,
                         hit_testable=False,
                     )
@@ -597,7 +650,7 @@ class _SegmentPicker(Widget):
                             1.0,
                             max(0.0, cell.height - 16.0),
                         ),
-                        fill=_BORDER,
+                        fill=self._border,
                         z_index=3,
                         hit_testable=False,
                     )
@@ -613,7 +666,8 @@ class _SegmentPicker(Widget):
                     ),
                     label.upper(),
                     9.0,
-                    _MUTED,
+                    (self._disabled if not self.enabled else self._selected_foreground
+                     if index == self._active_segment else self._muted),
                     self._font_family,
                 )
             )
@@ -628,10 +682,12 @@ class _SegmentPicker(Widget):
                     ),
                     value,
                     16.0,
-                    _ACCENT if index == self._active_segment else _FOREGROUND,
+                    (self._disabled if not self.enabled else self._selected_foreground
+                     if index == self._active_segment else self._foreground),
                     self._font_family,
                 )
             )
+        self._add_theme_focus_frame(root)
         return root
 
     def accessibility_snapshot(
@@ -671,6 +727,8 @@ class _SegmentPicker(Widget):
         )
 
     def _on_pointer_down(self, event: Event) -> None:
+        if event.source is not self or event.default_prevented:
+            return
         platform = _platform_event(event, PlatformEventKind.POINTER_DOWN)
         if (
             platform is None
@@ -693,6 +751,8 @@ class _SegmentPicker(Widget):
         event.prevent_default()
 
     def _on_key_down(self, event: Event) -> None:
+        if event.source is not self or event.default_prevented:
+            return
         platform = _platform_event(event, PlatformEventKind.KEY_DOWN)
         if platform is None or not self.enabled:
             return
@@ -743,7 +803,8 @@ class DatePicker(_SegmentPicker):
         min_date: date | None = None,
         max_date: date | None = None,
         key: str | None = None,
-        font_family: str = "Segoe UI",
+        font_family: str | None = None,
+        theme: Theme | None = None,
         opacity: float = 1.0,
         z_index: int = 0,
         accessible_name: str = "Date picker",
@@ -757,6 +818,7 @@ class DatePicker(_SegmentPicker):
             active_segment=2,
             key=key,
             font_family=font_family,
+            theme=theme,
             opacity=opacity,
             z_index=z_index,
             accessible_name=accessible_name,
@@ -847,7 +909,8 @@ class TimePicker(_SegmentPicker):
         show_seconds: bool = False,
         second_step: int = 1,
         key: str | None = None,
-        font_family: str = "Segoe UI",
+        font_family: str | None = None,
+        theme: Theme | None = None,
         opacity: float = 1.0,
         z_index: int = 0,
         accessible_name: str = "Time picker",
@@ -868,6 +931,7 @@ class TimePicker(_SegmentPicker):
             active_segment=1,
             key=key,
             font_family=font_family,
+            theme=theme,
             opacity=opacity,
             z_index=z_index,
             accessible_name=accessible_name,

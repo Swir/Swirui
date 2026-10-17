@@ -24,7 +24,7 @@ from .platforms import (
     PlatformEventKind,
     create_platform_backend,
 )
-from .rendering import FrameScheduler, Renderer, create_renderer
+from .rendering import FrameScheduler, NullRenderer, Renderer, create_renderer
 from .window import Window
 
 _IDLE_POLL_SECONDS = 0.004
@@ -46,7 +46,12 @@ class App(EventEmitter):
         self.config = config or AppConfig()
         self.logger = configure_logging(debug=self.config.debug)
         self.platform_backend = platform_backend or create_platform_backend()
-        self.renderer = renderer or create_renderer(self.config)
+        if renderer is not None:
+            self.renderer = renderer
+        elif isinstance(self.platform_backend, NullPlatformBackend):
+            self.renderer = NullRenderer()
+        else:
+            self.renderer = create_renderer(self.config)
         self.windows: list[Window] = []
         self.running = False
         self.exit_code = 0

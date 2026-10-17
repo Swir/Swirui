@@ -1,16 +1,16 @@
-use crate::image::ImageInstance;
 #[cfg(target_os = "windows")]
 use crate::color_filter::{validate_color_matrix, ColorMatrixFilter};
 #[cfg(target_os = "windows")]
 use crate::custom_effect::{validate_custom_shader_parameters, CustomShaderPass};
+use crate::image::ImageInstance;
 #[cfg(target_os = "windows")]
 use crate::image::ImageSystem;
 use crate::postprocess::validate_blur_radius;
 #[cfg(target_os = "windows")]
 use crate::postprocess::{BackdropCompositor, OffscreenRenderTarget, SeparableBlur};
-use crate::shape::ShapeVertex;
 #[cfg(target_os = "windows")]
 use crate::shape::ShapeSystem;
+use crate::shape::ShapeVertex;
 use crate::text::TextInstance;
 #[cfg(target_os = "windows")]
 use crate::text::TextSystem;
@@ -98,7 +98,9 @@ impl PersistentGpuContext {
 
         let mut config = surface
             .get_default_config(&adapter, width, height)
-            .ok_or_else(|| PyRuntimeError::new_err("The selected GPU cannot configure this surface."))?;
+            .ok_or_else(|| {
+                PyRuntimeError::new_err("The selected GPU cannot configure this surface.")
+            })?;
         config.present_mode = present_mode;
         config.desired_maximum_frame_latency = maximum_frame_latency;
         surface.configure(&device, &config);
@@ -262,7 +264,8 @@ impl PersistentGpuContext {
             self.invalidate_effect_cache();
         }
         let frame_uniforms = floats_to_bytes(&[width as f32, height as f32, 0.0, 0.0]);
-        self.queue.write_buffer(&self.frame_buffer, 0, &frame_uniforms);
+        self.queue
+            .write_buffer(&self.frame_buffer, 0, &frame_uniforms);
         self.text_system.resize(&self.queue, width, height);
         Ok(())
     }
@@ -371,8 +374,14 @@ impl PersistentGpuContext {
         height: u32,
         rgba: &[u8],
     ) -> PyResult<()> {
-        self.image_system
-            .register_rgba(&self.device, &self.queue, resource_id, width, height, rgba)?;
+        self.image_system.register_rgba(
+            &self.device,
+            &self.queue,
+            resource_id,
+            width,
+            height,
+            rgba,
+        )?;
         self.invalidate_effect_cache();
         Ok(())
     }
@@ -436,16 +445,17 @@ impl PersistentGpuContext {
         background_blue: f64,
         background_alpha: f64,
     ) -> PyResult<usize> {
-        let (rectangle_count, _text_count, _image_count, _shape_count) = self.draw_scene_with_paths(
-            rectangles,
-            &[],
-            &[],
-            &[],
-            background_red,
-            background_green,
-            background_blue,
-            background_alpha,
-        )?;
+        let (rectangle_count, _text_count, _image_count, _shape_count) = self
+            .draw_scene_with_paths(
+                rectangles,
+                &[],
+                &[],
+                &[],
+                background_red,
+                background_green,
+                background_blue,
+                background_alpha,
+            )?;
         Ok(rectangle_count)
     }
 
@@ -576,7 +586,12 @@ impl PersistentGpuContext {
         if !texts.is_empty() {
             self.text_system.trim();
         }
-        Ok((rectangles.len(), texts.len(), images.len(), shapes.len() / 3))
+        Ok((
+            rectangles.len(),
+            texts.len(),
+            images.len(),
+            shapes.len() / 3,
+        ))
     }
 
     fn draw_scene_with_backdrops(
@@ -646,13 +661,49 @@ impl PersistentGpuContext {
         background_blue: f64,
         background_alpha: f64,
     ) -> PyResult<EffectCacheCounts> {
+        let boundaries: Vec<_> = backdrops.iter().cloned().map(Some).collect();
+        validate_backdrop_segments(
+            rectangle_segments,
+            text_segments,
+            image_segments,
+            shape_segments,
+            backdrops,
+        )?;
+        self.draw_scene_ordered_impl(
+            rectangle_segments,
+            text_segments,
+            image_segments,
+            shape_segments,
+            &boundaries,
+            effect_cache_token,
+            background_red,
+            background_green,
+            background_blue,
+            background_alpha,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn draw_scene_ordered_impl(
+        &mut self,
+        rectangle_segments: &[Vec<RectangleInstance>],
+        text_segments: &[Vec<TextInstance>],
+        image_segments: &[Vec<ImageInstance>],
+        shape_segments: &[Vec<ShapeVertex>],
+        backdrops: &[Option<BackdropRegion>],
+        effect_cache_token: Option<u64>,
+        background_red: f64,
+        background_green: f64,
+        background_blue: f64,
+        background_alpha: f64,
+    ) -> PyResult<EffectCacheCounts> {
         validate_color(
             background_red,
             background_green,
             background_blue,
             background_alpha,
         )?;
-        validate_backdrop_segments(
+        validate_ordered_segments(
             rectangle_segments,
             text_segments,
             image_segments,
@@ -709,7 +760,7 @@ impl PersistentGpuContext {
             image_count += counts.2;
             shape_count += counts.3;
 
-            if let Some(backdrop) = backdrops.get(segment_index) {
+            if let Some(Some(backdrop)) = backdrops.get(segment_index) {
                 self.composite_backdrop(backdrop)?;
             }
         }
@@ -730,7 +781,7 @@ impl PersistentGpuContext {
             text_count,
             image_count,
             shape_count,
-            backdrops.len(),
+            backdrops.iter().filter(|region| region.is_some()).count(),
         );
         if let Some(token) = effect_cache_token {
             self.effect_cache_token = Some(token);
@@ -738,6 +789,97 @@ impl PersistentGpuContext {
             self.effect_cache_counts = Some(counts);
         }
         Ok(counts)
+    }
+
+    // Diagnostic readback of the composited scene before final full-frame effects.
+    fn read_scene_rgba(&self) -> PyResult<(u32, u32, Vec<u8>)> {
+        let (width, height) = self.offscreen_target.size();
+        if u64::from(width) * u64::from(height) > 16_777_216 {
+            return Err(PyValueError::new_err(
+                "Scene readback is limited to 16 megapixels.",
+            ));
+        }
+        let bgra = match self.config.format {
+            wgpu::TextureFormat::Bgra8Unorm | wgpu::TextureFormat::Bgra8UnormSrgb => true,
+            wgpu::TextureFormat::Rgba8Unorm | wgpu::TextureFormat::Rgba8UnormSrgb => false,
+            _ => {
+                return Err(PyRuntimeError::new_err(
+                    "Scene readback requires an RGBA8/BGRA8 target.",
+                ))
+            }
+        };
+        let row_bytes = width * 4;
+        let padded = row_bytes.div_ceil(wgpu::COPY_BYTES_PER_ROW_ALIGNMENT)
+            * wgpu::COPY_BYTES_PER_ROW_ALIGNMENT;
+        let buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("SwirUI diagnostic readback"),
+            size: u64::from(padded) * u64::from(height),
+            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+            mapped_at_creation: false,
+        });
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("SwirUI diagnostic readback encoder"),
+            });
+        encoder.copy_texture_to_buffer(
+            wgpu::TexelCopyTextureInfo {
+                texture: self.offscreen_target.texture(),
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            wgpu::TexelCopyBufferInfo {
+                buffer: &buffer,
+                layout: wgpu::TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(padded),
+                    rows_per_image: Some(height),
+                },
+            },
+            wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+        );
+        let submission = self.queue.submit([encoder.finish()]);
+        let slice = buffer.slice(..);
+        let (sender, receiver) = std::sync::mpsc::channel();
+        slice.map_async(wgpu::MapMode::Read, move |result| {
+            let _ = sender.send(result);
+        });
+        self.device
+            .poll(wgpu::PollType::Wait {
+                submission_index: Some(submission),
+                timeout: Some(std::time::Duration::from_secs(10)),
+            })
+            .map_err(|error| {
+                PyRuntimeError::new_err(format!("Scene readback poll failed: {error}"))
+            })?;
+        receiver
+            .recv_timeout(std::time::Duration::from_secs(1))
+            .map_err(|error| {
+                PyRuntimeError::new_err(format!("Scene readback callback failed: {error}"))
+            })?
+            .map_err(|error| {
+                PyRuntimeError::new_err(format!("Scene readback mapping failed: {error}"))
+            })?;
+        let mapped = slice.get_mapped_range().map_err(|error| {
+            PyRuntimeError::new_err(format!("Scene readback range failed: {error}"))
+        })?;
+        let mut pixels = Vec::with_capacity((row_bytes * height) as usize);
+        for row in mapped.chunks_exact(padded as usize) {
+            pixels.extend_from_slice(&row[..row_bytes as usize]);
+        }
+        drop(mapped);
+        buffer.unmap();
+        if bgra {
+            for pixel in pixels.chunks_exact_mut(4) {
+                pixel.swap(0, 2);
+            }
+        }
+        Ok((width, height, pixels))
     }
 
     fn draw_segment_to_offscreen(
@@ -814,7 +956,12 @@ impl PersistentGpuContext {
         if !texts.is_empty() {
             self.text_system.trim();
         }
-        Ok((rectangles.len(), texts.len(), images.len(), shapes.len() / 3))
+        Ok((
+            rectangles.len(),
+            texts.len(),
+            images.len(),
+            shapes.len() / 3,
+        ))
     }
 
     fn composite_backdrop(&mut self, backdrop: &BackdropRegion) -> PyResult<()> {
@@ -904,7 +1051,10 @@ impl PersistentGpuContext {
         }
 
         if self.custom_shader_enabled {
-            let effect = self.custom_shader.as_mut().expect("custom shader must exist");
+            let effect = self
+                .custom_shader
+                .as_mut()
+                .expect("custom shader must exist");
             if self.custom_shader_source_dirty {
                 effect.rebind_source(&self.device, &source);
                 self.custom_shader_source_dirty = false;
@@ -1036,7 +1186,10 @@ impl PyWin32GpuRenderer {
 
     #[getter]
     fn blur_target_size(&self) -> Option<(u32, u32)> {
-        self.context.postprocess_blur.as_ref().map(SeparableBlur::size)
+        self.context
+            .postprocess_blur
+            .as_ref()
+            .map(SeparableBlur::size)
     }
 
     #[getter]
@@ -1298,6 +1451,43 @@ impl PyWin32GpuRenderer {
             &image_segments,
             &shape_segments,
             &backdrops,
+            background_red,
+            background_green,
+            background_blue,
+            background_alpha,
+        )
+    }
+
+    /// Read composited scene pixels before final scene blur/color/custom effects.
+    fn read_scene_rgba(&self) -> PyResult<(u32, u32, Vec<u8>)> {
+        self.context.read_scene_rgba()
+    }
+
+    #[pyo3(signature = (
+        rectangle_segments, text_segments, image_segments, shape_segments,
+        boundaries, effect_cache_token, background_red=0.027,
+        background_green=0.043, background_blue=0.078, background_alpha=1.0
+    ))]
+    fn draw_scene_ordered_cached(
+        &mut self,
+        rectangle_segments: Vec<Vec<RectangleInstance>>,
+        text_segments: Vec<Vec<TextInstance>>,
+        image_segments: Vec<Vec<ImageInstance>>,
+        shape_segments: Vec<Vec<ShapeVertex>>,
+        boundaries: Vec<Option<BackdropRegion>>,
+        effect_cache_token: u64,
+        background_red: f64,
+        background_green: f64,
+        background_blue: f64,
+        background_alpha: f64,
+    ) -> PyResult<EffectCacheCounts> {
+        self.context.draw_scene_ordered_impl(
+            &rectangle_segments,
+            &text_segments,
+            &image_segments,
+            &shape_segments,
+            &boundaries,
+            Some(effect_cache_token),
             background_red,
             background_green,
             background_blue,
@@ -1581,6 +1771,34 @@ fn validate_backdrop_region(backdrop: &BackdropRegion) -> PyResult<()> {
     Ok(())
 }
 
+fn validate_ordered_segments(
+    rectangle_segments: &[Vec<RectangleInstance>],
+    text_segments: &[Vec<TextInstance>],
+    image_segments: &[Vec<ImageInstance>],
+    shape_segments: &[Vec<ShapeVertex>],
+    boundaries: &[Option<BackdropRegion>],
+) -> PyResult<()> {
+    let count = rectangle_segments.len();
+    if count == 0 || count > 16_384 {
+        return Err(PyValueError::new_err(
+            "Ordered scenes require 1..16384 segments.",
+        ));
+    }
+    if text_segments.len() != count
+        || image_segments.len() != count
+        || shape_segments.len() != count
+        || boundaries.len() != count - 1
+    {
+        return Err(PyValueError::new_err(
+            "Ordered scene segment lengths do not match.",
+        ));
+    }
+    for boundary in boundaries.iter().flatten() {
+        validate_backdrop_region(boundary)?;
+    }
+    Ok(())
+}
+
 fn validate_backdrop_segments(
     rectangle_segments: &[Vec<RectangleInstance>],
     text_segments: &[Vec<TextInstance>],
@@ -1731,15 +1949,15 @@ fn acquire_surface_texture(surface: &wgpu::Surface<'_>) -> PyResult<wgpu::Surfac
     match surface.get_current_texture() {
         wgpu::CurrentSurfaceTexture::Success(frame)
         | wgpu::CurrentSurfaceTexture::Suboptimal(frame) => Ok(frame),
-        wgpu::CurrentSurfaceTexture::Timeout => {
-            Err(PyRuntimeError::new_err("Timed out while acquiring a GPU frame."))
-        }
-        wgpu::CurrentSurfaceTexture::Occluded => {
-            Err(PyRuntimeError::new_err("The SwirUI GPU surface is occluded."))
-        }
-        wgpu::CurrentSurfaceTexture::Outdated => {
-            Err(PyRuntimeError::new_err("The SwirUI GPU surface is outdated."))
-        }
+        wgpu::CurrentSurfaceTexture::Timeout => Err(PyRuntimeError::new_err(
+            "Timed out while acquiring a GPU frame.",
+        )),
+        wgpu::CurrentSurfaceTexture::Occluded => Err(PyRuntimeError::new_err(
+            "The SwirUI GPU surface is occluded.",
+        )),
+        wgpu::CurrentSurfaceTexture::Outdated => Err(PyRuntimeError::new_err(
+            "The SwirUI GPU surface is outdated.",
+        )),
         wgpu::CurrentSurfaceTexture::Lost => {
             Err(PyRuntimeError::new_err("The SwirUI GPU surface was lost."))
         }
@@ -1761,8 +1979,8 @@ mod tests {
 
     fn clipped_rectangle() -> RectangleInstance {
         vec![
-            20.0, 30.0, 100.0, 50.0, 0.0, 0.5, 1.0, 1.0, 12.0, 18.0, 22.0, 8.0, 30.0, 35.0,
-            90.0, 70.0,
+            20.0, 30.0, 100.0, 50.0, 0.0, 0.5, 1.0, 1.0, 12.0, 18.0, 22.0, 8.0, 30.0, 35.0, 90.0,
+            70.0,
         ]
     }
 
@@ -1853,6 +2071,33 @@ mod tests {
         let mut invalid = valid_backdrop();
         invalid[4] = 0.0;
         assert!(validate_backdrop_region(&invalid).is_err());
+    }
+
+    #[test]
+    fn ordered_segments_allow_plain_boundaries_without_blur() {
+        let rectangles = vec![vec![valid_rectangle()], Vec::new(), Vec::new()];
+        let texts = vec![Vec::new(), Vec::new(), Vec::new()];
+        let images = vec![Vec::new(), Vec::new(), Vec::new()];
+        let shapes = vec![Vec::new(), Vec::new(), Vec::new()];
+        assert!(validate_ordered_segments(
+            &rectangles,
+            &texts,
+            &images,
+            &shapes,
+            &[None, Some(valid_backdrop())]
+        )
+        .is_ok());
+        assert!(validate_ordered_segments(&rectangles, &texts, &images, &shapes, &[None]).is_err());
+        let mut invalid = valid_backdrop();
+        invalid[4] = 0.0;
+        assert!(validate_ordered_segments(
+            &rectangles,
+            &texts,
+            &images,
+            &shapes,
+            &[None, Some(invalid)]
+        )
+        .is_err());
     }
 
     #[test]

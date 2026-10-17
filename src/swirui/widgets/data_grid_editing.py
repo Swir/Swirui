@@ -8,6 +8,7 @@ from swirui.core import Event
 from swirui.platforms import PlatformEventKind, PointerButton
 from swirui.rendering.geometry import Color, Rect
 from swirui.rendering.scene import SceneNode, SceneNodeKind
+from swirui.theme import Theme
 
 from .data_grid import DataGridColumn
 from .data_grid_accessibility import DataGrid as _DataGrid
@@ -56,12 +57,13 @@ class DataGrid(_DataGrid):
         *,
         bounds: Rect,
         key: str | None = None,
+        theme: Theme | None = None,
         row_height: float = 36.0,
         header_height: float = 40.0,
         cell_padding: float = 10.0,
         font_size: float = 14.0,
-        font_family: str = "Segoe UI",
-        corner_radius: float = 8.0,
+        font_family: str | None = None,
+        corner_radius: float | None = None,
         background: Color | None = None,
         header_background: Color | None = None,
         row_background: Color | None = None,
@@ -90,6 +92,7 @@ class DataGrid(_DataGrid):
             rows,
             bounds=bounds,
             key=key,
+            theme=theme,
             row_height=row_height,
             header_height=header_height,
             cell_padding=cell_padding,
@@ -177,10 +180,7 @@ class DataGrid(_DataGrid):
         if column.key not in self._editable_column_keys:
             raise ValueError(f"DataGrid column {column.key!r} is not editable.")
 
-        if (
-            self._editing_row_index == resolved_row
-            and self._editing_column_key == column.key
-        ):
+        if self._editing_row_index == resolved_row and self._editing_column_key == column.key:
             if ensure_visible:
                 self.scroll_to_row(resolved_row)
                 self.scroll_to_column(column.key)
@@ -254,9 +254,7 @@ class DataGrid(_DataGrid):
         if value is _UNSET:
             parser = self._cell_edit_parser
             new_value = (
-                self._editing_text
-                if parser is None
-                else parser(self._editing_text, old_value)
+                self._editing_text if parser is None else parser(self._editing_text, old_value)
             )
         else:
             new_value = value
@@ -270,9 +268,7 @@ class DataGrid(_DataGrid):
             else self._source_index_for_row(self.rows[self.selected_index])
         )
         anchor_row = self._row_at_index(self._selection_anchor)
-        anchor_source_index = (
-            None if anchor_row is None else self._source_index_for_row(anchor_row)
-        )
+        anchor_source_index = None if anchor_row is None else self._source_index_for_row(anchor_row)
 
         source_rows = list(self._source_rows)
         updated_row = dict(source_rows[source_index])
@@ -281,18 +277,12 @@ class DataGrid(_DataGrid):
         self._source_rows = tuple(source_rows)
         self._rows = self._apply_sort(self._source_rows)
 
-        selected_rows = tuple(
-            self._source_rows[index] for index in selected_source_indices
-        )
+        selected_rows = tuple(self._source_rows[index] for index in selected_source_indices)
         primary_row = (
-            None
-            if primary_source_index is None
-            else self._source_rows[primary_source_index]
+            None if primary_source_index is None else self._source_rows[primary_source_index]
         )
         anchor_row_after = (
-            None
-            if anchor_source_index is None
-            else self._source_rows[anchor_source_index]
+            None if anchor_source_index is None else self._source_rows[anchor_source_index]
         )
         self._restore_selection(
             selected_rows,

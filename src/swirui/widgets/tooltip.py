@@ -8,6 +8,7 @@ from collections.abc import Callable
 from swirui.core import AccessibilityRole, Component, Event
 from swirui.rendering.geometry import Color, CornerRadius, Rect
 from swirui.rendering.scene import SceneNode, SceneNodeKind
+from swirui.theme import Theme
 
 from .base import Widget
 
@@ -25,11 +26,12 @@ class Tooltip(Widget):
         bounds: Rect,
         target: Component | None = None,
         key: str | None = None,
+        theme: Theme | None = None,
         background: Color | None = None,
         foreground: Color | None = None,
-        corner_radius: float = 8.0,
+        corner_radius: float | None = None,
         font_size: float = 13.0,
-        font_family: str = "Segoe UI",
+        font_family: str | None = None,
         padding: float = 10.0,
         show_on_hover: bool = True,
         show_on_focus: bool = True,
@@ -42,9 +44,13 @@ class Tooltip(Widget):
         self._text = str(text)
         self._background = background or _DEFAULT_BACKGROUND
         self._foreground = foreground or _DEFAULT_FOREGROUND
-        self._corner_radius = self._validate_non_negative(corner_radius, "corner_radius")
+        self._corner_radius = self._validate_non_negative(
+            8.0 if corner_radius is None else corner_radius, "corner_radius"
+        )
         self._font_size = self._validate_positive(font_size, "font_size")
-        self._font_family = self._validate_font_family(font_family)
+        self._font_family = self._validate_font_family(
+            "Segoe UI" if font_family is None else font_family
+        )
         self._padding = self._validate_non_negative(padding, "padding")
         self._show_on_hover = bool(show_on_hover)
         self._show_on_focus = bool(show_on_focus)
@@ -63,6 +69,21 @@ class Tooltip(Widget):
             accessibility_role=AccessibilityRole.TOOLTIP,
             accessible_name=self._text if accessible_name is None else accessible_name,
             accessible_description=accessible_description,
+        )
+        self._bind_theme(
+            theme,
+            {
+                "_background": ("surface", "raised", _DEFAULT_BACKGROUND),
+                "_foreground": ("text", "text", _DEFAULT_FOREGROUND),
+                "_font_family": ("token", "font_family", "Segoe UI"),
+                "_corner_radius": ("token", "control_radius", 8.0),
+            },
+            {
+                "_background": background,
+                "_foreground": foreground,
+                "_font_family": self._font_family if font_family is not None else None,
+                "_corner_radius": corner_radius,
+            },
         )
         self.visible = bool(initially_open)
         if target is not None:

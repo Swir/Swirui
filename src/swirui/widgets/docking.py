@@ -17,6 +17,7 @@ from swirui.core import (
 from swirui.platforms import PlatformEvent, PlatformEventKind, PointerButton
 from swirui.rendering.geometry import Color, CornerRadius, Rect
 from swirui.rendering.scene import SceneNode, SceneNodeKind
+from swirui.theme import Theme
 
 from .base import Widget
 
@@ -73,9 +74,10 @@ class DockWorkspace(Widget):
         active_key: Hashable | None = None,
         header_height: float = 34.0,
         min_center_extent: float = 120.0,
-        corner_radius: float = 6.0,
+        corner_radius: float | None = None,
+        theme: Theme | None = None,
         font_size: float = 13.0,
-        font_family: str = "Segoe UI",
+        font_family: str | None = None,
         background: Color | None = None,
         pane_background: Color | None = None,
         header_background: Color | None = None,
@@ -92,9 +94,11 @@ class DockWorkspace(Widget):
         self._min_center_extent = self._validate_non_negative(
             min_center_extent, "min_center_extent"
         )
-        self._corner_radius = self._validate_non_negative(corner_radius, "corner_radius")
+        self._corner_radius = self._validate_non_negative(
+            6.0 if corner_radius is None else corner_radius, "corner_radius"
+        )
         self._font_size = self._validate_positive(font_size, "font_size")
-        self._font_family = str(font_family).strip()
+        self._font_family = "Segoe UI" if font_family is None else str(font_family).strip()
         if not self._font_family:
             raise ValueError("font_family must not be empty.")
         self._background = background or _DEFAULT_BACKGROUND
@@ -119,6 +123,33 @@ class DockWorkspace(Widget):
             accessible_name=accessible_name,
             accessible_description=accessible_description,
         )
+        self._bind_theme(
+            theme,
+            {
+                "_background": ("surface", "canvas", _DEFAULT_BACKGROUND),
+                "_pane_background": ("surface", "surface", _DEFAULT_PANE_BACKGROUND),
+                "_header_background": ("surface", "raised", _DEFAULT_HEADER_BACKGROUND),
+                "_active_header_background": (
+                    "surface", "selection", _DEFAULT_ACTIVE_HEADER_BACKGROUND
+                ),
+                "_foreground": ("text", "text", _DEFAULT_FOREGROUND),
+                "_accent": ("surface", "accent", _DEFAULT_ACCENT),
+                "_font_family": ("token", "font_family", "Segoe UI"),
+                "_corner_radius": ("token", "control_radius", 6.0),
+            },
+            {
+                "_background": background,
+                "_pane_background": pane_background,
+                "_header_background": header_background,
+                "_active_header_background": active_header_background,
+                "_foreground": foreground,
+                "_accent": accent,
+                "_font_family": self._font_family if font_family is not None else None,
+                "_corner_radius": corner_radius,
+            },
+        )
+        self._enable_theme_focus_frame()
+        self.on("key_down", self._on_key_down)
         self.on("pointer_down", self._on_pointer_down)
         self._attach_contents()
         self._sync_accessibility_value()
@@ -333,6 +364,7 @@ class DockWorkspace(Widget):
                     )
                 )
             root.add(header)
+        self._add_theme_focus_frame(root)
         return root
 
     def accessibility_snapshot(
@@ -507,7 +539,30 @@ class DockWorkspace(Widget):
                 )
         return tuple(regions)
 
+    def _on_key_down(self, event: Event) -> None:
+        if (
+            event.source is not self or event.default_prevented
+            or not self.enabled or not self._panes
+        ):
+            return
+        native = self._platform_event(event, PlatformEventKind.KEY_DOWN)
+        if native is None or native.ctrl or native.alt or native.meta:
+            return
+        index = next((i for i, p in enumerate(self._panes) if p.key == self._active_key), 0)
+        if native.key_code == 0x24:
+            index = 0
+        elif native.key_code == 0x23:
+            index = len(self._panes) - 1
+        elif native.key_code in (0x25, 0x27):
+            index = (index + (1 if native.key_code == 0x27 else -1)) % len(self._panes)
+        else:
+            return
+        self.activate_pane(self._panes[index].key)
+        event.prevent_default()
+
     def _on_pointer_down(self, event: Event) -> None:
+        if event.source is not self or event.default_prevented:
+            return
         platform_event = self._platform_event(event, PlatformEventKind.POINTER_DOWN)
         if (
             not self.enabled

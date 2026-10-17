@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from swirui.core import Event
 from swirui.rendering.geometry import Rect
+from swirui.theme import Theme
 
 from .scroll_events import routed_scroll_deltas, update_scroll_residual
 from .scrolling import ScrollView as _ScrollView
@@ -17,6 +18,7 @@ class ScrollView(_ScrollView):
         *,
         bounds: Rect,
         key: str | None = None,
+        theme: Theme | None = None,
         content_width: float | None = None,
         content_height: float | None = None,
         scroll_x: float = 0.0,
@@ -31,6 +33,7 @@ class ScrollView(_ScrollView):
         super().__init__(
             bounds=bounds,
             key=key,
+            theme=theme,
             content_width=content_width,
             content_height=content_height,
             scroll_x=scroll_x,

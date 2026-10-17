@@ -113,8 +113,7 @@ class WgpuRenderer(_BaseWgpuRenderer):
         """Return native retained-frame cache hits across live GPU contexts."""
 
         return sum(
-            int(getattr(context, "effect_cache_hits", 0))
-            for context in self._contexts.values()
+            int(getattr(context, "effect_cache_hits", 0)) for context in self._contexts.values()
         )
 
     @property
@@ -122,8 +121,7 @@ class WgpuRenderer(_BaseWgpuRenderer):
         """Return native retained-frame cache misses across live GPU contexts."""
 
         return sum(
-            int(getattr(context, "effect_cache_misses", 0))
-            for context in self._contexts.values()
+            int(getattr(context, "effect_cache_misses", 0)) for context in self._contexts.values()
         )
 
     def clear_backdrop_payload_cache(self, window: Window | None = None) -> None:
@@ -211,14 +209,10 @@ class WgpuRenderer(_BaseWgpuRenderer):
         handle = window.native_handle.value
         context = self._contexts.get(handle)
         if context is None:
-            raise RuntimeError(
-                "Backdrop blur requires the persistent SwirUI native GPU context."
-            )
+            raise RuntimeError("Backdrop blur requires the persistent SwirUI native GPU context.")
         draw = getattr(context, "draw_scene_with_backdrops", None)
         if draw is None:
-            raise RuntimeError(
-                "Installed SwirUI native GPU core does not support backdrop blur."
-            )
+            raise RuntimeError("Installed SwirUI native GPU core does not support backdrop blur.")
 
         self._context_scales[handle] = window.scale
         self._configure_scene_blur(context, window.scale)
@@ -275,9 +269,7 @@ class WgpuRenderer(_BaseWgpuRenderer):
             return
         configure = getattr(context, "set_color_filter", None)
         if configure is None:
-            raise RuntimeError(
-                "Installed SwirUI native GPU core does not support color filters."
-            )
+            raise RuntimeError("Installed SwirUI native GPU core does not support color filters.")
         configure(list(self.color_filter.native_values()))
 
     def _backdrop_payload(self, window: Window) -> BackdropPayload | None:
@@ -429,19 +421,23 @@ class WgpuRenderer(_BaseWgpuRenderer):
                 return
             text_fill = node.fill or _DEFAULT_TEXT_COLOR
             texts.append(
-                (
-                    node.text,
-                    self._scale(node.bounds.x, scale),
-                    self._scale(node.bounds.y, scale),
-                    self._scale(node.bounds.width, scale),
-                    self._scale(node.bounds.height, scale),
-                    self._scale(node.font_size, scale),
-                    text_fill.r,
-                    text_fill.g,
-                    text_fill.b,
-                    text_fill.a * effective_opacity,
-                    node.font_family,
-                    self._clip_tuple(clip, scale),
+                self._color_text_instance(
+                    (
+                        node.text,
+                        self._scale(node.bounds.x, scale),
+                        self._scale(node.bounds.y, scale),
+                        self._scale(node.bounds.width, scale),
+                        self._scale(node.bounds.height, scale),
+                        self._scale(node.font_size, scale),
+                        text_fill.r,
+                        text_fill.g,
+                        text_fill.b,
+                        text_fill.a * effective_opacity,
+                        node.font_family,
+                        self._clip_tuple(clip, scale),
+                    ),
+                    node,
+                    effective_opacity,
                 )
             )
             return

@@ -3,15 +3,23 @@
 from __future__ import annotations
 
 import math
-from typing import Any
+from bisect import bisect_right
+from collections import OrderedDict
+from typing import TYPE_CHECKING, Any
 
+from swirui.clipboard import ClipboardError
 from swirui.core import AccessibilityRole, Event
 from swirui.platforms import PlatformEvent, PlatformEventKind, PointerButton
 from swirui.rendering.geometry import Color, CornerRadius, Rect, Size
 from swirui.rendering.scene import SceneNode, SceneNodeKind
+from swirui.rendering.text_layout import TextLineLayout, estimated_line
+from swirui.theme import Theme
 
 from .base import Widget
 from .measurement import measure_text_block
+
+if TYPE_CHECKING:
+    from swirui.window import Window
 
 _VK_BACK = 0x08
 _VK_RETURN = 0x0D
@@ -23,6 +31,9 @@ _VK_DOWN = 0x28
 _VK_END = 0x23
 _VK_DELETE = 0x2E
 _VK_A = 0x41
+_VK_C = 0x43
+_VK_V = 0x56
+_VK_X = 0x58
 
 _DEFAULT_BACKGROUND = Color.from_hex("#07111C")
 _DEFAULT_FOCUSED_BACKGROUND = Color.from_hex("#0B1C2B")
@@ -42,6 +53,7 @@ class _TextInputBase(Widget):
         *,
         bounds: Rect,
         key: str | None = None,
+        theme: Theme | None = None,
         placeholder: str = "",
         read_only: bool = False,
         max_length: int | None = None,
@@ -52,9 +64,9 @@ class _TextInputBase(Widget):
         placeholder_color: Color | None = None,
         selection_color: Color | None = None,
         caret_color: Color | None = None,
-        corner_radius: float = 7.0,
+        corner_radius: float | None = None,
         font_size: float = 16.0,
-        font_family: str = "Segoe UI",
+        font_family: str | None = None,
         padding: float = 10.0,
         opacity: float = 1.0,
         z_index: int = 0,
@@ -64,6 +76,25 @@ class _TextInputBase(Widget):
         mask_character: str | None = None,
         accessibility_role: AccessibilityRole = AccessibilityRole.TEXT_BOX,
     ) -> None:
+        overrides = {
+            "_background": background,
+            "_focused_background": focused_background,
+            "_disabled_background": disabled_background,
+            "_foreground": foreground,
+            "_placeholder_color": placeholder_color,
+            "_selection_color": selection_color,
+            "_caret_color": caret_color,
+            "_corner_radius": corner_radius,
+            "_font_family": font_family,
+        }
+        if theme is not None:
+            background = background or theme.surface_color("raised")
+            focused_background = focused_background or theme.surface_color("hover")
+            disabled_background = disabled_background or theme.surface_color("disabled")
+            foreground = foreground or theme.text_color("text")
+            placeholder_color = placeholder_color or theme.text_color("muted")
+            selection_color = selection_color or theme.surface_color("selection")
+            caret_color = caret_color or theme.surface_color("focus")
         self._multiline = bool(multiline)
         self._mask_character = self._validate_mask_character(mask_character)
         if self._multiline and self._mask_character is not None:
@@ -81,13 +112,27 @@ class _TextInputBase(Widget):
         self._placeholder_color = placeholder_color or _DEFAULT_PLACEHOLDER
         self._selection_color = selection_color or _DEFAULT_SELECTION
         self._caret_color = caret_color or _DEFAULT_CARET
-        self._corner_radius = self._validate_non_negative(corner_radius, "corner_radius")
+        radius = (
+            corner_radius if corner_radius is not None else (theme.control_radius if theme else 7.0)
+        )
+        self._corner_radius = self._validate_non_negative(radius, "corner_radius")
         self._font_size = self._validate_positive(font_size, "font_size")
-        self._font_family = self._validate_font_family(font_family)
+        self._font_family = self._validate_font_family(
+            font_family if font_family is not None else (theme.font_family if theme else "Segoe UI")
+        )
         self._padding = self._validate_non_negative(padding, "padding")
         self._caret = len(self._value)
         self._selection_anchor: int | None = None
         self._focused = False
+        self._horizontal_offset = 0.0
+        self._preferred_caret_x: float | None = None
+        self._document_cache_value: str | None = None
+        self._document_lines: list[str] = []
+        self._document_starts: list[int] = []
+        self._multiline_layouts: OrderedDict[tuple[object, ...], TextLineLayout] = OrderedDict()
+        self._multiline_layout_chars = 0
+        self._line_layout_key: tuple[object, ...] | None = None
+        self._line_layout: TextLineLayout | None = None
         super().__init__(
             bounds=bounds,
             key=key,
@@ -103,6 +148,36 @@ class _TextInputBase(Widget):
         self.on("text_input", self._on_text_input)
         self.on("focus_gained", self._on_focus_gained)
         self.on("focus_lost", self._on_focus_lost)
+        if font_family is not None:
+            overrides["_font_family"] = self._font_family
+        self._bind_theme(
+            theme,
+            {
+                "_background": ("surface", "raised", _DEFAULT_BACKGROUND),
+                "_focused_background": ("surface", "hover", _DEFAULT_FOCUSED_BACKGROUND),
+                "_disabled_background": ("surface", "disabled", _DEFAULT_DISABLED_BACKGROUND),
+                "_foreground": ("text", "text", _DEFAULT_FOREGROUND),
+                "_placeholder_color": ("text", "muted", _DEFAULT_PLACEHOLDER),
+                "_selection_color": ("surface", "selection", _DEFAULT_SELECTION),
+                "_caret_color": ("surface", "focus", _DEFAULT_CARET),
+                "_font_family": ("token", "font_family", "Segoe UI"),
+                "_corner_radius": ("token", "control_radius", 7.0),
+            },
+            overrides,
+        )
+
+    def on_unmount(self, window: Window) -> None:
+        super().on_unmount(window)
+        # Layout keys include their provider; release the font system when a
+        # detached control outlives its window instead of retaining it in LRU keys.
+        self._line_layout_key = None
+        self._line_layout = None
+        self._multiline_layouts.clear()
+        self._multiline_layout_chars = 0
+        self._document_cache_value = None
+        self._document_lines.clear()
+        self._document_starts.clear()
+        self._preferred_caret_x = None
 
     @property
     def value(self) -> str:
@@ -110,6 +185,7 @@ class _TextInputBase(Widget):
 
     @value.setter
     def value(self, value: str) -> None:
+        self._preferred_caret_x = None
         normalized = self._normalize_value(value)
         if self._max_length is not None:
             normalized = normalized[: self._max_length]
@@ -198,6 +274,7 @@ class _TextInputBase(Widget):
         )
 
     def select(self, start: int, end: int) -> None:
+        self._preferred_caret_x = None
         length = len(self._value)
         start_index = max(0, min(int(start), length))
         end_index = max(0, min(int(end), length))
@@ -223,6 +300,29 @@ class _TextInputBase(Widget):
             hit_testable=self.enabled,
         )
         content = self._content_bounds()
+        if (
+            self._theme
+            and self._focused
+            and self.enabled
+            and min(self.bounds.width, self.bounds.height) > 4
+        ):
+            root.fill = self._theme.surface_color("focus")
+            root.add(
+                SceneNode(
+                    key=f"{self.key}:focus-surface",
+                    kind=SceneNodeKind.RECTANGLE,
+                    bounds=Rect(
+                        self.bounds.x + 2,
+                        self.bounds.y + 2,
+                        self.bounds.width - 4,
+                        self.bounds.height - 4,
+                    ),
+                    fill=self._current_background(),
+                    corner_radius=CornerRadius.uniform(max(0, self._corner_radius - 2)),
+                    hit_testable=False,
+                    z_index=-1,
+                )
+            )
         if content.width <= 0.0 or content.height <= 0.0:
             return root
 
@@ -232,164 +332,215 @@ class _TextInputBase(Widget):
             self._build_single_line_content(root, content)
         return root
 
-    def _build_single_line_content(self, root: SceneNode, content: Rect) -> None:
-        display_value = self._display_value()
-        char_width = self._estimated_char_width()
-        capacity = max(1, int(content.width / char_width))
-        start = 0
-        if len(display_value) > capacity:
-            start = min(max(0, self._caret - capacity + 1), len(display_value) - capacity)
-        visible = display_value[start : start + capacity]
-        showing_placeholder = not self._value and bool(self._placeholder)
-        if showing_placeholder:
-            visible = self._placeholder[:capacity]
-            start = 0
+    def _single_line_layout(self, text: str) -> TextLineLayout:
+        window = self.mounted_window
+        shaper = window._text_shaper if window is not None else None
+        scale = window.scale if window is not None else 1.0
+        key = (text, self._font_size, self._font_family, scale, shaper)
+        if key != self._line_layout_key or self._line_layout is None:
+            self._line_layout = (
+                shaper.shape_line(text, self._font_size, self._font_family, scale)
+                if shaper is not None
+                else estimated_line(text, self._font_size)
+            )
+            self._line_layout_key = key
+        return self._line_layout
 
+    def _line_view_offset(self, layout: TextLineLayout, content: Rect) -> float:
+        available = max(0.0, content.width - 1.5)
+        caret = layout.carets[min(self._caret, len(layout.carets) - 1)]
+        offset = min(self._horizontal_offset, max(0.0, layout.width - available))
+        if caret < offset:
+            offset = caret
+        elif caret > offset + available:
+            offset = caret - available
+        self._horizontal_offset = max(0.0, offset)
+        return self._horizontal_offset
+
+    def _build_single_line_content(self, root: SceneNode, content: Rect) -> None:
+        showing_placeholder = not self._value and bool(self._placeholder)
+        text = self._placeholder if showing_placeholder else self._display_value()
+        if showing_placeholder:
+            text = " ".join(text.splitlines())
+        layout = self._single_line_layout(text)
+        offset = 0.0 if showing_placeholder else self._line_view_offset(layout, content)
         line_height = min(content.height, self._line_height())
-        text_bounds = Rect(content.x, content.y, content.width, line_height)
-        if visible:
-            root.add(
+        # Keep the complete shaped line intact. Cropping a string changes its
+        # kerning/ligatures; a retained clip and pixel scroll preserve geometry.
+        viewport = SceneNode(
+            key=f"{self.key}:text-viewport",
+            kind=SceneNodeKind.GROUP,
+            bounds=content,
+            clip_to_bounds=True,
+            hit_testable=False,
+        )
+        root.add(viewport)
+        if text:
+            viewport.add(
                 SceneNode(
                     key=f"{self.key}:text",
                     kind=SceneNodeKind.TEXT,
-                    bounds=text_bounds,
+                    bounds=Rect(content.x - offset, content.y, layout.width, line_height),
                     z_index=1,
                     fill=self._placeholder_color if showing_placeholder else self._foreground,
-                    text=visible,
+                    text=text,
                     font_size=self._font_size,
                     font_family=self._font_family,
                     hit_testable=False,
                 )
             )
-
         if not showing_placeholder:
-            selection_start = max(self.selection_start, start)
-            selection_end = min(self.selection_end, start + capacity)
-            if selection_end > selection_start:
-                x = content.x + ((selection_start - start) * char_width)
-                width = max(1.0, (selection_end - selection_start) * char_width)
-                root.add(
-                    SceneNode(
-                        key=f"{self.key}:selection",
-                        kind=SceneNodeKind.RECTANGLE,
-                        bounds=Rect(x, content.y, min(width, content.right - x), line_height),
-                        z_index=0,
-                        fill=self._selection_color,
-                        hit_testable=False,
+            for index, (left, right) in enumerate(
+                layout.selection_spans(self.selection_start, self.selection_end)
+            ):
+                x = max(content.x, content.x + left - offset)
+                end = min(content.right, content.x + right - offset)
+                if end > x:
+                    viewport.add(
+                        SceneNode(
+                            key=f"{self.key}:selection" + (f":{index}" if index else ""),
+                            kind=SceneNodeKind.RECTANGLE,
+                            bounds=Rect(x, content.y, end - x, line_height),
+                            z_index=0,
+                            fill=self._selection_color,
+                            hit_testable=False,
+                        )
                     )
-                )
-
         if self._focused and self.enabled:
-            caret_column = max(0, min(self._caret - start, capacity))
-            caret_x = min(content.right - 1.0, content.x + (caret_column * char_width))
-            root.add(
+            caret = 0.0 if showing_placeholder else layout.carets[self._caret]
+            viewport.add(
                 SceneNode(
                     key=f"{self.key}:caret",
                     kind=SceneNodeKind.RECTANGLE,
-                    bounds=Rect(caret_x, content.y, 1.5, line_height),
+                    bounds=Rect(content.x + caret - offset, content.y, 1.5, line_height),
                     z_index=2,
                     fill=self._caret_color,
                     hit_testable=False,
                 )
             )
 
+    def _multiline_layout(self, text: str) -> TextLineLayout:
+        window = self.mounted_window
+        shaper = window._text_shaper if window is not None else None
+        scale = window.scale if window is not None else 1.0
+        key = (text, self._font_size, self._font_family, scale, shaper)
+        cached = self._multiline_layouts.get(key)
+        if cached is not None:
+            self._multiline_layouts.move_to_end(key)
+            return cached
+        layout = (
+            shaper.shape_line(text, self._font_size, self._font_family, scale)
+            if shaper is not None
+            else estimated_line(text, self._font_size)
+        )
+        # Keep viewport work reusable without retaining an entire shaped document.
+        if len(text) <= 65_536:
+            self._multiline_layouts[key] = layout
+            self._multiline_layout_chars += len(text)
+            while len(self._multiline_layouts) > 128 or self._multiline_layout_chars > 65_536:
+                old, _ = self._multiline_layouts.popitem(last=False)
+                self._multiline_layout_chars -= len(str(old[0]))
+        return layout
+
+    def _lines(self) -> list[str]:
+        if self._document_cache_value != self._value:
+            self._document_lines = self._value.split("\n")
+            self._document_starts = []
+            offset = 0
+            for line in self._document_lines:
+                self._document_starts.append(offset)
+                offset += len(line) + 1
+            self._document_cache_value = self._value
+        return self._document_lines
+
+    def _multiline_horizontal_offset(self, content: Rect) -> float:
+        starts = self._line_starts()
+        index = self._line_index_for_position(self._caret, starts)
+        layout = self._multiline_layout(self._lines()[index])
+        caret_x = layout.carets[self._caret - starts[index]]
+        available = max(0.0, content.width - 1.5)
+        offset = min(self._horizontal_offset, max(0.0, layout.width - available))
+        if caret_x < offset:
+            offset = caret_x
+        elif caret_x > offset + available:
+            offset = caret_x - available
+        self._horizontal_offset = max(0.0, offset)
+        return self._horizontal_offset
+
     def _build_multiline_content(self, root: SceneNode, content: Rect) -> None:
-        showing_placeholder = not self._value and bool(self._placeholder)
-        rendered = self._placeholder if showing_placeholder else self._display_value()
+        placeholder = not self._value and bool(self._placeholder)
+        lines = (
+            self._normalize_value(self._placeholder).split("\n") if placeholder else self._lines()
+        )
         line_height = self._line_height()
         visible_lines = max(1, int(content.height / line_height))
-        start_line = 0 if showing_placeholder else self._multiline_view_start(visible_lines)
-        lines = rendered.split("\n")
-        visible = "\n".join(lines[start_line : start_line + visible_lines])
-        if visible:
-            root.add(
-                SceneNode(
-                    key=f"{self.key}:text",
-                    kind=SceneNodeKind.TEXT,
-                    bounds=content,
-                    z_index=1,
-                    fill=self._placeholder_color if showing_placeholder else self._foreground,
-                    text=visible,
-                    font_size=self._font_size,
-                    font_family=self._font_family,
-                    hit_testable=False,
-                )
-            )
-
-        if not showing_placeholder and self.selection_start != self.selection_end:
-            self._add_multiline_selection(
-                root,
-                content,
-                start_line=start_line,
-                visible_lines=visible_lines,
-            )
-
-        if not self._focused or not self.enabled:
-            return
-
-        line_starts = self._line_starts()
-        caret_line = self._line_index_for_position(self._caret, line_starts)
-        if caret_line < start_line or caret_line >= start_line + visible_lines:
-            return
-        column = self._caret - line_starts[caret_line]
-        y = content.y + ((caret_line - start_line) * line_height)
-        x = min(content.right - 1.0, content.x + (column * self._estimated_char_width()))
-        root.add(
-            SceneNode(
-                key=f"{self.key}:caret",
-                kind=SceneNodeKind.RECTANGLE,
-                bounds=Rect(x, y, 1.5, min(line_height, content.bottom - y)),
-                z_index=2,
-                fill=self._caret_color,
-                hit_testable=False,
-            )
+        start = 0 if placeholder else self._multiline_view_start(visible_lines)
+        offset = 0.0 if placeholder else self._multiline_horizontal_offset(content)
+        starts = self._line_starts()
+        caret_line = self._line_index_for_position(self._caret, starts)
+        viewport = SceneNode(
+            key=f"{self.key}:text-viewport",
+            kind=SceneNodeKind.GROUP,
+            bounds=content,
+            clip_to_bounds=True,
+            hit_testable=False,
         )
-
-    def _add_multiline_selection(
-        self,
-        root: SceneNode,
-        content: Rect,
-        *,
-        start_line: int,
-        visible_lines: int,
-    ) -> None:
-        line_starts = self._line_starts()
-        char_width = self._estimated_char_width()
-        line_height = self._line_height()
-        selection_start = self.selection_start
-        selection_end = self.selection_end
-        stop_line = min(len(line_starts), start_line + visible_lines)
-        for line_index in range(start_line, stop_line):
-            line_start = line_starts[line_index]
-            line_end = self._line_end(line_start)
-            segment_start = max(selection_start, line_start)
-            segment_end = min(selection_end, line_end)
-            if segment_end <= segment_start:
-                # Include a selected newline as a thin visible end-of-line marker.
-                if not (
-                    selection_start <= line_end < selection_end
-                    and line_end < len(self._value)
-                    and self._value[line_end] == "\n"
-                ):
-                    continue
-                segment_start = line_end
-                segment_end = line_end
-            x = content.x + ((segment_start - line_start) * char_width)
-            width = max(char_width * 0.45, (segment_end - segment_start) * char_width)
-            width = min(width, max(0.0, content.right - x))
-            if width <= 0.0:
-                continue
-            y = content.y + ((line_index - start_line) * line_height)
-            root.add(
-                SceneNode(
-                    key=f"{self.key}:selection:{line_index}",
-                    kind=SceneNodeKind.RECTANGLE,
-                    bounds=Rect(x, y, width, min(line_height, content.bottom - y)),
-                    z_index=0,
-                    fill=self._selection_color,
-                    hit_testable=False,
+        root.add(viewport)
+        for index in range(start, min(len(lines), start + visible_lines)):
+            text = lines[index]
+            layout = self._multiline_layout(text)
+            y = content.y + (index - start) * line_height
+            height = min(line_height, content.bottom - y)
+            if text:
+                viewport.add(
+                    SceneNode(
+                        key=f"{self.key}:text:{index}",
+                        kind=SceneNodeKind.TEXT,
+                        bounds=Rect(content.x - offset, y, layout.width, height),
+                        text=text,
+                        fill=self._placeholder_color if placeholder else self._foreground,
+                        font_size=self._font_size,
+                        font_family=self._font_family,
+                        z_index=1,
+                        hit_testable=False,
+                    )
                 )
-            )
+            if placeholder:
+                continue
+            line_start = starts[index]
+            left_index = max(0, self.selection_start - line_start)
+            right_index = min(len(text), self.selection_end - line_start)
+            spans = list(layout.selection_spans(left_index, right_index))
+            line_end = line_start + len(text)
+            if index < len(lines) - 1 and self.selection_start <= line_end < self.selection_end:
+                newline_x = layout.carets[-1]
+                spans.append((newline_x, newline_x + max(2.0, self._font_size * 0.25)))
+            for part, (left, right) in enumerate(spans):
+                x = max(content.x, content.x + left - offset)
+                end_x = min(content.right, content.x + right - offset)
+                if end_x > x:
+                    viewport.add(
+                        SceneNode(
+                            key=f"{self.key}:selection:{index}:{part}",
+                            kind=SceneNodeKind.RECTANGLE,
+                            bounds=Rect(x, y, end_x - x, height),
+                            fill=self._selection_color,
+                            z_index=0,
+                            hit_testable=False,
+                        )
+                    )
+            if self._focused and self.enabled and index == caret_line:
+                x = content.x + layout.carets[self._caret - line_start] - offset
+                viewport.add(
+                    SceneNode(
+                        key=f"{self.key}:caret",
+                        kind=SceneNodeKind.RECTANGLE,
+                        bounds=Rect(x, y, 1.5, height),
+                        fill=self._caret_color,
+                        z_index=2,
+                        hit_testable=False,
+                    )
+                )
 
     def _multiline_view_start(self, visible_lines: int) -> int:
         if not self._focused:
@@ -441,6 +592,15 @@ class _TextInputBase(Widget):
             platform_event.ctrl
             and not platform_event.alt
             and not platform_event.meta
+            and key in (_VK_C, _VK_X, _VK_V)
+        ):
+            self._clipboard_action(key, event)
+            event.prevent_default()
+            return
+        if (
+            platform_event.ctrl
+            and not platform_event.alt
+            and not platform_event.meta
             and key == _VK_A
         ):
             self.select_all()
@@ -485,6 +645,35 @@ class _TextInputBase(Widget):
         self._replace_selection(text, input_event=event)
         event.prevent_default()
 
+    def _clipboard_action(self, key: int, event: Event) -> None:
+        # Password fields accept paste but never expose their contents by copy/cut.
+        if key in (_VK_C, _VK_X) and (self._mask_character is not None or not self.selected_text):
+            return
+        if self._read_only and key != _VK_C:
+            return
+        window = event.data.get("window") or self.mounted_window
+        if window is None:
+            return
+        try:
+            if key == _VK_V:
+                text = window.get_clipboard_text()
+                if text:
+                    normalized = self._normalize_inserted_text(text, allow_tabs=True)
+                    if normalized:
+                        self._replace_selection(normalized, input_event=event)
+            else:
+                window.set_clipboard_text(self.selected_text)
+                if key == _VK_X:
+                    # Do not remove the selection unless the clipboard write succeeded.
+                    self._replace_selection("", input_event=event)
+        except ClipboardError as exc:
+            self.emit(
+                "clipboard_error",
+                operation={_VK_C: "copy", _VK_X: "cut", _VK_V: "paste"}[key],
+                error=exc,
+                input_event=event,
+            )
+
     def _on_focus_gained(self, _event: Event) -> None:
         if not self._focused:
             self._focused = True
@@ -497,6 +686,7 @@ class _TextInputBase(Widget):
             self.invalidate(reason="focus_lost")
 
     def _replace_selection(self, text: str, *, input_event: Event) -> None:
+        self._preferred_caret_x = None
         start = self.selection_start
         end = self.selection_end
         available = None
@@ -545,15 +735,19 @@ class _TextInputBase(Widget):
         self._move_caret(target, extend=extend)
 
     def _move_vertical(self, delta: int, *, extend: bool) -> None:
-        line_starts = self._line_starts()
-        current_line = self._line_index_for_position(self._caret, line_starts)
-        column = self._caret - line_starts[current_line]
-        target_line = max(0, min(current_line + delta, len(line_starts) - 1))
-        target_start = line_starts[target_line]
-        target_end = self._line_end(target_start)
-        self._move_caret(min(target_start + column, target_end), extend=extend)
+        starts = self._line_starts()
+        lines = self._lines()
+        current = self._line_index_for_position(self._caret, starts)
+        preferred = self._preferred_caret_x
+        if preferred is None:
+            preferred = self._multiline_layout(lines[current]).carets[self._caret - starts[current]]
+        target = max(0, min(current + delta, len(starts) - 1))
+        column = self._multiline_layout(lines[target]).hit_test(preferred)
+        self._move_caret(starts[target] + column, extend=extend)
+        self._preferred_caret_x = preferred
 
     def _move_caret(self, index: int, *, extend: bool) -> None:
+        self._preferred_caret_x = None
         target = max(0, min(int(index), len(self._value)))
         old = (self._selection_anchor, self._caret)
         if extend:
@@ -576,19 +770,12 @@ class _TextInputBase(Widget):
         return self._line_end(line_start)
 
     def _line_starts(self) -> list[int]:
-        starts = [0]
-        starts.extend(index + 1 for index, char in enumerate(self._value) if char == "\n")
-        return starts
+        self._lines()
+        return self._document_starts
 
     @staticmethod
     def _line_index_for_position(position: int, line_starts: list[int]) -> int:
-        return max(
-            0,
-            next(
-                (index - 1 for index, start in enumerate(line_starts) if start > position),
-                len(line_starts) - 1,
-            ),
-        )
+        return max(0, bisect_right(line_starts, position) - 1)
 
     def _line_end(self, line_start: int) -> int:
         newline = self._value.find("\n", line_start)
@@ -596,15 +783,10 @@ class _TextInputBase(Widget):
 
     def _index_from_point(self, x: float, y: float) -> int:
         content = self._content_bounds()
-        char_width = self._estimated_char_width()
         if not self._multiline:
-            display_value = self._display_value()
-            capacity = max(1, int(content.width / char_width))
-            start = 0
-            if len(display_value) > capacity:
-                start = min(max(0, self._caret - capacity + 1), len(display_value) - capacity)
-            column = round((x - content.x) / char_width)
-            return max(start, min(start + column, min(len(self._value), start + capacity)))
+            layout = self._single_line_layout(self._display_value())
+            offset = self._line_view_offset(layout, content)
+            return layout.hit_test(x - content.x + offset)
 
         line_starts = self._line_starts()
         visible_lines = max(1, int(content.height / self._line_height()))
@@ -612,24 +794,26 @@ class _TextInputBase(Widget):
         line = view_start + int(max(0.0, y - content.y) / self._line_height())
         line = max(0, min(line, len(line_starts) - 1))
         start = line_starts[line]
-        end = self._line_end(start)
-        column = round((x - content.x) / char_width)
-        return max(start, min(start + column, end))
+        layout = self._multiline_layout(self._lines()[line])
+        offset = self._multiline_horizontal_offset(content)
+        return start + layout.hit_test(x - content.x + offset)
 
     def _normalize_value(self, value: str) -> str:
         normalized = str(value).replace("\r\n", "\n").replace("\r", "\n")
         if self._multiline:
-            return normalized
-        return normalized.replace("\n", "")
+            return normalized.replace("\u2028", "\n").replace("\u2029", "\n")
+        return normalized.replace("\n", "").replace("\u2028", "").replace("\u2029", "")
 
-    def _normalize_inserted_text(self, text: str) -> str:
+    def _normalize_inserted_text(self, text: str, *, allow_tabs: bool = False) -> str:
         normalized = text.replace("\r\n", "\n").replace("\r", "\n")
         filtered = "".join(
-            char for char in normalized if char >= " " or (self._multiline and char == "\n")
+            char
+            for char in normalized
+            if char >= " " or (self._multiline and (char == "\n" or (allow_tabs and char == "\t")))
         )
         if self._multiline:
-            return filtered
-        return filtered.replace("\n", "")
+            return filtered.replace("\u2028", "\n").replace("\u2029", "\n")
+        return filtered.replace("\n", "").replace("\u2028", "").replace("\u2029", "")
 
     def _estimated_char_width(self) -> float:
         return max(1.0, self._font_size * 0.58)

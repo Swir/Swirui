@@ -3,15 +3,18 @@
 from __future__ import annotations
 
 import math
+from dataclasses import replace
 
 from swirui.core import AccessibilityRole, Component, Event
 from swirui.platforms import PlatformEvent, PlatformEventKind, PointerButton
 from swirui.rendering.geometry import Color, CornerRadius, Rect
 from swirui.rendering.scene import SceneNode, SceneNodeKind
+from swirui.theme import Theme
 
 from .base import Widget
 
 _VK_ESCAPE = 0x1B
+_VK_TAB = 0x09
 
 _MODAL_BACKDROP = Color(0.0, 0.0, 0.0, 0.62)
 _MODAL_BACKGROUND = Color.from_hex("#07111C")
@@ -35,6 +38,8 @@ class Modal(Widget):
     compilation translates the subtree into ``dialog_bounds`` while the full
     overlay remains hit-testable so background controls cannot receive clicks.
     Escape dismisses the modal whenever focus is inside the modal subtree.
+    Once focus enters the modal, Tab/Shift+Tab cycles within available content.
+    Applications choose initial focus on opening and restore focus on dismissal.
     """
 
     def __init__(
@@ -44,6 +49,7 @@ class Modal(Widget):
         dialog_bounds: Rect,
         content: Component | None = None,
         key: str | None = None,
+        theme: Theme | None = None,
         open: bool = True,
         dismiss_on_backdrop: bool = True,
         dismiss_on_escape: bool = True,
@@ -51,7 +57,7 @@ class Modal(Widget):
         background: Color | None = None,
         border_color: Color | None = None,
         border_width: float = 1.0,
-        corner_radius: float = 18.0,
+        corner_radius: float | None = None,
         opacity: float = 1.0,
         z_index: int = 10_000,
         accessible_name: str | None = None,
@@ -65,8 +71,9 @@ class Modal(Widget):
         self._background = background or _MODAL_BACKGROUND
         self._border_color = border_color or _MODAL_BORDER
         self._border_width = self._validate_non_negative(border_width, "border_width")
-        radius = self._validate_non_negative(corner_radius, "corner_radius")
-        self._corner_radius = CornerRadius.uniform(radius)
+        self._corner_radius = self._validate_non_negative(
+            18.0 if corner_radius is None else corner_radius, "corner_radius"
+        )
         self._content: Component | None = None
         super().__init__(
             bounds=bounds,
@@ -77,6 +84,19 @@ class Modal(Widget):
             accessibility_role=AccessibilityRole.DIALOG,
             accessible_name=accessible_name or "Dialog",
             accessible_description=accessible_description,
+        )
+        self._bind_theme(
+            theme,
+            {
+                "_background": ("surface", "surface", _MODAL_BACKGROUND),
+                "_border_color": ("surface", "border", _MODAL_BORDER),
+                "_corner_radius": ("token", "control_radius", 18.0),
+            },
+            {
+                "_background": background,
+                "_border_color": border_color,
+                "_corner_radius": corner_radius,
+            },
         )
         self.visible = bool(open)
         self.on("pointer_down", self._on_pointer_down)
@@ -195,7 +215,7 @@ class Modal(Widget):
                     kind=SceneNodeKind.RECTANGLE,
                     bounds=self._dialog_bounds,
                     fill=self._border_color,
-                    corner_radius=self._corner_radius,
+                    corner_radius=CornerRadius.uniform(self._corner_radius),
                     z_index=-10,
                     hit_testable=False,
                 )
@@ -214,9 +234,7 @@ class Modal(Widget):
                     kind=SceneNodeKind.RECTANGLE,
                     bounds=surface,
                     fill=self._background,
-                    corner_radius=CornerRadius.uniform(
-                        max(0.0, self._corner_radius.top_left - inset)
-                    ),
+                    corner_radius=CornerRadius.uniform(max(0.0, self._corner_radius - inset)),
                     z_index=-5,
                     hit_testable=False,
                 )
@@ -259,15 +277,44 @@ class Modal(Widget):
             self.dismiss(reason="backdrop")
         event.prevent_default()
 
+    def _map_descendant_pointer_event(self, event: PlatformEvent) -> PlatformEvent:
+        return replace(
+            event,
+            x=None if event.x is None else event.x - self._dialog_bounds.x,
+            y=None if event.y is None else event.y - self._dialog_bounds.y,
+        )
+
     def _on_key_down(self, event: Event) -> None:
-        if not self._dismiss_on_escape:
+        if event.default_prevented or not self.visible or not self.enabled:
             return
         platform_event = self._platform_event(event, PlatformEventKind.KEY_DOWN)
         if platform_event is None:
             return
+        if platform_event.ctrl or platform_event.alt or platform_event.meta:
+            return
+        if platform_event.key_code == _VK_TAB:
+            window = self.mounted_window
+            if window is None:
+                return
+            candidates = [
+                item
+                for item in self.walk(include_self=False)
+                if window._component_is_focus_candidate(item)
+            ]
+            current = window.focused_component
+            if not candidates:
+                target: Component = self
+            elif current not in candidates:
+                target = candidates[-1] if platform_event.shift else candidates[0]
+            else:
+                step = -1 if platform_event.shift else 1
+                target = candidates[(candidates.index(current) + step) % len(candidates)]
+            window.focus_component(target)
+            event.prevent_default()
+            return
         if (
-            platform_event.key_code == _VK_ESCAPE
-            and not (platform_event.ctrl or platform_event.alt or platform_event.meta)
+            self._dismiss_on_escape
+            and platform_event.key_code == _VK_ESCAPE
             and self.dismiss(reason="escape")
         ):
             event.prevent_default()
@@ -317,6 +364,15 @@ class Dialog(Modal):
 class Toast(Widget):
     """GPU-backed notification surface with deterministic lifetime control."""
 
+    _foreground: Color
+    _muted: Color
+    _accent_info: Color
+    _accent_success: Color
+    _accent_warning: Color
+    _accent_error: Color
+    _font_family: str
+    _corner_radius: float
+
     def __init__(
         self,
         message: str,
@@ -324,6 +380,7 @@ class Toast(Widget):
         bounds: Rect,
         title: str = "Notification",
         key: str | None = None,
+        theme: Theme | None = None,
         kind: str = "info",
         duration_seconds: float | None = None,
         dismiss_on_click: bool = True,
@@ -351,6 +408,25 @@ class Toast(Widget):
             accessibility_role=AccessibilityRole.ALERT,
             accessible_name=accessible_name or self._title,
             accessible_description=accessible_description or self._message,
+        )
+        self._bind_theme(
+            theme,
+            {
+                "_background": ("surface", "raised", _TOAST_BACKGROUND),
+                "_border_color": ("surface", "border", _TOAST_BORDER),
+                "_foreground": ("text", "text", _TOAST_TEXT),
+                "_muted": ("text", "muted", _TOAST_MUTED),
+                "_font_family": ("token", "font_family", "Segoe UI"),
+                "_corner_radius": ("token", "control_radius", 14.0),
+                "_accent_info": ("surface", "accent", _TOAST_ACCENTS["info"]),
+                "_accent_success": ("surface", "success", _TOAST_ACCENTS["success"]),
+                "_accent_warning": ("surface", "warning", _TOAST_ACCENTS["warning"]),
+                "_accent_error": ("surface", "error", _TOAST_ACCENTS["error"]),
+            },
+            {
+                "_background": background,
+                "_border_color": border_color,
+            },
         )
         self.on("pointer_down", self._on_pointer_down)
 
@@ -432,7 +508,12 @@ class Toast(Widget):
         return self.dismiss(reason="timeout")
 
     def build_scene_node(self) -> SceneNode:
-        accent = _TOAST_ACCENTS[self._kind]
+        accent = {
+            "info": self._accent_info,
+            "success": self._accent_success,
+            "warning": self._accent_warning,
+            "error": self._accent_error,
+        }[self._kind]
         root = SceneNode(
             key=self.key,
             kind=SceneNodeKind.GROUP,
@@ -442,7 +523,7 @@ class Toast(Widget):
             clip_to_bounds=True,
             hit_testable=False,
         )
-        radius = CornerRadius.uniform(14.0)
+        radius = CornerRadius.uniform(self._corner_radius)
         root.add(
             SceneNode(
                 key=self.key,
@@ -463,7 +544,7 @@ class Toast(Widget):
                     max(0.0, self.bounds.height - 2.0),
                 ),
                 fill=self._background,
-                corner_radius=CornerRadius.uniform(13.0),
+                corner_radius=CornerRadius.uniform(max(0.0, self._corner_radius - 1.0)),
                 z_index=-15,
                 hit_testable=False,
             ),
@@ -493,10 +574,10 @@ class Toast(Widget):
                         max(0.0, self.bounds.width - 38.0),
                         24.0,
                     ),
-                    fill=_TOAST_TEXT,
+                    fill=self._foreground,
                     text=self._title,
                     font_size=15.0,
-                    font_family="Segoe UI",
+                    font_family=self._font_family,
                     z_index=0,
                     hit_testable=False,
                 )
@@ -511,10 +592,10 @@ class Toast(Widget):
                     max(0.0, self.bounds.width - 38.0),
                     max(20.0, self.bounds.height - (52.0 if self._title else 28.0)),
                 ),
-                fill=_TOAST_MUTED,
+                fill=self._muted,
                 text=self._message,
                 font_size=13.0,
-                font_family="Segoe UI",
+                font_family=self._font_family,
                 z_index=0,
                 hit_testable=False,
             )

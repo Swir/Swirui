@@ -12,6 +12,7 @@ from swirui.core import AccessibilityNode, AccessibilityRole, Component, Event
 from swirui.platforms import PlatformEvent, PlatformEventKind, PointerButton
 from swirui.rendering.geometry import Color, CornerRadius, Rect
 from swirui.rendering.scene import SceneNode, SceneNodeKind
+from swirui.theme import Theme
 
 from .base import Widget
 
@@ -79,6 +80,17 @@ class PropertyItem:
 class PropertyGrid(Widget):
     """Retained two-column property editor with keyboard and accessibility support."""
 
+    _background: Color
+    _row_background: Color
+    _selected_background: Color
+    _read_only_background: Color
+    _editor_background: Color
+    _foreground: Color
+    _muted: Color
+    _accent: Color
+    _divider: Color
+    _corner_radius: float
+
     def __init__(
         self,
         items: Sequence[PropertyItem],
@@ -87,12 +99,17 @@ class PropertyGrid(Widget):
         key: str | None = None,
         row_height: float = 44.0,
         label_fraction: float = 0.42,
+        theme: Theme | None = None,
+        font_family: str | None = None,
         opacity: float = 1.0,
         z_index: int = 0,
         accessible_name: str = "Property grid",
         accessible_description: str | None = None,
     ) -> None:
         self._items = _validate_items(items)
+        self._font_family = "Segoe UI" if font_family is None else str(font_family).strip()
+        if not self._font_family:
+            raise ValueError("font_family must not be empty.")
         self._row_height = _positive(row_height, "row_height")
         self._label_fraction = float(label_fraction)
         if not math.isfinite(self._label_fraction) or not 0.2 <= self._label_fraction <= 0.8:
@@ -111,6 +128,24 @@ class PropertyGrid(Widget):
             accessible_name=accessible_name,
             accessible_description=accessible_description,
         )
+        self._bind_theme(
+            theme,
+            {
+                "_background": ("surface", "surface", _BACKGROUND),
+                "_row_background": ("surface", "raised", _ROW_BACKGROUND),
+                "_selected_background": ("surface", "selection", _SELECTED_BACKGROUND),
+                "_read_only_background": ("surface", "surface", _READ_ONLY_BACKGROUND),
+                "_editor_background": ("surface", "surface", _EDITOR_BACKGROUND),
+                "_foreground": ("text", "text", _FOREGROUND),
+                "_muted": ("text", "muted", _MUTED),
+                "_accent": ("surface", "accent", _ACCENT),
+                "_divider": ("surface", "border", _DIVIDER),
+                "_font_family": ("token", "font_family", "Segoe UI"),
+                "_corner_radius": ("token", "control_radius", 8.0),
+            },
+            {"_font_family": self._font_family if font_family is not None else None},
+        )
+        self._enable_theme_focus_frame()
         self.on("pointer_down", self._on_pointer_down)
         self.on("key_down", self._on_key_down)
         self.on("text_input", self._on_text_input)
@@ -276,8 +311,8 @@ class PropertyGrid(Widget):
             bounds=self.bounds,
             opacity=self.opacity,
             z_index=self.z_index,
-            fill=_BACKGROUND,
-            corner_radius=CornerRadius.uniform(8.0),
+            fill=self._background,
+            corner_radius=CornerRadius.uniform(self._corner_radius),
             clip_to_bounds=True,
             hit_testable=self.enabled,
         )
@@ -293,9 +328,9 @@ class PropertyGrid(Widget):
                 kind=SceneNodeKind.RECTANGLE,
                 bounds=row,
                 fill=(
-                    _SELECTED_BACKGROUND
+                    self._selected_background
                     if selected
-                    else _READ_ONLY_BACKGROUND if item.read_only else _ROW_BACKGROUND
+                    else self._read_only_background if item.read_only else self._row_background
                 ),
                 z_index=1,
                 hit_testable=False,
@@ -311,10 +346,10 @@ class PropertyGrid(Widget):
                         max(0.0, label_width - 22.0),
                         20.0,
                     ),
-                    fill=_MUTED if item.read_only else _FOREGROUND,
+                    fill=self._muted if item.read_only and not selected else self._foreground,
                     text=name_text,
                     font_size=13.0,
-                    font_family="Segoe UI",
+                    font_family=self._font_family,
                     z_index=3,
                     hit_testable=False,
                 )
@@ -332,8 +367,8 @@ class PropertyGrid(Widget):
                         key=f"{self.key}:row:{index}:editor",
                         kind=SceneNodeKind.RECTANGLE,
                         bounds=value_bounds,
-                        fill=_EDITOR_BACKGROUND,
-                        corner_radius=CornerRadius.uniform(5.0),
+                        fill=self._editor_background,
+                        corner_radius=CornerRadius.uniform(max(0.0, self._corner_radius - 3.0)),
                         z_index=2,
                         hit_testable=False,
                     )
@@ -348,10 +383,10 @@ class PropertyGrid(Widget):
                         max(0.0, row.right - value_x - 22.0),
                         20.0,
                     ),
-                    fill=_MUTED if item.read_only else _FOREGROUND,
+                    fill=self._muted if item.read_only and not selected else self._foreground,
                     text=self._edit_buffer if editing else _format_value(item.value),
                     font_size=13.0,
-                    font_family="Segoe UI",
+                    font_family=self._font_family,
                     z_index=3,
                     hit_testable=False,
                 )
@@ -361,7 +396,7 @@ class PropertyGrid(Widget):
                     key=f"{self.key}:row:{index}:divider",
                     kind=SceneNodeKind.RECTANGLE,
                     bounds=Rect(value_x, row.y + 5.0, 1.0, max(0.0, row.height - 10.0)),
-                    fill=_DIVIDER,
+                    fill=self._divider,
                     z_index=3,
                     hit_testable=False,
                 )
@@ -372,12 +407,13 @@ class PropertyGrid(Widget):
                         key=f"{self.key}:row:{index}:accent",
                         kind=SceneNodeKind.RECTANGLE,
                         bounds=Rect(row.x, row.y + 5.0, 3.0, max(0.0, row.height - 10.0)),
-                        fill=_ACCENT,
+                        fill=self._accent,
                         z_index=4,
                         hit_testable=False,
                     )
                 )
             root.add(row_node)
+        self._add_theme_focus_frame(root)
         return root
 
     def accessibility_snapshot(
@@ -472,6 +508,8 @@ class PropertyGrid(Widget):
         )
 
     def _on_pointer_down(self, event: Event) -> None:
+        if event.source is not self or event.default_prevented:
+            return
         platform_event = _platform_event(event, PlatformEventKind.POINTER_DOWN)
         if (
             not self.enabled
@@ -499,6 +537,8 @@ class PropertyGrid(Widget):
         event.prevent_default()
 
     def _on_key_down(self, event: Event) -> None:
+        if event.source is not self or event.default_prevented:
+            return
         platform_event = _platform_event(event, PlatformEventKind.KEY_DOWN)
         if not self.enabled or platform_event is None:
             return
@@ -547,6 +587,8 @@ class PropertyGrid(Widget):
         event.prevent_default()
 
     def _on_text_input(self, event: Event) -> None:
+        if event.source is not self or event.default_prevented:
+            return
         platform_event = _platform_event(event, PlatformEventKind.TEXT_INPUT)
         if not self.enabled or self._editing_index is None or platform_event is None:
             return
@@ -568,6 +610,8 @@ class Inspector(PropertyGrid):
         key: str | None = None,
         row_height: float = 44.0,
         label_fraction: float = 0.42,
+        theme: Theme | None = None,
+        font_family: str | None = None,
         opacity: float = 1.0,
         z_index: int = 0,
         accessible_name: str = "Inspector",
@@ -579,6 +623,8 @@ class Inspector(PropertyGrid):
             key=key,
             row_height=row_height,
             label_fraction=label_fraction,
+            theme=theme,
+            font_family=font_family,
             opacity=opacity,
             z_index=z_index,
             accessible_name=accessible_name,

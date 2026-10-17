@@ -30,9 +30,13 @@ from ._windows_legacy import (
     Win32PlatformBackend as _LegacyWin32PlatformBackend,
 )
 from .base import NativeWindowSpec
-from .events import NativeWindowHandle, PlatformEvent, PlatformEventKind
+from .events import ColorScheme, NativeWindowHandle, PlatformEvent, PlatformEventKind
+from .windows_appearance import read_app_color_scheme
+from .windows_clipboard import Win32TextClipboard
 
 _WM_GETMINMAXINFO = 0x0024
+_WM_SETTINGCHANGE = 0x001A
+_WM_THEMECHANGED = 0x031A
 _WM_SYSKEYDOWN = 0x0104
 _WM_SYSKEYUP = 0x0105
 _VK_SHIFT = 0x10
@@ -69,6 +73,19 @@ class Win32PlatformBackend(_LegacyWin32PlatformBackend):
         self._logical_min_client_sizes: dict[NativeWindowHandle, tuple[float, float]] = {}
         self._dpi_resizing: set[NativeWindowHandle] = set()
         self._configure_client_area_signatures()
+        self._clipboard = Win32TextClipboard(self._user32, self._kernel32)
+
+    def get_clipboard_text(self, handle: NativeWindowHandle) -> str | None:
+        self._require_window(handle)
+        return self._clipboard.read_text(handle.value)
+
+    def get_system_color_scheme(self) -> ColorScheme | None:
+        """Read the Windows app preference without changing system settings."""
+        return read_app_color_scheme()
+
+    def set_clipboard_text(self, handle: NativeWindowHandle, text: str) -> None:
+        self._require_window(handle)
+        self._clipboard.write_text(handle.value, text)
 
     def _configure_client_area_signatures(self) -> None:
         self._user32.GetClientRect.argtypes = [ctypes.c_void_p, ctypes.POINTER(_Rect)]
@@ -328,6 +345,13 @@ class Win32PlatformBackend(_LegacyWin32PlatformBackend):
 
     def _wndproc(self, hwnd: int | None, message: int, wparam: int, lparam: int) -> int:
         handle = NativeWindowHandle(int(hwnd)) if hwnd else None
+
+        if handle in self._windows and message in (_WM_SETTINGCHANGE, _WM_THEMECHANGED):
+            # Defer the read to the application event loop. No lParam string
+            # dereference is needed; unrelated settings notifications are cheap
+            # no-ops when the resolved theme has not changed.
+            self._events.append(PlatformEvent(PlatformEventKind.SYSTEM_APPEARANCE_CHANGED, handle))
+            return 0
 
         key_down_messages = (_WM_KEYDOWN, _WM_SYSKEYDOWN)
         key_up_messages = (_WM_KEYUP, _WM_SYSKEYUP)

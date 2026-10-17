@@ -7,11 +7,14 @@ from collections.abc import Hashable, Sequence
 
 from swirui.core import AccessibilityNode, AccessibilityRole, Component, Event
 from swirui.platforms import PlatformEvent, PlatformEventKind, PointerButton
-from swirui.rendering.geometry import Color, CornerRadius, Rect
+from swirui.rendering.geometry import Color, CornerRadius, Rect, Size
 from swirui.rendering.scene import SceneNode, SceneNodeKind
+from swirui.theme import Theme
 
 from .base import Widget
 from .command_surfaces import CommandItem
+from .command_viewport import CommandViewport
+from .input import Input
 
 _VK_BACK = 0x08
 _VK_ESCAPE = 0x1B
@@ -41,6 +44,7 @@ class ContextMenu(Widget):
         *,
         bounds: Rect,
         key: str | None = None,
+        theme: Theme | None = None,
         row_height: float = 38.0,
         dismiss_on_invoke: bool = True,
         opacity: float = 1.0,
@@ -48,6 +52,7 @@ class ContextMenu(Widget):
         accessible_name: str = "Context menu",
         accessible_description: str | None = None,
     ) -> None:
+        self._row_viewport = CommandViewport()
         self._items = _validate_items(items)
         self._row_height = _positive(row_height, "row_height")
         self._dismiss_on_invoke = bool(dismiss_on_invoke)
@@ -63,6 +68,37 @@ class ContextMenu(Widget):
             accessible_name=accessible_name,
             accessible_description=accessible_description,
         )
+        self._background = _BACKGROUND
+        self._item_background = _ROW_BACKGROUND
+        self._active_item_background = _ACTIVE_BACKGROUND
+        self._input_background = _INPUT_BACKGROUND
+        self._foreground = _FOREGROUND
+        self._muted = _MUTED
+        self._accent = _ACCENT
+        self._scroll_track = _ROW_BACKGROUND
+        self._scroll_thumb = _ACCENT
+        self._font_family = "Segoe UI"
+        self._corner_radius = 10.0 if isinstance(self, ContextMenu) else 12.0
+        self._bind_theme(
+            theme,
+            {
+                "_background": ("surface", "surface", _BACKGROUND),
+                "_item_background": ("surface", "surface", _ROW_BACKGROUND),
+                "_active_item_background": ("surface", "selection", _ACTIVE_BACKGROUND),
+                "_input_background": ("surface", "raised", _INPUT_BACKGROUND),
+                "_foreground": ("text", "text", _FOREGROUND),
+                "_muted": ("text", "muted", _MUTED),
+                "_accent": ("surface", "accent", _ACCENT),
+                "_scroll_track": ("surface", "border", _ROW_BACKGROUND),
+                "_scroll_thumb": ("surface", "accent", _ACCENT),
+                "_font_family": ("token", "font_family", "Segoe UI"),
+                "_corner_radius": ("token", "control_radius", self._corner_radius),
+            },
+        )
+        self._enable_theme_focus_frame()
+        self.on("pointer_scroll", self._on_pointer_scroll)
+        self.on("pointer_move", self._on_pointer_move)
+        self.on("pointer_up", self._on_pointer_up)
         self.on("pointer_down", self._on_pointer_down)
         self.on("key_down", self._on_key_down)
         self._sync_accessibility()
@@ -112,17 +148,34 @@ class ContextMenu(Widget):
             raise KeyError(f"Unknown context-menu command key: {key!r}")
         return self._activate_index(index)
 
+    def _viewport(self) -> CommandViewport:
+        self._row_viewport.configure(self.bounds, self._row_height, len(self._items))
+        return self._row_viewport
+
+    @property
+    def scroll_offset(self) -> float:
+        return self._viewport().offset
+
+    def scroll_by(self, delta: float) -> ContextMenu:
+        if self._viewport().scroll_by(float(delta)):
+            self.invalidate(reason="scroll_offset")
+        return self
+
+    def _visible_indices(self) -> range:
+        return self._viewport().visible_indices()
+
     def row_bounds(self, index: int) -> Rect:
-        normalized = _normalize_index(index, len(self._items), "Context-menu row")
-        return Rect(
-            self.bounds.x,
-            self.bounds.y + normalized * self._row_height,
-            self.bounds.width,
-            min(
-                self._row_height,
-                max(0.0, self.bounds.bottom - (self.bounds.y + normalized * self._row_height)),
-            ),
-        )
+        index = _normalize_index(index, len(self._items), "Command row")
+        return self._viewport().row_bounds(index)
+
+    def _on_pointer_scroll(self, event: Event) -> None:
+        self._viewport().on_scroll(self, event)
+
+    def _on_pointer_move(self, event: Event) -> None:
+        self._viewport().on_pointer_move(self, event)
+
+    def _on_pointer_up(self, event: Event) -> None:
+        self._viewport().on_pointer_up(self, event)
 
     def build_scene_node(self) -> SceneNode:
         root = SceneNode(
@@ -131,8 +184,8 @@ class ContextMenu(Widget):
             bounds=self.bounds,
             opacity=self.opacity,
             z_index=self.z_index,
-            fill=_BACKGROUND,
-            corner_radius=CornerRadius.uniform(10.0),
+            fill=self._background,
+            corner_radius=CornerRadius.uniform(self._corner_radius),
             clip_to_bounds=True,
             hit_testable=self.enabled,
         )
@@ -140,7 +193,16 @@ class ContextMenu(Widget):
             root.opacity = 0.0
             root.hit_testable = False
             return root
-        for index, item in enumerate(self._items):
+        rows = SceneNode(
+            key=f"{self.key}:rows",
+            kind=SceneNodeKind.GROUP,
+            bounds=self._viewport().bounds,
+            clip_to_bounds=True,
+            hit_testable=False,
+        )
+        root.add(rows)
+        for index in self._visible_indices():
+            item = self._items[index]
             row = self.row_bounds(index)
             if row.height <= 0.0 or row.y >= self.bounds.bottom:
                 break
@@ -149,14 +211,27 @@ class ContextMenu(Widget):
                 key=f"{self.key}:item:{index}",
                 kind=SceneNodeKind.RECTANGLE,
                 bounds=row,
-                fill=_ACTIVE_BACKGROUND if active else _ROW_BACKGROUND,
+                fill=self._active_item_background if active else self._item_background,
                 z_index=1,
                 hit_testable=False,
             )
-            _add_command_text(node, self.key, "item", index, row, item)
+            _add_command_text(
+                node,
+                self.key,
+                "item",
+                index,
+                row,
+                item,
+                self._foreground,
+                self._muted,
+                self._font_family,
+                self.enabled,
+            )
             if active:
-                _add_active_accent(node, self.key, "item", index, row)
-            root.add(node)
+                _add_active_accent(node, self.key, "item", index, row, self._accent)
+            rows.add(node)
+        self._viewport().add_scrollbar(root, self.key, self._scroll_track, self._scroll_thumb)
+        self._add_theme_focus_frame(root)
         return root
 
     def accessibility_snapshot(
@@ -204,6 +279,7 @@ class ContextMenu(Widget):
         return self
 
     def _sync_accessibility(self) -> None:
+        self._viewport().reveal(self._active_index)
         active = self.active_item
         if active is None:
             self.accessible_value_text = f"No active command of {len(self._items)}"
@@ -213,6 +289,8 @@ class ContextMenu(Widget):
         self.accessible_value_text = f"{active.label}, command {index + 1} of {len(self._items)}"
 
     def _on_pointer_down(self, event: Event) -> None:
+        if self._viewport().on_pointer_down(self, event):
+            return
         platform_event = _platform_event(event, PlatformEventKind.POINTER_DOWN)
         if (
             not self.enabled
@@ -227,12 +305,15 @@ class ContextMenu(Widget):
             )
         ):
             return
-        index = int((platform_event.y - self.bounds.y) // self._row_height)
-        if 0 <= index < len(self._items):
+        viewport = self._viewport()
+        index = int((platform_event.y - viewport.bounds.y + viewport.offset) // self._row_height)
+        if index in self._visible_indices():
             self._activate_index(index)
             event.prevent_default()
 
     def _on_key_down(self, event: Event) -> None:
+        if event.source is not self or event.default_prevented:
+            return
         platform_event = _platform_event(event, PlatformEventKind.KEY_DOWN)
         if not self.enabled or not self.visible or platform_event is None:
             return
@@ -256,7 +337,7 @@ class ContextMenu(Widget):
         event.prevent_default()
 
 
-class CommandPalette(Widget):
+class CommandPalette(Input):
     """Searchable retained command palette with native text-input and keyboard routing."""
 
     def __init__(
@@ -265,6 +346,7 @@ class CommandPalette(Widget):
         *,
         bounds: Rect,
         key: str | None = None,
+        theme: Theme | None = None,
         query: str = "",
         header_height: float = 48.0,
         row_height: float = 40.0,
@@ -275,6 +357,7 @@ class CommandPalette(Widget):
         accessible_name: str = "Command palette",
         accessible_description: str | None = None,
     ) -> None:
+        self._row_viewport = CommandViewport()
         self._items = _validate_items(items)
         self._header_height = _positive(header_height, "header_height")
         self._row_height = _positive(row_height, "row_height")
@@ -282,23 +365,57 @@ class CommandPalette(Widget):
         if self._max_visible_rows <= 0:
             raise ValueError("max_visible_rows must be positive.")
         self._dismiss_on_invoke = bool(dismiss_on_invoke)
-        self._query = _normalize_query(query)
-        self._filtered = _filter_items(self._items, self._query)
+        query = self._normalize_value(_normalize_query(query))
+        self._filtered = _filter_items(self._items, query)
         self._active_index = _first_enabled(self._filtered)
         super().__init__(
+            query,
             bounds=bounds,
+            placeholder="Type a command...",
+            font_size=15,
+            padding=14,
             key=key,
             opacity=opacity,
             z_index=z_index,
-            clip_to_bounds=True,
-            focusable=True,
             accessibility_role=AccessibilityRole.DIALOG,
             accessible_name=accessible_name,
             accessible_description=accessible_description,
         )
-        self.on("pointer_down", self._on_pointer_down)
-        self.on("key_down", self._on_key_down)
-        self.on("text_input", self._on_text_input)
+        self._background = _BACKGROUND
+        self._item_background = _ROW_BACKGROUND
+        self._active_item_background = _ACTIVE_BACKGROUND
+        self._input_background = _INPUT_BACKGROUND
+        self._foreground = _FOREGROUND
+        self._muted = _MUTED
+        self._accent = _ACCENT
+        self._scroll_track = _ROW_BACKGROUND
+        self._scroll_thumb = _ACCENT
+        self._font_family = "Segoe UI"
+        self._corner_radius = 10.0 if isinstance(self, ContextMenu) else 12.0
+        self._bind_theme(
+            theme,
+            {
+                "_background": ("surface", "surface", _BACKGROUND),
+                "_item_background": ("surface", "surface", _ROW_BACKGROUND),
+                "_active_item_background": ("surface", "selection", _ACTIVE_BACKGROUND),
+                "_input_background": ("surface", "raised", _INPUT_BACKGROUND),
+                "_foreground": ("text", "text", _FOREGROUND),
+                "_muted": ("text", "muted", _MUTED),
+                "_accent": ("surface", "accent", _ACCENT),
+                "_scroll_track": ("surface", "border", _ROW_BACKGROUND),
+                "_scroll_thumb": ("surface", "accent", _ACCENT),
+                "_font_family": ("token", "font_family", "Segoe UI"),
+                "_corner_radius": ("token", "control_radius", self._corner_radius),
+                "_placeholder_color": ("text", "muted", _MUTED),
+                "_selection_color": ("surface", "selection", _ACTIVE_BACKGROUND),
+                "_caret_color": ("surface", "focus", _ACCENT),
+            },
+        )
+        self._enable_theme_focus_frame()
+        self.on("pointer_scroll", self._on_pointer_scroll)
+        self.on("pointer_move", self._on_pointer_move)
+        self.on("pointer_up", self._on_pointer_up)
+        self.on("changed", self._on_query_changed)
         self._sync_accessibility()
 
     @property
@@ -307,7 +424,7 @@ class CommandPalette(Widget):
 
     @property
     def query(self) -> str:
-        return self._query
+        return self.value
 
     @property
     def filtered_items(self) -> tuple[CommandItem, ...]:
@@ -333,14 +450,38 @@ class CommandPalette(Widget):
         return self
 
     def set_query(self, query: str) -> CommandPalette:
-        normalized = _normalize_query(query)
-        if normalized == self._query:
-            return self
-        active_key = None if self.active_item is None else self.active_item.key
-        self._query = normalized
-        self._apply_filter(active_key=active_key, reason="query")
-        self.emit("query_changed", query=self._query, result_count=len(self._filtered))
+        normalized = self._normalize_value(_normalize_query(query))
+        if normalized != self.value:
+            self.value = normalized
+            self.select(len(self.value), len(self.value))
         return self
+
+    def _on_query_changed(self, _event: Event) -> None:
+        active_key = None if self.active_item is None else self.active_item.key
+        self._apply_filter(active_key=active_key, reason="query")
+        self.emit("query_changed", query=self.value, result_count=len(self._filtered))
+
+    def intrinsic_size(self, available: Size | None = None) -> Size:
+        return Widget.intrinsic_size(self, available)
+
+    def _content_bounds(self) -> Rect:
+        return Rect(
+            self.bounds.x + 14,
+            self.bounds.y + 13,
+            max(0, self.bounds.width - 28),
+            max(0, min(self._header_height, self.bounds.height) - 26),
+        )
+
+    def _normalize_value(self, value: str) -> str:
+        return self._normalize_inserted_text(value, allow_tabs=True)
+
+    def _normalize_inserted_text(self, text: str, *, allow_tabs: bool = False) -> str:
+        text = text.replace("\u2028", " ").replace("\u2029", " ")
+        if allow_tabs:
+            text = (
+                text.replace("\r\n", "\n").replace("\r", "\n").replace("\n", " ").replace("\t", " ")
+            )
+        return "".join(char for char in text if ord(char) >= 32 and not 0x7F <= ord(char) <= 0x9F)
 
     def clear_query(self) -> CommandPalette:
         return self.set_query("")
@@ -351,15 +492,46 @@ class CommandPalette(Widget):
             raise KeyError(f"Unknown visible command key: {key!r}")
         return self._activate_index(index)
 
-    def row_bounds(self, index: int) -> Rect:
-        normalized = _normalize_index(index, len(self._filtered), "Command-palette row")
-        y = self.bounds.y + self._header_height + normalized * self._row_height
-        return Rect(
-            self.bounds.x,
-            y,
-            self.bounds.width,
-            min(self._row_height, max(0.0, self.bounds.bottom - y)),
+    def _viewport(self) -> CommandViewport:
+        self._row_viewport.configure(
+            Rect(
+                self.bounds.x,
+                self.bounds.y + min(self._header_height, self.bounds.height),
+                self.bounds.width,
+                min(
+                    self._max_visible_rows * self._row_height,
+                    max(0.0, self.bounds.height - self._header_height),
+                ),
+            ),
+            self._row_height,
+            len(self._filtered),
         )
+        return self._row_viewport
+
+    @property
+    def scroll_offset(self) -> float:
+        return self._viewport().offset
+
+    def scroll_by(self, delta: float) -> CommandPalette:
+        if self._viewport().scroll_by(float(delta)):
+            self.invalidate(reason="scroll_offset")
+        return self
+
+    def _visible_indices(self) -> range:
+        return self._viewport().visible_indices()
+
+    def row_bounds(self, index: int) -> Rect:
+        index = _normalize_index(index, len(self._filtered), "Command row")
+        return self._viewport().row_bounds(index)
+
+    def _on_pointer_scroll(self, event: Event) -> None:
+        self._viewport().on_scroll(self, event)
+
+    def _on_pointer_move(self, event: Event) -> None:
+        self._viewport().on_pointer_move(self, event)
+
+    def _on_pointer_up(self, event: Event) -> None:
+        self._viewport().on_pointer_up(self, event)
 
     def build_scene_node(self) -> SceneNode:
         root = SceneNode(
@@ -368,8 +540,8 @@ class CommandPalette(Widget):
             bounds=self.bounds,
             opacity=self.opacity,
             z_index=self.z_index,
-            fill=_BACKGROUND,
-            corner_radius=CornerRadius.uniform(12.0),
+            fill=self._background,
+            corner_radius=CornerRadius.uniform(self._corner_radius),
             clip_to_bounds=True,
             hit_testable=self.enabled,
         )
@@ -383,32 +555,38 @@ class CommandPalette(Widget):
             key=f"{self.key}:query",
             kind=SceneNodeKind.RECTANGLE,
             bounds=header,
-            fill=_INPUT_BACKGROUND,
+            fill=self._input_background,
             z_index=1,
             hit_testable=False,
         )
-        query_text = self._query if self._query else "Type a command..."
-        header_node.add(
-            SceneNode(
-                key=f"{self.key}:query:text",
-                kind=SceneNodeKind.TEXT,
-                bounds=Rect(
-                    header.x + 14.0,
-                    header.y + 13.0,
-                    max(0.0, header.width - 28.0),
-                    22.0,
-                ),
-                fill=_FOREGROUND if self._query else _MUTED,
-                text=query_text,
-                font_size=15.0,
-                font_family="Segoe UI",
-                z_index=2,
-                hit_testable=False,
-            )
-        )
+        self._build_single_line_content(header_node, self._content_bounds())
         root.add(header_node)
 
-        for index, item in enumerate(self._filtered[: self._max_visible_rows]):
+        if not self._filtered:
+            root.add(
+                SceneNode(
+                    key=f"{self.key}:empty",
+                    kind=SceneNodeKind.TEXT,
+                    bounds=Rect(header.x + 14, header.bottom + 12, max(0, header.width - 28), 24),
+                    fill=self._muted,
+                    text="No matching commands",
+                    font_size=14,
+                    font_family=self._font_family,
+                    z_index=2,
+                    hit_testable=False,
+                )
+            )
+
+        rows = SceneNode(
+            key=f"{self.key}:rows",
+            kind=SceneNodeKind.GROUP,
+            bounds=self._viewport().bounds,
+            clip_to_bounds=True,
+            hit_testable=False,
+        )
+        root.add(rows)
+        for index in self._visible_indices():
+            item = self._filtered[index]
             row = self.row_bounds(index)
             if row.height <= 0.0 or row.y >= self.bounds.bottom:
                 break
@@ -417,14 +595,27 @@ class CommandPalette(Widget):
                 key=f"{self.key}:result:{index}",
                 kind=SceneNodeKind.RECTANGLE,
                 bounds=row,
-                fill=_ACTIVE_BACKGROUND if active else _ROW_BACKGROUND,
+                fill=self._active_item_background if active else self._item_background,
                 z_index=1,
                 hit_testable=False,
             )
-            _add_command_text(node, self.key, "result", index, row, item)
+            _add_command_text(
+                node,
+                self.key,
+                "result",
+                index,
+                row,
+                item,
+                self._foreground,
+                self._muted,
+                self._font_family,
+                self.enabled,
+            )
             if active:
-                _add_active_accent(node, self.key, "result", index, row)
-            root.add(node)
+                _add_active_accent(node, self.key, "result", index, row, self._accent)
+            rows.add(node)
+        self._viewport().add_scrollbar(root, self.key, self._scroll_track, self._scroll_thumb)
+        self._add_theme_focus_frame(root)
         return root
 
     def accessibility_snapshot(
@@ -444,7 +635,8 @@ class CommandPalette(Widget):
                 selected=index == self._active_index,
                 active=index == self._active_index,
             )
-            for index, item in enumerate(self._filtered[: self._max_visible_rows])
+            for index in self._visible_indices()
+            for item in (self._filtered[index],)
         )
         return AccessibilityNode(
             key=self.key,
@@ -473,18 +665,15 @@ class CommandPalette(Widget):
         return self
 
     def _apply_filter(self, *, active_key: Hashable | None, reason: str) -> None:
-        self._filtered = _filter_items(self._items, self._query)
+        self._filtered = _filter_items(self._items, self.value)
         self._active_index = _index_for_key(self._filtered, active_key)
-        if (
-            self._active_index is None
-            or self._filtered[self._active_index].disabled
-            or self._active_index >= self._max_visible_rows
-        ):
-            self._active_index = _first_enabled(self._filtered[: self._max_visible_rows])
+        if self._active_index is None or self._filtered[self._active_index].disabled:
+            self._active_index = _first_enabled(self._filtered)
         self._sync_accessibility()
         self.invalidate(reason=reason)
 
     def _sync_accessibility(self) -> None:
+        self._viewport().reveal(self._active_index)
         active = self.active_item
         result_count = len(self._filtered)
         if active is None:
@@ -497,6 +686,8 @@ class CommandPalette(Widget):
         )
 
     def _on_pointer_down(self, event: Event) -> None:
+        if self._viewport().on_pointer_down(self, event):
+            return
         platform_event = _platform_event(event, PlatformEventKind.POINTER_DOWN)
         if (
             not self.enabled
@@ -509,54 +700,60 @@ class CommandPalette(Widget):
                 self.bounds.x <= platform_event.x < self.bounds.right
                 and self.bounds.y <= platform_event.y < self.bounds.bottom
             )
-            or platform_event.y < self.bounds.y + self._header_height
         ):
             return
-        index = int(
-            (platform_event.y - self.bounds.y - self._header_height) // self._row_height
-        )
-        if 0 <= index < min(len(self._filtered), self._max_visible_rows):
+        if platform_event.y < self.bounds.y + self._header_height:
+            super()._on_pointer_down(event)
+            return
+        viewport = self._viewport()
+        if platform_event.y >= viewport.bounds.bottom:
+            return
+        visible = self._visible_indices()
+        index = int((platform_event.y - viewport.bounds.y + viewport.offset) // self._row_height)
+        if index in visible:
             self._activate_index(index)
             event.prevent_default()
 
     def _on_key_down(self, event: Event) -> None:
-        platform_event = _platform_event(event, PlatformEventKind.KEY_DOWN)
-        if not self.enabled or not self.visible or platform_event is None:
+        if event.source is not self or event.default_prevented:
             return
-        if platform_event.alt or platform_event.ctrl or platform_event.meta:
+        native = _platform_event(event, PlatformEventKind.KEY_DOWN)
+        if not self.enabled or not self.visible or native is None:
             return
-        key_code = platform_event.key_code
-        if key_code == _VK_ESCAPE:
+        code = native.key_code
+        if native.alt or native.meta:
+            return
+        # Preserve result Home/End; Ctrl or Shift targets the query boundary.
+        if code in (_VK_HOME, _VK_END) and (native.ctrl or native.shift):
+            self._move_caret(0 if code == _VK_HOME else len(self.value), extend=native.shift)
+            event.prevent_default()
+            return
+        if native.ctrl:
+            super()._on_key_down(event)
+            return
+        if code == _VK_ESCAPE:
             self.visible = False
             self.emit("dismissed")
             event.prevent_default()
             return
-        if key_code in {_VK_BACK, _VK_DELETE} and self._query:
-            self.set_query(self._query[:-1])
+        if code == _VK_RETURN:
+            if self._active_index is not None:
+                self._activate_index(self._active_index)
             event.prevent_default()
             return
-        if key_code == _VK_RETURN and self._active_index is not None:
-            self._activate_index(self._active_index)
+        target = _navigation_target(self._filtered, self._active_index, code)
+        if target is not None:
+            self._active_index = target
+            self._sync_accessibility()
+            self.invalidate(reason="selection")
             event.prevent_default()
             return
-        visible = self._filtered[: self._max_visible_rows]
-        target = _navigation_target(visible, self._active_index, key_code)
-        if target is None:
-            return
-        self._active_index = target
-        self._sync_accessibility()
-        self.invalidate(reason="selection")
-        event.prevent_default()
+        super()._on_key_down(event)
 
     def _on_text_input(self, event: Event) -> None:
-        platform_event = _platform_event(event, PlatformEventKind.TEXT_INPUT)
-        if not self.enabled or not self.visible or platform_event is None:
+        if event.source is not self or event.default_prevented or not self.visible:
             return
-        text = platform_event.text
-        if not text or any(character in "\r\n\t" for character in text):
-            return
-        self.set_query(self._query + text)
-        event.prevent_default()
+        super()._on_text_input(event)
 
 
 def _add_command_text(
@@ -566,16 +763,22 @@ def _add_command_text(
     index: int,
     row: Rect,
     item: CommandItem,
+    foreground: Color,
+    muted: Color,
+    font_family: str,
+    enabled: bool,
 ) -> None:
+    shortcut_width = min(102.0, max(0.0, row.width - 28.0)) if item.shortcut else 0.0
+    label_width = max(0.0, row.width - 28.0 - shortcut_width - (12.0 if item.shortcut else 0.0))
     node.add(
         SceneNode(
             key=f"{root_key}:{kind}:{index}:label",
             kind=SceneNodeKind.TEXT,
-            bounds=Rect(row.x + 14.0, row.y + 9.0, max(0.0, row.width - 28.0), 20.0),
-            fill=_MUTED if item.disabled else _FOREGROUND,
+            bounds=Rect(row.x + 14.0, row.y + 9.0, label_width, 20.0),
+            fill=muted if item.disabled or not enabled else foreground,
             text=item.label,
             font_size=14.0,
-            font_family="Segoe UI",
+            font_family=font_family,
             z_index=3,
             hit_testable=False,
         )
@@ -591,10 +794,10 @@ def _add_command_text(
                     min(102.0, max(0.0, row.width - 28.0)),
                     18.0,
                 ),
-                fill=_MUTED,
+                fill=muted,
                 text=item.shortcut,
                 font_size=11.0,
-                font_family="Segoe UI",
+                font_family=font_family,
                 z_index=3,
                 hit_testable=False,
             )
@@ -607,13 +810,14 @@ def _add_active_accent(
     kind: str,
     index: int,
     row: Rect,
+    accent: Color,
 ) -> None:
     node.add(
         SceneNode(
             key=f"{root_key}:{kind}:{index}:accent",
             kind=SceneNodeKind.RECTANGLE,
             bounds=Rect(row.x, row.y + 5.0, 3.0, max(0.0, row.height - 10.0)),
-            fill=_ACCENT,
+            fill=accent,
             z_index=4,
             hit_testable=False,
         )
@@ -642,7 +846,7 @@ def _filter_items(
 def _normalize_query(query: str) -> str:
     if not isinstance(query, str):
         raise TypeError("CommandPalette query must be a string.")
-    return " ".join(query.split())
+    return query
 
 
 def _validate_items(items: Sequence[CommandItem]) -> tuple[CommandItem, ...]:
@@ -672,11 +876,7 @@ def _first_enabled(items: Sequence[CommandItem]) -> int | None:
 
 def _last_enabled(items: Sequence[CommandItem]) -> int | None:
     return next(
-        (
-            index
-            for index in range(len(items) - 1, -1, -1)
-            if not items[index].disabled
-        ),
+        (index for index in range(len(items) - 1, -1, -1) if not items[index].disabled),
         None,
     )
 

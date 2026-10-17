@@ -8,6 +8,7 @@ from swirui.core import AccessibilityRole, Component, Event
 from swirui.platforms import PlatformEvent, PlatformEventKind, PointerButton
 from swirui.rendering.geometry import Color, Rect
 from swirui.rendering.scene import SceneNode, SceneNodeKind
+from swirui.theme import Theme
 
 from .base import Widget
 
@@ -41,6 +42,7 @@ class SplitView(Widget):
         first: Component | None = None,
         second: Component | None = None,
         key: str | None = None,
+        theme: Theme | None = None,
         orientation: str = "horizontal",
         split_ratio: float = 0.5,
         min_ratio: float = 0.15,
@@ -61,9 +63,7 @@ class SplitView(Widget):
         self._max_ratio = self._validate_ratio(max_ratio, "max_ratio")
         if self._min_ratio >= self._max_ratio:
             raise ValueError("min_ratio must be smaller than max_ratio.")
-        self._split_ratio = self._clamp_ratio(
-            self._validate_ratio(split_ratio, "split_ratio")
-        )
+        self._split_ratio = self._clamp_ratio(self._validate_ratio(split_ratio, "split_ratio"))
         self._divider_size = self._validate_positive(divider_size, "divider_size")
         self._keyboard_step = self._validate_positive(keyboard_step, "keyboard_step")
         self._divider_color = divider_color or _DEFAULT_DIVIDER
@@ -85,6 +85,21 @@ class SplitView(Widget):
             accessibility_role=AccessibilityRole.SLIDER,
             accessible_name=accessible_name or "Split view divider",
             accessible_description=accessible_description,
+        )
+        self._bind_theme(
+            theme,
+            {
+                "_divider_color": ("surface", "border", _DEFAULT_DIVIDER),
+                "_divider_hover_color": ("surface", "focus", _DEFAULT_DIVIDER_HOVER),
+                "_divider_active_color": ("surface", "accent", _DEFAULT_DIVIDER_ACTIVE),
+                "_divider_disabled_color": ("surface", "disabled", _DEFAULT_DIVIDER_DISABLED),
+            },
+            {
+                "_divider_color": divider_color,
+                "_divider_hover_color": divider_hover_color,
+                "_divider_active_color": divider_active_color,
+                "_divider_disabled_color": divider_disabled_color,
+            },
         )
         self._sync_accessibility()
         self.on("pointer_enter", self._on_pointer_enter)
@@ -198,9 +213,7 @@ class SplitView(Widget):
         if first is self._first and second is self._second:
             return self
 
-        previous = tuple(
-            child for child in (self._first, self._second) if child is not None
-        )
+        previous = tuple(child for child in (self._first, self._second) if child is not None)
         for child in previous:
             if child.parent is self:
                 super().remove(child)
@@ -230,9 +243,7 @@ class SplitView(Widget):
         return self
 
     def clear(self) -> None:
-        for child in tuple(
-            item for item in (self._first, self._second) if item is not None
-        ):
+        for child in tuple(item for item in (self._first, self._second) if item is not None):
             self.remove(child)
 
     def set_split_ratio(self, value: float, *, reason: str = "programmatic") -> bool:

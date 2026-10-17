@@ -9,6 +9,7 @@ from __future__ import annotations
 import ctypes
 import sys
 from collections import deque
+from itertools import count
 from typing import Any
 
 from .base import DisplayInfo, NativeWindowSpec
@@ -46,7 +47,7 @@ _WM_DPICHANGED = 0x02E0
 _SM_CXSCREEN = 0
 _SM_CYSCREEN = 1
 _VREFRESH = 116
-_ERROR_CLASS_ALREADY_EXISTS = 1410
+_WINDOW_CLASS_IDS = count()
 _MONITORINFOF_PRIMARY = 0x00000001
 _MONITOR_DEFAULTTONEAREST = 0x00000002
 _MDT_EFFECTIVE_DPI = 0
@@ -123,7 +124,9 @@ class Win32PlatformBackend:
             raise RuntimeError("Win32PlatformBackend can only run on Windows.")
 
         self._initialized = False
-        self._class_name = "SwirUI.NativeWindow"
+        # Win32 retains the callback pointer for the lifetime of its class.
+        # Each backend must own a class tied to its own callback and event queue.
+        self._class_name = f"SwirUI.NativeWindow.{next(_WINDOW_CLASS_IDS)}"
         self._events: deque[PlatformEvent] = deque()
         self._windows: set[NativeWindowHandle] = set()
 
@@ -164,6 +167,8 @@ class Win32PlatformBackend:
 
         self._user32.RegisterClassW.argtypes = [ctypes.POINTER(_WndClass)]
         self._user32.RegisterClassW.restype = ctypes.c_ushort
+        self._user32.UnregisterClassW.argtypes = [ctypes.c_wchar_p, ctypes.c_void_p]
+        self._user32.UnregisterClassW.restype = ctypes.c_bool
         self._user32.CreateWindowExW.argtypes = [
             ctypes.c_ulong,
             ctypes.c_wchar_p,
@@ -301,9 +306,7 @@ class Win32PlatformBackend:
 
         atom = self._user32.RegisterClassW(ctypes.byref(window_class))
         if not atom:
-            error = self._last_error()
-            if error != _ERROR_CLASS_ALREADY_EXISTS:
-                raise OSError(error, "RegisterClassW failed for SwirUI.")
+            raise OSError(self._last_error(), "RegisterClassW failed for SwirUI.")
 
         self._initialized = True
 
@@ -434,6 +437,10 @@ class Win32PlatformBackend:
             self._user32.DestroyWindow(ctypes.c_void_p(handle.value))
         self._windows.clear()
         self._events.clear()
+        if self._initialized and not self._user32.UnregisterClassW(
+            self._class_name, self._instance
+        ):
+            raise OSError(self._last_error(), "UnregisterClassW failed for SwirUI.")
         self._initialized = False
 
     def _enable_per_monitor_dpi_awareness(self) -> None:

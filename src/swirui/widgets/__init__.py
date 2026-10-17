@@ -87,6 +87,7 @@ from .surfaces import Card, Frame, GlassCard, Panel
 from .tabs import TabItem, Tabs
 from .terminal import Terminal
 from .text import Label, Text
+from .theme_surface import ThemeSurface
 from .timeline import Timeline, TimelineItem, TimelineOrientation
 from .toggle import Checkbox, RadioButton, Switch
 from .tooltip import Tooltip
@@ -95,6 +96,7 @@ from .video_player import VideoPlayer
 from .waveform import Waveform, WaveformEnvelope, waveform_envelope_pcm16
 
 __all__ = [
+    "ThemeSurface",
     "Accordion",
     "AdaptiveNavigation",
     "AdaptiveNavigationSpec",

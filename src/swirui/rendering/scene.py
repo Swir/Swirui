@@ -64,6 +64,7 @@ class SceneNode:
     hit_testable: bool = True
     blur_radius: float = 0.0
     transform: Affine2D = field(default_factory=Affine2D)
+    text_spans: tuple[tuple[int, int, Color], ...] = ()
 
     def __post_init__(self) -> None:
         if not 0.0 <= self.opacity <= 1.0:
@@ -80,6 +81,16 @@ class SceneNode:
                 raise ValueError("Text scene nodes require a positive font_size.")
             if not self.font_family:
                 raise ValueError("Text scene nodes require a font_family.")
+        if self.text_spans:
+            if self.kind is not SceneNodeKind.TEXT or self.text is None:
+                raise ValueError("Text color spans require a text node.")
+            if len(self.text_spans) > 4096:
+                raise ValueError("Text supports at most 4096 color spans.")
+            previous = 0
+            for start, end, _color in self.text_spans:
+                if start < previous or start >= end or end > len(self.text):
+                    raise ValueError("Text spans must be ordered, disjoint ranges within the text.")
+                previous = end
         if self.kind is SceneNodeKind.IMAGE and self.resource_id is None:
             raise ValueError("Image scene nodes require a resource_id.")
         if self.kind is SceneNodeKind.BACKDROP_BLUR:

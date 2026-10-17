@@ -9,8 +9,9 @@ from swirui.core import AccessibilityRole, Event
 from swirui.platforms import PlatformEvent, PlatformEventKind, PointerButton
 from swirui.rendering.geometry import Color, CornerRadius, Rect
 from swirui.rendering.scene import SceneNode, SceneNodeKind
+from swirui.theme import Theme
 
-from .base import Widget
+from .base import ThemeStyle, Widget
 
 ThumbName = Literal["lower", "upper"]
 
@@ -30,6 +31,18 @@ _ACCENT_HOVER = Color.from_hex("#28B2FF")
 _THUMB = Color.from_hex("#F4FAFF")
 _THUMB_DISABLED = Color.from_hex("#7A8992")
 _FOCUS = Color.from_hex("#62E5FF")
+
+
+def _slider_theme_styles() -> dict[str, ThemeStyle]:
+    return {
+        "_track": ("surface", "border", _TRACK),
+        "_track_disabled": ("surface", "disabled", _TRACK_DISABLED),
+        "_accent": ("surface", "accent", _ACCENT),
+        "_accent_hover": ("surface", "accent_hover", _ACCENT_HOVER),
+        "_thumb": ("surface", "text", _THUMB),
+        "_thumb_disabled": ("surface", "disabled_text", _THUMB_DISABLED),
+        "_focus": ("surface", "focus", _FOCUS),
+    }
 
 
 def _validate_range(minimum: float, maximum: float, step: float) -> tuple[float, float, float]:
@@ -78,11 +91,19 @@ class Slider(Widget):
         maximum: float = 100.0,
         step: float = 1.0,
         key: str | None = None,
+        theme: Theme | None = None,
         opacity: float = 1.0,
         z_index: int = 0,
         accessible_name: str | None = None,
         accessible_description: str | None = None,
     ) -> None:
+        self._track = theme.surface_color("border") if theme else _TRACK
+        self._track_disabled = theme.surface_color("disabled") if theme else _TRACK_DISABLED
+        self._accent = theme.surface_color("accent") if theme else _ACCENT
+        self._accent_hover = theme.surface_color("accent_hover") if theme else _ACCENT_HOVER
+        self._thumb = theme.surface_color("text") if theme else _THUMB
+        self._thumb_disabled = theme.surface_color("disabled_text") if theme else _THUMB_DISABLED
+        self._focus = theme.surface_color("focus") if theme else _FOCUS
         self._minimum, self._maximum, self._step = _validate_range(minimum, maximum, step)
         self._value = _snap(value, self._minimum, self._maximum, self._step)
         self._hovered = False
@@ -98,6 +119,7 @@ class Slider(Widget):
             accessible_name=accessible_name,
             accessible_description=accessible_description,
         )
+        self._bind_theme(theme, _slider_theme_styles())
         self._sync_accessibility()
         self.on("pointer_enter", self._on_pointer_enter)
         self.on("pointer_leave", self._on_pointer_leave)
@@ -147,7 +169,7 @@ class Slider(Widget):
                 key=f"{self.key}:track",
                 kind=SceneNodeKind.RECTANGLE,
                 bounds=track,
-                fill=_TRACK if self.enabled else _TRACK_DISABLED,
+                fill=self._track if self.enabled else self._track_disabled,
                 corner_radius=CornerRadius.uniform(self.track_height / 2.0),
                 hit_testable=False,
             )
@@ -161,7 +183,7 @@ class Slider(Widget):
                     kind=SceneNodeKind.RECTANGLE,
                     bounds=Rect(left, track.y, fill_width, track.height),
                     z_index=1,
-                    fill=_ACCENT if self.enabled else _TRACK_DISABLED,
+                    fill=self._accent if self.enabled else self._track_disabled,
                     corner_radius=CornerRadius.uniform(self.track_height / 2.0),
                     hit_testable=False,
                 )
@@ -180,7 +202,7 @@ class Slider(Widget):
                         thumb.height + 2.0 * halo,
                     ),
                     z_index=2,
-                    fill=_FOCUS.with_alpha(0.22),
+                    fill=self._focus.with_alpha(0.22),
                     corner_radius=CornerRadius.uniform((thumb.width + 2.0 * halo) / 2.0),
                     hit_testable=False,
                 )
@@ -250,10 +272,10 @@ class Slider(Widget):
 
     def _thumb_color(self) -> Color:
         if not self.enabled:
-            return _THUMB_DISABLED
+            return self._thumb_disabled
         if self._hovered or self._pressed:
-            return _ACCENT_HOVER
-        return _THUMB
+            return self._accent_hover
+        return self._thumb
 
     def _on_pointer_enter(self, _event: Event) -> None:
         if self.enabled and not self._hovered:
@@ -353,11 +375,19 @@ class RangeSlider(Widget):
         maximum: float = 100.0,
         step: float = 1.0,
         key: str | None = None,
+        theme: Theme | None = None,
         opacity: float = 1.0,
         z_index: int = 0,
         accessible_name: str | None = None,
         accessible_description: str | None = None,
     ) -> None:
+        self._track = theme.surface_color("border") if theme else _TRACK
+        self._track_disabled = theme.surface_color("disabled") if theme else _TRACK_DISABLED
+        self._accent = theme.surface_color("accent") if theme else _ACCENT
+        self._accent_hover = theme.surface_color("accent_hover") if theme else _ACCENT_HOVER
+        self._thumb = theme.surface_color("text") if theme else _THUMB
+        self._thumb_disabled = theme.surface_color("disabled_text") if theme else _THUMB_DISABLED
+        self._focus = theme.surface_color("focus") if theme else _FOCUS
         self._minimum, self._maximum, self._step = _validate_range(minimum, maximum, step)
         lower = _snap(lower_value, self._minimum, self._maximum, self._step)
         upper = _snap(upper_value, self._minimum, self._maximum, self._step)
@@ -379,6 +409,7 @@ class RangeSlider(Widget):
             accessible_name=accessible_name,
             accessible_description=accessible_description,
         )
+        self._bind_theme(theme, _slider_theme_styles())
         self._sync_accessibility()
         self.on("pointer_enter", self._on_pointer_enter)
         self.on("pointer_leave", self._on_pointer_leave)
@@ -440,7 +471,7 @@ class RangeSlider(Widget):
                 key=f"{self.key}:track",
                 kind=SceneNodeKind.RECTANGLE,
                 bounds=track,
-                fill=_TRACK if self.enabled else _TRACK_DISABLED,
+                fill=self._track if self.enabled else self._track_disabled,
                 corner_radius=CornerRadius.uniform(self.track_height / 2.0),
                 hit_testable=False,
             )
@@ -454,7 +485,7 @@ class RangeSlider(Widget):
                     kind=SceneNodeKind.RECTANGLE,
                     bounds=Rect(lower_x, track.y, upper_x - lower_x, track.height),
                     z_index=1,
-                    fill=_ACCENT if self.enabled else _TRACK_DISABLED,
+                    fill=self._accent if self.enabled else self._track_disabled,
                     corner_radius=CornerRadius.uniform(self.track_height / 2.0),
                     hit_testable=False,
                 )
@@ -474,7 +505,7 @@ class RangeSlider(Widget):
                             thumb.height + 2.0 * halo,
                         ),
                         z_index=2,
-                        fill=_FOCUS.with_alpha(0.22),
+                        fill=self._focus.with_alpha(0.22),
                         corner_radius=CornerRadius.uniform((thumb.width + 2.0 * halo) / 2.0),
                         hit_testable=False,
                     )
@@ -567,10 +598,10 @@ class RangeSlider(Widget):
 
     def _thumb_color(self, name: str) -> Color:
         if not self.enabled:
-            return _THUMB_DISABLED
+            return self._thumb_disabled
         if name == self._active_thumb and (self._hovered or self._dragging):
-            return _ACCENT_HOVER
-        return _THUMB
+            return self._accent_hover
+        return self._thumb
 
     def _on_pointer_enter(self, _event: Event) -> None:
         if self.enabled and not self._hovered:
