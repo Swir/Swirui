@@ -102,19 +102,39 @@ jobs:
         working-directory: native
         run: maturin build --release --interpreter python --out ../dist-native
 
-      - name: Install PyO3 extension
+      - name: Install PyO3 extension for checkout tests
         shell: pwsh
         run: |
           $wheel = (Get-ChildItem dist-native\*.whl | Select-Object -First 1).FullName
           python -m pip install $wheel
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Exercise integrated Studio on real Win32 and wgpu
         run: >-
           pytest tests/test_studio.py tests/test_windows_studio.py -q
           --junitxml=studio-native-pytest.xml
 
-      - name: Exercise installed Studio smoke route
-        run: python -m swirui studio --smoke-test
+      - name: Exercise installed Studio smoke route in clean environment
+        shell: pwsh
+        run: |
+          $wheels = @(Get-ChildItem dist-native\*.whl)
+          if ($wheels.Count -ne 1) { throw "Expected exactly one native wheel." }
+          $cleanEnv = Join-Path $env:RUNNER_TEMP "swirui-studio-clean"
+          python -m venv $cleanEnv
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $cleanPython = Join-Path $cleanEnv "Scripts/python.exe"
+          & $cleanPython -m pip install --no-deps $wheels[0].FullName
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $env:PYTHONPATH = $null
+          Push-Location $env:RUNNER_TEMP
+          try {
+            & $cleanPython -m swirui doctor --json
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            & $cleanPython -m swirui studio --smoke-test
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          } finally {
+            Pop-Location
+          }
 
       - name: Upload Studio native diagnostics
         if: always()
