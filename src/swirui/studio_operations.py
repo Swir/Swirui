@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Callable
 
 from . import (
     Badge,
@@ -196,7 +197,7 @@ class StudioSettings(Panel):
             ("reduced_motion", self.reduced_motion),
             ("live_metrics", self.live_metrics),
         ):
-            control.on("changed", lambda event, name=key: self._switch_changed(name, event))
+            control.on("changed", self._switch_handler(key))
         self.density.on("changed", self._density_changed)
         self.add(
             self.heading,
@@ -233,6 +234,12 @@ class StudioSettings(Panel):
         self.density_label._set_layout_bounds(Rect(x, y + 316, width, 24))
         self.density._set_layout_bounds(Rect(x, y + 348, min(420.0, width), 36))
         self.status._set_layout_bounds(Rect(x, y + 410, width, 26))
+
+    def _switch_handler(self, key: str) -> Callable[[Event], None]:
+        def changed(event: Event) -> None:
+            self._switch_changed(key, event)
+
+        return changed
 
     def _switch_changed(self, key: str, _event: Event) -> None:
         value = bool(self.snapshot[key])
