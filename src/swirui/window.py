@@ -5,8 +5,10 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import TYPE_CHECKING
 
+from .clipboard import ClipboardError, TextClipboard
 from .core import Component, Event, EventEmitter, EventPhase
 from .platforms import (
+    ColorScheme,
     DisplayInfo,
     NativeWindowHandle,
     PlatformBackend,
@@ -15,7 +17,9 @@ from .platforms import (
 )
 
 if TYPE_CHECKING:
+    from .appearance import ThemeController
     from .rendering.scene import Scene, SceneNode
+    from .rendering.text_layout import TextShaper
 
 
 _POINTER_EVENTS = {
@@ -48,6 +52,7 @@ class Window(EventEmitter):
         height: int = 640,
         min_width: int = 320,
         min_height: int = 240,
+        clipboard: TextClipboard | None = None,
     ) -> None:
         super().__init__()
         if width <= 0 or height <= 0:
@@ -72,6 +77,51 @@ class Window(EventEmitter):
         self.focused = False
         self.native_handle: NativeWindowHandle | None = None
         self._platform_backend: PlatformBackend | None = None
+        self._clipboard = clipboard
+        self._text_shaper: TextShaper | None = None
+        self._theme_controller: ThemeController | None = None
+
+    def get_system_color_scheme(self) -> ColorScheme | None:
+        """Read the native app appearance preference, or None if unavailable.
+
+        This optional backend capability does not change the PlatformBackend
+        protocol. Headless and unsupported backends report None.
+        """
+        reader = getattr(self._platform_backend, "get_system_color_scheme", None)
+        if self.native_handle is None or not callable(reader):
+            return None
+        try:
+            result = reader()
+            return ColorScheme(result) if result is not None else None
+        except (OSError, RuntimeError, TypeError, ValueError):
+            return None
+
+    def _set_text_shaper(self, shaper: TextShaper | None) -> None:
+        if self._text_shaper is shaper:
+            return
+        self._text_shaper = shaper
+        if self.root is not None:
+            self.root.invalidate(reason="text_editing_geometry")
+
+    def get_clipboard_text(self) -> str | None:
+        """Read plain Unicode text using the native or explicitly supplied clipboard."""
+        if self._clipboard is not None:
+            return self._clipboard.read_text()
+        reader = getattr(self._platform_backend, "get_clipboard_text", None)
+        if self.native_handle is None or reader is None:
+            raise ClipboardError("This window has no text clipboard provider.")
+        value: str | None = reader(self.native_handle)
+        return value
+
+    def set_clipboard_text(self, text: str) -> None:
+        """Replace clipboard contents with plain Unicode text."""
+        if self._clipboard is not None:
+            self._clipboard.write_text(text)
+            return
+        writer = getattr(self._platform_backend, "set_clipboard_text", None)
+        if self.native_handle is None or writer is None:
+            raise ClipboardError("This window has no text clipboard provider.")
+        writer(self.native_handle, text)
 
     @property
     def pixel_width(self) -> int:
@@ -143,9 +193,7 @@ class Window(EventEmitter):
             if not component_path or any(
                 not item.enabled or not item.visible for item in component_path
             ):
-                raise ValueError(
-                    "Focused component and its ancestors must be enabled and visible."
-                )
+                raise ValueError("Focused component and its ancestors must be enabled and visible.")
 
         old_component = self.focused_component
         self.focused_component = component
@@ -617,12 +665,14 @@ class Window(EventEmitter):
         if not component_path:
             return None
 
+        local_events = self._pointer_events_for_path(platform_event, component_path)
         target = component_path[-1]
         routed = Event(
             type=event_type,
             source=target,
             data={
                 "event": platform_event,
+                "window_event": platform_event,
                 "scene_target": scene_target,
                 "scene_path": scene_path,
                 "component_target": target,
@@ -630,12 +680,14 @@ class Window(EventEmitter):
             },
         )
 
-        for component in component_path[:-1]:
+        for component, local_event in zip(component_path[:-1], local_events[:-1], strict=True):
+            routed.data["event"] = local_event
             routed.phase = EventPhase.CAPTURE
             component.dispatch(routed, capture=True)
             if routed.propagation_stopped:
                 return routed
 
+        routed.data["event"] = local_events[-1]
         routed.phase = EventPhase.TARGET
         target.dispatch(routed, capture=True)
         if routed.propagation_stopped:
@@ -644,7 +696,10 @@ class Window(EventEmitter):
         if routed.propagation_stopped:
             return routed
 
-        for component in reversed(component_path[:-1]):
+        for component, local_event in reversed(
+            tuple(zip(component_path[:-1], local_events[:-1], strict=True))
+        ):
+            routed.data["event"] = local_event
             routed.phase = EventPhase.BUBBLE
             component.dispatch(routed)
             if routed.propagation_stopped:
@@ -666,6 +721,7 @@ class Window(EventEmitter):
             source=target,
             data={
                 "event": platform_event,
+                "window": self,
                 "component_target": target,
                 "component_path": component_path,
             },
@@ -692,6 +748,16 @@ class Window(EventEmitter):
                 break
         return routed
 
+    @staticmethod
+    def _pointer_events_for_path(
+        event: PlatformEvent, component_path: tuple[Component, ...]
+    ) -> tuple[PlatformEvent, ...]:
+        events = []
+        for component in component_path:
+            events.append(event)
+            event = component._map_descendant_pointer_event(event)
+        return tuple(events)
+
     def _dispatch_direct_component_pointer_event(
         self,
         event_type: str,
@@ -706,7 +772,8 @@ class Window(EventEmitter):
             type=event_type,
             source=target,
             data={
-                "event": platform_event,
+                "event": self._pointer_events_for_path(platform_event, component_path)[-1],
+                "window_event": platform_event,
                 "scene_target": scene_target,
                 "component_target": target,
                 "component_path": component_path,

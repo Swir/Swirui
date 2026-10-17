@@ -72,6 +72,7 @@ class Autocomplete(Input):
         self._case_sensitive = bool(case_sensitive)
         self._open_on_focus = bool(open_on_focus)
         self._popup_gap = self._validate_non_negative(popup_gap, "popup_gap")
+        self._popup_radius = 7.0
         self._popup_background = popup_background or _DEFAULT_POPUP_BACKGROUND
         self._popup_border = popup_border or _DEFAULT_POPUP_BORDER
         self._popup_foreground = popup_foreground or _DEFAULT_POPUP_FOREGROUND
@@ -94,6 +95,28 @@ class Autocomplete(Input):
             accessible_name=accessible_name,
             accessible_description=accessible_description,
             **kwargs,
+        )
+        self._bind_theme(
+            self.theme,
+            {
+                **self._theme_styles,
+                "_popup_background": ("surface", "surface", _DEFAULT_POPUP_BACKGROUND),
+                "_popup_border": ("surface", "border", _DEFAULT_POPUP_BORDER),
+                "_popup_foreground": ("text", "text", _DEFAULT_POPUP_FOREGROUND),
+                "_popup_selected": ("surface", "selection", _DEFAULT_POPUP_SELECTED),
+                "_popup_selected_foreground": (
+                    "text", "text", _DEFAULT_POPUP_SELECTED_FOREGROUND
+                ),
+                "_popup_radius": ("token", "control_radius", 7.0),
+            },
+            {
+                **self._theme_overrides,
+                "_popup_background": popup_background,
+                "_popup_border": popup_border,
+                "_popup_foreground": popup_foreground,
+                "_popup_selected": popup_selected,
+                "_popup_selected_foreground": popup_selected_foreground,
+            },
         )
         self.on("changed", self._on_value_changed)
         self._sync_autocomplete_accessibility()
@@ -194,6 +217,9 @@ class Autocomplete(Input):
         root.clip_to_bounds = False
         row_height = self._popup_row_height()
         popup = self._popup_bounds(row_height)
+        popup_radius = min(
+            self._popup_radius, popup.width / 2, popup.height / 2, row_height + 1.0
+        )
         root.add(
             SceneNode(
                 key=f"{self.key}:suggestions",
@@ -201,7 +227,7 @@ class Autocomplete(Input):
                 bounds=popup,
                 z_index=10,
                 fill=self._popup_border,
-                corner_radius=CornerRadius.uniform(7.0),
+                corner_radius=CornerRadius.uniform(popup_radius),
                 hit_testable=False,
             )
         )
@@ -218,7 +244,7 @@ class Autocomplete(Input):
                 bounds=inner,
                 z_index=11,
                 fill=self._popup_background,
-                corner_radius=CornerRadius.uniform(6.0),
+                corner_radius=CornerRadius.uniform(max(0.0, popup_radius - 1.0)),
                 hit_testable=False,
             )
         )
@@ -232,6 +258,14 @@ class Autocomplete(Input):
                 min(row_height, max(0.0, inner.bottom - y)),
             )
             if index == self._selected_suggestion_index:
+                radius = min(
+                    max(0.0, popup_radius - 1.0),
+                    row_bounds.width / 2,
+                    inner.height / 2,
+                    row_bounds.height,
+                )
+                top_radius = radius if index == 0 else 0.0
+                bottom_radius = radius if index == len(self._suggestions) - 1 else 0.0
                 root.add(
                     SceneNode(
                         key=f"{self.key}:suggestion:{index}:selected",
@@ -239,6 +273,9 @@ class Autocomplete(Input):
                         bounds=row_bounds,
                         z_index=12,
                         fill=self._popup_selected,
+                        corner_radius=CornerRadius(
+                            top_radius, top_radius, bottom_radius, bottom_radius
+                        ),
                         hit_testable=False,
                     )
                 )

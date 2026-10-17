@@ -11,8 +11,9 @@ from swirui.core import Component, PresentationMode
 from swirui.window import Window
 
 from .geometry import Color, Rect
-from .scene import SceneNodeKind
+from .scene import SceneNode, SceneNodeKind
 from .surface import RenderSurface
+from .text_layout import NativeTextShaper
 
 ClipRect = tuple[float, float, float, float]
 RectangleInstance = tuple[
@@ -33,7 +34,7 @@ RectangleInstance = tuple[
     float,
     float,
 ]
-TextInstance = tuple[
+PlainTextInstance = tuple[
     str,
     float,
     float,
@@ -47,6 +48,8 @@ TextInstance = tuple[
     str,
     ClipRect,
 ]
+TextColorSpan = tuple[int, int, float, float, float, float]
+TextInstance = PlainTextInstance | tuple[PlainTextInstance, list[TextColorSpan]]
 ImageInstance = tuple[str, float, float, float, float, float, ClipRect]
 ImageResource = tuple[int, int, bytes]
 ShapeVertex = tuple[
@@ -122,6 +125,7 @@ class WgpuRenderer:
         self._image_cache_hits = 0
         self._image_native_uploads = 0
         self._native: Any | None = native_module
+        self._text_shaper: NativeTextShaper | None = None
 
     @property
     def persistent_context_count(self) -> int:
@@ -175,6 +179,14 @@ class WgpuRenderer:
                 raise RuntimeError(
                     "SwirUI native GPU core is not installed. Build/install native/ with Maturin."
                 ) from exc
+        shaper_factory = getattr(self._native, "TextShaper", None)
+        if shaper_factory is not None:
+            self._text_shaper = NativeTextShaper(
+                shaper_factory(),
+                supports_color_spans=bool(
+                    getattr(self._native, "supports_text_color_spans", False)
+                ),
+            )
         self.initialized = True
 
     def set_scene_blur_radius(self, radius: float) -> None:
@@ -298,6 +310,7 @@ class WgpuRenderer:
             self._configure_scene_blur(context, window.scale)
             self._upload_registered_images(context)
             self._capture_adapter_info(context)
+        window._set_text_shaper(self._text_shaper)
         return surface
 
     def resize_surface(self, window: Window, width: int, height: int) -> None:
@@ -312,6 +325,7 @@ class WgpuRenderer:
             self._configure_scene_blur(context, window.scale)
 
     def destroy_surface(self, window: Window) -> None:
+        window._set_text_shaper(None)
         if window.native_handle is None:
             return
         handle = window.native_handle.value
@@ -422,6 +436,7 @@ class WgpuRenderer:
         for surface in self.surfaces.values():
             surface.destroy()
         self.surfaces.clear()
+        self._text_shaper = None
         self.initialized = False
 
     def _render_stateless(
@@ -436,13 +451,9 @@ class WgpuRenderer:
         if native is None or window.native_handle is None:
             raise RuntimeError("Native GPU core is unavailable.")
         if paths:
-            raise RuntimeError(
-                "Path rendering requires the persistent SwirUI native GPU context."
-            )
+            raise RuntimeError("Path rendering requires the persistent SwirUI native GPU context.")
         if images:
-            raise RuntimeError(
-                "Image rendering requires the persistent SwirUI native GPU context."
-            )
+            raise RuntimeError("Image rendering requires the persistent SwirUI native GPU context.")
         background = self.background
         pixel_width, pixel_height = window.pixel_size
         if texts:
@@ -467,17 +478,15 @@ class WgpuRenderer:
             self.last_image_count = 0
             self.last_path_count = 0
         elif rectangles:
-            adapter_name, graphics_backend, rectangle_count = (
-                native.draw_rectangles_win32_surface(
-                    window.native_handle.value,
-                    pixel_width,
-                    pixel_height,
-                    rectangles,
-                    background.r,
-                    background.g,
-                    background.b,
-                    background.a,
-                )
+            adapter_name, graphics_backend, rectangle_count = native.draw_rectangles_win32_surface(
+                window.native_handle.value,
+                pixel_width,
+                pixel_height,
+                rectangles,
+                background.r,
+                background.g,
+                background.b,
+                background.a,
             )
             self.last_rectangle_count = int(rectangle_count)
             self.last_text_count = 0
@@ -524,9 +533,7 @@ class WgpuRenderer:
             return
         register = getattr(context, "register_image_rgba", None)
         if register is None:
-            raise RuntimeError(
-                "Installed SwirUI native GPU core does not support image resources."
-            )
+            raise RuntimeError("Installed SwirUI native GPU core does not support image resources.")
         for native_id, (width, height, data) in self._image_resources.items():
             register(native_id, width, height, data)
             self._image_native_uploads += 1
@@ -616,6 +623,21 @@ class WgpuRenderer:
             )
         return rectangles
 
+    def _color_text_instance(
+        self, base: PlainTextInstance, node: SceneNode, opacity: float
+    ) -> TextInstance:
+        if not node.text_spans:
+            return base
+        if not getattr(self._native, "supports_text_color_spans", False):
+            raise RuntimeError("Installed native core does not support shaped text color spans.")
+        return base, self._text_color_spans(node, opacity)
+
+    @staticmethod
+    def _text_color_spans(node: SceneNode, opacity: float) -> list[TextColorSpan]:
+        return [
+            (a, b, color.r, color.g, color.b, color.a * opacity) for a, b, color in node.text_spans
+        ]
+
     def _text_instances(self, window: Window) -> list[TextInstance]:
         scene = window.scene
         if scene is None:
@@ -636,19 +658,23 @@ class WgpuRenderer:
 
             fill = node.fill or _DEFAULT_TEXT_COLOR
             texts.append(
-                (
-                    node.text,
-                    self._scale(node.bounds.x, scale),
-                    self._scale(node.bounds.y, scale),
-                    self._scale(node.bounds.width, scale),
-                    self._scale(node.bounds.height, scale),
-                    self._scale(node.font_size, scale),
-                    fill.r,
-                    fill.g,
-                    fill.b,
-                    fill.a * effective_opacity,
-                    node.font_family,
-                    self._clip_tuple(clip, scale),
+                self._color_text_instance(
+                    (
+                        node.text,
+                        self._scale(node.bounds.x, scale),
+                        self._scale(node.bounds.y, scale),
+                        self._scale(node.bounds.width, scale),
+                        self._scale(node.bounds.height, scale),
+                        self._scale(node.font_size, scale),
+                        fill.r,
+                        fill.g,
+                        fill.b,
+                        fill.a * effective_opacity,
+                        node.font_family,
+                        self._clip_tuple(clip, scale),
+                    ),
+                    node,
+                    effective_opacity,
                 )
             )
         return texts

@@ -28,6 +28,7 @@ mod shader_validation;
 mod shape;
 mod spectrum;
 mod text;
+mod text_layout;
 mod video;
 mod waveform;
 
@@ -81,7 +82,7 @@ fn validate_affine_transform(values: Vec<f32>) -> PyResult<()> {
 }
 
 #[pyfunction]
-#[pyo3(signature = (content, width, height, font_size, red, green, blue, alpha, family))]
+#[pyo3(signature = (content, width, height, font_size, red, green, blue, alpha, family, spans=None))]
 fn rasterize_text_rgba(
     content: &str,
     width: u32,
@@ -92,9 +93,10 @@ fn rasterize_text_rgba(
     blue: f32,
     alpha: f32,
     family: &str,
+    spans: Option<Vec<text::TextColorSpan>>,
 ) -> PyResult<Vec<u8>> {
     text::rasterize_text_rgba(
-        content, width, height, font_size, red, green, blue, alpha, family,
+        content, width, height, font_size, red, green, blue, alpha, family, spans.as_deref().unwrap_or(&[]),
     )
 }
 
@@ -273,6 +275,8 @@ fn backend_names(backends: wgpu::Backends) -> Vec<&'static str> {
 
 #[pymodule]
 fn _swirui_native(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    module.add_class::<text_layout::PyTextShaper>()?;
+    module.add("supports_text_color_spans", true)?;
     module.add_function(wrap_pyfunction!(core_version, module)?)?;
     module.add_function(wrap_pyfunction!(enabled_backends, module)?)?;
     module.add_function(wrap_pyfunction!(probe_adapter, module)?)?;

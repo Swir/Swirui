@@ -7,8 +7,9 @@ import math
 from swirui.core import AccessibilityRole, Event
 from swirui.rendering.geometry import Color, CornerRadius, Rect
 from swirui.rendering.scene import SceneNode, SceneNodeKind
+from swirui.theme import Theme
 
-from .base import Widget
+from .base import ThemeStyle, Widget
 from .button import Button
 
 _BADGE_BACKGROUND = Color.from_hex("#113047")
@@ -28,11 +29,12 @@ class Badge(Widget):
         *,
         bounds: Rect,
         key: str | None = None,
+        theme: Theme | None = None,
         background: Color | None = None,
         foreground: Color | None = None,
-        corner_radius: float = 10.0,
+        corner_radius: float | None = None,
         font_size: float = 13.0,
-        font_family: str = "Segoe UI",
+        font_family: str | None = None,
         padding: float = 8.0,
         opacity: float = 1.0,
         z_index: int = 0,
@@ -42,9 +44,13 @@ class Badge(Widget):
         self._text = str(text)
         self._background = background or _BADGE_BACKGROUND
         self._foreground = foreground or _BADGE_FOREGROUND
-        self._corner_radius = self._validate_non_negative(corner_radius, "corner_radius")
+        self._corner_radius = self._validate_non_negative(
+            10.0 if corner_radius is None else corner_radius, "corner_radius"
+        )
         self._font_size = self._validate_positive(font_size, "font_size")
-        self._font_family = self._validate_font_family(font_family)
+        self._font_family = self._validate_font_family(
+            "Segoe UI" if font_family is None else font_family
+        )
         self._padding = self._validate_non_negative(padding, "padding")
         self._auto_accessible_name = accessible_name is None
         super().__init__(
@@ -56,6 +62,22 @@ class Badge(Widget):
             accessibility_role=AccessibilityRole.TEXT,
             accessible_name=self._text if accessible_name is None else accessible_name,
             accessible_description=accessible_description,
+        )
+
+        self._bind_theme(
+            theme,
+            {
+                "_background": ("surface", "raised", _BADGE_BACKGROUND),
+                "_foreground": ("text", "text", _BADGE_FOREGROUND),
+                "_font_family": ("token", "font_family", "Segoe UI"),
+                "_corner_radius": ("token", "control_radius", 10.0),
+            },
+            {
+                "_background": background,
+                "_foreground": foreground,
+                "_font_family": self._font_family if font_family is not None else None,
+                "_corner_radius": corner_radius,
+            },
         )
 
     @property
@@ -78,6 +100,7 @@ class Badge(Widget):
 
     @background.setter
     def background(self, value: Color) -> None:
+        self._theme_overrides["_background"] = value
         if value == self._background:
             return
         self._background = value
@@ -89,6 +112,7 @@ class Badge(Widget):
 
     @foreground.setter
     def foreground(self, value: Color) -> None:
+        self._theme_overrides["_foreground"] = value
         if value == self._foreground:
             return
         self._foreground = value
@@ -160,14 +184,15 @@ class Chip(Button):
         *,
         bounds: Rect,
         key: str | None = None,
+        theme: Theme | None = None,
         selected: bool = False,
         background: Color | None = None,
         selected_background: Color | None = None,
         foreground: Color | None = None,
         selected_foreground: Color | None = None,
-        corner_radius: float = 16.0,
+        corner_radius: float | None = None,
         font_size: float = 14.0,
-        font_family: str = "Segoe UI",
+        font_family: str | None = None,
         padding: float = 12.0,
         opacity: float = 1.0,
         z_index: int = 0,
@@ -179,10 +204,11 @@ class Chip(Button):
         self._selected_foreground = selected_foreground or _CHIP_SELECTED_FOREGROUND
         super().__init__(
             text,
+            theme=theme,
             bounds=bounds,
             key=key,
-            background=background or _CHIP_BACKGROUND,
-            foreground=foreground or _CHIP_FOREGROUND,
+            background=background,
+            foreground=foreground,
             corner_radius=corner_radius,
             font_size=font_size,
             font_family=font_family,
@@ -192,9 +218,36 @@ class Chip(Button):
             accessible_name=accessible_name,
             accessible_description=accessible_description,
         )
+        self._theme_overrides.update(
+            {
+                key: value
+                for key, value in {
+                    "_selected_background": selected_background,
+                    "_selected_foreground": selected_foreground,
+                }.items()
+                if value is not None
+            }
+        )
+        self._apply_theme_values(self.effective_theme)
         self.accessibility_role = AccessibilityRole.CHIP
         self.accessible_checked = self._selected
         self.on("click", self._on_click_toggle)
+
+    def _button_theme_styles(self) -> dict[str, ThemeStyle]:
+        styles = super()._button_theme_styles()
+        styles.update(
+            {
+                "_background": ("surface", "raised", _CHIP_BACKGROUND),
+                "_hover_background": ("surface", "hover", styles["_hover_background"][2]),
+                "_pressed_background": ("surface", "pressed", styles["_pressed_background"][2]),
+                "_focused_background": ("surface", "hover", styles["_focused_background"][2]),
+                "_foreground": ("text", "text", _CHIP_FOREGROUND),
+                "_selected_background": ("surface", "accent", _CHIP_SELECTED_BACKGROUND),
+                "_selected_foreground": ("text", "on_accent", _CHIP_SELECTED_FOREGROUND),
+                "_corner_radius": ("token", "control_radius", 16.0),
+            }
+        )
+        return styles
 
     @property
     def selected(self) -> bool:
@@ -206,13 +259,21 @@ class Chip(Button):
 
     def build_scene_node(self) -> SceneNode:
         node = super().build_scene_node()
-        if self.selected:
+        if self.selected and self.enabled:
             for child in node.children:
                 if child.key == f"{self.key}:content":
                     child.fill = self._selected_foreground
         return node
 
     def _current_background(self) -> Color:
+        if self.enabled and self.selected and self._theme:
+            if "_selected_background" in self._theme_overrides:
+                return self._selected_background
+            if self.pressed:
+                return self._theme.surface_color("accent_pressed")
+            if self.hovered or self.focused:
+                return self._theme.surface_color("accent_hover")
+            return self._selected_background
         if (
             self.enabled
             and self.selected

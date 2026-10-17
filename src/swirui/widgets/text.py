@@ -7,6 +7,7 @@ import math
 from swirui.core import AccessibilityRole
 from swirui.rendering.geometry import Color, Rect, Size
 from swirui.rendering.scene import SceneNode, SceneNodeKind
+from swirui.theme import Theme
 
 from .base import Widget
 from .measurement import measure_text_block
@@ -21,9 +22,10 @@ class Label(Widget):
         *,
         bounds: Rect,
         key: str | None = None,
+        theme: Theme | None = None,
         color: Color | None = None,
         font_size: float = 16.0,
-        font_family: str = "Segoe UI",
+        font_family: str | None = None,
         opacity: float = 1.0,
         z_index: int = 0,
         clip_to_bounds: bool = False,
@@ -31,9 +33,11 @@ class Label(Widget):
         accessible_description: str | None = None,
     ) -> None:
         self._text = str(text)
-        self._color = color or Color(1.0, 1.0, 1.0, 1.0)
+        self._color = color or (theme.text_color("text") if theme else Color(1.0, 1.0, 1.0, 1.0))
         self._font_size = self._validate_font_size(font_size)
-        self._font_family = self._validate_font_family(font_family)
+        self._font_family = self._validate_font_family(
+            font_family if font_family is not None else (theme.font_family if theme else "Segoe UI")
+        )
         self._auto_accessible_name = accessible_name is None
         super().__init__(
             bounds=bounds,
@@ -44,6 +48,17 @@ class Label(Widget):
             accessibility_role=AccessibilityRole.TEXT,
             accessible_name=self._text if accessible_name is None else accessible_name,
             accessible_description=accessible_description,
+        )
+        self._bind_theme(
+            theme,
+            {
+                "_color": ("text", "text", Color(1, 1, 1, 1)),
+                "_font_family": ("token", "font_family", "Segoe UI"),
+            },
+            {
+                "_color": color,
+                "_font_family": self._font_family if font_family is not None else None,
+            },
         )
 
     @property
@@ -66,6 +81,7 @@ class Label(Widget):
 
     @color.setter
     def color(self, value: Color) -> None:
+        self._theme_overrides["_color"] = value
         if value == self._color:
             return
         self._color = value
@@ -90,6 +106,7 @@ class Label(Widget):
     @font_family.setter
     def font_family(self, value: str) -> None:
         normalized = self._validate_font_family(value)
+        self._theme_overrides["_font_family"] = normalized
         if normalized == self._font_family:
             return
         self._font_family = normalized

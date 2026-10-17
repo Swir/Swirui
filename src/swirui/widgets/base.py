@@ -3,11 +3,16 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Mapping
 from dataclasses import dataclass
+from typing import Literal, cast
 
-from swirui.core import AccessibilityRole, Component
-from swirui.rendering.geometry import Point, Rect, Size
-from swirui.rendering.scene import SceneNode
+from swirui.core import AccessibilityRole, Component, Event
+from swirui.rendering.geometry import CornerRadius, Point, Rect, Size
+from swirui.rendering.scene import SceneNode, SceneNodeKind
+from swirui.theme import ColorRole, Theme
+
+ThemeStyle = tuple[Literal["surface", "text", "token", "constant"], str, object]
 
 _LAYOUT_VISUAL_ONLY_INVALIDATIONS = frozenset(
     {
@@ -25,6 +30,7 @@ _LAYOUT_VISUAL_ONLY_INVALIDATIONS = frozenset(
         "pointer_enter",
         "pointer_leave",
         "pointer_up",
+        "text_editing_geometry",  # caret/selection shaping does not change intrinsic size
         "visual_offset",
         "visual_rotation",
         "visual_scale",
@@ -117,6 +123,90 @@ class Widget(Component):
         self._layout_revision = 0
         self._prepared_layout_revision = -1
         self._prepared_layout_viewport: Rect | None = None
+        self._theme_styles: dict[str, ThemeStyle] = {}
+        self._theme_overrides: dict[str, object] = {}
+        self._theme: Theme | None = None
+        self._theme_focus_frame_enabled = False
+        self._theme_focus_frame_focused = False
+
+    def _enable_theme_focus_frame(self) -> None:
+        """Opt collection surfaces into a bounded, non-interactive focus outline."""
+        if self._theme_focus_frame_enabled:
+            return
+        self._theme_focus_frame_enabled = True
+        self.on("focus_gained", self._on_theme_focus_frame)
+        self.on("focus_lost", self._on_theme_focus_frame)
+
+    def _on_theme_focus_frame(self, event: Event) -> None:
+        self._theme_focus_frame_focused = event.type == "focus_gained"
+        if self._theme is not None:
+            self.invalidate(reason=event.type)
+
+    def _add_theme_focus_frame(self, root: SceneNode, *, bounds: Rect | None = None) -> None:
+        if not self._theme or not self._theme_focus_frame_focused or not self.enabled:
+            return
+        bounds = root.bounds if bounds is None else bounds
+        if min(bounds.width, bounds.height) <= 6:
+            return
+        # The retained root clips the outline to rounded bounds. Paint it after
+        # virtualized rows without introducing focusable or hit-testable nodes.
+        edges = (
+            Rect(bounds.x, bounds.y, bounds.width, 3),
+            Rect(bounds.x, bounds.bottom - 3, bounds.width, 3),
+            Rect(bounds.x, bounds.y + 3, 3, bounds.height - 6),
+            Rect(bounds.right - 3, bounds.y + 3, 3, bounds.height - 6),
+        )
+        for index, edge in enumerate(edges):
+            root.add(
+                SceneNode(
+                    key=f"{self.key}:theme-focus:{index}",
+                    kind=SceneNodeKind.RECTANGLE,
+                    bounds=edge,
+                    fill=self._theme.surface_color("focus"),
+                    corner_radius=CornerRadius.uniform(1),
+                    z_index=100_000,
+                    hit_testable=False,
+                )
+            )
+
+    def _bind_theme(
+        self,
+        theme: Theme | None,
+        styles: Mapping[str, ThemeStyle],
+        overrides: Mapping[str, object | None] | None = None,
+        *,
+        fallback: Theme | None = None,
+    ) -> None:
+        """Bind semantic style attributes while retaining explicit authored values."""
+        if theme is not None and not isinstance(theme, Theme):
+            raise TypeError("theme must be a Theme or None.")
+        self._theme_styles = dict(styles)
+        self._theme_overrides = {
+            key: value for key, value in (overrides or {}).items() if value is not None
+        }
+        self._local_theme = theme
+        self._theme_fallback = fallback
+        self._refresh_theme_tree()
+        self._apply_theme_values(self.effective_theme)
+
+    def _apply_theme_values(self, theme: Theme | None) -> None:
+        self._theme = theme
+        for attribute, (kind, role, default) in self._theme_styles.items():
+            value = self._theme_overrides.get(attribute)
+            if value is None:
+                if theme is None or kind == "constant":
+                    value = default
+                elif kind == "surface":
+                    value = theme.surface_color(cast(ColorRole, role))
+                elif kind == "text":
+                    value = theme.text_color(cast(ColorRole, role))
+                else:
+                    value = getattr(theme, role)
+            setattr(self, attribute, value)
+
+    def on_theme_changed(self, previous: Theme | None, current: Theme | None) -> None:
+        del previous
+        self._apply_theme_values(current)
 
     @property
     def bounds(self) -> Rect:

@@ -648,6 +648,18 @@ class AnimationController:
     def active_count(self) -> int:
         return len(self._animations)
 
+    @property
+    def disposed(self) -> bool:
+        return self._disposed
+
+    def cancel(self, animation: AnimationPlayable) -> bool:
+        """Cancel and release one owned animation without affecting others."""
+        if animation not in self._animations:
+            return False
+        cancelled = animation.cancel()
+        self._animations.remove(animation)
+        return cancelled
+
     def play(self, animation: AnimationPlayable) -> AnimationPlayable:
         """Start one animation and schedule its first presentation frame."""
 

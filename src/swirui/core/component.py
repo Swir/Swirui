@@ -10,6 +10,8 @@ from .accessibility import AccessibilityRole
 from .events import EventEmitter
 
 if TYPE_CHECKING:
+    from swirui.platforms import PlatformEvent
+    from swirui.theme import Theme
     from swirui.window import Window
 
 
@@ -35,6 +37,7 @@ class Component(EventEmitter):
         accessible_min_value: float | None = None,
         accessible_max_value: float | None = None,
         accessible_value_text: str | None = None,
+        theme: Theme | None = None,
     ) -> None:
         super().__init__()
         self.name = name or self.__class__.__name__
@@ -53,6 +56,60 @@ class Component(EventEmitter):
         self.accessible_min_value = accessible_min_value
         self.accessible_max_value = accessible_max_value
         self.accessible_value_text = accessible_value_text
+        self._local_theme: Theme | None = None
+        self._resolved_theme: Theme | None = None
+        self._theme_fallback: Theme | None = None
+        if theme is not None:
+            self.theme = theme
+
+    @property
+    def theme(self) -> Theme | None:
+        """Local theme override. None inherits the nearest ancestor's theme."""
+        return self._local_theme
+
+    @theme.setter
+    def theme(self, value: Theme | None) -> None:
+        from swirui.theme import Theme
+
+        if value is not None and not isinstance(value, Theme):
+            raise TypeError("theme must be a Theme or None.")
+        if value == self._local_theme:
+            return
+        self._local_theme = value
+        self._refresh_theme_tree()
+
+    @property
+    def effective_theme(self) -> Theme | None:
+        """Resolved local/inherited theme, or the control's standalone fallback."""
+        return self._resolved_theme
+
+    def on_theme_changed(self, previous: Theme | None, current: Theme | None) -> None:
+        """Update visual styling without replacing content or interaction state."""
+        del previous, current
+
+    def _refresh_theme_tree(self) -> None:
+        from .state import state_transaction
+
+        changes: list[tuple[Component, Theme | None, Theme | None]] = []
+
+        def refresh(node: Component) -> None:
+            inherited = node.parent.effective_theme if node.parent is not None else None
+            resolved = node._local_theme or inherited or node._theme_fallback
+            previous = node._resolved_theme
+            if resolved != previous:
+                node._resolved_theme = resolved
+                node.on_theme_changed(previous, resolved)
+                changes.append((node, previous, resolved))
+            for child in node.children:
+                refresh(child)
+
+        # Resolve the whole subtree before notifying observers. The retained
+        # runtime schedules a single scene update for the resulting transaction.
+        with state_transaction():
+            refresh(self)
+            for node, previous, current in changes:
+                node.emit("theme_changed", previous=previous, theme=current)
+                node.invalidate(reason="theme")
 
     @property
     def enabled(self) -> bool:
@@ -107,6 +164,15 @@ class Component(EventEmitter):
 
         del window
 
+    def _map_descendant_pointer_event(self, event: PlatformEvent) -> PlatformEvent:
+        """Map pointer coordinates into the coordinate space used by descendants.
+
+        Ordinary containers retain their parent's coordinate space. Containers
+        which translate compiled children override this to keep input aligned.
+        The container's own handlers still receive its parent's coordinates.
+        """
+        return event
+
     def on_update(self, *, reason: str, source: Component) -> None:
         """Lifecycle hook called for invalidation affecting this mounted component.
 
@@ -123,36 +189,43 @@ class Component(EventEmitter):
         del window
 
     def add(self, *children: Component) -> Component:
-        for child in children:
-            if child is self:
-                raise ValueError("A component cannot be its own child.")
-            if child._contains_component(self):
-                raise ValueError("Adding this child would create a component cycle.")
-            if child.parent is self:
-                continue
-            if (
-                child.parent is None
-                and child.mounted_window is not None
-                and child.mounted_window is not self._mounted_window
-            ):
-                raise ValueError("A mounted root cannot be attached to a different component tree.")
+        from .state import state_transaction
 
-            old_parent = child.parent
-            if old_parent is not None:
-                old_parent.remove(child)
-            child.parent = self
-            self.children.append(child)
-            try:
-                if self._mounted_window is not None:
-                    child._mount(self._mounted_window)
-            except BaseException:
-                self.children.remove(child)
-                child.parent = None
-                raise
-            child.emit("parent_changed", old_parent=old_parent, new_parent=self)
-            self.emit("child_added", child=child)
-            self.invalidate(reason="child_added", source=child)
+        with state_transaction():
+            for child in children:
+                self._attach_child(child)
         return self
+
+    def _attach_child(self, child: Component) -> None:
+        if child is self:
+            raise ValueError("A component cannot be its own child.")
+        if child._contains_component(self):
+            raise ValueError("Adding this child would create a component cycle.")
+        if child.parent is self:
+            return
+        if (
+            child.parent is None
+            and child.mounted_window is not None
+            and child.mounted_window is not self._mounted_window
+        ):
+            raise ValueError("A mounted root cannot be attached to a different component tree.")
+        old_parent = child.parent
+        if old_parent is not None:
+            old_parent.remove(child)
+        child.parent = self
+        self.children.append(child)
+        try:
+            child._refresh_theme_tree()
+            if self._mounted_window is not None:
+                child._mount(self._mounted_window)
+        except BaseException:
+            self.children.remove(child)
+            child.parent = None
+            child._refresh_theme_tree()
+            raise
+        child.emit("parent_changed", old_parent=old_parent, new_parent=self)
+        self.emit("child_added", child=child)
+        self.invalidate(reason="child_added", source=child)
 
     def remove(self, child: Component) -> Component:
         if child not in self.children:
@@ -161,6 +234,7 @@ class Component(EventEmitter):
             child._unmount()
         self.children.remove(child)
         child.parent = None
+        child._refresh_theme_tree()
         child.emit("parent_changed", old_parent=self, new_parent=None)
         self.emit("child_removed", child=child)
         self.invalidate(reason="child_removed", source=child)

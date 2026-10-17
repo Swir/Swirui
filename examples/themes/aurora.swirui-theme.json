@@ -1,0 +1,67 @@
+{
+  "format": "swirui.theme-package",
+  "format_version": 1,
+  "name": "Aurora",
+  "version": "1.0.0",
+  "author": "Swir",
+  "description": "Deep teal surfaces and a quiet daylight workspace.",
+  "default_theme": "night",
+  "themes": {
+    "night": {
+      "palette": {
+        "canvas": "#07191E",
+        "surface": "#0D242B",
+        "raised": "#14323A",
+        "hover": "#1B434B",
+        "pressed": "#225762",
+        "border": "#31505A",
+        "focus": "#A3F6E5",
+        "accent": "#76E4CF",
+        "accent_hover": "#A3F6E5",
+        "accent_pressed": "#50BFAE",
+        "on_accent": "#062B25",
+        "text": "#EAF9F6",
+        "muted": "#9FBFBE",
+        "disabled": "#1A3339",
+        "disabled_text": "#758F92",
+        "selection": "#23574F",
+        "success": "#8FE5B5",
+        "warning": "#F4CF86",
+        "error": "#FF99AC"
+      },
+      "font_family": "Segoe UI",
+      "control_radius": 8.0,
+      "motion_duration": 0.16,
+      "reduced_motion": false,
+      "monospace_family": "Cascadia Mono"
+    },
+    "day": {
+      "palette": {
+        "canvas": "#F0F8F6",
+        "surface": "#FFFFFF",
+        "raised": "#E5F1ED",
+        "hover": "#D7EAE3",
+        "pressed": "#C6E0D7",
+        "border": "#AFCAC0",
+        "focus": "#086B61",
+        "accent": "#09665C",
+        "accent_hover": "#08786B",
+        "accent_pressed": "#064D46",
+        "on_accent": "#FFFFFF",
+        "text": "#102C27",
+        "muted": "#46655F",
+        "disabled": "#DAE8E2",
+        "disabled_text": "#728A82",
+        "selection": "#BDEBDD",
+        "success": "#146F52",
+        "warning": "#8A5900",
+        "error": "#BC304D"
+      },
+      "font_family": "Segoe UI",
+      "control_radius": 8.0,
+      "motion_duration": 0.16,
+      "reduced_motion": false,
+      "monospace_family": "Cascadia Mono"
+    }
+  }
+}

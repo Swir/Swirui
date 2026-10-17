@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Hashable, Mapping, Sequence
 
 from swirui.rendering.geometry import Color, Rect
+from swirui.theme import Theme
 
 from .data_grid import DataGridColumn
 from .data_grid_editing import CellEditParser
@@ -29,12 +30,13 @@ class DataGrid(_DataGrid):
         *,
         bounds: Rect,
         key: str | None = None,
+        theme: Theme | None = None,
         row_height: float = 36.0,
         header_height: float = 40.0,
         cell_padding: float = 10.0,
         font_size: float = 14.0,
-        font_family: str = "Segoe UI",
-        corner_radius: float = 8.0,
+        font_family: str | None = None,
+        corner_radius: float | None = None,
         background: Color | None = None,
         header_background: Color | None = None,
         row_background: Color | None = None,
@@ -69,6 +71,7 @@ class DataGrid(_DataGrid):
             rows,
             bounds=bounds,
             key=key,
+            theme=theme,
             row_height=row_height,
             header_height=header_height,
             cell_padding=cell_padding,
@@ -153,14 +156,10 @@ class DataGrid(_DataGrid):
         seen: set[Hashable] = set()
         for index, row in enumerate(rows):
             if row_key not in row:
-                raise KeyError(
-                    f"DataGrid row {index} is missing configured row_key {row_key!r}."
-                )
+                raise KeyError(f"DataGrid row {index} is missing configured row_key {row_key!r}.")
             identity = row[row_key]
             if not isinstance(identity, Hashable):
-                raise TypeError(
-                    f"DataGrid row_key value at row {index} must be hashable."
-                )
+                raise TypeError(f"DataGrid row_key value at row {index} must be hashable.")
             if identity in seen:
                 raise ValueError(
                     f"DataGrid row_key {row_key!r} must contain unique values; "

@@ -7,8 +7,8 @@ import sys
 
 from swirui.core import AppConfig
 
-from .affine_text_wgpu_renderer import WgpuRenderer
 from .base import NullRenderer, Renderer
+from .ordered_wgpu_renderer import WgpuRenderer
 from .windows_gdi import Win32PreviewRenderer
 
 

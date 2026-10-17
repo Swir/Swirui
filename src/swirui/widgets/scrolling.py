@@ -8,6 +8,7 @@ from swirui.core import AccessibilityRole, Event
 from swirui.platforms import PlatformEvent, PlatformEventKind
 from swirui.rendering.geometry import Color, Rect
 from swirui.rendering.scene import SceneNode, SceneNodeKind
+from swirui.theme import Theme
 
 from .base import Widget
 
@@ -41,6 +42,7 @@ class ScrollView(Widget):
         *,
         bounds: Rect,
         key: str | None = None,
+        theme: Theme | None = None,
         content_width: float | None = None,
         content_height: float | None = None,
         scroll_x: float = 0.0,
@@ -75,6 +77,7 @@ class ScrollView(Widget):
             accessible_name=accessible_name or "Scrollable content",
             accessible_description=accessible_description,
         )
+        self._bind_theme(theme, {})
         self._scroll_x = self._clamp_x(self._scroll_x)
         self._scroll_y = self._clamp_y(self._scroll_y)
         self._sync_accessibility()

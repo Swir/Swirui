@@ -16,6 +16,7 @@ from swirui.core import (
 from swirui.platforms import PlatformEvent, PlatformEventKind, PointerButton
 from swirui.rendering.geometry import Color, CornerRadius, Rect
 from swirui.rendering.scene import SceneNode, SceneNodeKind
+from swirui.theme import Theme
 
 from .base import Widget
 
@@ -64,11 +65,12 @@ class Tabs(Widget):
         *,
         bounds: Rect,
         key: str | None = None,
+        theme: Theme | None = None,
         selected_key: Hashable | None = None,
         header_height: float = 42.0,
-        corner_radius: float = 8.0,
+        corner_radius: float | None = None,
         font_size: float = 14.0,
-        font_family: str = "Segoe UI",
+        font_family: str | None = None,
         background: Color | None = None,
         tab_background: Color | None = None,
         active_tab_background: Color | None = None,
@@ -82,9 +84,11 @@ class Tabs(Widget):
     ) -> None:
         self._tabs = self._validate_tabs(tabs)
         self._header_height = self._validate_positive(header_height, "header_height")
-        self._corner_radius = self._validate_non_negative(corner_radius, "corner_radius")
+        self._corner_radius = self._validate_non_negative(
+            8.0 if corner_radius is None else corner_radius, "corner_radius"
+        )
         self._font_size = self._validate_positive(font_size, "font_size")
-        self._font_family = str(font_family).strip()
+        self._font_family = "Segoe UI" if font_family is None else str(font_family).strip()
         if not self._font_family:
             raise ValueError("font_family must not be empty.")
         self._background = background or _DEFAULT_BACKGROUND
@@ -106,6 +110,30 @@ class Tabs(Widget):
             accessible_name=accessible_name,
             accessible_description=accessible_description,
         )
+        self._bind_theme(
+            theme,
+            {
+                "_background": ("surface", "surface", _DEFAULT_BACKGROUND),
+                "_foreground": ("text", "text", _DEFAULT_FOREGROUND),
+                "_tab_background": ("surface", "surface", _DEFAULT_TAB_BACKGROUND),
+                "_active_tab_background": ("surface", "selection", _DEFAULT_ACTIVE_TAB_BACKGROUND),
+                "_muted_foreground": ("text", "disabled_text", _DEFAULT_MUTED),
+                "_accent": ("surface", "accent", _DEFAULT_ACCENT),
+                "_font_family": ("token", "font_family", "Segoe UI"),
+                "_corner_radius": ("token", "control_radius", 8.0),
+            },
+            {
+                "_background": background,
+                "_foreground": foreground,
+                "_tab_background": tab_background,
+                "_active_tab_background": active_tab_background,
+                "_muted_foreground": muted_foreground,
+                "_accent": accent,
+                "_font_family": self._font_family if font_family is not None else None,
+                "_corner_radius": corner_radius,
+            },
+        )
+        self._enable_theme_focus_frame()
         self.on("pointer_down", self._on_pointer_down)
         self.on("key_down", self._on_key_down)
         self._attach_contents()
@@ -207,6 +235,8 @@ class Tabs(Widget):
             clip_to_bounds=True,
             hit_testable=self.enabled,
         )
+        if self._selected_index is None:
+            self._add_theme_focus_frame(root)
         if not self._tabs or self.bounds.width <= 0.0 or self.header_height <= 0.0:
             return root
 
@@ -216,6 +246,8 @@ class Tabs(Widget):
             width = self.bounds.right - x if index == len(self._tabs) - 1 else tab_width
             tab_bounds = Rect(x, self.bounds.y, max(0.0, width), self.header_height)
             active = index == self._selected_index
+            if active:
+                self._add_theme_focus_frame(root, bounds=tab_bounds)
             tab_node = SceneNode(
                 key=f"{self.key}:tab:{index}",
                 kind=SceneNodeKind.RECTANGLE,
@@ -237,7 +269,7 @@ class Tabs(Widget):
                     ),
                     fill=(
                         self._muted_foreground
-                        if tab.disabled
+                        if tab.disabled or not self.enabled
                         else self._foreground
                     ),
                     text=tab.label,
@@ -342,6 +374,10 @@ class Tabs(Widget):
         event.prevent_default()
 
     def _on_key_down(self, event: Event) -> None:
+        # Header navigation belongs to the tab container itself. Page controls
+        # retain arrows/Home/End, including keys they deliberately leave unhandled.
+        if event.source is not self or event.default_prevented:
+            return
         platform_event = self._platform_event(event, PlatformEventKind.KEY_DOWN)
         if not self.enabled or platform_event is None or not self._tabs:
             return

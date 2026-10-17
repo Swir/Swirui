@@ -38,6 +38,7 @@ def test_window_root_resize_and_close() -> None:
 
 def test_app_lifecycle() -> None:
     app = App("Test", platform_backend=NullPlatformBackend())
+    assert isinstance(app.renderer, NullRenderer)
     window = app.add_window(Window())
 
     exit_code = app.run()
@@ -52,6 +53,12 @@ def test_app_lifecycle() -> None:
     assert app.exit_code == 7
     assert window.closed is True
     assert window.native_handle is None
+
+
+def test_headless_app_preserves_explicit_renderer() -> None:
+    renderer = NullRenderer()
+    app = App(platform_backend=NullPlatformBackend(), renderer=renderer)
+    assert app.renderer is renderer
 
 
 def test_headless_backends() -> None:

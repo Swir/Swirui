@@ -32,6 +32,8 @@ from .animation import (
 )
 from .animation_timeline import DelayAnimation, RepeatAnimation
 from .app import App
+from .appearance import ThemeController, ThemeMode
+from .clipboard import ClipboardError, MemoryClipboard, TextClipboard
 from .core import (
     AccessibilityNode,
     AccessibilityRole,
@@ -69,8 +71,23 @@ from .interaction_animation import (
 )
 from .keyframes import Keyframe, KeyframeAnimation
 from .page_transition import PageTransition, PageTransitionDirection
+from .platforms import ColorScheme
 from .rotation_animation import RotateTransition
 from .shared_element_transition import SharedElementTransition
+from .surface_style import SurfaceStyle
+from .theme import FUTURE_DARK, FUTURE_LIGHT, ButtonVariant, Palette, Theme
+from .theme_package import ThemePackage
+from .theme_presets import (
+    CYBERPUNK,
+    MATRIX,
+    MINIMAL,
+    NEON_BLUE,
+    NEON_GREEN,
+    OLED,
+    PROFESSIONAL,
+    THEME_PRESETS,
+)
+from .theme_transition import ThemeTransition
 from .transform_animation import (
     FadeTransition,
     FlipTransition,
@@ -215,9 +232,33 @@ from .widgets import (
     spectrum_magnitudes_pcm16,
     waveform_envelope_pcm16,
 )
+from .widgets.theme_surface import ThemeSurface
 from .window import Window
 
 __all__ = [
+    "SurfaceStyle",
+    "ThemeSurface",
+    "FUTURE_DARK",
+    "FUTURE_LIGHT",
+    "ClipboardError",
+    "MemoryClipboard",
+    "TextClipboard",
+    "ButtonVariant",
+    "Palette",
+    "Theme",
+    "ThemePackage",
+    "NEON_BLUE",
+    "NEON_GREEN",
+    "MATRIX",
+    "CYBERPUNK",
+    "OLED",
+    "MINIMAL",
+    "PROFESSIONAL",
+    "THEME_PRESETS",
+    "ThemeTransition",
+    "ThemeController",
+    "ThemeMode",
+    "ColorScheme",
     "AccessibilityNode",
     "AccessibilityRole",
     "AdaptiveNavigation",

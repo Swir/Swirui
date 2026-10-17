@@ -9,6 +9,7 @@ from swirui.core import Event
 from swirui.platforms import PlatformEventKind, PointerButton
 from swirui.rendering.geometry import Color, Rect
 from swirui.rendering.scene import SceneNode
+from swirui.theme import Theme
 
 from .data_grid import DataGridColumn
 from .data_grid_routed import DataGrid as _DataGrid
@@ -30,12 +31,13 @@ class DataGrid(_DataGrid):
         *,
         bounds: Rect,
         key: str | None = None,
+        theme: Theme | None = None,
         row_height: float = 36.0,
         header_height: float = 40.0,
         cell_padding: float = 10.0,
         font_size: float = 14.0,
-        font_family: str = "Segoe UI",
-        corner_radius: float = 8.0,
+        font_family: str | None = None,
+        corner_radius: float | None = None,
         background: Color | None = None,
         header_background: Color | None = None,
         row_background: Color | None = None,
@@ -65,6 +67,7 @@ class DataGrid(_DataGrid):
             rows,
             bounds=bounds,
             key=key,
+            theme=theme,
             row_height=row_height,
             header_height=header_height,
             cell_padding=cell_padding,

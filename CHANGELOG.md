@@ -6,7 +6,89 @@ The project uses semantic versioning where practical during pre-alpha developmen
 
 ## [Unreleased]
 
-_No unreleased changes yet._
+### Added
+- Custom SurfaceStyle and ThemeSurface for inherited glass/acrylic, bounded
+  decorative perspective backplates, shadow and accent glow, with ordinary
+  interactive foreground controls. Theme-package format 2 preserves these styles;
+  basic packages retain version-1 compatibility. Added Ocean Studio and authoring docs.
+- Version-aware GitHub release qualification with a full installed Windows wheel
+  test gate, cross-distribution source checks and strict PyPI publication.
+- Nine immutable appearance presets and opt-in linear-light theme transitions,
+  preserving local scopes, editing state and exact endpoints. Rapid retargeting,
+  explicit reduced motion and selective animation cancellation are supported.
+  Added the native Theme Gallery and scoped palette contrast checks.
+- Per-window system/light/dark appearance policy with read-only Windows app-theme
+  detection, native change notifications, custom theme pairs, explicit fallback
+  and lifecycle cleanup. Added the interactive Appearance showcase.
+- Versioned, immutable JSON theme packages with multiple variants, strict token
+  validation and atomic file replacement. Added the Aurora example package and
+  Workbench `--theme-package` loading with live variant switching.
+- Runtime property-grid, inspector, docking and terminal palettes; preserved
+  editing state and ANSI foreground identities recolor existing scrollback.
+  Dock headers support keyboard activation. Added the local Workbench showcase.
+- Runtime calendar, date/time and color-picker themes with keyboard focus frames.
+  Color-picker swatches now match sRGB HEX values on the native GPU; bounded
+  seam-free hue strips, transparency checkerboards and captured color dragging
+  are included in the new Details showcase.
+- Runtime editor gutter, minimap and syntax palettes, autocomplete popup styling
+  and a separate theme monospace font. Theme switches preserve editing state,
+  partial color overrides and completion results. Selected code uses readable
+  foreground, and minimap code marks remain visible above its viewport indicator.
+- Shaped multiline editing geometry, visual-column navigation and bounded line
+  caches; native color spans remove duplicated syntax glyphs, including affine
+  text and effect copies. Added the editable Compose showcase.
+- Native shaped single-line caret, selection and pointer geometry; clipped
+  pixel scrolling preserves complete text, with DPI-aware per-control caching.
+- Editable command queries share Input caret, selection and clipboard behavior;
+  fractional popup scrolling, bounded/clipped result rows and captured scrollbars.
+- Runtime palette, font, radius and keyboard-focus styling for toolbars, menu
+  bars, ribbons, context menus and command palettes; workspace Ctrl+K navigation.
+- Runtime theme bindings and visible keyboard-focus outlines for navigation,
+  tabs, virtualized lists/trees and the public DataGrid, preserving edits,
+  filtering, sorting, selection, expansion and scrolling; native workspace demo.
+- Live semantic styling for progress indicators, badges/chips, tooltips,
+  expanders, split panes, dialogs and notifications; inherited glass styling
+  with explicit-material precedence, warning/error swatches and a native
+  interactive component gallery.
+- Runtime component-theme inheritance and Future Dark / Future Light presets,
+  preserving control identity, focus, selections, values and undo history.
+- Live palette/mode switching in the native playground without recreating controls.
+- Native Windows Unicode text clipboard and an injectable in-memory clipboard;
+  copy/cut/paste in text controls, guarded password/read-only behavior, error
+  reporting, bounded native memory access and code-editor undo integration.
+- Explicit immutable themes with semantic color roles, typography, geometry and
+  motion tokens for core controls; primary, secondary and ghost button variants.
+- Native visual playground with editable title, three accent palettes, glass and
+  geometry controls, keyboard focus and on-demand animation.
+- GPU scene readback for pixel-level native rendering regression tests.
+
+### Fixed
+- Map pointer coordinates into dialog content, including nested modals and
+  captured drags, while preserving ancestor and window coordinate spaces.
+- Ignore native control characters emitted after shortcuts and editing keys in
+  command palette text input; the workspace shortcut also works before focus.
+- Retain spaces while typing multiword command queries and show an empty-result message.
+- Reveal keyboard-selected overflow commands in bounded menu, ribbon and palette
+  viewports; keep pointer activation aligned with displayed rows and columns.
+- Respect focused child controls and prevented defaults in command navigation;
+  separate command titles and shortcut text in popups and short toolbars.
+- Keep tab-header navigation from consuming arrows/Home/End routed from page
+  controls or nested tabs, and honor prevented default keyboard actions.
+- Reserve separate text bounds for ListView primary and secondary labels so
+  long titles cannot paint over metadata.
+- Keep selected-chip foreground/background pairs consistent during hover and
+  press, and use disabled text styling when a selected chip is unavailable.
+- Show a distinct keyboard-focus frame on themed expanders.
+- Keep Tab/Shift+Tab traversal inside a focused modal, including nested dialogs,
+  while honoring child controls that consume Tab themselves.
+- Preserve ordinary scene painter order across rectangles, paths, images and
+  text without turning plain segment boundaries into glass effects.
+- Isolate Win32 callback registrations across backend instances and restarts.
+- Keep the null platform on the null renderer unless a renderer is explicitly
+  provided, and make Windows frame tests advance from the actual previous frame.
+
+These changes remain an unreleased candidate. Canonical progress is unchanged;
+this is not a declaration of a complete Theme Engine or a stable 1.0 release.
 
 ## [0.1.0a1] - 2026-09-23
 

@@ -27,13 +27,37 @@ class _SuggestedRect(ctypes.Structure):
     ]
 
 
+@pytest.mark.skipif(sys.platform != "win32", reason="Win32 requires Windows")
+def test_default_backends_route_messages_independently_and_can_restart() -> None:
+    first = Win32PlatformBackend()
+    second = Win32PlatformBackend()
+    try:
+        first.initialize()
+        second.initialize()
+        first.create_window(NativeWindowSpec("First backend", 320, 240))
+        handle = second.create_window(NativeWindowSpec("Second backend", 320, 240))
+        first.poll_events()
+        second.poll_events()
+        send = second._user32.SendMessageW
+        send.argtypes = [ctypes.c_void_p, ctypes.c_uint, ctypes.c_size_t, ctypes.c_ssize_t]
+        send.restype = ctypes.c_ssize_t
+        send(ctypes.c_void_p(handle.value), 0x0100, 0x41, 0)
+        assert any(e.kind is PlatformEventKind.KEY_DOWN for e in second.poll_events())
+        assert not any(e.kind is PlatformEventKind.KEY_DOWN for e in first.poll_events())
+        second.shutdown()
+        second.initialize()
+        restarted = second.create_window(NativeWindowSpec("Restarted backend", 320, 240))
+        assert restarted.value > 0
+    finally:
+        second.shutdown()
+        first.shutdown()
+
+
 def _isolated_backend(label: str) -> Win32PlatformBackend:
     """Create a backend with a process-unique Win32 class for smoke isolation.
 
-    Win32 window classes remain registered for the lifetime of the process. The
-    production runtime normally owns one platform backend, while this test module
-    deliberately creates several independent backends in one pytest process.
-    Giving each smoke backend its own class keeps its WNDPROC callback isolated.
+    The backend owns and unregisters its class. Named test classes additionally
+    make native diagnostics easier to attribute to a particular smoke scenario.
     """
 
     backend = Win32PlatformBackend()

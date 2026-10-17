@@ -10,6 +10,7 @@ from swirui.core import AccessibilityNode, AccessibilityRole, Component, Event
 from swirui.platforms import PlatformEvent, PlatformEventKind, PointerButton
 from swirui.rendering.geometry import Color, CornerRadius, Rect
 from swirui.rendering.scene import SceneNode, SceneNodeKind
+from swirui.theme import Theme
 
 from .base import Widget
 
@@ -63,12 +64,13 @@ class NavigationRail(Widget):
         *,
         bounds: Rect,
         key: str | None = None,
+        theme: Theme | None = None,
         selected_key: Hashable | None = None,
         expanded: bool = False,
         item_height: float = 48.0,
-        corner_radius: float = 8.0,
+        corner_radius: float | None = None,
         font_size: float = 14.0,
-        font_family: str = "Segoe UI",
+        font_family: str | None = None,
         background: Color | None = None,
         item_background: Color | None = None,
         active_item_background: Color | None = None,
@@ -83,9 +85,11 @@ class NavigationRail(Widget):
         self._items = self._validate_items(items)
         self._expanded = bool(expanded)
         self._item_height = self._validate_positive(item_height, "item_height")
-        self._corner_radius = self._validate_non_negative(corner_radius, "corner_radius")
+        self._corner_radius = self._validate_non_negative(
+            8.0 if corner_radius is None else corner_radius, "corner_radius"
+        )
         self._font_size = self._validate_positive(font_size, "font_size")
-        self._font_family = str(font_family).strip()
+        self._font_family = "Segoe UI" if font_family is None else str(font_family).strip()
         if not self._font_family:
             raise ValueError("font_family must not be empty.")
         self._background = background or _DEFAULT_BACKGROUND
@@ -107,6 +111,34 @@ class NavigationRail(Widget):
             accessible_name=accessible_name,
             accessible_description=accessible_description,
         )
+        self._bind_theme(
+            theme,
+            {
+                "_background": ("surface", "surface", _DEFAULT_BACKGROUND),
+                "_foreground": ("text", "text", _DEFAULT_FOREGROUND),
+                "_item_background": ("surface", "surface", _DEFAULT_ITEM_BACKGROUND),
+                "_active_item_background": (
+                    "surface",
+                    "selection",
+                    _DEFAULT_ACTIVE_ITEM_BACKGROUND,
+                ),
+                "_muted_foreground": ("text", "disabled_text", _DEFAULT_MUTED),
+                "_accent": ("surface", "accent", _DEFAULT_ACCENT),
+                "_font_family": ("token", "font_family", "Segoe UI"),
+                "_corner_radius": ("token", "control_radius", 8.0),
+            },
+            {
+                "_background": background,
+                "_foreground": foreground,
+                "_item_background": item_background,
+                "_active_item_background": active_item_background,
+                "_muted_foreground": muted_foreground,
+                "_accent": accent,
+                "_font_family": self._font_family if font_family is not None else None,
+                "_corner_radius": corner_radius,
+            },
+        )
+        self._enable_theme_focus_frame()
         self.on("pointer_down", self._on_pointer_down)
         self.on("key_down", self._on_key_down)
         self._sync_accessibility_value()
@@ -211,6 +243,12 @@ class NavigationRail(Widget):
             clip_to_bounds=True,
             hit_testable=self.enabled,
         )
+        self._add_theme_focus_frame(
+            root,
+            bounds=self.item_bounds(self._selected_index)
+            if self._selected_index is not None
+            else self.bounds,
+        )
         if self.bounds.width <= 0.0 or self.bounds.height <= 0.0:
             return root
 
@@ -250,7 +288,9 @@ class NavigationRail(Widget):
                         max(0.0, row.width - (28.0 if self._expanded else 20.0)),
                         text_height,
                     ),
-                    fill=self._muted_foreground if item.disabled else self._foreground,
+                    fill=self._muted_foreground
+                    if item.disabled or not self.enabled
+                    else self._foreground,
                     text=label,
                     font_size=self._font_size,
                     font_family=self._font_family,
@@ -431,6 +471,7 @@ class Sidebar(NavigationRail):
         *,
         bounds: Rect,
         key: str | None = None,
+        theme: Theme | None = None,
         selected_key: Hashable | None = None,
         item_height: float = 44.0,
         opacity: float = 1.0,
@@ -442,6 +483,7 @@ class Sidebar(NavigationRail):
             items,
             bounds=bounds,
             key=key,
+            theme=theme,
             selected_key=selected_key,
             expanded=True,
             item_height=item_height,

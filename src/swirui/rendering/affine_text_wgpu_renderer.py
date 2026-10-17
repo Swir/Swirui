@@ -126,6 +126,9 @@ class WgpuRenderer(_AffineClipWgpuRenderer):
             font_size,
             fill,
         )
+        if node.text_spans:
+            style_digest = hashlib.sha256(repr(node.text_spans).encode("utf-8")).hexdigest()
+            resource_id += ":" + style_digest
 
         if resource_id in self._affine_text_cache and resource_id in self._image_aliases:
             self._affine_text_cache.move_to_end(resource_id)
@@ -134,6 +137,11 @@ class WgpuRenderer(_AffineClipWgpuRenderer):
         previous_size = self._affine_text_cache.pop(resource_id, None)
         if previous_size is not None:
             self._affine_text_cache_bytes -= previous_size
+        span_args = {}
+        if node.text_spans:
+            if not getattr(self._native, "supports_text_color_spans", False):
+                raise RuntimeError("Installed native core cannot rasterize text color spans.")
+            span_args["spans"] = self._text_color_spans(node, 1.0)
         rgba = bytes(
             rasterize(
                 text,
@@ -145,6 +153,7 @@ class WgpuRenderer(_AffineClipWgpuRenderer):
                 fill.b,
                 fill.a,
                 node.font_family,
+                **span_args,
             )
         )
         expected = width * height * 4
@@ -234,6 +243,7 @@ class WgpuRenderer(_AffineClipWgpuRenderer):
                 kind=SceneNodeKind.IMAGE,
                 fill=None,
                 text=None,
+                text_spans=(),
                 resource_id=resource_id,
                 children=children,
             )

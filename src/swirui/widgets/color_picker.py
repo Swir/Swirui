@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import colorsys
+import math
 from typing import Literal
 
 from swirui.core import AccessibilityNode, AccessibilityRole, Component, Event
 from swirui.platforms import PlatformEvent, PlatformEventKind, PointerButton
-from swirui.rendering.geometry import Color, CornerRadius, Rect
+from swirui.rendering.geometry import Color, CornerRadius, Path2D, Point, Rect
 from swirui.rendering.scene import SceneNode, SceneNodeKind
+from swirui.theme import Theme
 
 from .base import Widget
 
@@ -52,6 +54,13 @@ def _clamp_unit(value: float) -> float:
     return max(0.0, min(1.0, float(value)))
 
 
+def _linear_color(color: Color) -> Color:
+    """ColorPicker values and HEX are encoded sRGB; native shapes are linear."""
+    def channel(value: float) -> float:
+        return value / 12.92 if value <= 0.04045 else ((value + 0.055) / 1.055) ** 2.4
+    return Color(channel(color.r), channel(color.g), channel(color.b), color.a)
+
+
 def _hex_channel(value: float) -> int:
     return max(0, min(255, round(_clamp_unit(value) * 255.0)))
 
@@ -82,6 +91,8 @@ def _text(
 class ColorPicker(Widget):
     """Focusable HSV(A) color picker with retained gradient tracks.
 
+    Values, HSV channels and HEX use encoded sRGB; swatches and tracks convert
+    to linear RGB for native rendering while preserving alpha.
     Python remains the public API while every visual compiles into ordinary
     retained ``SceneNode`` primitives, so the existing Rust/wgpu pipeline owns
     native GPU submission without a separate widget renderer.
@@ -92,7 +103,17 @@ class ColorPicker(Widget):
     _LABEL_HEIGHT = 16.0
     _TRACK_HEIGHT = 18.0
     _CHANNEL_GAP = 12.0
-    _GRADIENT_SEGMENTS = 16
+    _GRADIENT_SEGMENTS = 128
+    _background: Color
+    _surface: Color
+    _border: Color
+    _foreground: Color
+    _muted: Color
+    _accent: Color
+    _accent_surface: Color
+    _disabled_text: Color
+    _disabled_surface: Color
+    _corner_radius: float
 
     def __init__(
         self,
@@ -101,7 +122,8 @@ class ColorPicker(Widget):
         value: Color | None = None,
         show_alpha: bool = True,
         key: str | None = None,
-        font_family: str = "Segoe UI",
+        font_family: str | None = None,
+        theme: Theme | None = None,
         opacity: float = 1.0,
         z_index: int = 0,
         accessible_name: str = "Color picker",
@@ -110,7 +132,7 @@ class ColorPicker(Widget):
         initial = value or Color.from_hex("#0088FFFF")
         if not isinstance(initial, Color):
             raise TypeError("value must be a swirui.rendering.Color.")
-        family = str(font_family).strip()
+        family = "Segoe UI" if font_family is None else str(font_family).strip()
         if not family:
             raise ValueError("font_family must not be empty.")
         hue, saturation, brightness = colorsys.rgb_to_hsv(initial.r, initial.g, initial.b)
@@ -134,6 +156,24 @@ class ColorPicker(Widget):
             accessible_name=accessible_name,
             accessible_description=accessible_description,
         )
+        self._bind_theme(
+            theme,
+            {
+                "_background": ("surface", "surface", _BACKGROUND),
+                "_surface": ("surface", "raised", _SURFACE),
+                "_border": ("surface", "border", _BORDER),
+                "_foreground": ("text", "text", _FOREGROUND),
+                "_muted": ("text", "muted", _MUTED),
+                "_accent": ("text", "accent", _ACCENT),
+                "_accent_surface": ("surface", "accent", _ACCENT),
+                "_disabled_text": ("text", "disabled_text", _DISABLED),
+                "_disabled_surface": ("surface", "disabled", _DISABLED),
+                "_corner_radius": ("token", "control_radius", 10.0),
+                "_font_family": ("token", "font_family", "Segoe UI"),
+            },
+            {"_font_family": family if font_family is not None else None},
+        )
+        self._enable_theme_focus_frame()
         self._sync_accessibility()
         self.on("pointer_down", self._on_pointer_down)
         self.on("pointer_move", self._on_pointer_move)
@@ -141,6 +181,7 @@ class ColorPicker(Widget):
         self.on("key_down", self._on_key_down)
         self.on("focus_gained", self._on_focus_gained)
         self.on("focus_lost", self._on_focus_lost)
+        self.on("pointer_capture_lost", self._on_capture_lost)
 
     @property
     def value(self) -> Color:
@@ -260,8 +301,8 @@ class ColorPicker(Widget):
             bounds=self.bounds,
             opacity=self.opacity,
             z_index=self.z_index,
-            fill=_BACKGROUND,
-            corner_radius=CornerRadius.uniform(10.0),
+            fill=self._background,
+            corner_radius=CornerRadius.uniform(self._corner_radius),
             clip_to_bounds=True,
             hit_testable=self.enabled,
         )
@@ -271,13 +312,14 @@ class ColorPicker(Widget):
             min(112.0, max(0.0, self.bounds.width * 0.28)),
             self._PREVIEW_HEIGHT,
         )
+        self._append_checkerboard(root, preview, "preview")
         root.add(
             SceneNode(
                 key=f"{self.key}:preview",
                 kind=SceneNodeKind.RECTANGLE,
                 bounds=preview,
-                fill=self.value if self.enabled else _DISABLED,
-                corner_radius=CornerRadius.uniform(7.0),
+                fill=_linear_color(self.value) if self.enabled else self._disabled_surface,
+                corner_radius=CornerRadius.uniform(0.0),
                 z_index=2,
                 hit_testable=False,
             ),
@@ -291,11 +333,11 @@ class ColorPicker(Widget):
                 ),
                 self.hex_value,
                 18.0,
-                _FOREGROUND if self.enabled else _DISABLED,
+                self._foreground if self.enabled else self._disabled_text,
                 self._font_family,
             ),
         )
-        if self._focused and self.enabled:
+        if self._focused and self.enabled and self._theme is None:
             root.add(
                 SceneNode(
                     key=f"{self.key}:focus",
@@ -306,7 +348,7 @@ class ColorPicker(Widget):
                         max(0.0, self.bounds.width - 4.0),
                         max(0.0, self.bounds.height - 4.0),
                     ),
-                    fill=_ACCENT.with_alpha(0.05),
+                    fill=self._accent_surface.with_alpha(0.05),
                     corner_radius=CornerRadius.uniform(9.0),
                     z_index=1,
                     hit_testable=False,
@@ -314,6 +356,7 @@ class ColorPicker(Widget):
             )
         for channel in self.channels:
             self._append_channel(root, channel)
+        self._add_theme_focus_frame(root)
         return root
 
     def accessibility_snapshot(
@@ -361,7 +404,8 @@ class ColorPicker(Widget):
                 Rect(track.x, label_y, max(0.0, track.width - 70.0), self._LABEL_HEIGHT),
                 _LABELS[channel],
                 11.0,
-                _ACCENT if channel == self._active_channel else _MUTED,
+                (self._disabled_text if not self.enabled else self._accent
+                 if channel == self._active_channel else self._muted),
                 self._font_family,
             ),
             _text(
@@ -369,37 +413,57 @@ class ColorPicker(Widget):
                 Rect(track.right - 68.0, label_y, 68.0, self._LABEL_HEIGHT),
                 self._channel_text(channel),
                 11.0,
-                _FOREGROUND,
+                self._foreground if self.enabled else self._disabled_text,
                 self._font_family,
             ),
         )
-        segment_width = track.width / self._GRADIENT_SEGMENTS if track.width else 0.0
-        for index in range(self._GRADIENT_SEGMENTS):
+        if track.width <= 0 or track.height <= 0:
+            return
+        if channel == "alpha":
+            self._append_checkerboard(root, track, "alpha")
+        segments = min(self._GRADIENT_SEGMENTS, max(16, math.ceil(track.width / 2)))
+        segment_width = track.width / segments
+        for index in range(segments):
             x = track.x + index * segment_width
-            width = segment_width if index < self._GRADIENT_SEGMENTS - 1 else track.right - x
-            ratio = (index + 0.5) / self._GRADIENT_SEGMENTS
+            width = segment_width if index < segments - 1 else track.right - x
+            ratio = (index + 0.5) / segments
             root.add(
                 SceneNode(
                     key=f"{self.key}:track:{channel}:{index}",
-                    kind=SceneNodeKind.RECTANGLE,
+                    kind=SceneNodeKind.PATH,
                     bounds=Rect(x, track.y, max(0.0, width), track.height),
-                    fill=self._gradient_color(channel, ratio) if self.enabled else _DISABLED,
+                    path=Path2D((Point(0, 0), Point(width, 0),
+                                 Point(width, track.height), Point(0, track.height))),
+                    fill=(_linear_color(self._gradient_color(channel, ratio))
+                          if self.enabled else self._disabled_surface),
                     z_index=2,
                     hit_testable=False,
                 )
             )
         thumb_x = track.x + track.width * self.channel_value(channel)
+        thumb_left = max(track.x, min(track.right - 3.0, thumb_x - 1.5))
+        # A dark outline and white center remain visible over every hue/value,
+        # independently of the application's light or dark appearance.
+        root.add(SceneNode(
+            key=f"{self.key}:thumb-outline:{channel}",
+            kind=SceneNodeKind.RECTANGLE,
+            bounds=Rect(thumb_left - 1.0, track.y - 4.0, 5.0, track.height + 8.0),
+            fill=Color(0, 0, 0) if self.enabled else self._border,
+            corner_radius=CornerRadius.uniform(2.5),
+            z_index=3,
+            hit_testable=False,
+        ))
         root.add(
             SceneNode(
                 key=f"{self.key}:thumb:{channel}",
                 kind=SceneNodeKind.RECTANGLE,
                 bounds=Rect(
-                    max(track.x, min(track.right - 3.0, thumb_x - 1.5)),
+                    thumb_left,
                     track.y - 3.0,
                     3.0,
                     track.height + 6.0,
                 ),
-                fill=_FOREGROUND if self.enabled else _DISABLED,
+                fill=Color(1, 1, 1) if self.enabled else self._disabled_surface,
                 corner_radius=CornerRadius.uniform(1.5),
                 z_index=4,
                 hit_testable=False,
@@ -416,12 +480,32 @@ class ColorPicker(Widget):
                         track.width + 4.0,
                         track.height + 4.0,
                     ),
-                    fill=_ACCENT.with_alpha(0.08),
+                    fill=self._accent_surface.with_alpha(0.08),
                     corner_radius=CornerRadius.uniform(5.0),
                     z_index=1,
                     hit_testable=False,
                 )
             )
+
+    def _append_checkerboard(self, root: SceneNode, bounds: Rect, name: str) -> None:
+        if bounds.width <= 0 or bounds.height <= 0:
+            return
+        columns = min(32, max(1, math.ceil(bounds.width / 8)))
+        rows = min(8, max(1, math.ceil(bounds.height / 8)))
+        width, height = bounds.width / columns, bounds.height / rows
+        path = Path2D((Point(0, 0), Point(width, 0),
+                       Point(width, height), Point(0, height)))
+        for row in range(rows):
+            for column in range(columns):
+                root.add(SceneNode(
+                    key=f"{self.key}:checker:{name}:{row}:{column}",
+                    kind=SceneNodeKind.PATH,
+                    bounds=Rect(bounds.x + column * width, bounds.y + row * height, width, height),
+                    path=path,
+                    fill=self._surface if (row + column) % 2 else self._border,
+                    z_index=1,
+                    hit_testable=False,
+                ))
 
     def _gradient_color(self, channel: ColorChannel, ratio: float) -> Color:
         ratio = _clamp_unit(ratio)
@@ -478,6 +562,8 @@ class ColorPicker(Widget):
         return _clamp_unit((x - track.x) / track.width)
 
     def _on_pointer_down(self, event: Event) -> None:
+        if event.source is not self or event.default_prevented:
+            return
         platform = _platform_event(event, PlatformEventKind.POINTER_DOWN)
         if (
             not self.enabled
@@ -492,6 +578,8 @@ class ColorPicker(Widget):
             return
         self.activate_channel(channel)
         self._drag_channel = channel
+        if self.mounted_window is not None:
+            self.mounted_window.capture_pointer(self)
         self.set_channel_value(channel, self._value_from_x(channel, platform.x), input_event=event)
         event.prevent_default()
 
@@ -523,6 +611,8 @@ class ColorPicker(Widget):
         self._drag_channel = None
 
     def _on_key_down(self, event: Event) -> None:
+        if event.source is not self or event.default_prevented:
+            return
         platform = _platform_event(event, PlatformEventKind.KEY_DOWN)
         if not self.enabled or platform is None or platform.ctrl or platform.alt or platform.meta:
             return
@@ -564,8 +654,13 @@ class ColorPicker(Widget):
         changed = self._focused or self._drag_channel is not None
         self._focused = False
         self._drag_channel = None
+        if self.mounted_window is not None:
+            self.mounted_window.release_pointer_capture(self)
         if changed:
             self.invalidate(reason="focus_lost")
+
+    def _on_capture_lost(self, _event: Event) -> None:
+        self._drag_channel = None
 
 
 __all__ = ["ColorChannel", "ColorPicker"]

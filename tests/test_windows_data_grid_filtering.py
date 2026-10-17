@@ -1,6 +1,5 @@
 import ctypes
 import sys
-import time
 from collections.abc import Callable, Mapping
 from typing import Any
 
@@ -101,7 +100,10 @@ def test_datagrid_filtering_preserves_native_wgpu_context_and_filtered_navigatio
         assert filter_events[-1].data["source_count"] == 200
 
         app.invalidate(window)
-        assert app.render_pending(time.monotonic() + 1.0) == 1
+        scheduler = app._frame_schedulers[window]
+        last_frame = scheduler.stats.last_frame_time
+        assert last_frame is not None
+        assert app.render_pending(last_frame + 2.0 * scheduler.frame_interval) == 1
         assert renderer.persistent_context_count == initial_contexts
         assert window.scene is not None
         row_nodes = [
@@ -139,7 +141,10 @@ def test_datagrid_filtering_preserves_native_wgpu_context_and_filtered_navigatio
         assert grid.source_row_count == 200
 
         app.invalidate(window)
-        assert app.render_pending(time.monotonic() + 1.0) == 1
+        scheduler = app._frame_schedulers[window]
+        last_frame = scheduler.stats.last_frame_time
+        assert last_frame is not None
+        assert app.render_pending(last_frame + 2.0 * scheduler.frame_interval) == 1
         assert renderer.persistent_context_count == initial_contexts
         assert window.scene is not None
         visible_text = {

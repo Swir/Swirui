@@ -9,8 +9,9 @@ from swirui.core import AccessibilityRole, Event
 from swirui.platforms import PlatformEvent, PlatformEventKind, PointerButton
 from swirui.rendering.geometry import Color, CornerRadius, Rect, Size
 from swirui.rendering.scene import SceneNode, SceneNodeKind
+from swirui.theme import DEFAULT_THEME, ButtonVariant, Theme
 
-from .base import Widget
+from .base import ThemeStyle, Widget
 from .measurement import measure_text_block
 
 _VK_RETURN = 0x0D
@@ -32,21 +33,54 @@ class Button(Widget):
         *,
         bounds: Rect,
         key: str | None = None,
+        theme: Theme | None = None,
+        variant: ButtonVariant | None = None,
         background: Color | None = None,
         hover_background: Color | None = None,
         pressed_background: Color | None = None,
         focused_background: Color | None = None,
         disabled_background: Color | None = None,
         foreground: Color | None = None,
-        corner_radius: float = 8.0,
+        corner_radius: float | None = None,
         font_size: float = 16.0,
-        font_family: str = "Segoe UI",
+        font_family: str | None = None,
         padding: float = 12.0,
         opacity: float = 1.0,
         z_index: int = 0,
         accessible_name: str | None = None,
         accessible_description: str | None = None,
     ) -> None:
+        overrides = {
+            "_background": background,
+            "_hover_background": hover_background,
+            "_pressed_background": pressed_background,
+            "_focused_background": focused_background,
+            "_disabled_background": disabled_background,
+            "_foreground": foreground,
+            "_corner_radius": corner_radius,
+            "_font_family": font_family,
+        }
+        resolved_variant = ButtonVariant(variant or ButtonVariant.PRIMARY)
+        self._variant = resolved_variant
+        if theme is not None:
+            primary = resolved_variant is ButtonVariant.PRIMARY
+            background = background or (
+                Color(0, 0, 0, 0)
+                if resolved_variant is ButtonVariant.GHOST
+                else theme.surface_color("accent" if primary else "raised")
+            )
+            hover_background = hover_background or theme.surface_color(
+                "accent_hover" if primary else "hover"
+            )
+            pressed_background = pressed_background or theme.surface_color(
+                "accent_pressed" if primary else "pressed"
+            )
+            focused_background = focused_background or theme.surface_color(
+                "accent_hover" if primary else "hover"
+            )
+            disabled_background = disabled_background or theme.surface_color("disabled")
+            foreground = foreground or theme.text_color("on_accent" if primary else "text")
+        self._theme = theme
         self._text = str(text)
         self._background = background or _DEFAULT_BACKGROUND
         self._hover_background = hover_background or _DEFAULT_HOVER_BACKGROUND
@@ -54,9 +88,14 @@ class Button(Widget):
         self._focused_background = focused_background or _DEFAULT_FOCUSED_BACKGROUND
         self._disabled_background = disabled_background or _DEFAULT_DISABLED_BACKGROUND
         self._foreground = foreground or _DEFAULT_FOREGROUND
-        self._corner_radius = self._validate_non_negative(corner_radius, "corner_radius")
+        radius = (
+            corner_radius if corner_radius is not None else (theme.control_radius if theme else 8.0)
+        )
+        self._corner_radius = self._validate_non_negative(radius, "corner_radius")
         self._font_size = self._validate_positive(font_size, "font_size")
-        self._font_family = self._validate_font_family(font_family)
+        self._font_family = self._validate_font_family(
+            font_family if font_family is not None else (theme.font_family if theme else "Segoe UI")
+        )
         self._padding = self._validate_non_negative(padding, "padding")
         self._auto_accessible_name = accessible_name is None
         self._hovered = False
@@ -81,6 +120,57 @@ class Button(Widget):
         self.on("focus_gained", self._on_focus_gained)
         self.on("focus_lost", self._on_focus_lost)
         self.on("invalidated", self._on_invalidated)
+        if font_family is not None:
+            overrides["_font_family"] = self._font_family
+        self._bind_theme(
+            theme,
+            self._button_theme_styles(),
+            overrides,
+            fallback=DEFAULT_THEME if variant is not None else None,
+        )
+
+    def _button_theme_styles(self) -> dict[str, ThemeStyle]:
+        primary = self._variant is ButtonVariant.PRIMARY
+        return {
+            "_background": ("constant", "", Color(0, 0, 0, 0))
+            if self._variant is ButtonVariant.GHOST
+            else ("surface", "accent" if primary else "raised", _DEFAULT_BACKGROUND),
+            "_hover_background": (
+                "surface",
+                "accent_hover" if primary else "hover",
+                _DEFAULT_HOVER_BACKGROUND,
+            ),
+            "_pressed_background": (
+                "surface",
+                "accent_pressed" if primary else "pressed",
+                _DEFAULT_PRESSED_BACKGROUND,
+            ),
+            "_focused_background": (
+                "surface",
+                "accent_hover" if primary else "hover",
+                _DEFAULT_FOCUSED_BACKGROUND,
+            ),
+            "_disabled_background": ("surface", "disabled", _DEFAULT_DISABLED_BACKGROUND),
+            "_foreground": ("text", "on_accent" if primary else "text", _DEFAULT_FOREGROUND),
+            "_font_family": ("token", "font_family", "Segoe UI"),
+            "_corner_radius": ("token", "control_radius", 8.0),
+        }
+
+    @property
+    def variant(self) -> ButtonVariant:
+        return self._variant
+
+    @variant.setter
+    def variant(self, value: ButtonVariant) -> None:
+        normalized = ButtonVariant(value)
+        if normalized is self._variant:
+            return
+        self._variant = normalized
+        self._theme_styles = self._button_theme_styles()
+        self._theme_fallback = DEFAULT_THEME
+        self._refresh_theme_tree()
+        self._apply_theme_values(self.effective_theme)
+        self.invalidate(reason="theme")
 
     @property
     def text(self) -> str:
@@ -135,13 +225,42 @@ class Button(Widget):
             hit_testable=self.enabled,
         )
         content_bounds = self._content_bounds()
+        if (
+            self._theme
+            and self.focused
+            and self.enabled
+            and min(self.bounds.width, self.bounds.height) > 4
+        ):
+            node.fill = self._theme.surface_color("focus")
+            node.add(
+                SceneNode(
+                    key=f"{self.key}:focus-surface",
+                    kind=SceneNodeKind.RECTANGLE,
+                    bounds=Rect(
+                        self.bounds.x + 2,
+                        self.bounds.y + 2,
+                        self.bounds.width - 4,
+                        self.bounds.height - 4,
+                    ),
+                    fill=self._current_background(),
+                    corner_radius=CornerRadius.uniform(max(0, self._corner_radius - 2)),
+                    hit_testable=False,
+                    z_index=-1,
+                )
+            )
         if self.text and content_bounds.width > 0.0 and content_bounds.height > 0.0:
             node.add(
                 SceneNode(
                     key=f"{self.key}:content",
                     kind=SceneNodeKind.TEXT,
                     bounds=content_bounds,
-                    fill=self._foreground,
+                    fill=(
+                        self._theme.text_color("disabled_text")
+                        if self._theme
+                        and not self.enabled
+                        and "_foreground" not in self._theme_overrides
+                        else self._foreground
+                    ),
                     text=self.text,
                     font_size=self._font_size,
                     font_family=self._font_family,

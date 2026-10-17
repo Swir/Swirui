@@ -10,6 +10,7 @@ from swirui.core import AccessibilityNode, AccessibilityRole, Component, Event
 from swirui.platforms import PlatformEvent, PlatformEventKind, PointerButton
 from swirui.rendering.geometry import Color, CornerRadius, Rect
 from swirui.rendering.scene import SceneNode, SceneNodeKind
+from swirui.theme import Theme
 
 from .base import Widget
 
@@ -85,6 +86,7 @@ class _CommandStrip(Widget):
         *,
         bounds: Rect,
         key: str | None,
+        theme: Theme | None,
         item_width: float,
         role: AccessibilityRole,
         item_role: AccessibilityRole,
@@ -93,16 +95,11 @@ class _CommandStrip(Widget):
         opacity: float,
         z_index: int,
     ) -> None:
+        self._first_visible = 0
         self._items = _validate_items(items)
         self._item_width = _positive(item_width, "item_width")
         self._item_role = item_role
         self._active_index = _first_enabled(self._items)
-        self._background = _DEFAULT_BACKGROUND
-        self._item_background = _DEFAULT_ITEM_BACKGROUND
-        self._active_item_background = _DEFAULT_ACTIVE_ITEM_BACKGROUND
-        self._foreground = _DEFAULT_FOREGROUND
-        self._muted = _DEFAULT_MUTED
-        self._accent = _DEFAULT_ACCENT
         super().__init__(
             bounds=bounds,
             key=key,
@@ -114,6 +111,16 @@ class _CommandStrip(Widget):
             accessible_name=accessible_name,
             accessible_description=accessible_description,
         )
+        self._font_family = "Segoe UI"
+        self._corner_radius = 8.0
+        self._background = _DEFAULT_BACKGROUND
+        self._item_background = _DEFAULT_ITEM_BACKGROUND
+        self._active_item_background = _DEFAULT_ACTIVE_ITEM_BACKGROUND
+        self._foreground = _DEFAULT_FOREGROUND
+        self._muted = _DEFAULT_MUTED
+        self._accent = _DEFAULT_ACCENT
+        _bind_command_theme(self, theme, 8.0)
+        self._enable_theme_focus_frame()
         self.on("pointer_down", self._on_pointer_down)
         self.on("key_down", self._on_key_down)
         self._sync_accessibility()
@@ -164,10 +171,18 @@ class _CommandStrip(Widget):
             raise KeyError(f"Unknown command key: {key!r}")
         return self.activate_index(index)
 
+    def _visible_indices(self) -> range:
+        capacity = max(1, int(self.bounds.width // self._item_width))
+        self._first_visible = _visible_start(
+            self._first_visible, self._active_index, len(self._items), capacity
+        )
+        return range(self._first_visible, min(len(self._items), self._first_visible + capacity))
+
     def item_bounds(self, index: int) -> Rect:
         normalized = self._normalize_index(index)
+        self._visible_indices()
         return Rect(
-            self.bounds.x + self._item_width * normalized,
+            self.bounds.x + self._item_width * (normalized - self._first_visible),
             self.bounds.y,
             self._item_width,
             self.bounds.height,
@@ -181,11 +196,12 @@ class _CommandStrip(Widget):
             opacity=self.opacity,
             z_index=self.z_index,
             fill=self._background,
-            corner_radius=CornerRadius.uniform(8.0),
+            corner_radius=CornerRadius.uniform(self._corner_radius),
             clip_to_bounds=True,
             hit_testable=self.enabled,
         )
-        for index, item in enumerate(self._items):
+        for index in self._visible_indices():
+            item = self._items[index]
             cell = self.item_bounds(index)
             if cell.x >= self.bounds.right:
                 break
@@ -214,20 +230,28 @@ class _CommandStrip(Widget):
                         hit_testable=False,
                     )
                 )
+            inline_shortcut = item.shortcut is not None and cell.height < 56
+            shortcut_width = min(80.0, max(0.0, cell.width - 20.0) * 0.5)
+            label_width = max(
+                0.0, cell.width - 20.0 - (shortcut_width + 8.0 if inline_shortcut else 0.0)
+            )
+            label_y = (
+                cell.y + max(0.0, (cell.height - 20.0) / 2) if inline_shortcut else cell.y + 8.0
+            )
             node.add(
                 SceneNode(
                     key=f"{self.key}:item:{index}:label",
                     kind=SceneNodeKind.TEXT,
                     bounds=Rect(
                         cell.x + 10.0,
-                        cell.y + 8.0,
-                        max(0.0, cell.width - 20.0),
+                        label_y,
+                        label_width,
                         20.0,
                     ),
-                    fill=self._muted if item.disabled else self._foreground,
+                    fill=self._muted if item.disabled or not self.enabled else self._foreground,
                     text=item.label,
                     font_size=14.0,
-                    font_family="Segoe UI",
+                    font_family=self._font_family,
                     z_index=3,
                     hit_testable=False,
                 )
@@ -238,20 +262,23 @@ class _CommandStrip(Widget):
                         key=f"{self.key}:item:{index}:shortcut",
                         kind=SceneNodeKind.TEXT,
                         bounds=Rect(
-                            cell.x + 10.0,
-                            cell.bottom - 22.0,
-                            max(0.0, cell.width - 20.0),
+                            cell.right - 10.0 - shortcut_width
+                            if inline_shortcut
+                            else cell.x + 10.0,
+                            label_y + 2.0 if inline_shortcut else cell.bottom - 22.0,
+                            shortcut_width if inline_shortcut else max(0.0, cell.width - 20.0),
                             16.0,
                         ),
                         fill=self._muted,
                         text=item.shortcut,
                         font_size=11.0,
-                        font_family="Segoe UI",
+                        font_family=self._font_family,
                         z_index=3,
                         hit_testable=False,
                     )
                 )
             root.add(node)
+        self._add_theme_focus_frame(root)
         return root
 
     def accessibility_snapshot(
@@ -311,12 +338,15 @@ class _CommandStrip(Widget):
             )
         ):
             return
-        index = int((platform_event.x - self.bounds.x) // self._item_width)
-        if 0 <= index < len(self._items):
+        visible = self._visible_indices()
+        index = self._first_visible + int((platform_event.x - self.bounds.x) // self._item_width)
+        if index in visible:
             self.activate_index(index)
             event.prevent_default()
 
     def _on_key_down(self, event: Event) -> None:
+        if event.source is not self or event.default_prevented:
+            return
         platform_event = _platform_event(event, PlatformEventKind.KEY_DOWN)
         if not self.enabled or platform_event is None or not self._items:
             return
@@ -365,6 +395,7 @@ class Toolbar(_CommandStrip):
         *,
         bounds: Rect,
         key: str | None = None,
+        theme: Theme | None = None,
         item_width: float = 104.0,
         opacity: float = 1.0,
         z_index: int = 0,
@@ -375,6 +406,7 @@ class Toolbar(_CommandStrip):
             items,
             bounds=bounds,
             key=key,
+            theme=theme,
             item_width=item_width,
             role=AccessibilityRole.GROUP,
             item_role=AccessibilityRole.BUTTON,
@@ -394,6 +426,7 @@ class MenuBar(_CommandStrip):
         *,
         bounds: Rect,
         key: str | None = None,
+        theme: Theme | None = None,
         item_width: float = 92.0,
         opacity: float = 1.0,
         z_index: int = 0,
@@ -404,6 +437,7 @@ class MenuBar(_CommandStrip):
             items,
             bounds=bounds,
             key=key,
+            theme=theme,
             item_width=item_width,
             role=AccessibilityRole.MENU,
             item_role=AccessibilityRole.MENU_ITEM,
@@ -423,6 +457,7 @@ class Ribbon(Widget):
         *,
         bounds: Rect,
         key: str | None = None,
+        theme: Theme | None = None,
         selected_key: Hashable | None = None,
         tab_width: float = 112.0,
         tab_height: float = 34.0,
@@ -432,6 +467,8 @@ class Ribbon(Widget):
         accessible_name: str = "Ribbon",
         accessible_description: str | None = None,
     ) -> None:
+        self._first_visible_group = 0
+        self._first_visible_command = 0
         self._groups = _validate_groups(groups)
         self._tab_width = _positive(tab_width, "tab_width")
         self._tab_height = _positive(tab_height, "tab_height")
@@ -449,6 +486,16 @@ class Ribbon(Widget):
             accessible_name=accessible_name,
             accessible_description=accessible_description,
         )
+        self._font_family = "Segoe UI"
+        self._corner_radius = 8.0
+        self._background = _DEFAULT_BACKGROUND
+        self._item_background = _DEFAULT_ITEM_BACKGROUND
+        self._active_item_background = _DEFAULT_ACTIVE_ITEM_BACKGROUND
+        self._foreground = _DEFAULT_FOREGROUND
+        self._muted = _DEFAULT_MUTED
+        self._accent = _DEFAULT_ACCENT
+        _bind_command_theme(self, theme, 8.0)
+        self._enable_theme_focus_frame()
         self.on("pointer_down", self._on_pointer_down)
         self.on("key_down", self._on_key_down)
         self._sync_accessibility()
@@ -511,6 +558,26 @@ class Ribbon(Widget):
         self.emit("command_invoked", index=index, key=item.key, item=item, group=group)
         return self
 
+    def _group_indices(self) -> range:
+        capacity = max(1, int(self.bounds.width // self._tab_width))
+        self._first_visible_group = _visible_start(
+            self._first_visible_group, self._selected_index, len(self._groups), capacity
+        )
+        return range(
+            self._first_visible_group, min(len(self._groups), self._first_visible_group + capacity)
+        )
+
+    def _command_indices(self) -> range:
+        group = self.selected_group
+        count = 0 if group is None else len(group.items)
+        capacity = max(1, int(self.bounds.width // self._command_width))
+        self._first_visible_command = _visible_start(
+            self._first_visible_command, self._active_command_index, count, capacity
+        )
+        return range(
+            self._first_visible_command, min(count, self._first_visible_command + capacity)
+        )
+
     def build_scene_node(self) -> SceneNode:
         root = SceneNode(
             key=self.key,
@@ -518,14 +585,15 @@ class Ribbon(Widget):
             bounds=self.bounds,
             opacity=self.opacity,
             z_index=self.z_index,
-            fill=_DEFAULT_BACKGROUND,
-            corner_radius=CornerRadius.uniform(8.0),
+            fill=self._background,
+            corner_radius=CornerRadius.uniform(self._corner_radius),
             clip_to_bounds=True,
             hit_testable=self.enabled,
         )
-        for index, group in enumerate(self._groups):
+        for index in self._group_indices():
+            group = self._groups[index]
             tab = Rect(
-                self.bounds.x + index * self._tab_width,
+                self.bounds.x + (index - self._first_visible_group) * self._tab_width,
                 self.bounds.y,
                 self._tab_width,
                 min(self._tab_height, self.bounds.height),
@@ -535,7 +603,7 @@ class Ribbon(Widget):
                 key=f"{self.key}:group:{index}",
                 kind=SceneNodeKind.RECTANGLE,
                 bounds=tab,
-                fill=_DEFAULT_ACTIVE_ITEM_BACKGROUND if active else _DEFAULT_ITEM_BACKGROUND,
+                fill=self._active_item_background if active else self._item_background,
                 z_index=1,
                 hit_testable=False,
             )
@@ -549,10 +617,10 @@ class Ribbon(Widget):
                         max(0.0, tab.width - 20.0),
                         18.0,
                     ),
-                    fill=_DEFAULT_FOREGROUND,
+                    fill=self._foreground,
                     text=group.label,
                     font_size=13.0,
-                    font_family="Segoe UI",
+                    font_family=self._font_family,
                     z_index=2,
                     hit_testable=False,
                 )
@@ -564,9 +632,10 @@ class Ribbon(Widget):
             return root
         command_y = self.bounds.y + self._tab_height
         command_height = max(0.0, self.bounds.bottom - command_y)
-        for index, item in enumerate(selected_group.items):
+        for index in self._command_indices():
+            item = selected_group.items[index]
             cell = Rect(
-                self.bounds.x + index * self._command_width,
+                self.bounds.x + (index - self._first_visible_command) * self._command_width,
                 command_y,
                 self._command_width,
                 command_height,
@@ -578,7 +647,7 @@ class Ribbon(Widget):
                 key=f"{self.key}:command:{index}",
                 kind=SceneNodeKind.RECTANGLE,
                 bounds=cell,
-                fill=_DEFAULT_ACTIVE_ITEM_BACKGROUND if active else _DEFAULT_ITEM_BACKGROUND,
+                fill=self._active_item_background if active else self._item_background,
                 z_index=1,
                 hit_testable=False,
             )
@@ -592,15 +661,16 @@ class Ribbon(Widget):
                         max(0.0, cell.width - 20.0),
                         20.0,
                     ),
-                    fill=_DEFAULT_MUTED if item.disabled else _DEFAULT_FOREGROUND,
+                    fill=self._muted if item.disabled or not self.enabled else self._foreground,
                     text=item.label,
                     font_size=13.0,
-                    font_family="Segoe UI",
+                    font_family=self._font_family,
                     z_index=2,
                     hit_testable=False,
                 )
             )
             root.add(node)
+        self._add_theme_focus_frame(root)
         return root
 
     def accessibility_snapshot(
@@ -620,8 +690,7 @@ class Ribbon(Widget):
                     focusable=False,
                     focused=False,
                     active=(
-                        group_index == self._selected_index
-                        and index == self._active_command_index
+                        group_index == self._selected_index and index == self._active_command_index
                     ),
                 )
                 for index, item in enumerate(group.items)
@@ -693,20 +762,28 @@ class Ribbon(Widget):
         ):
             return
         if platform_event.y < self.bounds.y + self._tab_height:
-            index = int((platform_event.x - self.bounds.x) // self._tab_width)
-            if 0 <= index < len(self._groups):
+            visible = self._group_indices()
+            index = self._first_visible_group + int(
+                (platform_event.x - self.bounds.x) // self._tab_width
+            )
+            if index in visible:
                 self.select_group(self._groups[index].key)
                 event.prevent_default()
             return
         group = self.selected_group
         if group is None:
             return
-        index = int((platform_event.x - self.bounds.x) // self._command_width)
-        if 0 <= index < len(group.items):
+        visible = self._command_indices()
+        index = self._first_visible_command + int(
+            (platform_event.x - self.bounds.x) // self._command_width
+        )
+        if index in visible:
             self.activate_command(group.items[index].key)
             event.prevent_default()
 
     def _on_key_down(self, event: Event) -> None:
+        if event.source is not self or event.default_prevented:
+            return
         platform_event = _platform_event(event, PlatformEventKind.KEY_DOWN)
         if not self.enabled or platform_event is None or not self._groups:
             return
@@ -744,6 +821,32 @@ class Ribbon(Widget):
         if key_code in {_VK_RETURN, _VK_SPACE} and self._active_command_index is not None:
             self.activate_command(group.items[self._active_command_index].key)
             event.prevent_default()
+
+
+def _visible_start(start: int, active: int | None, count: int, capacity: int) -> int:
+    start = max(0, min(start, count - capacity))
+    if active is not None:
+        if active < start:
+            start = active
+        elif active >= start + capacity:
+            start = active - capacity + 1
+    return start
+
+
+def _bind_command_theme(widget: Widget, theme: Theme | None, radius: float) -> None:
+    widget._bind_theme(
+        theme,
+        {
+            "_background": ("surface", "surface", _DEFAULT_BACKGROUND),
+            "_item_background": ("surface", "raised", _DEFAULT_ITEM_BACKGROUND),
+            "_active_item_background": ("surface", "selection", _DEFAULT_ACTIVE_ITEM_BACKGROUND),
+            "_foreground": ("text", "text", _DEFAULT_FOREGROUND),
+            "_muted": ("text", "muted", _DEFAULT_MUTED),
+            "_accent": ("surface", "accent", _DEFAULT_ACCENT),
+            "_font_family": ("token", "font_family", "Segoe UI"),
+            "_corner_radius": ("token", "control_radius", radius),
+        },
+    )
 
 
 def _validate_items(items: Sequence[CommandItem]) -> tuple[CommandItem, ...]:
@@ -794,11 +897,7 @@ def _first_enabled(items: Sequence[CommandItem]) -> int | None:
 
 def _last_enabled(items: Sequence[CommandItem]) -> int | None:
     return next(
-        (
-            index
-            for index in range(len(items) - 1, -1, -1)
-            if not items[index].disabled
-        ),
+        (index for index in range(len(items) - 1, -1, -1) if not items[index].disabled),
         None,
     )
 

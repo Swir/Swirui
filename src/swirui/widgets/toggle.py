@@ -8,6 +8,7 @@ from swirui.core import AccessibilityRole, Event
 from swirui.platforms import PlatformEvent, PlatformEventKind, PointerButton
 from swirui.rendering.geometry import Color, CornerRadius, Rect
 from swirui.rendering.scene import SceneNode, SceneNodeKind
+from swirui.theme import Theme
 
 from .base import Widget
 
@@ -39,21 +40,38 @@ class _ToggleControl(Widget):
         *,
         bounds: Rect,
         role: AccessibilityRole,
+        theme: Theme | None = None,
         checked: bool = False,
         key: str | None = None,
         font_size: float = 16.0,
-        font_family: str = "Segoe UI",
+        font_family: str | None = None,
         opacity: float = 1.0,
         z_index: int = 0,
         accessible_name: str | None = None,
         accessible_description: str | None = None,
     ) -> None:
+        self._surface = theme.surface_color("raised") if theme else _SURFACE
+        self._surface_hover = theme.surface_color("hover") if theme else _SURFACE_HOVER
+        self._surface_focus = theme.surface_color("pressed") if theme else _SURFACE_FOCUS
+        self._surface_disabled = theme.surface_color("disabled") if theme else _SURFACE_DISABLED
+        self._accent = theme.surface_color("accent") if theme else _ACCENT
+        self._accent_hover = theme.surface_color("accent_hover") if theme else _ACCENT_HOVER
+        self._accent_pressed = theme.surface_color("accent_pressed") if theme else _ACCENT_PRESSED
+        self._foreground = theme.text_color("text") if theme else _FOREGROUND
+        self._foreground_disabled = (
+            theme.text_color("disabled_text") if theme else _FOREGROUND_DISABLED
+        )
+        self._mark_text = theme.text_color("on_accent") if theme else _MARK
+        self._mark_surface = theme.surface_color("on_accent") if theme else _MARK
+        self._knob_surface = theme.surface_color("text") if theme else _MARK
         self._text = str(text)
         self._checked = bool(checked)
         self._font_size = float(font_size)
         if self._font_size <= 0.0:
             raise ValueError("font_size must be greater than zero.")
-        self._font_family = font_family.strip()
+        self._font_family = (
+            font_family if font_family is not None else (theme.font_family if theme else "Segoe UI")
+        ).strip()
         if not self._font_family:
             raise ValueError("font_family cannot be empty.")
         self._auto_accessible_name = accessible_name is None
@@ -71,6 +89,25 @@ class _ToggleControl(Widget):
             accessible_description=accessible_description,
         )
         self.accessible_checked = self._checked
+        self._bind_theme(
+            theme,
+            {
+                "_surface": ("surface", "raised", _SURFACE),
+                "_surface_hover": ("surface", "hover", _SURFACE_HOVER),
+                "_surface_focus": ("surface", "pressed", _SURFACE_FOCUS),
+                "_surface_disabled": ("surface", "disabled", _SURFACE_DISABLED),
+                "_accent": ("surface", "accent", _ACCENT),
+                "_accent_hover": ("surface", "accent_hover", _ACCENT_HOVER),
+                "_accent_pressed": ("surface", "accent_pressed", _ACCENT_PRESSED),
+                "_foreground": ("text", "text", _FOREGROUND),
+                "_foreground_disabled": ("text", "disabled_text", _FOREGROUND_DISABLED),
+                "_mark_text": ("text", "on_accent", _MARK),
+                "_mark_surface": ("surface", "on_accent", _MARK),
+                "_knob_surface": ("surface", "text", _MARK),
+                "_font_family": ("token", "font_family", "Segoe UI"),
+            },
+            {"_font_family": self._font_family if font_family is not None else None},
+        )
         self.on("pointer_enter", self._on_pointer_enter)
         self.on("pointer_leave", self._on_pointer_leave)
         self.on("pointer_down", self._on_pointer_down)
@@ -139,7 +176,7 @@ class _ToggleControl(Widget):
                     kind=SceneNodeKind.TEXT,
                     bounds=label,
                     z_index=2,
-                    fill=_FOREGROUND if self.enabled else _FOREGROUND_DISABLED,
+                    fill=self._foreground if self.enabled else self._foreground_disabled,
                     text=self._text,
                     font_size=self._font_size,
                     font_family=self._font_family,
@@ -166,18 +203,18 @@ class _ToggleControl(Widget):
 
     def _surface_color(self) -> Color:
         if not self.enabled:
-            return _SURFACE_DISABLED
+            return self._surface_disabled
         if self._checked:
             if self._pressed:
-                return _ACCENT_PRESSED
+                return self._accent_pressed
             if self._hovered:
-                return _ACCENT_HOVER
-            return _ACCENT
+                return self._accent_hover
+            return self._accent
         if self._pressed or self._focused:
-            return _SURFACE_FOCUS
+            return self._surface_focus
         if self._hovered:
-            return _SURFACE_HOVER
-        return _SURFACE
+            return self._surface_hover
+        return self._surface
 
     def _activate(self, *, input_event: Event | None) -> None:
         self._set_checked(not self._checked, input_event=input_event)
@@ -321,7 +358,7 @@ class Checkbox(_ToggleControl):
                     kind=SceneNodeKind.TEXT,
                     bounds=bounds,
                     z_index=2,
-                    fill=_MARK,
+                    fill=self._mark_text,
                     text="✓",
                     font_size=max(10.0, bounds.height * 0.72),
                     font_family="Segoe UI Symbol",
@@ -399,7 +436,7 @@ class RadioButton(_ToggleControl):
                 kind=SceneNodeKind.RECTANGLE,
                 bounds=Rect(x, y, diameter, diameter),
                 z_index=2,
-                fill=_MARK,
+                fill=self._mark_surface,
                 corner_radius=CornerRadius.uniform(diameter * 0.5),
                 hit_testable=False,
             )
@@ -456,7 +493,7 @@ class Switch(_ToggleControl):
                 kind=SceneNodeKind.RECTANGLE,
                 bounds=Rect(x, y, knob_size, knob_size),
                 z_index=2,
-                fill=_MARK,
+                fill=self._mark_surface if self.checked else self._knob_surface,
                 corner_radius=CornerRadius.uniform(knob_size * 0.5),
                 hit_testable=False,
             )

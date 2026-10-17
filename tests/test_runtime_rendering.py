@@ -1,3 +1,4 @@
+import math
 import time
 
 import pytest
@@ -73,7 +74,11 @@ def test_clean_window_does_not_render_repeatedly() -> None:
     app.stop()
 
 
-def test_frame_rendered_event_exposes_runtime_pacing_telemetry() -> None:
+@pytest.mark.parametrize("clock_origin", [0.0, 2.0**20])
+def test_frame_rendered_event_exposes_runtime_pacing_telemetry(
+    monkeypatch: pytest.MonkeyPatch, clock_origin: float
+) -> None:
+    monkeypatch.setattr(time, "monotonic", lambda: clock_origin)
     renderer = NullRenderer()
     app = App(
         config=AppConfig(target_fps=120),
@@ -108,7 +113,11 @@ def test_frame_rendered_event_exposes_runtime_pacing_telemetry() -> None:
     expected_fps = 1 / expected_delta
     assert second["instantaneous_fps"] == pytest.approx(expected_fps)
     assert second["smoothed_fps"] == pytest.approx(expected_fps)
-    assert second["pacing_error"] == pytest.approx(1e-6)
+    # Subtracting absolute timestamps loses precision after long system uptime.
+    # Bound that rounding by the timestamp's ULP, not an arbitrary fixed slack.
+    assert second["pacing_error"] == pytest.approx(
+        1e-6, abs=2 * math.ulp(first_time + expected_delta)
+    )
 
     app.stop()
 

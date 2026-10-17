@@ -9,6 +9,7 @@ from swirui.core import AccessibilityRole, Component, Event
 from swirui.platforms import PlatformEvent, PlatformEventKind, PointerButton
 from swirui.rendering.geometry import Color, CornerRadius, Rect
 from swirui.rendering.scene import SceneNode, SceneNodeKind
+from swirui.theme import Theme
 
 from .base import Widget
 
@@ -46,6 +47,7 @@ class Expander(Widget):
         content: Component | None = None,
         expanded: bool = False,
         key: str | None = None,
+        theme: Theme | None = None,
         background: Color | None = None,
         hover_background: Color | None = None,
         pressed_background: Color | None = None,
@@ -53,9 +55,9 @@ class Expander(Widget):
         disabled_background: Color | None = None,
         foreground: Color | None = None,
         accent: Color | None = None,
-        corner_radius: float = 8.0,
+        corner_radius: float | None = None,
         font_size: float = 15.0,
-        font_family: str = "Segoe UI",
+        font_family: str | None = None,
         padding: float = 12.0,
         opacity: float = 1.0,
         z_index: int = 0,
@@ -72,9 +74,13 @@ class Expander(Widget):
         self._disabled_background = disabled_background or _DEFAULT_DISABLED_BACKGROUND
         self._foreground = foreground or _DEFAULT_FOREGROUND
         self._accent = accent or _DEFAULT_ACCENT
-        self._corner_radius = self._validate_non_negative(corner_radius, "corner_radius")
+        self._corner_radius = self._validate_non_negative(
+            8.0 if corner_radius is None else corner_radius, "corner_radius"
+        )
         self._font_size = self._validate_positive(font_size, "font_size")
-        self._font_family = self._validate_font_family(font_family)
+        self._font_family = self._validate_font_family(
+            "Segoe UI" if font_family is None else font_family
+        )
         self._padding = self._validate_non_negative(padding, "padding")
         self._auto_accessible_name = accessible_name is None
         self._hovered = False
@@ -89,6 +95,31 @@ class Expander(Widget):
             accessibility_role=AccessibilityRole.BUTTON,
             accessible_name=self._title if accessible_name is None else accessible_name,
             accessible_description=accessible_description,
+        )
+        self._bind_theme(
+            theme,
+            {
+                "_background": ("surface", "raised", _DEFAULT_BACKGROUND),
+                "_foreground": ("text", "text", _DEFAULT_FOREGROUND),
+                "_font_family": ("token", "font_family", "Segoe UI"),
+                "_corner_radius": ("token", "control_radius", 8.0),
+                "_hover_background": ("surface", "hover", _DEFAULT_HOVER_BACKGROUND),
+                "_pressed_background": ("surface", "pressed", _DEFAULT_PRESSED_BACKGROUND),
+                "_focused_background": ("surface", "hover", _DEFAULT_FOCUSED_BACKGROUND),
+                "_disabled_background": ("surface", "disabled", _DEFAULT_DISABLED_BACKGROUND),
+                "_accent": ("text", "accent", _DEFAULT_ACCENT),
+            },
+            {
+                "_background": background,
+                "_foreground": foreground,
+                "_font_family": self._font_family if font_family is not None else None,
+                "_corner_radius": corner_radius,
+                "_hover_background": hover_background,
+                "_pressed_background": pressed_background,
+                "_focused_background": focused_background,
+                "_disabled_background": disabled_background,
+                "_accent": accent,
+            },
         )
         self.accessible_value_text = self._state_text()
         self.on("pointer_enter", self._on_pointer_enter)
@@ -211,13 +242,40 @@ class Expander(Widget):
             hit_testable=self.enabled,
         )
         text_bounds = self._title_bounds()
+        if (
+            self._theme
+            and self.focused
+            and self.enabled
+            and min(self.bounds.width, self.bounds.height) > 4
+        ):
+            node.fill = self._theme.surface_color("focus")
+            node.add(
+                SceneNode(
+                    key=f"{self.key}:focus-surface",
+                    kind=SceneNodeKind.RECTANGLE,
+                    bounds=Rect(
+                        self.bounds.x + 2,
+                        self.bounds.y + 2,
+                        self.bounds.width - 4,
+                        self.bounds.height - 4,
+                    ),
+                    fill=self._current_background(),
+                    corner_radius=CornerRadius.uniform(max(0.0, self._corner_radius - 2)),
+                    z_index=-1,
+                    hit_testable=False,
+                )
+            )
         if self.title and text_bounds.width > 0.0 and text_bounds.height > 0.0:
             node.add(
                 SceneNode(
                     key=f"{self.key}:title",
                     kind=SceneNodeKind.TEXT,
                     bounds=text_bounds,
-                    fill=self._foreground,
+                    fill=self._theme.text_color("disabled_text")
+                    if self._theme
+                    and not self.enabled
+                    and "_foreground" not in self._theme_overrides
+                    else self._foreground,
                     text=self.title,
                     font_size=self._font_size,
                     font_family=self._font_family,
@@ -231,7 +289,9 @@ class Expander(Widget):
                     key=f"{self.key}:indicator",
                     kind=SceneNodeKind.TEXT,
                     bounds=indicator_bounds,
-                    fill=self._accent,
+                    fill=self._theme.text_color("disabled_text")
+                    if self._theme and not self.enabled and "_accent" not in self._theme_overrides
+                    else self._accent,
                     text="▾" if self._expanded else "›",
                     font_size=self._font_size + 2.0,
                     font_family=self._font_family,
@@ -400,6 +460,7 @@ class Accordion(Component):
         self,
         *items: Expander,
         key: str | None = None,
+        theme: Theme | None = None,
         allow_multiple: bool = False,
         require_one: bool = False,
         accessible_name: str | None = None,
@@ -407,6 +468,7 @@ class Accordion(Component):
     ) -> None:
         super().__init__(
             "Accordion",
+            theme=theme,
             key=key,
             accessibility_role=AccessibilityRole.GROUP,
             accessible_name=accessible_name or "Accordion",
