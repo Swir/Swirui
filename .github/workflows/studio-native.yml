@@ -1,0 +1,126 @@
+name: SwirUI Studio Native Gate
+
+on:
+  pull_request:
+    paths:
+      - "src/swirui/studio.py"
+      - "src/swirui/__main__.py"
+      - "src/swirui/app.py"
+      - "src/swirui/window.py"
+      - "src/swirui/theme.py"
+      - "src/swirui/surface_style.py"
+      - "src/swirui/rendering/**"
+      - "src/swirui/platforms/windows.py"
+      - "src/swirui/widgets/base.py"
+      - "src/swirui/widgets/runtime.py"
+      - "src/swirui/widgets/docking.py"
+      - "src/swirui/widgets/tabs.py"
+      - "src/swirui/widgets/list_tree_view.py"
+      - "src/swirui/widgets/property_grid.py"
+      - "src/swirui/widgets/code_editor.py"
+      - "src/swirui/widgets/terminal.py"
+      - "src/swirui/widgets/context_commands.py"
+      - "tests/test_studio.py"
+      - "tests/test_windows_studio.py"
+      - "native/**"
+      - ".github/workflows/studio-native.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "src/swirui/studio.py"
+      - "src/swirui/__main__.py"
+      - "src/swirui/app.py"
+      - "src/swirui/window.py"
+      - "src/swirui/theme.py"
+      - "src/swirui/surface_style.py"
+      - "src/swirui/rendering/**"
+      - "src/swirui/platforms/windows.py"
+      - "src/swirui/widgets/base.py"
+      - "src/swirui/widgets/runtime.py"
+      - "src/swirui/widgets/docking.py"
+      - "src/swirui/widgets/tabs.py"
+      - "src/swirui/widgets/list_tree_view.py"
+      - "src/swirui/widgets/property_grid.py"
+      - "src/swirui/widgets/code_editor.py"
+      - "src/swirui/widgets/terminal.py"
+      - "src/swirui/widgets/context_commands.py"
+      - "tests/test_studio.py"
+      - "tests/test_windows_studio.py"
+      - "native/**"
+      - ".github/workflows/studio-native.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  windows-studio:
+    name: Integrated Studio / Win32 + wgpu / Python 3.14
+    runs-on: windows-latest
+    steps:
+      - name: Checkout exact event head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Verify exact event head
+        shell: pwsh
+        run: |
+          $expected = "${{ github.event.pull_request.head.sha || github.sha }}"
+          $actual = git rev-parse HEAD
+          if ($actual -ne $expected) {
+            throw "Expected exact head $expected but checked out $actual"
+          }
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+
+      - name: Set up stable Rust
+        run: rustup toolchain install stable --profile minimal && rustup default stable
+
+      - name: Install Python tools
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]" maturin==1.15.0
+
+      - name: Ruff focused Studio scope
+        run: >-
+          ruff check src/swirui/studio.py src/swirui/__main__.py
+          tests/test_studio.py tests/test_windows_studio.py
+
+      - name: Strict package typing
+        run: mypy src/swirui
+
+      - name: Check native core on Windows
+        run: cargo check --manifest-path native/Cargo.toml --all-targets
+
+      - name: Build PyO3 extension
+        working-directory: native
+        run: maturin build --release --interpreter python --out ../dist-native
+
+      - name: Install PyO3 extension
+        shell: pwsh
+        run: |
+          $wheel = (Get-ChildItem dist-native\*.whl | Select-Object -First 1).FullName
+          python -m pip install $wheel
+
+      - name: Exercise integrated Studio on real Win32 and wgpu
+        run: >-
+          pytest tests/test_studio.py tests/test_windows_studio.py -q
+          --junitxml=studio-native-pytest.xml
+
+      - name: Exercise installed Studio smoke route
+        run: python -m swirui studio --smoke-test
+
+      - name: Upload Studio native diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: studio-native-${{ github.run_id }}
+          path: studio-native-pytest.xml
+          if-no-files-found: ignore
+          retention-days: 7
