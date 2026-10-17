@@ -351,7 +351,7 @@ class Studio(Panel):
             accessible_name="Studio commands",
         )
         self.palette.on("command_invoked", self._command_invoked)
-        self.palette.on("dismissed", lambda _: self.command_dialog.dismiss())
+        self.palette.on("dismissed", self._palette_dismissed)
         self.command_dialog.on("dismissed", self._commands_dismissed)
         self.inspector.on("property_changed", self._property_changed)
         self.terminal.on("submitted", self._terminal_submitted)
@@ -503,6 +503,9 @@ class Studio(Panel):
         self.execute_command(str(event.data["key"]))
         self.command_dialog.dismiss()
 
+    def _palette_dismissed(self, _event: Event) -> None:
+        self.command_dialog.dismiss()
+
     def _commands_dismissed(self, event: Event) -> None:
         if event.source is self.command_dialog and self.mounted_window:
             self.mounted_window.focus_component(self.command_button)
@@ -513,6 +516,8 @@ class Studio(Panel):
             return
         native = event.data.get("event")
         if not isinstance(native, PlatformEvent) or native.kind is not PlatformEventKind.KEY_DOWN:
+            return
+        if native.key_code is None:
             return
         if native.ctrl and not native.alt and not native.meta:
             if native.key_code == 0x4B:
