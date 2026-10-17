@@ -4,7 +4,7 @@ All notable changes to SwirUI will be documented in this file.
 
 The project uses semantic versioning where practical during development. Breaking API changes may occur before 1.0.
 
-## [0.1.0b1] - Unreleased beta candidate
+## [0.1.0b1] - 2026-10-17
 
 This release targets Windows x64 desktop applications on CPython 3.11–3.14.
 It does not complete the full roadmap or claim Linux/macOS GPU support.

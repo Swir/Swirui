@@ -2,7 +2,7 @@
 
 <div align="center">
 
-<img src="assets/readme/hero.svg" width="100%" alt="SwirUI — native reactive GPU-first Python desktop UI framework">
+<img src="https://raw.githubusercontent.com/Swir/Swirui/v0.1.0b1/assets/readme/hero.svg" width="100%" alt="SwirUI — native reactive GPU-first Python desktop UI framework">
 
 # ⚡ SwirUI
 
@@ -16,7 +16,8 @@
 ![Windows](https://img.shields.io/badge/Windows-Win32%20GPU-02050A?style=for-the-badge&logo=windows11&logoColor=62E5FF)
 
 [![CI](https://img.shields.io/github/actions/workflow/status/Swir/Swirui/ci.yml?branch=main&style=flat-square&label=CI&color=0088FF)](https://github.com/Swir/Swirui/actions/workflows/ci.yml)
-![Status](https://img.shields.io/badge/status-Windows%20beta%20candidate-0088FF?style=flat-square)
+![Status](https://img.shields.io/badge/status-Windows%20desktop%20beta-0088FF?style=flat-square)
+[![PyPI](https://img.shields.io/pypi/v/swirui?include_prereleases&style=flat-square)](https://pypi.org/project/swirui/)
 ![Progress](https://img.shields.io/badge/project%20progress-68%25-0088FF?style=flat-square)
 
 </div>
@@ -34,7 +35,7 @@ Scope       12 / 12 layout groups verified
 
 > PyPI-safe text progress is the portable status view. The SVG below is an optional GitHub visual.
 
-<img width="100%" src="assets/readme/progress-card.svg" alt="SwirUI project progress: 68.0% — 0.5 Alpha Layout Engine complete; 12 of 12 layout groups verified">
+<img width="100%" src="https://raw.githubusercontent.com/Swir/Swirui/v0.1.0b1/assets/readme/progress-card.svg" alt="SwirUI project progress: 68.0% — 0.5 Alpha Layout Engine complete; 12 of 12 layout groups verified">
 
 **68% authoritative weighted project progress — 0.8 Beta Professional Widgets is complete at 13 / 13 groups; Media Engine is complete at 8 / 8 groups verified.**
 
@@ -50,8 +51,10 @@ Scope       12 / 12 layout groups verified
 
 The published 68% value preserves the verified weighting documented in `ROADMAP.md` through completed 0.5. Completed later milestone functionality is tracked by its canonical checklist until an explicit project-weighting extension is documented; later work is never double-counted or used to invent project progress.
 
-This checkout prepares the **Windows desktop beta candidate 0.1.0b1**.
-The latest published release is still the `0.1.0a1` alpha on PyPI and GitHub.
+**0.1.0b1 is the Windows desktop beta**, for building your own Python programs
+with SwirUI controls, materials and custom themes. See the
+[release page](https://github.com/Swir/Swirui/releases/tag/v0.1.0b1) for publication
+status and qualification evidence.
 Beta scope and release readiness are separate from full roadmap completion;
 public APIs may still change before 1.0.
 
@@ -89,18 +92,15 @@ The completed 0.5 layout layer provides content-aware intrinsic measurement, min
 
 ## Quick Start
 
-### Windows desktop beta — 0.1.0b1 candidate
+### Windows desktop beta — 0.1.0b1
 
 This beta targets **Windows x64 with 64-bit CPython 3.11–3.14**. Its native wheel
 includes the Rust/wgpu core, so users do not need Rust or a repository checkout.
-The candidate is available from the release-qualification artifacts on its PR;
-it is not on PyPI until a matching GitHub release successfully publishes it.
-
-Install the downloaded `swirui-0.1.0b1-cp311-abi3-win_amd64.whl` in a fresh environment:
+Install the pinned beta from PyPI in a fresh environment:
 
 ```powershell
 py -3.13 -m venv .venv
-.venv\Scripts\python -m pip install .\swirui-0.1.0b1-cp311-abi3-win_amd64.whl
+.venv\Scripts\python -m pip install --only-binary=:all: swirui==0.1.0b1
 .venv\Scripts\python -m swirui doctor
 .venv\Scripts\python -m swirui demo
 ```
@@ -110,13 +110,46 @@ materials and perspective layers while preserving your edits. It resizes down
 to an 800 × 600 logical client area. `python -m swirui demo --smoke-test` opens,
 renders and closes the gallery, reporting the actual adapter/backend.
 
-After publication, the installation command will be
-`python -m pip install --only-binary=:all: swirui==0.1.0b1`.
+The explicit version selects this prerelease. On supported Windows/Python,
+pip selects the native ABI3 wheel automatically. A compatible graphics driver
+is still required; `doctor` checks installation and `demo --smoke-test` checks rendering.
 The portable wheel supports Python models and tooling; it does not provide
 equivalent GPU desktop rendering on Linux/macOS. See the
-[beta scope and limitations](docs/beta.md) before adopting this prerelease.
+[beta scope and limitations](https://github.com/Swir/Swirui/blob/v0.1.0b1/docs/beta.md) before adopting this prerelease.
 
-### Visual system preview (this checkout)
+### Your first program
+
+Save this as `my_app.py` and run `.venv\Scripts\python my_app.py`.
+Your application owns its behavior; the controls inherit SwirUI's visual theme.
+
+```python
+from swirui import NEON_BLUE, App, Button, Input, Label, Panel, Window, mount
+from swirui.rendering import Rect, WgpuRenderer
+
+app = App("My first SwirUI app", renderer=WgpuRenderer())
+window = Window(title="Made with SwirUI", width=640, height=400,
+                min_width=640, min_height=400)
+root = Panel(bounds=Rect(0, 0, 640, 400), theme=NEON_BLUE)
+name = Input(bounds=Rect(32, 88, 320, 44), placeholder="Your name")
+message = Label("Your idea. Your Python. Your style.", bounds=Rect(32, 32, 560, 32))
+button = Button("Say hello", bounds=Rect(32, 156, 180, 44))
+button.on("click", lambda _: setattr(message, "text", f"Hello, {name.value or 'world'}!"))
+root.add(message, name, button)
+window.on("resized", lambda _: setattr(root, "bounds", Rect(0, 0, window.width, window.height)))
+mount(window, root)
+app.add_window(window)
+try:
+    app.run()
+finally:
+    app.stop()
+```
+
+Choose another built-in preset, replace palette/font tokens, or distribute your
+own JSON theme package. For glass, acrylic and decorative depth, see
+[custom material themes](https://github.com/Swir/Swirui/blob/v0.1.0b1/docs/custom-material-themes.md).
+These perspective layers are visual decoration, not a general-purpose 3D viewport.
+
+### Customize the visual system
 
 Core controls accept an explicit, immutable `Theme`. Share one theme across a
 window or use independent themes for different windows. Semantic swatches keep
@@ -158,18 +191,18 @@ call `super().on_theme_changed(...)` to retain built-in style bindings.
 Custom appearances can be shared as versioned JSON `ThemePackage` files with
 multiple variants, complete palettes and tokens. Load with `ThemePackage.load(path)`
 and assign `root.theme = package.default` or `package.themes["day"]`. The
-[theme-package guide](docs/theme-packages.md) covers authoring, validation and
+[theme-package guide](https://github.com/Swir/Swirui/blob/v0.1.0b1/docs/theme-packages.md) covers authoring, validation and
 atomic saves. Try Aurora with
 `python examples/workbench_gallery.py --theme-package examples/themes/aurora.swirui-theme.json`.
 `ThemeController(window)` follows the Windows application color preference and
 supports explicit system/light/dark choices, custom theme pairs and an explicit
 fallback on unsupported backends. It preserves local scopes and editing state;
-see [system appearance](docs/system-appearance.md) and run
+see [system appearance](https://github.com/Swir/Swirui/blob/v0.1.0b1/docs/system-appearance.md) and run
 `python examples/appearance_gallery.py` for a native preview.
 Connect an `AnimationController` to opt into appearance transitions. Nine built-in
 presets include Neon Blue, Neon Green, Matrix, Cyberpunk, OLED, Minimal and
 Professional alongside Future Dark/Light. Try `python examples/theme_gallery.py`;
-see [presets and motion](docs/theme-presets.md) for reduced motion and interpolation
+see [presets and motion](https://github.com/Swir/Swirui/blob/v0.1.0b1/docs/theme-presets.md) for reduced motion and interpolation
 behavior. Linux/macOS synchronization remains unimplemented. Direct theme assignment
 continues to apply immediately.
 
@@ -198,7 +231,7 @@ ThemePackage("My appearance", {"main": my_theme}, "main").save("my-theme.json")
 
 Try `python examples/custom_theme_gallery.py` or load
 [Ocean Studio](examples/themes/ocean-studio.swirui-theme.json).
-The [custom-material guide](docs/custom-material-themes.md) covers local overrides,
+The [custom-material guide](https://github.com/Swir/Swirui/blob/v0.1.0b1/docs/custom-material-themes.md) covers local overrides,
 portable sharing and rendering limits. Perspective layers provide a dimensional
 UI treatment; a full 3D model viewport remains on the roadmap.
 
@@ -208,7 +241,7 @@ The [release workflow](.github/workflows/publish-pypi.yml) qualifies candidate
 packages and publishes only for a matching GitHub Release after its checks pass.
 It validates versions, tests the installed Windows native wheel, checks identical
 Python sources across distributions and uses PyPI Trusted Publishing.
-See [release instructions](docs/releasing.md). These local candidate changes are
+See [release instructions](https://github.com/Swir/Swirui/blob/v0.1.0b1/docs/releasing.md). These local candidate changes are
 not yet published; they do not constitute a stable release or new remote CI evidence.
 
 Notification colors use `accent`, `success`, `warning` and `error` palette roles.
@@ -349,14 +382,6 @@ not the system clipboard. Native Linux/macOS providers, non-text formats and
 terminal selection exchange remain unimplemented. The opt-in Windows clipboard
 test uses `SWIRUI_TEST_CLIPBOARD=1` and replaces clipboard contents with known
 test text; it does not inspect previous clipboard contents.
-
-### Published alpha
-
-```powershell
-python -m pip install "swirui==0.1.0a1"
-```
-
-The release includes a portable Python wheel and source distribution, plus the verified Windows x86-64 ABI3 wheel containing the Rust + wgpu + PyO3 native core.
 
 ### Python development environment
 
@@ -639,18 +664,18 @@ SwirUI does not claim performance superiority over other frameworks without repr
 
 ## Roadmap
 
-The authoritative plan and its single roadmap progress graphic are in **[ROADMAP.md](ROADMAP.md)**.
+The authoritative plan and its single roadmap progress graphic are in **[ROADMAP.md](https://github.com/Swir/Swirui/blob/v0.1.0b1/ROADMAP.md)**.
 
-**0.8 Beta — Professional Widgets is complete at 13 / 13 groups, and Media Engine is complete at 8 / 8 groups verified.** The Media Engine credit includes the merged Image/SVG/GIF, Lottie, VideoPlayer, AudioPlayer, CameraView, Microphone input, Waveform and Spectrum visualizer qualification chains. The project-wide weighted percentage intentionally remains 68% until the documented weighting model is explicitly extended. The named 0.8 roadmap milestone being complete does not imply that a Beta package release has been published; the current public package is the `0.1.0a1` alpha prerelease.
+**0.8 Beta — Professional Widgets is complete at 13 / 13 groups, and Media Engine is complete at 8 / 8 groups verified.** The Media Engine credit includes the merged Image/SVG/GIF, Lottie, VideoPlayer, AudioPlayer, CameraView, Microphone input, Waveform and Spectrum visualizer qualification chains. The project-wide weighted percentage intentionally remains 68% until the documented weighting model is explicitly extended. The named 0.8 roadmap milestone and the separately scoped `0.1.0b1` Windows desktop beta do not imply completion of the full roadmap. Markdown closeout remains tracked separately in PR #189.
 
 ## Releases
 
-**SwirUI v0.1.0a1** is the first public alpha prerelease. It is published to PyPI and GitHub after the release metadata, portable distribution, Windows Rust + wgpu + PyO3 ABI3 wheel, trusted-publishing and GitHub-prerelease gates all passed.
+**SwirUI v0.1.0b1** is the Windows desktop beta. Each release is built and tested by GitHub Actions before PyPI Trusted Publishing. The payload contains a Windows x64 ABI3 native wheel, a portable Python wheel and a source archive. The release notes record actual qualification and publication results.
 
-- PyPI: **[swirui 0.1.0a1](https://pypi.org/project/swirui/0.1.0a1/)**
-- GitHub prerelease: **[v0.1.0a1](https://github.com/Swir/Swirui/releases/tag/v0.1.0a1)**
-- Development history: **[CHANGELOG.md](CHANGELOG.md)**
-- Full roadmap: **[ROADMAP.md](ROADMAP.md)**
+- PyPI: **[swirui 0.1.0b1](https://pypi.org/project/swirui/0.1.0b1/)**
+- GitHub prerelease: **[v0.1.0b1](https://github.com/Swir/Swirui/releases/tag/v0.1.0b1)**
+- Development history: **[CHANGELOG.md](https://github.com/Swir/Swirui/blob/v0.1.0b1/CHANGELOG.md)**
+- Full roadmap: **[ROADMAP.md](https://github.com/Swir/Swirui/blob/v0.1.0b1/ROADMAP.md)**
 - CI status: **[GitHub Actions](https://github.com/Swir/Swirui/actions)**
 
 ## Repository Structure
@@ -680,7 +705,7 @@ Swirui/
 
 <div align="center">
 
-<img src="assets/swirui-icon.svg" width="76" alt="SwirUI icon">
+<img src="https://raw.githubusercontent.com/Swir/Swirui/v0.1.0b1/assets/swirui-icon.svg" width="76" alt="SwirUI icon">
 
 ### `BUILD • TEST • RENDER • EVOLVE`
 
