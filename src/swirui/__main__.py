@@ -18,8 +18,20 @@ def main(argv: Sequence[str] | None = None) -> int:
     doctor = commands.add_parser("doctor", help="Check installation without opening a window")
     doctor.add_argument("--json", action="store_true", help="Print machine-readable diagnostics")
     demo = commands.add_parser("demo", help="Open the interactive material and theme gallery")
-    demo.add_argument("--smoke-test", action="store_true",
-                      help="Render, verify and close the gallery")
+    demo.add_argument(
+        "--smoke-test",
+        action="store_true",
+        help="Render, verify and close the gallery",
+    )
+    studio = commands.add_parser(
+        "studio",
+        help="Open the integrated hierarchy, design, code and inspector showcase",
+    )
+    studio.add_argument(
+        "--smoke-test",
+        action="store_true",
+        help="Render, verify and close the integrated showcase",
+    )
     args = parser.parse_args(argv)
     if args.command is None:
         parser.print_help()
@@ -36,7 +48,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     if not report["ready"]:
         print(report["message"], file=sys.stderr)
         return 1
-    from .demo import run
+    if args.command == "demo":
+        from .demo import run
+    else:
+        from .studio import run
 
     try:
         return run(smoke_test=args.smoke_test)
