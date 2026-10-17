@@ -321,7 +321,10 @@ def run(*, smoke_test: bool = False) -> int:
         app.start()
         app.process_events()
         root.dashboard.pulse()
-        app.render_pending(app._frame_schedulers[window].stats.last_frame_time + 1)
+        last_frame = app._frame_schedulers[window].stats.last_frame_time
+        if last_frame is None:
+            raise RuntimeError("Studio frame scheduler did not record its first frame")
+        app.render_pending(last_frame + 1.0)
         if renderer.frames_rendered < 1 or not renderer.adapter_name:
             raise RuntimeError("No native Studio frame was rendered")
         print(
