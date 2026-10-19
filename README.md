@@ -22,6 +22,12 @@
 
 </div>
 
+## 📸 Screenshot
+
+![Swirui application screenshot](docs/screenshots/application.jpg)
+
+Native gallery from the published Windows desktop beta, swirui 0.1.0b1.
+
 <img width="100%" src="https://raw.githubusercontent.com/Swir/Swir/main/assets/power-divider-v4.svg" alt="SWIR electric divider" />
 
 ## Project Status
