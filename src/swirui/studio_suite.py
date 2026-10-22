@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import time
 from dataclasses import replace
 
 from . import (
@@ -25,12 +26,23 @@ from .platforms import PlatformEvent, PlatformEventKind
 from .rendering import Rect, WgpuRenderer
 from .studio import Studio
 from .studio_operations import StudioDashboard, StudioSettings
+from .studio_session import (
+    StudioSession,
+    StudioSessionError,
+    StudioSessionStore,
+    default_session_path,
+)
 
 
 class StudioSuite(Studio):
     """The complete Studio shell with dashboard, settings and notifications."""
 
-    def __init__(self) -> None:
+    def __init__(self, *, session_store: StudioSessionStore | None = None) -> None:
+        self._session_store = session_store
+        self._session_restoring = False
+        self._last_saved_session: StudioSession | None = None
+        self._last_session_write = 0.0
+        self._last_session_error: str | None = None
         super().__init__()
         empty = Rect(0, 0, 0, 0)
         self.dashboard = StudioDashboard()
@@ -104,6 +116,7 @@ class StudioSuite(Studio):
                 CommandItem("theme", "Switch light / dark appearance"),
                 CommandItem("reset", "Reset preview design"),
                 CommandItem("clear", "Clear console"),
+            CommandItem("save", "Save Studio session locally"),
             ],
             bounds=Rect(0, 0, 620, 368),
             max_visible_rows=8,
@@ -146,6 +159,102 @@ class StudioSuite(Studio):
         )
         self.resize_to(1440, 900)
         self._sync_navigation()
+        self.workspace.on("active_pane_changed", self._session_changed)
+        self.settings.on("settings_changed", self._session_changed)
+        self.preview.project.on("changed", self._session_changed)
+        self.preview.motion.on("changed", self._session_changed)
+        self.editor.on("changed", self._session_changed)
+        self.inspector.on("property_changed", self._session_changed)
+        if self._session_store is not None:
+            try:
+                session = self._session_store.load()
+            except (OSError, StudioSessionError) as error:
+                self.terminal.writeln(f"Session recovery skipped: {error}")
+            else:
+                if session is not None:
+                    self.restore_session(session)
+                    self.settings.status.text = "Local session restored."
+
+    def snapshot_session(self) -> StudioSession:
+        """Capture bounded settings, layout choice and editable local draft code."""
+        return StudioSession(
+            active_pane=str(self.workspace.active_center_key),
+            light=self.light,
+            title=self.preview.heading.text,
+            project=self.preview.project.value,
+            code=self.editor.value,
+            material=self.preview.material,
+            depth=self.preview.depth,
+            motion=self.preview.motion.checked,
+            autosave=self.settings.autosave.checked,
+            notifications=self.settings.notifications.checked,
+            reduced_motion=self.settings.reduced_motion.checked,
+            live_metrics=self.settings.live_metrics.checked,
+            density=self.settings.density.value,
+        )
+
+    def restore_session(self, session: StudioSession) -> None:
+        """Apply an already validated session in-place without rebuilding widgets."""
+        if not isinstance(session, StudioSession):
+            raise TypeError("Expected StudioSession")
+        self._session_restoring = True
+        try:
+            with state_transaction():
+                self.preview.set_title(session.title)
+                self.preview.project.value = session.project
+                self.editor.value = session.code
+                self.preview.set_material(session.material)
+                self.preview.set_depth(session.depth)
+                self.preview.motion.checked = session.motion
+                self.settings.autosave.checked = session.autosave
+                self.settings.notifications.checked = session.notifications
+                self.settings.reduced_motion.checked = session.reduced_motion
+                self.settings.live_metrics.checked = session.live_metrics
+                self.settings.density.value = session.density
+                if self.light != session.light:
+                    self.toggle_theme()
+                self.activate(session.active_pane)
+                self._sync_inspector()
+            self._last_saved_session = self.snapshot_session()
+        finally:
+            self._session_restoring = False
+
+    def save_session(self) -> bool:
+        """Manually save even if automatic session saving is switched off."""
+        return self._persist_session(force=True)
+
+    def _session_changed(self, _event: Event) -> None:
+        self._persist_session()
+
+    def _persist_session(self, *, force: bool = False) -> bool:
+        store = self._session_store
+        if store is None or self._session_restoring:
+            return False
+        if not force and not self.settings.autosave.checked:
+            return False
+        try:
+            session = self.snapshot_session()
+            if session == self._last_saved_session:
+                return True
+            now = time.monotonic()
+            if not force and now - self._last_session_write < 1.5:
+                return False
+            store.save(session)
+        except (OSError, StudioSessionError, UnicodeError) as error:
+            message = str(error)
+            if message != self._last_session_error:
+                self.terminal.writeln(f"Session not saved: {message}")
+            self._last_session_error = message
+            return False
+        self._last_saved_session = session
+        self._last_session_write = now
+        self._last_session_error = None
+        return True
+
+    def on_unmount(self, window: Window) -> None:
+        if self.settings.autosave.checked:
+            self._persist_session(force=True)
+        super().on_unmount(window)
 
     def prepare_layout(self, viewport: Rect) -> None:
         if not hasattr(self, "dashboard_button"):
@@ -197,6 +306,11 @@ class StudioSuite(Studio):
                 self.dashboard.pulse()
             else:
                 self.terminal.writeln("\x1b[33mLive metrics are paused in Settings.\x1b[0m")
+        elif key == "save":
+            if self.save_session():
+                self.terminal.writeln("Studio session saved locally.")
+            else:
+                self.terminal.writeln("Studio session storage is unavailable.")
         elif key == "notify":
             self.show_notification(
                 "The integrated workspace is ready for the next build.",
@@ -311,7 +425,8 @@ def run(*, smoke_test: bool = False) -> int:
         min_width=1024,
         min_height=720,
     )
-    root = StudioSuite()
+    store = None if smoke_test else StudioSessionStore(default_session_path())
+    root = StudioSuite(session_store=store)
     window.on("resized", lambda _: root.resize_to(window.width, window.height))
     mount(window, root)
     app.add_window(window)
