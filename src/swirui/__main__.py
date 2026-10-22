@@ -51,7 +51,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "demo":
         from .demo import run
     else:
-        from .studio import run
+        from .studio_suite import run
 
     try:
         return run(smoke_test=args.smoke_test)

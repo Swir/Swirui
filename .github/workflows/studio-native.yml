@@ -4,18 +4,26 @@ on:
   pull_request:
     paths:
       - "src/swirui/studio.py"
+      - "src/swirui/studio_operations.py"
+      - "src/swirui/studio_suite.py"
       - "src/swirui/__main__.py"
       - "tests/test_studio.py"
+      - "tests/test_studio_suite.py"
       - "tests/test_windows_studio.py"
+      - "tests/test_windows_studio_suite.py"
       - ".github/workflows/studio-native.yml"
   push:
     branches:
       - main
     paths:
       - "src/swirui/studio.py"
+      - "src/swirui/studio_operations.py"
+      - "src/swirui/studio_suite.py"
       - "src/swirui/__main__.py"
       - "tests/test_studio.py"
+      - "tests/test_studio_suite.py"
       - "tests/test_windows_studio.py"
+      - "tests/test_windows_studio_suite.py"
       - ".github/workflows/studio-native.yml"
 
 permissions:
@@ -56,10 +64,15 @@ jobs:
           python -m pip install -e ".[dev]" maturin==1.15.0
 
       - name: Ruff
-        run: python -m ruff check src/swirui/studio.py tests/test_studio.py tests/test_windows_studio.py
+        run: >
+          python -m ruff check src/swirui/studio.py src/swirui/studio_operations.py
+          src/swirui/studio_suite.py
+          tests/test_studio.py tests/test_studio_suite.py
+          tests/test_windows_studio.py tests/test_windows_studio_suite.py
 
       - name: Strict mypy
-        run: python -m mypy --strict src/swirui/studio.py
+        run: python -m mypy --strict src/swirui/studio.py src/swirui/studio_operations.py
+          src/swirui/studio_suite.py
 
       - name: Check native core on Windows
         run: cargo check --manifest-path native/Cargo.toml --all-targets
@@ -76,7 +89,8 @@ jobs:
 
       - name: Verify integrated Studio
         run: >
-          pytest tests/test_studio.py tests/test_windows_studio.py -q
+          pytest tests/test_studio.py tests/test_studio_suite.py
+          tests/test_windows_studio.py tests/test_windows_studio_suite.py -q
           --junitxml=studio-pytest.xml
 
       - name: Upload Studio diagnostics
