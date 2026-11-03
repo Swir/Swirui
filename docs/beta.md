@@ -1,13 +1,13 @@
-# Windows desktop beta: 0.1.0b1
+# Windows desktop beta: 0.1.0b2
 
 The beta is a usable, deliberately bounded desktop release, separate from the
 full roadmap. Canonical roadmap completion remains 68%. See the
-[release page](https://github.com/Swir/Swirui/releases/tag/v0.1.0b1) for publication
+[release page](https://github.com/Swir/Swirui/releases/tag/v0.1.0b2) for publication
 status, installation files and the actual qualification run.
 
 On supported Windows/Python, install with
-`python -m pip install --only-binary=:all: swirui==0.1.0b1`, then run
-`python -m swirui doctor` and `python -m swirui demo`.
+`python -m pip install --only-binary=:all: swirui==0.1.0b2`, then run
+`python -m swirui doctor`, `python -m swirui demo` and `python -m swirui studio`.
 
 ## Supported scope
 
@@ -17,6 +17,10 @@ On supported Windows/Python, install with
   keyboard/mouse editing, text clipboard, and Windows GPU materials/effects.
 - Runtime/inherited themes, nine presets, custom JSON theme packages, Windows
   appearance synchronization, and decorative perspective surfaces.
+- Opt-in `SurfaceInteraction` for animated hover/press/keyboard-focus material
+  feedback, with reduced motion, preserved child controls and bounded rendering.
+- An integrated Studio showcase with dashboard, preview, editor, asset list,
+  inspector, settings and console. Its CPU/GPU samples are generated demo data.
 - An installed-package demo (`python -m swirui demo`) and read-only installation
   diagnostics (`python -m swirui doctor`, optionally `--json`). No checkout or
   compiler is required to run the Windows wheel.
@@ -28,7 +32,9 @@ GPU presentation and Wayland are not part of this desktop beta. The portable
 wheel is intended for Python models/tooling and tests on those systems.
 
 Perspective layers are decoration; a general 3D viewport, models, interactive
-3D widgets, full visual Studio, WebView and PdfViewer are outside beta scope.
+3D widgets, a production visual application builder, WebView and PdfViewer are
+outside beta scope. Studio is an integrated showcase, not a project compiler
+or full IDE.
 Markdown implementation exists, while its roadmap closeout remains tracked by
 PR #189. OS screen-reader integration, IME, touch/pen and full internationalization
 are unfinished; beta adoption must account for those limitations. Some advanced
@@ -40,7 +46,7 @@ API changes may occur during beta. No universal FPS or hardware guarantee is mad
 The release workflow must pass Ruff, mypy and pytest on Python 3.11–3.14,
 Windows Rust tests, and the full installed native-wheel suite. A separate empty
 environment installs only that wheel, then runs diagnostics and a real native
-gallery smoke test from outside the source checkout. Portable/native wheels and
+gallery and Studio smoke tests from outside the source checkout. Portable/native wheels and
 sdist must contain identical Python sources and pass metadata checks.
 
 PR checks qualify a candidate without publishing it. Publication requires a new

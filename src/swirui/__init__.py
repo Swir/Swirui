@@ -74,6 +74,7 @@ from .page_transition import PageTransition, PageTransitionDirection
 from .platforms import ColorScheme
 from .rotation_animation import RotateTransition
 from .shared_element_transition import SharedElementTransition
+from .surface_interaction import SurfaceInteraction
 from .surface_style import SurfaceStyle
 from .theme import FUTURE_DARK, FUTURE_LIGHT, ButtonVariant, Palette, Theme
 from .theme_package import ThemePackage
@@ -237,6 +238,7 @@ from .window import Window
 
 __all__ = [
     "SurfaceStyle",
+    "SurfaceInteraction",
     "ThemeSurface",
     "FUTURE_DARK",
     "FUTURE_LIGHT",
@@ -457,4 +459,4 @@ __all__ = [
     "tween_state",
     "waveform_envelope_pcm16",
 ]
-__version__ = "0.1.0b1"
+__version__ = "0.1.0b2"

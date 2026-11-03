@@ -52,6 +52,7 @@ class StudioPreview(Panel):
         self.material: MaterialKind = "glass"
         self.depth = 3
         self.light = False
+        self.reduced_motion = False
         self.status = Badge("LIVE PREVIEW", bounds=empty)
         self.blob = Panel(
             bounds=empty,
@@ -83,6 +84,7 @@ class StudioPreview(Panel):
             font_size=11,
         )
         self.create.on("click", lambda _: self._launch())
+        self.motion.on("changed", lambda _: self.apply_theme())
         self.add(self.blob, self.status, self.surface, self.footer)
         self.apply_theme()
 
@@ -119,12 +121,13 @@ class StudioPreview(Panel):
         base = FUTURE_LIGHT if self.light else NEON_BLUE
         self.theme = replace(
             base,
+            reduced_motion=self.reduced_motion or not self.motion.checked,
             surface_style=SurfaceStyle(
                 kind=self.material,
                 tint_opacity=0.74,
                 elevation=14,
                 glow_radius=18,
-                glow_opacity=0.26,
+                glow_opacity=0.10,
                 depth_layers=self.depth,
                 depth_spacing=7,
                 tilt_x=8,

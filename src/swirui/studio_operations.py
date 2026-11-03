@@ -95,7 +95,8 @@ class StudioDashboard(Panel):
         self.hero = StudioHero(bounds=empty)
         self.hero.add(self.heading, self.subtitle)
         self.metric_cards = tuple(ThemeSurface(
-            bounds=empty, style=SurfaceStyle(elevation=5, border_opacity=.5),
+            bounds=empty, style=SurfaceStyle(elevation=8, border_opacity=.55,
+                                             glow_radius=12, glow_opacity=.035),
         ) for _ in range(3))
         self.metric_captions = tuple(Label(text, bounds=empty, font_size=12, opacity=.78)
                                      for text in ("PROCESSOR", "GRAPHICS", "FRAME BUDGET"))
