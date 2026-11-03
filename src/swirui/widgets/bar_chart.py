@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from swirui.rendering import Point, Rect, SceneNode
 
-from .cartesian_chart import EPSILON, rectangle_node, text_node
+from .cartesian_chart import EPSILON, rectangle_node
 from .large_dataset_chart import LargeDatasetCartesianChart
 
 
@@ -46,7 +46,7 @@ class BarChart(LargeDatasetCartesianChart):
             point = reference[index]
             center = self._category_center(index, plot)
             root.add(
-                text_node(
+                self._text_node(
                     f"{self.key}:x:{index}",
                     Rect(center - slot * 0.45, plot.bottom + 7.0, slot * 0.9, 15.0),
                     point.label,

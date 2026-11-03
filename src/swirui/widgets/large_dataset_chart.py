@@ -8,7 +8,7 @@ from collections.abc import Sequence
 from swirui.core import AccessibilityNode, AccessibilityRole, Event
 from swirui.rendering import Rect, SceneNode
 
-from .cartesian_chart import EPSILON, CartesianChart, format_value, text_node
+from .cartesian_chart import EPSILON, CartesianChart, format_value
 from .charts import ChartPoint, ChartSelection, ChartSeries
 
 _DEFAULT_RENDER_POINT_LIMIT = 2_048
@@ -174,7 +174,7 @@ class LargeDatasetCartesianChart(CartesianChart):
             point = points[index]
             x = self.x_position(index, len(points), plot)
             root.add(
-                text_node(
+                self._text_node(
                     f"{self.key}:x:{index}",
                     Rect(x - 38.0, plot.bottom + 7.0, 76.0, 15.0),
                     point.label,

@@ -4,6 +4,16 @@ All notable changes to SwirUI will be documented in this file.
 
 The project uses semantic versioning where practical during development. Breaking API changes may occur before 1.0.
 
+## Unreleased
+
+- Refined Studio dashboard with a palette-driven header, dimensional metric cards
+  and responsive navigation that avoids overlapping controls at 1024–1920 pixels.
+- Line, area, bar and streaming chart surfaces, axes, labels, focus and automatic
+  series colors now follow inherited themes. Theme changes preserve selection,
+  zoom and explicit series colors; unthemed charts keep their previous defaults.
+- Studio sample values and threshold notifications are explicitly labelled as
+  demonstrations, rather than claiming CPU/GPU telemetry or measured frame rates.
+
 ## [0.1.0b1] - 2026-10-17
 
 This release targets Windows x64 desktop applications on CPython 3.11–3.14.

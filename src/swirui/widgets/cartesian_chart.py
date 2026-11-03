@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import math
 from collections.abc import Hashable, Sequence
+from typing import cast
 
 from swirui.core import AccessibilityNode, AccessibilityRole, Event
 from swirui.platforms import PlatformEvent, PlatformEventKind, PointerButton
 from swirui.rendering import Color, CornerRadius, Point, Rect, SceneNode, SceneNodeKind
+from swirui.theme import ColorRole
 
 from .base import Widget
 from .charts import ChartSelection, ChartSeries, ChartViewport
@@ -40,6 +42,14 @@ _MIN_HIT_DISTANCE = 28.0
 
 class CartesianChart(Widget):
     """Axes, scaling, selection and zoom shared by retained cartesian charts."""
+
+    _background: Color
+    _grid_color: Color
+    _axis_color: Color
+    _text_color: Color
+    _selection_color: Color
+    _focus_color: Color
+    _font_family: str
 
     include_zero = False
     chart_kind = "cartesian"
@@ -76,6 +86,15 @@ class CartesianChart(Widget):
             accessibility_role=AccessibilityRole.GROUP,
             accessible_name=normalized_title or self.__class__.__name__,
         )
+        self._bind_theme(None, {
+            "_background": ("surface", "surface", BACKGROUND),
+            "_grid_color": ("surface", "border", GRID),
+            "_axis_color": ("surface", "muted", TEXT),
+            "_text_color": ("text", "muted", TEXT),
+            "_selection_color": ("surface", "text", SELECTION),
+            "_focus_color": ("surface", "focus", FOCUS),
+            "_font_family": ("token", "font_family", "Segoe UI"),
+        })
         self.on("pointer_down", self._on_pointer_down)
         self.on("pointer_scroll", self._on_pointer_scroll)
         self.on("key_down", self._on_key_down)
@@ -301,14 +320,14 @@ class CartesianChart(Widget):
         root = rectangle_node(
             self.key,
             self.bounds,
-            BACKGROUND,
+            self._background,
             radius=8.0,
             clip_to_bounds=True,
             hit_testable=self.enabled and self.interactive,
         )
         if self._title:
             root.add(
-                text_node(
+                self._text_node(
                     f"{self.key}:title",
                     Rect(
                         self.bounds.x + 12.0,
@@ -401,7 +420,7 @@ class CartesianChart(Widget):
                 continue
             x = self.x_position(index, len(points), plot)
             root.add(
-                text_node(
+                self._text_node(
                     f"{self.key}:x:{index}",
                     Rect(x - 38.0, plot.bottom + 7.0, 76.0, 15.0),
                     point.label,
@@ -444,9 +463,21 @@ class CartesianChart(Widget):
         viewport = self.viewport
         return viewport.x_min - EPSILON <= index <= viewport.x_max + EPSILON
 
+    def _text_node(self, key: str, bounds: Rect, value: str, size: float) -> SceneNode:
+        node = text_node(key, bounds, value, size)
+        node.fill = self._text_color
+        node.font_family = self._font_family
+        return node
+
     def series_color(self, index: int) -> Color:
         series = self.series[index]
-        return series.color or PALETTE[index % len(PALETTE)]
+        if series.color is not None:
+            return series.color
+        theme = self.effective_theme
+        if theme is not None:
+            roles = ("accent", "success", "warning", "error", "focus", "muted")
+            return theme.surface_color(cast(ColorRole, roles[index % len(roles)]))
+        return PALETTE[index % len(PALETTE)]
 
     def _full_x_domain(self) -> tuple[float, float]:
         count = max(len(series.points) for series in self.series)
@@ -524,13 +555,13 @@ class CartesianChart(Widget):
             rectangle_node(
                 f"{self.key}:selection:halo",
                 Rect(position.x - 8.0, position.y - 8.0, 16.0, 16.0),
-                SELECTION.with_alpha(0.24),
+                self._selection_color.with_alpha(0.24),
                 radius=8.0,
             ),
             rectangle_node(
                 f"{self.key}:selection:marker",
                 Rect(position.x - 4.0, position.y - 4.0, 8.0, 8.0),
-                SELECTION,
+                self._selection_color,
                 radius=4.0,
             ),
         )
@@ -544,17 +575,19 @@ class CartesianChart(Widget):
         if width <= 0.0 or height <= 0.0:
             return
         root.add(
-            rectangle_node(f"{self.key}:focus:top", Rect(left, top, width, 1.0), FOCUS),
+            rectangle_node(f"{self.key}:focus:top", Rect(left, top, width, 1.0), self._focus_color),
             rectangle_node(
                 f"{self.key}:focus:bottom",
                 Rect(left, top + height - 1.0, width, 1.0),
-                FOCUS,
+                self._focus_color,
             ),
-            rectangle_node(f"{self.key}:focus:left", Rect(left, top, 1.0, height), FOCUS),
+            rectangle_node(
+                f"{self.key}:focus:left", Rect(left, top, 1.0, height), self._focus_color,
+            ),
             rectangle_node(
                 f"{self.key}:focus:right",
                 Rect(left + width - 1.0, top, 1.0, height),
-                FOCUS,
+                self._focus_color,
             ),
         )
 
@@ -566,25 +599,27 @@ class CartesianChart(Widget):
                 rectangle_node(
                     f"{self.key}:grid:{index}",
                     Rect(plot.x, y, plot.width, 1.0),
-                    GRID,
+                    self._grid_color,
                 )
             )
             root.add(
-                text_node(
+                self._text_node(
                     f"{self.key}:y:{index}",
                     Rect(self.bounds.x + 4.0, y - 7.0, 42.0, 14.0),
                     format_value(low + fraction * (high - low)),
                     10.0,
                 )
             )
-        root.add(rectangle_node(f"{self.key}:axis:y", Rect(plot.x, plot.y, 1.0, plot.height), TEXT))
+        root.add(rectangle_node(
+            f"{self.key}:axis:y", Rect(plot.x, plot.y, 1.0, plot.height), self._axis_color,
+        ))
         baseline_value = 0.0 if low <= 0.0 <= high else low
         baseline = self.value_y(baseline_value, plot, low, high)
         root.add(
             rectangle_node(
                 f"{self.key}:axis:x",
                 Rect(plot.x, baseline, plot.width, 1.0),
-                TEXT,
+                self._axis_color,
             )
         )
 
