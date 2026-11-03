@@ -20,6 +20,28 @@ def test_studio_navigation_does_not_overlap_at_supported_window_sizes() -> None:
         assert not studio.active.visible
 
 
+def test_studio_motion_and_sample_settings_control_the_visible_actions() -> None:
+    studio = StudioSuite()
+    studio.preview.motion.checked = False
+    assert studio.preview.theme.reduced_motion
+    studio.preview.set_material("acrylic")
+    assert studio.preview.theme.reduced_motion
+    studio.preview.motion.checked = True
+    assert not studio.preview.theme.reduced_motion
+    studio.settings.reduced_motion.checked = True
+    studio.preview.set_material("glass")
+    assert studio.preview.theme.reduced_motion
+    studio.toggle_theme()
+    assert studio.preview.theme.reduced_motion
+    studio.settings.live_metrics.checked = False
+    assert not studio.dashboard.pulse_button.enabled
+    before = studio.dashboard.sample_index
+    studio.execute_command("pulse")
+    assert studio.dashboard.sample_index == before
+    studio.settings.live_metrics.checked = True
+    assert studio.dashboard.pulse_button.enabled
+
+
 def test_dashboard_sections_remain_ordered_when_compact_or_offset() -> None:
     dashboard = StudioDashboard()
     for viewport in (Rect(269, 160, 408, 338), Rect(269, 150, 824, 556),

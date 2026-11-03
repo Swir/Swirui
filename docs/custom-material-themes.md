@@ -48,6 +48,51 @@ Theme transitions blend colors/radius as before. Surface policy switches at
 completion; blur, grain, depth and material kinds are not interpolated. Custom
 glass backgrounds require contrast checks against their actual backdrop.
 
+## Animated material feedback
+
+Since 0.1.0b2, `SurfaceInteraction` adds a shadow lift, accent glow, border emphasis
+and soft diagonal sheen to an ordinary `ThemeSurface`. It follows hover, primary
+button press and keyboard focus within the surface. Child geometry, edited values
+and explicit `SurfaceStyle` objects remain unchanged. It does not animate the
+layout or turn the child controls into projected 3D objects.
+
+```python
+from swirui import (
+    AnimationController, App, Button, NEON_BLUE, SurfaceInteraction,
+    SurfaceStyle, ThemeSurface, Window, mount,
+)
+from swirui.rendering import Rect, WgpuRenderer
+
+app = App(renderer=WgpuRenderer())
+window = app.add_window(Window(title="My material UI", width=560, height=360))
+surface = ThemeSurface(
+    bounds=Rect(60, 50, 440, 240), theme=NEON_BLUE,
+    style=SurfaceStyle(kind="glass", depth_layers=2, elevation=10),
+)
+surface.add(Button("Create something", bounds=Rect(100, 140, 260, 48)))
+mount(window, surface)
+clock = AnimationController(app, window)
+feedback = SurfaceInteraction(clock, surface)  # Bind after mounting.
+try:
+    app.run()
+finally:
+    feedback.dispose()
+    clock.dispose()
+    app.stop()
+```
+
+The binding uses the window's existing animation clock and hit-test paths, so
+decorations never intercept a child's click. It enables hit testing only on the
+container's own bounds. There is at most one active tween per binding, including
+rapid direction changes. `Theme.motion_duration` controls timing; setting inherited
+`reduced_motion=True` immediately completes the feedback without a moving transition.
+Palette and material changes still follow the live theme. Effects stop when idle.
+
+Bind only once per surface and to the window where it is mounted. `dispose()` is
+idempotent and restores its ordinary appearance/input policy. Unmounting the
+surface or closing the window disposes it automatically; bind again after remounting.
+The binding is runtime state and is not serialized into a theme package.
+
 ## Sharing and compatibility
 
 Packages with a material style use JSON `format_version: 2`, which includes

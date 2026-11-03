@@ -3,6 +3,10 @@ name: SwirUI Studio Native Gate
 on:
   pull_request:
     paths:
+      - "src/swirui/surface_interaction.py"
+      - "src/swirui/widgets/theme_surface.py"
+      - "tests/test_surface_interaction.py"
+      - "tests/test_windows_surface_interaction.py"
       - "src/swirui/studio.py"
       - "src/swirui/studio_operations.py"
       - "src/swirui/studio_suite.py"
@@ -16,6 +20,10 @@ on:
     branches:
       - main
     paths:
+      - "src/swirui/surface_interaction.py"
+      - "src/swirui/widgets/theme_surface.py"
+      - "tests/test_surface_interaction.py"
+      - "tests/test_windows_surface_interaction.py"
       - "src/swirui/studio.py"
       - "src/swirui/studio_operations.py"
       - "src/swirui/studio_suite.py"
@@ -66,13 +74,16 @@ jobs:
       - name: Ruff
         run: >
           python -m ruff check src/swirui/studio.py src/swirui/studio_operations.py
-          src/swirui/studio_suite.py
+          src/swirui/studio_suite.py src/swirui/surface_interaction.py
+          src/swirui/widgets/theme_surface.py
           tests/test_studio.py tests/test_studio_suite.py
           tests/test_windows_studio.py tests/test_windows_studio_suite.py
+          tests/test_surface_interaction.py tests/test_windows_surface_interaction.py
 
       - name: Strict mypy
         run: python -m mypy --strict src/swirui/studio.py src/swirui/studio_operations.py
-          src/swirui/studio_suite.py
+          src/swirui/studio_suite.py src/swirui/surface_interaction.py
+          src/swirui/widgets/theme_surface.py
 
       - name: Check native core on Windows
         run: cargo check --manifest-path native/Cargo.toml --all-targets
@@ -89,7 +100,8 @@ jobs:
 
       - name: Verify integrated Studio
         run: >
-          pytest tests/test_studio.py tests/test_studio_suite.py
+          pytest tests/test_surface_interaction.py tests/test_windows_surface_interaction.py
+          tests/test_studio.py tests/test_studio_suite.py
           tests/test_windows_studio.py tests/test_windows_studio_suite.py -q
           --junitxml=studio-pytest.xml
 

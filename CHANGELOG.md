@@ -4,7 +4,16 @@ All notable changes to SwirUI will be documented in this file.
 
 The project uses semantic versioning where practical during development. Breaking API changes may occur before 1.0.
 
-## Unreleased
+## [0.1.0b2] - 2026-11-03
+
+- Added opt-in `SurfaceInteraction`: elapsed-time shadow, accent glow,
+  border and diagonal sheen feedback for hover, press and child focus.
+  Retargeting keeps one active tween; reduced motion is immediate;
+  unmount/close releases listeners and restores the authored appearance.
+- Integrated Studio preview, code, hierarchy, inspector, assets, settings
+  and console are available through `python -m swirui studio`.
+- Studio motion and demo-sample switches now control the visible actions;
+  clean-wheel release qualification launches Studio as well as the gallery.
 
 - Refined Studio dashboard with a palette-driven header, dimensional metric cards
   and responsive navigation that avoids overlapping controls at 1024–1920 pixels.

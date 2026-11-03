@@ -6,6 +6,7 @@ import json
 from dataclasses import replace
 
 from . import (
+    AnimationController,
     App,
     Button,
     ButtonVariant,
@@ -14,6 +15,7 @@ from . import (
     DockPane,
     DockWorkspace,
     Modal,
+    SurfaceInteraction,
     Toast,
     TreeNode,
     TreeView,
@@ -147,6 +149,12 @@ class StudioSuite(Studio):
         self.resize_to(1440, 900)
         self._sync_navigation()
 
+    def bind_interactions(self, controller: AnimationController) -> tuple[SurfaceInteraction, ...]:
+        """Attach optional material feedback after mounting this Studio."""
+        return tuple(SurfaceInteraction(controller, surface) for surface in (
+            *self.dashboard.metric_cards, self.preview.surface,
+        ))
+
     def prepare_layout(self, viewport: Rect) -> None:
         if not hasattr(self, "dashboard_button"):
             super().prepare_layout(viewport)
@@ -195,7 +203,8 @@ class StudioSuite(Studio):
             reduced = self.settings.reduced_motion.checked
             assert self.theme is not None and self.preview.theme is not None
             self.theme = replace(self.theme, reduced_motion=reduced)
-            self.preview.theme = replace(self.preview.theme, reduced_motion=reduced)
+            self.preview.reduced_motion = reduced
+            self.preview.apply_theme()
 
     def execute_command(self, key: str) -> None:
         if key in {"dashboard", "settings"}:
@@ -252,9 +261,12 @@ class StudioSuite(Studio):
         if key == "reduced_motion":
             assert self.theme is not None and self.preview.theme is not None
             self.theme = replace(self.theme, reduced_motion=bool(value))
-            self.preview.theme = replace(self.preview.theme, reduced_motion=bool(value))
+            self.preview.reduced_motion = bool(value)
+            self.preview.apply_theme()
         elif key == "density":
             self._apply_density(float(value))
+        elif key == "live_metrics":
+            self.dashboard.pulse_button.enabled = bool(value)
         self.terminal.writeln(f"Setting changed: {key} = {value}")
 
     def _apply_density(self, value: float) -> None:
@@ -323,6 +335,8 @@ def run(*, smoke_test: bool = False) -> int:
     window.on("resized", lambda _: root.resize_to(window.width, window.height))
     mount(window, root)
     app.add_window(window)
+    animations = AnimationController(app, window)
+    interactions = root.bind_interactions(animations)
     try:
         if not smoke_test:
             return app.run()
@@ -349,4 +363,7 @@ def run(*, smoke_test: bool = False) -> int:
         )
         return 0
     finally:
+        for interaction in interactions:
+            interaction.dispose()
+        animations.dispose()
         app.stop()

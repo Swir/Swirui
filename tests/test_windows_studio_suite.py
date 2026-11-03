@@ -2,7 +2,7 @@ import sys
 
 import pytest
 
-from swirui import FUTURE_LIGHT, App, Window, mount
+from swirui import FUTURE_LIGHT, AnimationController, App, Window, mount
 from swirui.rendering import WgpuRenderer
 from swirui.studio_suite import StudioSuite
 
@@ -17,6 +17,9 @@ def test_studio_suite_dashboard_settings_notifications_keep_one_native_context(
     studio = StudioSuite()
     window.on("resized", lambda _: studio.resize_to(window.width, window.height))
     mount(window, studio)
+    animations = AnimationController(app, window)
+    interactions = studio.bind_interactions(animations)
+    assert len(interactions) == 4
     images = []
     try:
         app.start()
@@ -75,4 +78,7 @@ def test_studio_suite_dashboard_settings_notifications_keep_one_native_context(
         record_property("backend", renderer.graphics_backend)
         record_property("center_panes", "dashboard, preview, code, assets, settings")
     finally:
+        for interaction in interactions:
+            interaction.dispose()
+        animations.dispose()
         app.stop()
