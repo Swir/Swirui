@@ -4,6 +4,38 @@ from swirui.studio_operations import StudioDashboard
 from swirui.studio_suite import StudioSuite
 
 
+def test_studio_navigation_does_not_overlap_at_supported_window_sizes() -> None:
+    studio = StudioSuite()
+    buttons = (studio.dashboard_button, studio.preview_button, studio.code_button,
+               studio.assets_button, studio.settings_button, studio.theme_button,
+               studio.command_button)
+    for width, height in ((1024, 720), (1100, 720), (1280, 800), (1440, 900), (1920, 1080)):
+        studio.resize_to(width, height)
+        for index, button in enumerate(buttons):
+            a = button.bounds
+            assert a.right <= width and a.bottom <= studio.workspace.bounds.y
+            for other in buttons[index + 1:]:
+                b = other.bounds
+                assert a.right <= b.x or b.right <= a.x or a.bottom <= b.y or b.bottom <= a.y
+        assert not studio.active.visible
+
+
+def test_dashboard_sections_remain_ordered_when_compact_or_offset() -> None:
+    dashboard = StudioDashboard()
+    for viewport in (Rect(269, 160, 408, 338), Rect(269, 150, 824, 556),
+                     Rect(0, 0, 1184, 760)):
+        dashboard.prepare_layout(viewport)
+        cards = dashboard.metric_cards
+        assert dashboard.hero.bounds.bottom < cards[0].bounds.y
+        assert cards[0].bounds.right < cards[1].bounds.x
+        assert cards[1].bounds.right < cards[2].bounds.x
+        assert cards[2].bounds.right <= viewport.right
+        assert cards[0].bounds.bottom < dashboard.chart.bounds.y
+        assert dashboard.chart.bounds.bottom < dashboard.pulse_button.bounds.y
+        assert dashboard.pulse_button.bounds.bottom <= viewport.bottom
+        assert dashboard.chart.plot_bounds.height > 0
+
+
 def test_studio_suite_adds_dashboard_settings_and_notification_center() -> None:
     studio = StudioSuite()
 
@@ -31,7 +63,7 @@ def test_studio_suite_adds_dashboard_settings_and_notification_center() -> None:
     assert studio.preview_button.variant.value == "primary"
 
 
-def test_dashboard_records_bounded_live_metrics_and_updates_accessibility() -> None:
+def test_dashboard_records_bounded_samples_and_updates_accessibility() -> None:
     dashboard = StudioDashboard()
     before = dashboard.sample_index
 
@@ -55,7 +87,8 @@ def test_dashboard_records_bounded_live_metrics_and_updates_accessibility() -> N
     assert dashboard.cpu_stream.dropped_count > 0
     assert dashboard.gpu_stream.dropped_count > 0
     snapshot = dashboard.chart.accessibility_snapshot()
-    assert snapshot.name == "Live performance"
+    assert snapshot.name == "Sample activity · CPU / GPU"
+    assert dashboard.status.text == "DEMO DATA"
 
 
 def test_settings_are_retained_and_drive_notifications_and_reduced_motion() -> None:

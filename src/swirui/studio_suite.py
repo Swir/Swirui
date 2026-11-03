@@ -35,7 +35,7 @@ class StudioSuite(Studio):
         empty = Rect(0, 0, 0, 0)
         self.dashboard = StudioDashboard()
         self.settings = StudioSettings()
-        self.dashboard_button = Button("Dashboard", bounds=empty)
+        self.dashboard_button = Button("Overview", bounds=empty)
         self.settings_button = Button(
             "Settings",
             bounds=empty,
@@ -89,7 +89,7 @@ class StudioSuite(Studio):
             bounds=empty,
             active_key="dashboard",
             header_height=34,
-            min_center_extent=260,
+            min_center_extent=460,
             accessible_name="SwirUI Studio workspace",
         )
         self.palette = CommandPalette(
@@ -99,7 +99,7 @@ class StudioSuite(Studio):
                 CommandItem("code", "Open code editor"),
                 CommandItem("assets", "Open asset library"),
                 CommandItem("settings", "Open Studio settings"),
-                CommandItem("pulse", "Record a performance sample"),
+                CommandItem("pulse", "Generate a demo sample"),
                 CommandItem("notify", "Show a Studio notification"),
                 CommandItem("theme", "Switch light / dark appearance"),
                 CommandItem("reset", "Reset preview design"),
@@ -153,9 +153,16 @@ class StudioSuite(Studio):
             return
         super().prepare_layout(viewport)
         width = viewport.width
-        button_width = 74.0 if width < 1200 else 86.0
-        gap = 6.0
-        start = 306.0
+        compact = width < 1280
+        button_width = 100.0
+        gap = 8.0
+        start = 24.0 if compact else 300.0
+        nav_y = 78.0 if compact else 22.0
+        self.active.visible = False
+        self.workspace._set_layout_bounds(Rect(
+            viewport.x + 18, viewport.y + (138 if compact else 100),
+            max(0, width - 36), max(0, viewport.height - (158 if compact else 120)),
+        ))
         buttons = (
             self.dashboard_button,
             self.preview_button,
@@ -165,7 +172,8 @@ class StudioSuite(Studio):
         )
         for index, button in enumerate(buttons):
             button._set_layout_bounds(
-                Rect(start + index * (button_width + gap), 22, button_width, 40)
+                Rect(viewport.x + start + index * (button_width + gap),
+                     viewport.y + nav_y, button_width, 40)
             )
         self.theme_button._set_layout_bounds(Rect(width - 314, 22, 118, 40))
         self.command_button._set_layout_bounds(Rect(width - 186, 22, 162, 40))
@@ -196,7 +204,7 @@ class StudioSuite(Studio):
             if self.settings.live_metrics.checked:
                 self.dashboard.pulse()
             else:
-                self.terminal.writeln("\x1b[33mLive metrics are paused in Settings.\x1b[0m")
+                self.terminal.writeln("\x1b[33mDemo samples are paused in Settings.\x1b[0m")
         elif key == "notify":
             self.show_notification(
                 "The integrated workspace is ready for the next build.",
@@ -268,8 +276,8 @@ class StudioSuite(Studio):
         gpu = float(event.data["gpu"])
         if max(cpu, gpu) >= 85:
             self.show_notification(
-                f"High load detected · CPU {cpu:.0f}% / GPU {gpu:.0f}%",
-                title="Performance monitor",
+                f"Demo threshold reached · CPU {cpu:.0f}% / GPU {gpu:.0f}%",
+                title="Sample preview",
                 kind="warning",
             )
 

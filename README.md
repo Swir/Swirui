@@ -28,6 +28,20 @@
 
 Native gallery from the published Windows desktop beta, swirui 0.1.0b1.
 
+### Studio development preview
+
+![Native Studio dashboard with themed charts](docs/screenshots/studio-dashboard.jpg)
+
+The development checkout includes `python -m swirui studio`: an integrated
+workspace with a responsive toolbar, palette-driven header and dimensional
+metric cards. Line, area, bar and streaming charts inherit the application theme,
+including labels and focus. Switching themes keeps chart selection and zoom;
+explicit series colors remain yours. Dashboard samples are generated examples,
+not measurements of device load or frame rate.
+
+This preview requires the development checkout with its native core installed;
+these Studio changes are **not included in the published 0.1.0b1 wheel**.
+
 <img width="100%" src="https://raw.githubusercontent.com/Swir/Swir/main/assets/power-divider-v4.svg" alt="SWIR electric divider" />
 
 ## Project Status

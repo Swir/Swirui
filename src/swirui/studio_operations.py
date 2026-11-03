@@ -15,14 +15,37 @@ from . import (
     Slider,
     StreamingChartSeries,
     StreamingLineChart,
+    SurfaceStyle,
     Switch,
+    ThemeSurface,
 )
 from .core import Event
-from .rendering import Rect
+from .rendering import CornerRadius, LinearGradient, Rect, SceneNode, SceneNodeKind
+from .theme import FUTURE_DARK
+
+
+class StudioHero(Panel):
+    """A bounded accent wash that inherits the current application palette."""
+
+    def build_scene_node(self) -> SceneNode:
+        theme = self.effective_theme or FUTURE_DARK
+        node = SceneNode(self.key, SceneNodeKind.RECTANGLE, self.bounds,
+                         fill=theme.surface_color("raised"),
+                         corner_radius=CornerRadius.uniform(18), clip_to_bounds=True,
+                         hit_testable=False, opacity=self.opacity, z_index=self.z_index)
+        if self.bounds.width > 0 and self.bounds.height > 0:
+            wash = LinearGradient.two_color(
+                theme.surface_color("accent").with_alpha(.13),
+                theme.surface_color("focus").with_alpha(.03),
+            ).to_scene_node(f"{self.key}:wash", self.bounds, steps=24)
+            for decoration in wash.walk():
+                decoration.hit_testable = False
+            node.add(wash)
+        return node
 
 
 class StudioDashboard(Panel):
-    """Live, bounded operational dashboard for one retained Studio session."""
+    """Responsive visual workspace with explicitly labelled demonstration data."""
 
     def __init__(self) -> None:
         super().__init__(bounds=Rect(0, 0, 760, 540))
@@ -45,39 +68,47 @@ class StudioDashboard(Panel):
             (self.cpu_stream, self.gpu_stream),
             bounds=empty,
             key="studio-live-performance",
-            title="Live performance",
+            title="Sample activity · CPU / GPU",
             y_min=0,
             y_max=100,
         )
-        self.status = Badge("LIVE METRICS", bounds=empty)
-        self.heading = Label("Runtime command center", bounds=empty, font_size=28)
+        self.status = Badge("DEMO DATA", bounds=empty)
+        self.heading = Label("Shape your next idea.", bounds=empty, font_size=32)
         self.subtitle = Label(
-            "Bounded retained telemetry samples for the active Studio session.",
+            "Explore the visuals. Make them yours.",
             bounds=empty,
             font_size=14,
         )
         self.cpu_label = Label("CPU 49%", bounds=empty, font_size=18)
         self.gpu_label = Label("GPU 46%", bounds=empty, font_size=18)
+        self.cpu_label._theme_styles["_color"] = ("text", "accent", self.cpu_label.color)
+        self.gpu_label._theme_styles["_color"] = ("text", "success", self.gpu_label.color)
         self.frame_label = Label("144 FPS · 6.9 ms", bounds=empty, font_size=16)
         self.frame_ring = ProgressRing(
             bounds=empty,
             value=100,
-            accessible_name="Frame rate budget",
+            accessible_name="Demonstration frame budget",
         )
-        self.pulse_button = Button("Record sample", bounds=empty)
+        self.pulse_button = Button("Next sample", bounds=empty)
         self.pulse_button.on("click", lambda _: self.pulse())
         self._sample_index = len(cpu_points)
-        self.add(
-            self.status,
-            self.heading,
-            self.subtitle,
-            self.chart,
-            self.cpu_label,
-            self.gpu_label,
-            self.frame_label,
-            self.frame_ring,
-            self.pulse_button,
-        )
+        self.hero = StudioHero(bounds=empty)
+        self.hero.add(self.heading, self.subtitle)
+        self.metric_cards = tuple(ThemeSurface(
+            bounds=empty, style=SurfaceStyle(elevation=5, border_opacity=.5),
+        ) for _ in range(3))
+        self.metric_captions = tuple(Label(text, bounds=empty, font_size=12, opacity=.78)
+                                     for text in ("PROCESSOR", "GRAPHICS", "FRAME BUDGET"))
+        for card, caption, value in zip(
+            self.metric_cards, self.metric_captions,
+            (self.cpu_label, self.gpu_label, self.frame_label), strict=True,
+        ):
+            card.add(caption, value)
+        self.metric_cards[2].add(self.frame_ring)
+        self.disclaimer = Label("Generated samples · not device telemetry", bounds=empty,
+                                font_size=12, opacity=.8)
+        self.add(self.hero, self.status, *self.metric_cards, self.chart,
+                 self.disclaimer, self.pulse_button)
 
     @property
     def sample_index(self) -> int:
@@ -125,38 +156,42 @@ class StudioDashboard(Panel):
 
     def prepare_layout(self, viewport: Rect) -> None:
         self._set_layout_bounds(viewport)
-        x, y = viewport.x, viewport.y
-        width, height = viewport.width, viewport.height
-        pad = 24.0
-        self.status._set_layout_bounds(Rect(x + pad, y + 18, 142, 30))
-        self.heading._set_layout_bounds(Rect(x + pad, y + 58, max(0.0, width - 48), 38))
-        self.subtitle._set_layout_bounds(Rect(x + pad, y + 100, max(0.0, width - 48), 24))
-        if width >= 720:
-            metrics_width = 210.0
-            chart_width = max(0.0, width - metrics_width - 3 * pad)
-            self.chart._set_layout_bounds(
-                Rect(x + pad, y + 142, chart_width, max(0.0, height - 174))
-            )
-            metric_x = x + 2 * pad + chart_width
-            self.frame_ring._set_layout_bounds(Rect(metric_x + 45, y + 150, 116, 116))
-            self.frame_label._set_layout_bounds(Rect(metric_x, y + 278, metrics_width, 28))
-            self.cpu_label._set_layout_bounds(Rect(metric_x, y + 326, metrics_width, 28))
-            self.gpu_label._set_layout_bounds(Rect(metric_x, y + 364, metrics_width, 28))
-            self.pulse_button._set_layout_bounds(Rect(metric_x, y + 416, metrics_width, 40))
-        else:
-            available = max(0.0, height - 278.0)
-            chart_height = min(max(140.0, height * 0.48), available)
-            self.chart._set_layout_bounds(
-                Rect(x + pad, y + 136, max(0.0, width - 2 * pad), chart_height)
-            )
-            metric_y = min(viewport.bottom - 100.0, y + 150 + chart_height)
-            self.frame_ring._set_layout_bounds(Rect(x + pad, metric_y, 88, 88))
-            self.frame_label._set_layout_bounds(
-                Rect(x + 126, metric_y + 4, max(0.0, width - 150), 24)
-            )
-            self.cpu_label._set_layout_bounds(Rect(x + 126, metric_y + 34, 130, 24))
-            self.gpu_label._set_layout_bounds(Rect(x + 260, metric_y + 34, 130, 24))
-            self.pulse_button._set_layout_bounds(Rect(x + 126, metric_y + 62, 190, 36))
+        compact = viewport.height < 440
+        pad = min(14.0 if compact else 20.0, viewport.width / 12)
+        gap = 8.0 if compact else 12.0
+        x, y = viewport.x + pad, viewport.y + pad
+        width = max(0.0, viewport.width - 2 * pad)
+        hero_height = min(64.0 if compact else 120.0, viewport.height * .24)
+        card_height = min(56.0 if compact else 88.0, viewport.height * .19)
+        self.hero._set_layout_bounds(Rect(x, y, width, hero_height))
+        self.heading.font_size = 32 if width >= 600 else 24
+        self.heading._set_layout_bounds(Rect(x + 18, y + 14, max(0, width - 36), 42))
+        self.subtitle.visible = hero_height >= 90
+        self.subtitle._set_layout_bounds(Rect(x + 20, y + 64, max(0, width - 40), 22))
+        cards_y = y + hero_height + gap
+        card_width = max(0, (width - 2 * gap) / 3)
+        for index, (card, caption, value) in enumerate(zip(
+            self.metric_cards, self.metric_captions,
+            (self.cpu_label, self.gpu_label, self.frame_label), strict=True,
+        )):
+            left = x + index * (card_width + gap)
+            card._set_layout_bounds(Rect(left, cards_y, card_width, card_height))
+            caption.font_size = 12 if card_width >= 160 else 10
+            caption._set_layout_bounds(Rect(left + 12, cards_y + 6, max(0, card_width - 24), 18))
+            value.font_size = (24 if index < 2 else 19) if card_width >= 220 else 12
+            value._set_layout_bounds(Rect(left + 12, cards_y + (26 if compact else 34),
+                                          max(0, card_width - 24), 24))
+        self.frame_ring.visible = card_width >= 270
+        self.frame_ring._set_layout_bounds(Rect(self.metric_cards[2].bounds.right - 54,
+                                               cards_y + 12, 36, 36))
+        chart_y = cards_y + card_height + gap
+        footer_y = viewport.bottom - pad - 36
+        self.chart._set_layout_bounds(Rect(x, chart_y, width, max(0, footer_y - chart_y - gap)))
+        self.status._set_layout_bounds(Rect(x, footer_y, 110, 30))
+        self.disclaimer.visible = width >= 620
+        self.disclaimer._set_layout_bounds(Rect(x + 122, footer_y + 6,
+                                                max(0, width - 274), 20))
+        self.pulse_button._set_layout_bounds(Rect(x + max(0, width - 132), footer_y, 132, 34))
 
     @staticmethod
     def _percentage(value: float, name: str) -> float:
@@ -181,7 +216,7 @@ class StudioSettings(Panel):
         self.autosave = Switch("Autosave project state", bounds=empty, checked=True)
         self.notifications = Switch("Show Studio notifications", bounds=empty, checked=True)
         self.reduced_motion = Switch("Reduce appearance motion", bounds=empty, checked=False)
-        self.live_metrics = Switch("Enable live performance samples", bounds=empty, checked=True)
+        self.live_metrics = Switch("Enable demo sample actions", bounds=empty, checked=True)
         self.density = Slider(
             bounds=empty,
             value=100,
