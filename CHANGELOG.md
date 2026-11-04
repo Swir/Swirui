@@ -4,6 +4,18 @@ All notable changes to SwirUI will be documented in this file.
 
 The project uses semantic versioning where practical during development. Breaking API changes may occur before 1.0.
 
+## [0.1.0b3] - 2026-11-04
+
+- Refined Studio hierarchy with a perspective-layer header, larger metric
+  typography, theme-aware mini histories and a framed activity chart.
+  Mini histories use the same bounded demo samples as the main chart.
+- Reduced console height to free canvas space and centered the material preview
+  at a bounded size. Compact preview layouts keep launch/result controls visible.
+- Added a reproducible Windows/wgpu RGBA capture tool. README screenshots show
+  actual dark/light Studio and material preview frames without a cursor or OS chrome.
+- Preserved reduced-motion behavior, keyboard/child interaction and explicit
+  demo-data labels. Full roadmap progress remains 68%.
+
 ## [0.1.0b2] - 2026-11-03
 
 - Added opt-in `SurfaceInteraction`: elapsed-time shadow, accent glow,

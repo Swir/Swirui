@@ -81,7 +81,7 @@ class StudioSuite(Studio):
             [
                 DockPane("hierarchy", "Hierarchy", self.hierarchy, dock="left", extent=250),
                 DockPane("inspector", "Inspector", self.inspector, dock="right", extent=330),
-                DockPane("console", "Console", self.terminal, dock="bottom", extent=190),
+                DockPane("console", "Console", self.terminal, dock="bottom", extent=130),
                 DockPane("dashboard", "Dashboard", self.dashboard),
                 DockPane("preview", "Preview canvas", self.preview),
                 DockPane("code", "Code", self.editor),
@@ -274,7 +274,7 @@ class StudioSuite(Studio):
         extents = {
             "hierarchy": 250.0 * scale,
             "inspector": 330.0 * scale,
-            "console": 190.0 * scale,
+            "console": 130.0 * scale,
         }
         panes = tuple(
             replace(pane, extent=extents.get(str(pane.key), pane.extent))

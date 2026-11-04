@@ -45,7 +45,7 @@ def test_studio_motion_and_sample_settings_control_the_visible_actions() -> None
 def test_dashboard_sections_remain_ordered_when_compact_or_offset() -> None:
     dashboard = StudioDashboard()
     for viewport in (Rect(269, 160, 408, 338), Rect(269, 150, 824, 556),
-                     Rect(0, 0, 1184, 760)):
+                     Rect(0, 0, 1184, 760), Rect(0, 0, 1184, 338), Rect(0, 0, 1184, 440)):
         dashboard.prepare_layout(viewport)
         cards = dashboard.metric_cards
         assert dashboard.hero.bounds.bottom < cards[0].bounds.y
@@ -56,6 +56,40 @@ def test_dashboard_sections_remain_ordered_when_compact_or_offset() -> None:
         assert dashboard.chart.bounds.bottom < dashboard.pulse_button.bounds.y
         assert dashboard.pulse_button.bounds.bottom <= viewport.bottom
         assert dashboard.chart.plot_bounds.height > 0
+        for value in (dashboard.cpu_label, dashboard.gpu_label, dashboard.frame_label):
+            assert value.bounds.height >= value.font_size * 1.2
+
+
+def test_dashboard_mini_histories_follow_samples_and_theme_without_intercepting_input() -> None:
+    dashboard = StudioDashboard()
+    dashboard.prepare_layout(Rect(200, 150, 984, 716))
+    bars = dashboard.sample_bars[0]
+    before = bars.build_scene_node()
+    dashboard.record_sample(100, 0, 8)
+    after = bars.build_scene_node()
+    assert after.children[-1].bounds.height == bars.bounds.height
+    assert before.children[-1].bounds.height < after.children[-1].bounds.height
+    assert len(after.children) == 12
+    assert all(not node.hit_testable for node in after.walk())
+    dashboard.theme = FUTURE_LIGHT
+    themed = bars.build_scene_node()
+    assert themed.children[-1].fill != after.children[-1].fill
+    assert all(not node.hit_testable for node in dashboard.hero.build_scene_node().walk())
+
+
+def test_preview_controls_fit_the_material_card_at_supported_sizes() -> None:
+    studio = StudioSuite()
+    for width, height in ((1024, 720), (1280, 800), (1600, 1000), (1920, 1080)):
+        studio.resize_to(width, height)
+        studio.workspace.prepare_layout(studio.workspace.bounds)
+        preview = studio.preview
+        preview.prepare_layout(preview.bounds)
+        surface = preview.surface.bounds
+        assert surface.width <= 680 and surface.height <= 380
+        assert surface.x >= preview.bounds.x and surface.right <= preview.bounds.right
+        assert preview.result.bounds.bottom <= surface.bottom
+        assert preview.create.bounds.bottom < preview.result.bounds.y
+        assert preview.project.bounds.bottom < preview.motion.bounds.y
 
 
 def test_studio_suite_adds_dashboard_settings_and_notification_center() -> None:
