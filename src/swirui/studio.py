@@ -62,7 +62,7 @@ class StudioPreview(Panel):
         self.surface = ThemeSurface(bounds=empty)
         self.heading = Label("Build beyond ordinary.", bounds=empty, font_size=30)
         self.subtitle = Label(
-            "Native Python UI with a retained Rust + wgpu core.",
+            "Shape every detail. Make it yours.",
             bounds=empty,
             font_size=15,
         )
@@ -79,7 +79,7 @@ class StudioPreview(Panel):
             self.result,
         )
         self.footer = Label(
-            "CANVAS / RETAINED SCENE / GPU",
+            "EDIT MATERIALS AND DEPTH IN THE INSPECTOR",
             bounds=empty,
             font_size=11,
         )
@@ -93,25 +93,33 @@ class StudioPreview(Panel):
         width, height = viewport.width, viewport.height
         pad = 24.0
         self.status._set_layout_bounds(Rect(viewport.x + pad, viewport.y + 16, 148, 30))
-        self.blob._set_layout_bounds(
-            Rect(viewport.right - 220, viewport.y + 52, 170, 170)
-        )
+        surface_width = min(680.0, max(0.0, width - 2 * pad))
+        available_height = max(0.0, height - 90)
+        surface_height = min(380.0, available_height)
         surface = Rect(
-            viewport.x + pad,
-            viewport.y + 54,
-            max(0.0, width - 2 * pad),
-            max(0.0, height - 90),
+            viewport.x + (width - surface_width) / 2,
+            viewport.y + 54 + (available_height - surface_height) / 2,
+            surface_width,
+            surface_height,
         )
+        self.blob._set_layout_bounds(Rect(surface.right - 130, surface.y - 24, 150, 150))
         self.surface._set_layout_bounds(surface)
+        compact = surface.height < 320
         inner_x = surface.x + 26
         inner_width = max(0.0, surface.width - 52)
-        self.heading._set_layout_bounds(Rect(inner_x, surface.y + 22, inner_width, 38))
+        self.heading.font_size = 24 if compact or surface.width < 440 else 30
+        self.heading._set_layout_bounds(Rect(inner_x, surface.y + (14 if compact else 22),
+                                             inner_width, 38))
+        self.subtitle.visible = not compact
         self.subtitle._set_layout_bounds(Rect(inner_x, surface.y + 68, inner_width, 24))
-        self.project._set_layout_bounds(Rect(inner_x, surface.y + 108, inner_width, 42))
-        self.motion._set_layout_bounds(Rect(inner_x, surface.y + 164, inner_width, 36))
-        self.create._set_layout_bounds(Rect(inner_x, surface.y + 218, 190, 40))
+        self.project._set_layout_bounds(Rect(inner_x, surface.y + (58 if compact else 108),
+                                             inner_width, 42))
+        self.motion._set_layout_bounds(Rect(inner_x, surface.y + (104 if compact else 164),
+                                            inner_width, 36))
+        self.create._set_layout_bounds(Rect(inner_x, surface.y + (148 if compact else 218),
+                                            min(190, inner_width), 40))
         self.result._set_layout_bounds(
-            Rect(inner_x, surface.y + 270, inner_width, 24)
+            Rect(inner_x, surface.y + (196 if compact else 270), inner_width, 24)
         )
         self.footer._set_layout_bounds(
             Rect(viewport.x + pad, viewport.bottom - 28, max(0.0, width - 2 * pad), 18)
@@ -127,7 +135,7 @@ class StudioPreview(Panel):
                 tint_opacity=0.74,
                 elevation=14,
                 glow_radius=18,
-                glow_opacity=0.10,
+                glow_opacity=0.055,
                 depth_layers=self.depth,
                 depth_spacing=7,
                 tilt_x=8,

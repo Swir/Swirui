@@ -20,12 +20,12 @@ from . import (
     ThemeSurface,
 )
 from .core import Event
-from .rendering import CornerRadius, LinearGradient, Rect, SceneNode, SceneNodeKind
-from .theme import FUTURE_DARK
+from .rendering import CornerRadius, PerspectivePlane, Rect, SceneNode, SceneNodeKind
+from .theme import FUTURE_DARK, ColorRole
 
 
 class StudioHero(Panel):
-    """A bounded accent wash that inherits the current application palette."""
+    """Quiet, palette-aware perspective artwork behind the workspace heading."""
 
     def build_scene_node(self) -> SceneNode:
         theme = self.effective_theme or FUTURE_DARK
@@ -33,14 +33,43 @@ class StudioHero(Panel):
                          fill=theme.surface_color("raised"),
                          corner_radius=CornerRadius.uniform(18), clip_to_bounds=True,
                          hit_testable=False, opacity=self.opacity, z_index=self.z_index)
-        if self.bounds.width > 0 and self.bounds.height > 0:
-            wash = LinearGradient.two_color(
-                theme.surface_color("accent").with_alpha(.13),
-                theme.surface_color("focus").with_alpha(.03),
-            ).to_scene_node(f"{self.key}:wash", self.bounds, steps=24)
-            for decoration in wash.walk():
-                decoration.hit_testable = False
-            node.add(wash)
+        if self.bounds.width >= 660 and self.bounds.height >= 120:
+            plane = PerspectivePlane(rotation_x_degrees=48, rotation_y_degrees=-24)
+            for index in range(3):
+                bounds = Rect(self.bounds.right - 204 + index * 10,
+                              self.bounds.y + 22 - index * 9, 142, 112)
+                color = theme.surface_color("accent" if index < 2 else "focus")
+                node.add(plane.to_scene_node(
+                    f"{self.key}:layer:{index}", bounds,
+                    fill=color.with_alpha(.10 + index * .08), hit_testable=False,
+                ))
+        return node
+
+
+class StudioSampleBars(Panel):
+    """Small decorative history using the same samples as the main chart."""
+
+    def __init__(self, stream: StreamingChartSeries, role: ColorRole) -> None:
+        super().__init__(bounds=Rect(0, 0, 0, 0))
+        self.stream = stream
+        self.role = role
+
+    def build_scene_node(self) -> SceneNode:
+        node = SceneNode(self.key, SceneNodeKind.GROUP, self.bounds, hit_testable=False)
+        if self.bounds.width <= 0 or self.bounds.height <= 0:
+            return node
+        theme = self.effective_theme or FUTURE_DARK
+        points = self.stream.snapshot().points[-12:]
+        step = self.bounds.width / len(points)
+        for index, point in enumerate(points):
+            height = max(2, self.bounds.height * point.value / 100)
+            node.add(SceneNode(
+                f"{self.key}:bar:{index}", SceneNodeKind.RECTANGLE,
+                Rect(self.bounds.x + index * step, self.bounds.bottom - height,
+                     max(1, step - 3), height),
+                fill=theme.text_color(self.role).with_alpha(.25 + .65 * (index + 1) / len(points)),
+                corner_radius=CornerRadius.uniform(2), hit_testable=False,
+            ))
         return node
 
 
@@ -73,9 +102,11 @@ class StudioDashboard(Panel):
             y_max=100,
         )
         self.status = Badge("DEMO DATA", bounds=empty)
-        self.heading = Label("Shape your next idea.", bounds=empty, font_size=32)
+        self.kicker = Label("YOUR NEXT INTERFACE STARTS HERE", bounds=empty,
+                            font_size=11, opacity=.7)
+        self.heading = Label("Design what’s next.", bounds=empty, font_size=34)
         self.subtitle = Label(
-            "Explore the visuals. Make them yours.",
+            "Your code. Your materials. Your signature.",
             bounds=empty,
             font_size=14,
         )
@@ -93,10 +124,10 @@ class StudioDashboard(Panel):
         self.pulse_button.on("click", lambda _: self.pulse())
         self._sample_index = len(cpu_points)
         self.hero = StudioHero(bounds=empty)
-        self.hero.add(self.heading, self.subtitle)
+        self.hero.add(self.kicker, self.heading, self.subtitle)
         self.metric_cards = tuple(ThemeSurface(
-            bounds=empty, style=SurfaceStyle(elevation=8, border_opacity=.55,
-                                             glow_radius=12, glow_opacity=.035),
+            bounds=empty, style=SurfaceStyle(elevation=4, border_opacity=.45,
+                                             glow_radius=8, glow_opacity=.015),
         ) for _ in range(3))
         self.metric_captions = tuple(Label(text, bounds=empty, font_size=12, opacity=.78)
                                      for text in ("PROCESSOR", "GRAPHICS", "FRAME BUDGET"))
@@ -106,9 +137,17 @@ class StudioDashboard(Panel):
         ):
             card.add(caption, value)
         self.metric_cards[2].add(self.frame_ring)
+        self.sample_bars = (StudioSampleBars(self.cpu_stream, "accent"),
+                            StudioSampleBars(self.gpu_stream, "success"))
+        for card, bars in zip(self.metric_cards[:2], self.sample_bars, strict=True):
+            card.add(bars)
+        self.chart_surface = ThemeSurface(
+            bounds=empty, style=SurfaceStyle(elevation=2, border_opacity=.35),
+        )
+        self.chart_surface.add(self.chart)
         self.disclaimer = Label("Generated samples · not device telemetry", bounds=empty,
                                 font_size=12, opacity=.8)
-        self.add(self.hero, self.status, *self.metric_cards, self.chart,
+        self.add(self.hero, self.status, *self.metric_cards, self.chart_surface,
                  self.disclaimer, self.pulse_button)
 
     @property
@@ -134,6 +173,8 @@ class StudioDashboard(Panel):
             refresh=False,
         )
         self.chart.refresh()
+        for bars in self.sample_bars:
+            bars.invalidate()
         self._sample_index += 1
         fps = min(999.0, 1000.0 / frame_value)
         self.cpu_label.text = f"CPU {cpu_value:.0f}%"
@@ -162,13 +203,18 @@ class StudioDashboard(Panel):
         gap = 8.0 if compact else 12.0
         x, y = viewport.x + pad, viewport.y + pad
         width = max(0.0, viewport.width - 2 * pad)
-        hero_height = min(64.0 if compact else 120.0, viewport.height * .24)
-        card_height = min(56.0 if compact else 88.0, viewport.height * .19)
+        hero_height = min(64.0 if compact else 144.0, viewport.height * .24)
+        card_height = min(56.0 if compact else 104.0, viewport.height * .19)
         self.hero._set_layout_bounds(Rect(x, y, width, hero_height))
-        self.heading.font_size = 32 if width >= 600 else 24
-        self.heading._set_layout_bounds(Rect(x + 18, y + 14, max(0, width - 36), 42))
-        self.subtitle.visible = hero_height >= 90
-        self.subtitle._set_layout_bounds(Rect(x + 20, y + 64, max(0, width - 40), 22))
+        text_width = max(0, width - (220 if width >= 660 else 40))
+        self.kicker.visible = hero_height >= 120
+        self.kicker._set_layout_bounds(Rect(x + 22, y + 16, text_width, 18))
+        self.heading.font_size = 34 if width >= 660 else 26
+        self.heading._set_layout_bounds(Rect(x + 20, y + (40 if self.kicker.visible else 12),
+                                             text_width, 44))
+        self.subtitle.visible = hero_height >= 100
+        self.subtitle._set_layout_bounds(Rect(x + 22, y + (91 if self.kicker.visible else 68),
+                                              text_width, 22))
         cards_y = y + hero_height + gap
         card_width = max(0, (width - 2 * gap) / 3)
         for index, (card, caption, value) in enumerate(zip(
@@ -179,15 +225,27 @@ class StudioDashboard(Panel):
             card._set_layout_bounds(Rect(left, cards_y, card_width, card_height))
             caption.font_size = 12 if card_width >= 160 else 10
             caption._set_layout_bounds(Rect(left + 12, cards_y + 6, max(0, card_width - 24), 18))
-            value.font_size = (24 if index < 2 else 19) if card_width >= 220 else 12
+            value.font_size = (28 if index < 2 else 19) if card_width >= 200 else 14
+            if compact:
+                value.font_size = min(18, value.font_size)
             value._set_layout_bounds(Rect(left + 12, cards_y + (26 if compact else 34),
-                                          max(0, card_width - 24), 24))
+                                          max(0, card_width - 24),
+                                          36 if value.font_size > 20 else 24))
+        for card, bars in zip(self.metric_cards[:2], self.sample_bars, strict=True):
+            bars.visible = card_height >= 90
+            bars._set_layout_bounds(Rect(card.bounds.x + 12, cards_y + card_height - 27,
+                                         max(0, card_width - 24), 20))
         self.frame_ring.visible = card_width >= 270
         self.frame_ring._set_layout_bounds(Rect(self.metric_cards[2].bounds.right - 54,
                                                cards_y + 12, 36, 36))
         chart_y = cards_y + card_height + gap
         footer_y = viewport.bottom - pad - 36
-        self.chart._set_layout_bounds(Rect(x, chart_y, width, max(0, footer_y - chart_y - gap)))
+        chart_height = max(0, footer_y - chart_y - gap)
+        self.chart_surface._set_layout_bounds(Rect(x, chart_y, width, chart_height))
+        inset = 6 if compact else 12
+        self.chart._set_layout_bounds(Rect(x + inset, chart_y + inset,
+                                           max(0, width - 2 * inset),
+                                           max(0, chart_height - 2 * inset)))
         self.status._set_layout_bounds(Rect(x, footer_y, 110, 30))
         self.disclaimer.visible = width >= 620
         self.disclaimer._set_layout_bounds(Rect(x + 122, footer_y + 6,

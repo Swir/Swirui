@@ -74,6 +74,12 @@ def test_studio_suite_dashboard_settings_notifications_keep_one_native_context(
         app.render_pending(app._frame_schedulers[window].stats.last_frame_time + 1)
         assert studio.dashboard.chart.plot_bounds.height >= 100
         assert len(set(images)) == 4
+        studio.activate("preview")
+        app.render_pending(app._frame_schedulers[window].stats.last_frame_time + 1)
+        width, height, rgba = context.read_scene_rgba()
+        assert bytes(rgba) not in images
+        assert studio.preview.result.bounds.bottom <= studio.preview.surface.bounds.bottom
+        assert renderer._contexts[window.native_handle.value] is context
         record_property("adapter", renderer.adapter_name)
         record_property("backend", renderer.graphics_backend)
         record_property("center_panes", "dashboard, preview, code, assets, settings")
