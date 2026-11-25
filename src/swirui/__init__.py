@@ -199,10 +199,12 @@ from .widgets import (
     ScatterSeries,
     ScrollView,
     Sidebar,
+    SilkRibbon,
     Slider,
     SpectrumVisualizer,
     SplitView,
     Stack,
+    StreamingAreaChart,
     StreamingChartSeries,
     StreamingLineChart,
     Switch,
@@ -407,12 +409,14 @@ __all__ = [
     "SharedElementTransition",
     "Sidebar",
     "SlideTransition",
+    "SilkRibbon",
     "Slider",
     "SpectrumVisualizer",
     "SplitView",
     "SpringAnimation",
     "Stack",
     "State",
+    "StreamingAreaChart",
     "StreamingChartSeries",
     "StreamingLineChart",
     "Switch",
@@ -459,4 +463,4 @@ __all__ = [
     "tween_state",
     "waveform_envelope_pcm16",
 ]
-__version__ = "0.1.0b4"
+__version__ = "0.1.0b5"

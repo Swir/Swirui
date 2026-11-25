@@ -75,7 +75,17 @@ def test_studio_suite_dashboard_settings_notifications_keep_one_native_context(
         app.render_pending(app._frame_schedulers[window].stats.last_frame_time + 1)
         assert studio.dashboard.chart.plot_bounds.height >= 100
         assert len(set(images)) == 4
-        studio.activate("preview")
+        studio.preview.project.value = "My material"
+        acrylic = studio.dashboard.material_buttons[1]
+        for kind in (PlatformEventKind.POINTER_DOWN, PlatformEventKind.POINTER_UP):
+            window._apply_platform_event(PlatformEvent(
+                kind, window.native_handle, x=(acrylic.bounds.x + 12) * window.scale,
+                y=(acrylic.bounds.y + 12) * window.scale, button=PointerButton.LEFT,
+            ))
+        assert studio.workspace.active_center_key == "preview"
+        assert studio.preview.material == "acrylic"
+        assert studio.preview.project.value == "My material"
+        assert window.focused_component is studio.preview.project
         app.render_pending(app._frame_schedulers[window].stats.last_frame_time + 1)
         width, height, rgba = context.read_scene_rgba()
         assert bytes(rgba) not in images
