@@ -10,15 +10,18 @@ button states your app will inherit. Tab to a project name, type a new name
 and press Enter or select **Apply name**. Both halves update together. Your
 Studio project keeps its original name.
 
-To compare a different design, edit the material or accent in Studio and select
-**Launch preview** again. Studio refreshes the existing window at its current
-size. Closing the comparison leaves Studio open.
+Leave the comparison open while you work in Studio. Changing the accent,
+material, depth, tint, glow, corners or headline updates both panes together.
+For example, choose **Rose** in **Settings → Signature color**, then move
+**Corners** in the preview. Your sample text and its selection survive both
+edits. Select **Launch preview** again when you want to restore the sample to
+the current project name. Closing the comparison leaves Studio open.
 
-![An interactive form in the dark and light Studio appearances](screenshots/studio-comparison.png)
+![The dark and light forms after applying the same rose accent and rounded corners in Studio](screenshots/studio-comparison.png)
 
 This 960 × 460 capture is a direct readback of the Windows wgpu frame on AMD
 Radeon graphics with DX12. To reproduce it from the same checkout, run
-`python tools/capture_studio.py --pane comparison --output studio-comparison.png`.
+`python tools/capture_studio.py --pane comparison --accent "#FF7ADE" --corner-radius 24 --output studio-comparison.png`.
 The OS cursor is outside the captured frame.
 
 ## Shape your controls

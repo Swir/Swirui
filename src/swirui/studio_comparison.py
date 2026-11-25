@@ -17,11 +17,15 @@ from . import (
     Window,
 )
 from .core import Event, state_transaction
+from .core.state import schedule_reactive_update
 from .rendering import Rect
 from .widgets import mount
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from .studio import StudioPreview
+    from .theme import Theme
 
 
 class _AppearancePane(Panel):
@@ -72,9 +76,14 @@ class AppearanceComparison(Panel):
 
     def set_design(self, package: ThemePackage, headline: str) -> None:
         with state_transaction():
+            self.set_appearance(package.themes, headline)
             for pane in self.panes:
-                pane.theme = package.themes[pane.mode]
                 pane.title.text = pane.field.value = package.name
+
+    def set_appearance(self, themes: Mapping[str, Theme], headline: str) -> None:
+        with state_transaction():
+            for pane in self.panes:
+                pane.theme = themes[pane.mode]
                 pane.headline.text = headline
 
     def _rename(self, event: Event) -> None:
@@ -136,10 +145,20 @@ def bind_comparison(app: App, owner: Window, preview: StudioPreview) -> None:
         child = window
         preview.result.text = "Comparison opened."
 
-    unsubscribe = preview.on("launch_requested", launch)
+    def refresh() -> None:
+        if child is not None and isinstance(child.root, AppearanceComparison):
+            child.root.set_appearance(preview.appearance_themes(), preview.heading.text)
+
+    def design_changed(_event: Event) -> None:
+        if child is not None:
+            schedule_reactive_update(refresh, refresh)
+
+    stop_launch = preview.on("launch_requested", launch)
+    stop_updates = preview.on("design_changed", design_changed)
 
     def owner_closed(_event: Event) -> None:
-        unsubscribe()
+        stop_launch()
+        stop_updates()
         if child is not None:
             child.close()
 

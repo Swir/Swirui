@@ -111,9 +111,28 @@ def test_launch_compare_refresh_and_close_real_preview_windows(record_property):
         studio.preview.project.value = "x" * 121
         studio.preview.create.emit("click")
         assert dark.title.text == "Renamed" and len(app.windows) == 2
+        # Change the geometry while the source name is invalid and the sample is being edited.
+        child.focus_component(light.field)
+        light.field.value = "Unsubmitted sample"
+        light.field.select(0, 11)
+        app.render_pending(app._frame_schedulers[child].stats.last_frame_time + 1)
+        width, _, before = context.read_scene_rgba()
+        offsets = [
+            4 * (round((pane.apply.bounds.y + 2) * child.scale) * width
+                 + round((pane.apply.bounds.x + 2) * child.scale))
+            for pane in proof.panes
+        ]
+        studio.preview.corners.value = 0
+        studio.inspector.set_value("title", "Live headline")
+        app.render_pending(app._frame_schedulers[child].stats.last_frame_time + 1)
+        after = context.read_scene_rgba()[2]
+        assert all(before[i:i + 3] != after[i:i + 3] for i in offsets)
+        assert dark.headline.text == light.headline.text == "Live headline"
+        assert child.focused_component is light.field and light.field.selected_text == "Unsubmitted"
+        assert light.field.value == "Unsubmitted sample" and dark.title.text == "Renamed"
         studio.preview.project.value = "New design"
         studio.inspector.set_value("material", "acrylic")
-        studio.preview.corners.value = 0
+        assert dark.theme.surface_style.kind == light.theme.surface_style.kind == "acrylic"
         studio.preview.create.emit("click")
         assert child.root is proof and len(app.windows) == 2
         assert renderer._contexts[child.native_handle.value] is context

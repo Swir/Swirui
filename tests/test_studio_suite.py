@@ -1,7 +1,58 @@
-from swirui import FUTURE_LIGHT, ClipboardError, MemoryClipboard, ThemePackage, Window, mount
+from swirui import (
+    FUTURE_LIGHT,
+    App,
+    ClipboardError,
+    MemoryClipboard,
+    ThemePackage,
+    Window,
+    mount,
+    state_transaction,
+)
+from swirui.platforms import NullPlatformBackend
 from swirui.rendering import Rect
+from swirui.studio_comparison import bind_comparison
 from swirui.studio_operations import StudioDashboard
 from swirui.studio_suite import StudioSuite
+
+
+def test_open_comparison_follows_edits_and_detaches_on_close():
+    app = App(platform_backend=NullPlatformBackend())
+    owner = app.add_window(Window())
+    studio = StudioSuite()
+    mount(owner, studio)
+    preview = studio.preview
+    bind_comparison(app, owner, preview)
+    try:
+        app.start()
+        studio.settings.set_accent("#7FE0BF")
+        assert app.windows == [owner]
+        preview.create.emit("click")
+        child = app.windows[-1]
+        dark, light = child.root.panes
+        seen = []
+        dark.on("theme_changed", lambda event: seen.append(event.data["theme"]))
+        with state_transaction():
+            studio.settings.set_accent("#FF9DAF")
+            preview.tint.value = 43
+            preview.glow.value = 18
+            studio.inspector.set_value("depth", 6)
+            studio.settings.reduced_motion.checked = True
+        exported = preview.theme_package()
+        assert seen == [exported.themes["dark"]]
+        assert light.theme == exported.themes["light"]
+        assert light.theme.palette.accent == "#FF9DAF" and light.theme.reduced_motion
+        with state_transaction():
+            preview.corners.value = 0
+            child.close()
+        assert app.windows == [owner] and dark.theme == exported.themes["dark"]
+        preview.create.emit("click")
+        next_dark, _ = app.windows[-1].root.panes
+        assert next_dark.theme.control_radius == 0
+        studio.execute_command("reset")
+        assert next_dark.theme == preview.theme_package().themes["dark"]
+        assert dark.theme == exported.themes["dark"]
+    finally:
+        app.stop()
 
 
 def test_preview_copies_both_authored_finishes_and_preserves_input(tmp_path):

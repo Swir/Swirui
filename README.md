@@ -26,8 +26,9 @@
 
 On the 0.2 development branch, drag **Corners** to shape the buttons, fields
 and material cards in your design. Select **Launch preview** to try the
-dark and light versions side by side. **Copy theme JSON** carries those
-corners into your own app. [Try the development preview](https://github.com/Swir/Swirui/blob/development/0.2/docs/development-0.2.md).
+dark and light versions side by side. Both versions follow changes to the
+material, accent and corners while the comparison is open. Use **Copy
+theme JSON** to bring the same design into your own app. [Try the development preview](https://github.com/Swir/Swirui/blob/development/0.2/docs/development-0.2.md).
 
 ![SwirUI Studio in dark appearance, captured without a cursor](https://raw.githubusercontent.com/Swir/Swirui/v0.1.0b6/docs/screenshots/studio-dark.png)
 

@@ -206,11 +206,15 @@ class StudioPreview(Panel):
         for chip, label, role in zip(self.swatch_chips, self.swatch_hex, roles, strict=True):
             chip.background = theme.surface_color(role)
             label.text = getattr(theme.palette, role)
+        self.emit("design_changed")
+
+    def appearance_themes(self) -> dict[str, Theme]:
+        """Build both authored appearances independently of the project name."""
+        return {"dark": self._material_theme(False), "light": self._material_theme(True)}
 
     def theme_package(self) -> ThemePackage:
         """Snapshot the authored finish in both modes, defaulting to the visible mode."""
-        variants = {"dark": self._material_theme(False), "light": self._material_theme(True)}
-        return ThemePackage(self.project.value.strip() or "Studio theme", variants,
+        return ThemePackage(self.project.value.strip() or "Studio theme", self.appearance_themes(),
                             "light" if self.light else "dark")
 
     def _copy_theme(self, _event: Event) -> None:
@@ -227,8 +231,10 @@ class StudioPreview(Panel):
             self.result.text = "Copied dark and light theme JSON."
 
     def set_title(self, value: str) -> None:
-        text = value.strip()
-        self.heading.text = text or "Build beyond ordinary."
+        text = value.strip() or "Build beyond ordinary."
+        if self.heading.text != text:
+            self.heading.text = text
+            self.emit("design_changed")
 
     def set_material(self, value: str) -> None:
         normalized = value.strip().lower()
