@@ -26,6 +26,7 @@ from .core import Event
 from .platforms import PlatformEvent, PlatformEventKind
 from .rendering import Rect, WgpuRenderer
 from .studio import Studio
+from .studio_comparison import bind_comparison
 from .studio_operations import StudioDashboard, StudioSettings
 from .theme import FUTURE_LIGHT
 from .theme_presets import NEON_BLUE
@@ -365,6 +366,7 @@ def run(*, smoke_test: bool = False) -> int:
     window.on("resized", lambda _: root.resize_to(window.width, window.height))
     mount(window, root)
     app.add_window(window)
+    bind_comparison(app, window, root.preview)
     animations = AnimationController(app, window)
     interactions = root.bind_interactions(animations)
     try:

@@ -1,0 +1,146 @@
+"""Native side-by-side preview of an authored Studio design."""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+from . import (
+    App,
+    Badge,
+    Button,
+    Input,
+    Label,
+    Panel,
+    SilkRibbon,
+    ThemePackage,
+    ThemeSurface,
+    Window,
+)
+from .core import Event, state_transaction
+from .rendering import Rect
+from .widgets import mount
+
+if TYPE_CHECKING:
+    from .studio import StudioPreview
+
+
+class _AppearancePane(Panel):
+    def __init__(self, mode: str) -> None:
+        empty = Rect(0, 0, 0, 0)
+        super().__init__(bounds=empty, clip_to_bounds=True)
+        self.mode = mode
+        self.mode_label = Badge(f"{mode.title()} appearance", bounds=empty)
+        self.title = Label("", bounds=empty, font_size=31)
+        self.ribbon = SilkRibbon(bounds=empty)
+        self.card = ThemeSurface(bounds=empty)
+        self.headline = Label("", bounds=empty, font_size=23)
+        self.caption = Label("Project name", bounds=empty, font_size=13)
+        self.field = Input("", bounds=empty, accessible_name=f"{mode.title()} preview project name")
+        self.apply = Button("Apply name", bounds=empty)
+        self.card.add(self.headline, self.caption, self.field, self.apply)
+        self.add(self.ribbon, self.mode_label, self.title, self.card)
+
+    def prepare_layout(self, viewport: Rect) -> None:
+        self._set_layout_bounds(viewport)
+        x, y, w, h = viewport.x, viewport.y, viewport.width, viewport.height
+        pad = 20 if w < 400 else 32
+        inner = max(0, w - 2 * pad)
+        self.mode_label._set_layout_bounds(Rect(x + pad, y + 20, 150, 30))
+        self.title._set_layout_bounds(Rect(x + pad, y + 59, inner, 48))
+        card_y = y + max(131, (h - 220) * .72)
+        self.ribbon._set_layout_bounds(Rect(x + 3, max(y + 94, card_y - 70), max(0, w - 6), 200))
+        self.card._set_layout_bounds(Rect(x + pad, card_y, inner, 220))
+        left = x + pad + 19
+        content = max(0, inner - 38)
+        self.headline._set_layout_bounds(Rect(left, card_y + 16, content, 35))
+        self.caption._set_layout_bounds(Rect(left, card_y + 63, content, 20))
+        self.field._set_layout_bounds(Rect(left, card_y + 88, content, 40))
+        self.apply._set_layout_bounds(Rect(left, card_y + 152, min(content, 128), 40))
+
+
+class AppearanceComparison(Panel):
+    """Two interactive instances of the same form using the exported Studio themes."""
+
+    def __init__(self, package: ThemePackage, headline: str) -> None:
+        super().__init__(bounds=Rect(0, 0, 960, 460))
+        self.panes = (_AppearancePane("dark"), _AppearancePane("light"))
+        self.add(*self.panes)
+        for pane in self.panes:
+            pane.field.on("submitted", self._rename)
+            pane.apply.on("click", self._rename)
+        self.set_design(package, headline)
+
+    def set_design(self, package: ThemePackage, headline: str) -> None:
+        with state_transaction():
+            for pane in self.panes:
+                pane.theme = package.themes[pane.mode]
+                pane.title.text = pane.field.value = package.name
+                pane.headline.text = headline
+
+    def _rename(self, event: Event) -> None:
+        source = next(p for p in self.panes if event.source in (p.field, p.apply))
+        name = source.field.value.strip()
+        if name:
+            with state_transaction():
+                for pane in self.panes:
+                    pane.title.text = pane.field.value = name
+        else:
+            source.field.value = source.title.text
+
+    def prepare_layout(self, viewport: Rect) -> None:
+        self._set_layout_bounds(viewport)
+        half = viewport.width / 2
+        for index, pane in enumerate(self.panes):
+            pane._set_layout_bounds(Rect(viewport.x + index * half, viewport.y, half,
+                                         viewport.height))
+
+
+def bind_comparison(app: App, owner: Window, preview: StudioPreview) -> None:
+    """Open at most one comparison window for this Studio session."""
+    child: Window | None = None
+
+    def closed(event: Event) -> None:
+        nonlocal child
+        if child is not None and event.source is child:
+            window, child = child, None
+            if window in app.windows:
+                app.remove_window(window)
+
+    def launch(_event: Event) -> None:
+        nonlocal child
+        try:
+            package = preview.theme_package()
+        except ValueError:
+            preview.result.text = "Use a valid project name (up to 120 characters)."
+            return
+        title = f"{package.name} · Appearance comparison"
+        if child is not None and isinstance(child.root, AppearanceComparison):
+            child.root.set_design(package, preview.heading.text)
+            child.set_title(title)
+            if child.visible and child.native_handle is not None:
+                app.platform_backend.show_window(child.native_handle)
+            else:
+                child.show()
+            preview.result.text = "Comparison updated."
+            return
+        window = Window(title=title, width=960, height=460, min_width=640, min_height=390)
+        mount(window, AppearanceComparison(package, preview.heading.text))
+        try:
+            app.add_window(window)
+        except (OSError, RuntimeError):
+            if window in app.windows:
+                app.remove_window(window)
+            preview.result.text = "Could not open the comparison window. Try again."
+            return
+        window.on("closed", closed)
+        child = window
+        preview.result.text = "Comparison opened."
+
+    unsubscribe = preview.on("launch_requested", launch)
+
+    def owner_closed(_event: Event) -> None:
+        unsubscribe()
+        if child is not None:
+            child.close()
+
+    owner.on("closed", owner_closed)

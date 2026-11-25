@@ -44,6 +44,7 @@ from . import (
 from .core import Event
 from .platforms import PlatformEvent, PlatformEventKind
 from .rendering import Rect, WgpuRenderer
+from .studio_comparison import bind_comparison
 from .theme import ColorRole
 
 MaterialKind = Literal["solid", "glass", "acrylic"]
@@ -254,6 +255,8 @@ class StudioPreview(Panel):
         self.result.text = (
             f"{name} is ready to render." if name else "Name the project before launch."
         )
+        if name:
+            self.emit("launch_requested")
 
 
 class Studio(Panel):
@@ -634,6 +637,7 @@ def run(*, smoke_test: bool = False) -> int:
     window.on("resized", lambda _: root.resize_to(window.width, window.height))
     mount(window, root)
     app.add_window(window)
+    bind_comparison(app, window, root.preview)
     try:
         if not smoke_test:
             return app.run()

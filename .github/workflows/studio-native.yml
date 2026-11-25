@@ -14,6 +14,7 @@ on:
       - "src/swirui/studio.py"
       - "src/swirui/studio_operations.py"
       - "src/swirui/studio_suite.py"
+      - "src/swirui/studio_comparison.py"
       - "src/swirui/__main__.py"
       - "tests/test_studio.py"
       - "tests/test_studio_suite.py"
@@ -35,6 +36,7 @@ on:
       - "src/swirui/studio.py"
       - "src/swirui/studio_operations.py"
       - "src/swirui/studio_suite.py"
+      - "src/swirui/studio_comparison.py"
       - "src/swirui/__main__.py"
       - "tests/test_studio.py"
       - "tests/test_studio_suite.py"
@@ -82,7 +84,8 @@ jobs:
       - name: Ruff
         run: >
           python -m ruff check src/swirui/studio.py src/swirui/studio_operations.py
-          src/swirui/studio_suite.py src/swirui/surface_interaction.py
+          src/swirui/studio_suite.py src/swirui/studio_comparison.py
+          src/swirui/surface_interaction.py
           src/swirui/widgets/theme_surface.py src/swirui/widgets/silk_ribbon.py
           src/swirui/widgets/streaming_charts.py
           tests/test_studio.py tests/test_studio_suite.py
@@ -91,7 +94,8 @@ jobs:
 
       - name: Strict mypy
         run: python -m mypy --strict src/swirui/studio.py src/swirui/studio_operations.py
-          src/swirui/studio_suite.py src/swirui/surface_interaction.py
+          src/swirui/studio_suite.py src/swirui/studio_comparison.py
+          src/swirui/surface_interaction.py
           src/swirui/widgets/theme_surface.py src/swirui/widgets/silk_ribbon.py
           src/swirui/widgets/streaming_charts.py
 

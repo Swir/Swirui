@@ -18,6 +18,7 @@ from pathlib import Path
 
 from swirui import AnimationController, App, Window, mount
 from swirui.rendering import WgpuRenderer
+from swirui.studio_comparison import bind_comparison
 from swirui.studio_suite import StudioSuite
 
 
@@ -43,7 +44,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--theme", choices=("dark", "light"), default="dark")
-    parser.add_argument("--pane", choices=("dashboard", "preview", "settings"), default="dashboard")
+    parser.add_argument("--pane", choices=("dashboard", "preview", "settings", "comparison"),
+                        default="dashboard")
     parser.add_argument("--accent", help="Opaque hex accent, e.g. #7FE0BF")
     parser.add_argument("--width", type=int, default=1600)
     parser.add_argument("--height", type=int, default=1000)
@@ -61,8 +63,9 @@ def main() -> None:
         studio.toggle_theme()
     if args.accent is not None and not studio.settings.set_accent(args.accent):
         parser.error("--accent must be an opaque hex color")
-    studio.activate(args.pane)
+    studio.activate("preview" if args.pane == "comparison" else args.pane)
     mount(window, studio)
+    bind_comparison(app, window, studio.preview)
     animations = AnimationController(app, window)
     interactions = studio.bind_interactions(animations)
     try:
@@ -71,11 +74,16 @@ def main() -> None:
         # Settle any input-induced material feedback before the recorded frame.
         for interaction in interactions:
             interaction.dispose()
-        app.invalidate(window)
-        last = app._frame_schedulers[window].stats.last_frame_time
+        target = window
+        if args.pane == "comparison":
+            studio.preview.create.emit("click")
+            target, = [candidate for candidate in app.windows if candidate is not window]
+            app.process_events()
+        app.invalidate(target)
+        last = app._frame_schedulers[target].stats.last_frame_time
         assert last is not None
         app.render_pending(last + 1)
-        context = renderer._contexts[window.native_handle.value]
+        context = renderer._contexts[target.native_handle.value]
         width, height, rgba = context.read_scene_rgba()
         write_png(args.output, width, height, bytes(rgba))
         print(json.dumps({

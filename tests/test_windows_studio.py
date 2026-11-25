@@ -3,8 +3,10 @@ import sys
 import pytest
 
 from swirui import App, Window, mount
+from swirui.platforms import PlatformEvent, PlatformEventKind, PointerButton
 from swirui.rendering import WgpuRenderer
 from swirui.studio import Studio
+from swirui.studio_comparison import AppearanceComparison, bind_comparison
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Windows/wgpu required")
@@ -59,5 +61,71 @@ def test_integrated_studio_keeps_one_native_context_across_tools_and_theme(recor
         record_property("adapter", renderer.adapter_name)
         record_property("backend", renderer.graphics_backend)
         record_property("panes", "hierarchy, inspector, console, preview, code, assets")
+    finally:
+        app.stop()
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows/wgpu required")
+def test_launch_compare_refresh_and_close_real_preview_windows(record_property):
+    renderer = WgpuRenderer()
+    app = App("Studio proof test", renderer=renderer)
+    owner = app.add_window(Window(width=1280, height=800))
+    studio = Studio()
+    mount(owner, studio)
+    bind_comparison(app, owner, studio.preview)
+    try:
+        app.start()
+        app.process_events()
+        studio.preview.project.value = "Projekt"
+        studio.preview.create.emit("click")
+        owner_context = renderer._contexts[owner.native_handle.value]
+        child, = [window for window in app.windows if window is not owner]
+        app.process_events()
+        proof = child.root
+        assert isinstance(proof, AppearanceComparison)
+        context = renderer._contexts[child.native_handle.value]
+        assert context is not owner_context
+        dark, light = proof.panes
+        assert dark.theme == studio.preview.theme_package().themes["dark"]
+        assert light.theme == studio.preview.theme_package().themes["light"]
+        width, height, pixels = context.read_scene_rgba()
+        # Clear canvas just below each top edge must differ in the real GPU frame.
+        left_pixel = 4 * (width * 5 + 10)
+        right_pixel = left_pixel + (width // 2) * 4
+        assert pixels[left_pixel:left_pixel + 3] != pixels[right_pixel:right_pixel + 3]
+
+        child.resize(640, 390)
+        app.process_events()
+        assert dark.bounds.right <= light.bounds.x
+        assert light.apply.bounds.right <= child.width
+        assert dark.card.bounds.bottom <= child.height
+        light.field.value = "Renamed"
+        button = light.apply.bounds
+        for kind in (PlatformEventKind.POINTER_DOWN, PlatformEventKind.POINTER_UP):
+            child._apply_platform_event(PlatformEvent(
+                kind, child.native_handle, x=(button.x + 16) * child.scale,
+                y=(button.y + 12) * child.scale, button=PointerButton.LEFT,
+            ))
+        assert dark.title.text == light.title.text == "Renamed"
+        assert studio.preview.project.value == "Projekt"
+        studio.preview.project.value = "x" * 121
+        studio.preview.create.emit("click")
+        assert dark.title.text == "Renamed" and len(app.windows) == 2
+        studio.preview.project.value = "New design"
+        studio.inspector.set_value("material", "acrylic")
+        studio.preview.create.emit("click")
+        assert child.root is proof and len(app.windows) == 2
+        assert renderer._contexts[child.native_handle.value] is context
+        assert dark.title.text == light.title.text == "New design"
+        assert light.theme.surface_style.kind == "acrylic"
+        child_handle = child.native_handle.value
+        child.close()
+        assert app.windows == [owner] and child_handle not in renderer._contexts
+        studio.preview.create.emit("click")
+        replacement = app.windows[-1]
+        assert replacement is not child and replacement is not owner
+        owner.close()
+        assert replacement.closed and not renderer._contexts
+        record_property("comparison_backend", renderer.graphics_backend)
     finally:
         app.stop()
