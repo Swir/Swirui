@@ -3,6 +3,8 @@ name: SwirUI Studio Native Gate
 on:
   pull_request:
     paths:
+      - "src/swirui/theme.py"
+      - "tests/test_accent_authoring.py"
       - "src/swirui/surface_interaction.py"
       - "src/swirui/widgets/theme_surface.py"
       - "tests/test_surface_interaction.py"
@@ -20,6 +22,8 @@ on:
     branches:
       - main
     paths:
+      - "src/swirui/theme.py"
+      - "tests/test_accent_authoring.py"
       - "src/swirui/surface_interaction.py"
       - "src/swirui/widgets/theme_surface.py"
       - "tests/test_surface_interaction.py"
@@ -100,7 +104,8 @@ jobs:
 
       - name: Verify integrated Studio
         run: >
-          pytest tests/test_surface_interaction.py tests/test_windows_surface_interaction.py
+          pytest tests/test_accent_authoring.py
+          tests/test_surface_interaction.py tests/test_windows_surface_interaction.py
           tests/test_studio.py tests/test_studio_suite.py
           tests/test_windows_studio.py tests/test_windows_studio_suite.py -q
           --junitxml=studio-pytest.xml

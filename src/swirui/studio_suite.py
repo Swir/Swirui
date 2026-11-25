@@ -27,6 +27,8 @@ from .platforms import PlatformEvent, PlatformEventKind
 from .rendering import Rect, WgpuRenderer
 from .studio import Studio
 from .studio_operations import StudioDashboard, StudioSettings
+from .theme import FUTURE_LIGHT
+from .theme_presets import NEON_BLUE
 
 
 class StudioSuite(Studio):
@@ -129,6 +131,7 @@ class StudioSuite(Studio):
         self.palette.on("dismissed", self._palette_dismissed)
         self.command_dialog.on("dismissed", self._commands_dismissed)
         self.settings.on("settings_changed", self._settings_changed)
+        self.settings.on("accent_changed", self._accent_changed)
         self.dashboard.on("sampled", self._sampled)
         self.clear()
         self.add(
@@ -205,6 +208,21 @@ class StudioSuite(Studio):
             self.theme = replace(self.theme, reduced_motion=reduced)
             self.preview.reduced_motion = reduced
             self.preview.apply_theme()
+            self._apply_accent()
+
+    def _accent_changed(self, _event: Event) -> None:
+        self._apply_accent()
+
+    def _apply_accent(self) -> None:
+        base = FUTURE_LIGHT if self.light else NEON_BLUE
+        accent = self.settings.accent
+        if accent is not None:
+            base = base.with_accent(accent)
+        self.theme = replace(base, reduced_motion=self.settings.reduced_motion.checked)
+        self.preview.accent = accent
+        self.preview.apply_theme()
+        if accent is None:
+            self.settings.accent_input.value = base.palette.accent
 
     def execute_command(self, key: str) -> None:
         if key in {"dashboard", "settings"}:

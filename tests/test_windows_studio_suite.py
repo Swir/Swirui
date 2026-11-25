@@ -3,6 +3,7 @@ import sys
 import pytest
 
 from swirui import FUTURE_LIGHT, AnimationController, App, Window, mount
+from swirui.platforms import PlatformEvent, PlatformEventKind, PointerButton
 from swirui.rendering import WgpuRenderer
 from swirui.studio_suite import StudioSuite
 
@@ -79,6 +80,32 @@ def test_studio_suite_dashboard_settings_notifications_keep_one_native_context(
         width, height, rgba = context.read_scene_rgba()
         assert bytes(rgba) not in images
         assert studio.preview.result.bounds.bottom <= studio.preview.surface.bounds.bottom
+        assert renderer._contexts[window.native_handle.value] is context
+        studio.activate("settings")
+        window.focus_component(studio.settings.density)
+        app.render_pending(app._frame_schedulers[window].stats.last_frame_time + 1)
+        assert studio.settings.scroll.scroll_y > 0
+        window.focus_component(studio.settings.accent_input)
+        studio.settings.accent_input.value = "#FF7ADE"
+        studio.settings.accent_input.emit("submitted")
+        app.render_pending(app._frame_schedulers[window].stats.last_frame_time + 1)
+        assert studio.theme.palette.accent == studio.preview.theme.palette.accent == "#FF7ADE"
+        width, height, rgba = context.read_scene_rgba()
+        button = studio.settings.apply_accent_button
+        scroll = studio.settings.scroll
+        x = scroll.bounds.x + button.bounds.x + button.bounds.width / 2
+        y = scroll.bounds.y + button.bounds.bottom - scroll.scroll_y - 6
+        offset = (round(y * window.scale) * width + round(x * window.scale)) * 4
+        assert tuple(rgba[offset:offset + 3]) == pytest.approx((255, 122, 222), abs=1)
+        studio.settings.accent_input.value = "#7FE0BF"
+        for kind in (PlatformEventKind.POINTER_DOWN, PlatformEventKind.POINTER_UP):
+            window._apply_platform_event(PlatformEvent(
+                kind, window.native_handle, x=x * window.scale, y=y * window.scale,
+                button=PointerButton.LEFT,
+            ))
+        assert window.focused_component is button
+        assert studio.theme.palette.accent == "#7FE0BF"
+        assert chart.selection == selection and chart.viewport == viewport
         assert renderer._contexts[window.native_handle.value] is context
         record_property("adapter", renderer.adapter_name)
         record_property("backend", renderer.graphics_backend)

@@ -9,9 +9,11 @@ from . import (
     Badge,
     Button,
     ChartPoint,
+    Input,
     Label,
     Panel,
     ProgressRing,
+    ScrollView,
     Slider,
     StreamingChartSeries,
     StreamingLineChart,
@@ -67,7 +69,8 @@ class StudioSampleBars(Panel):
                 f"{self.key}:bar:{index}", SceneNodeKind.RECTANGLE,
                 Rect(self.bounds.x + index * step, self.bounds.bottom - height,
                      max(1, step - 3), height),
-                fill=theme.text_color(self.role).with_alpha(.25 + .65 * (index + 1) / len(points)),
+                fill=theme.surface_color(self.role).with_alpha(
+                    .25 + .65 * (index + 1) / len(points)),
                 corner_radius=CornerRadius.uniform(2), hit_testable=False,
             ))
         return node
@@ -260,15 +263,33 @@ class StudioDashboard(Panel):
         return result
 
 
+class StudioSettingsScroll(ScrollView):
+    """Settings viewport with a non-interactive scroll position indicator."""
+
+    def build_scene_node(self) -> SceneNode:
+        node = super().build_scene_node()
+        if self.max_scroll_y > 0 and self.bounds.height > 0:
+            theme = self.effective_theme or FUTURE_DARK
+            height = min(self.bounds.height, max(24, self.bounds.height ** 2 / self.content_height))
+            top = self.bounds.y + (self.bounds.height - height) * self.scroll_y / self.max_scroll_y
+            node.add(SceneNode(
+                f"{self.key}:position", SceneNodeKind.RECTANGLE,
+                Rect(self.bounds.right - 6, top, 4, height),
+                fill=theme.surface_color("muted").with_alpha(.5),
+                corner_radius=CornerRadius.uniform(2), z_index=100_000, hit_testable=False,
+            ))
+        return node
+
+
 class StudioSettings(Panel):
     """Application-owned settings surface with retained interactive state."""
 
     def __init__(self) -> None:
         super().__init__(bounds=Rect(0, 0, 760, 540))
         empty = Rect(0, 0, 0, 0)
-        self.heading = Label("Studio settings", bounds=empty, font_size=28)
+        self.heading = Label("Make it yours.", bounds=empty, font_size=30)
         self.subtitle = Label(
-            "Configure the workspace without rebuilding the retained component tree.",
+            "One signature color. A whole new atmosphere.",
             bounds=empty,
             font_size=14,
         )
@@ -285,6 +306,41 @@ class StudioSettings(Panel):
         )
         self.density_label = Label("Workspace density · 100%", bounds=empty, font_size=15)
         self.status = Label("Settings are applied to this session.", bounds=empty, font_size=14)
+        self.accent: str | None = None
+        self.appearance_card = ThemeSurface(
+            bounds=empty, style=SurfaceStyle(elevation=3, border_opacity=.4),
+        )
+        self.accent_caption = Label("SIGNATURE COLOR", bounds=empty, font_size=12, opacity=.8)
+        self.accent_input = Input("#62DEFF", bounds=empty, accessible_name="Accent hex color")
+        self.apply_accent_button = Button("Apply", bounds=empty)
+        self.reset_accent_button = Button("Reset", bounds=empty)
+        self.accent_status = Label("Choose a color or enter your own hex.", bounds=empty,
+                                   font_size=13)
+        self.apply_accent_button.on("click", self._submit_accent)
+        self.accent_input.on("submitted", self._submit_accent)
+        self.reset_accent_button.on("click", self._reset_accent)
+        self.swatches = tuple(
+            Button(name, bounds=empty, theme=FUTURE_DARK.with_accent(color), font_size=14,
+                   accessible_name=f"Use {name} accent {color}")
+            for name, color in (("Ice", "#62DEFF"), ("Mint", "#7FE0BF"),
+                                ("Violet", "#B6A0FF"), ("Rose", "#FF7ADE"),
+                                ("Amber", "#F3D083"), ("Coral", "#FF9DAF"))
+        )
+        for button in self.swatches:
+            assert button.theme is not None
+            color = button.theme.palette.accent
+            button.on("click", self._accent_handler(color))
+        self.appearance_card.add(self.accent_caption, self.accent_input,
+                                 self.apply_accent_button, self.reset_accent_button,
+                                 *self.swatches, self.accent_status)
+        self.runtime_heading = Label("Workspace preferences", bounds=empty, font_size=21)
+        self.scroll = StudioSettingsScroll(
+            bounds=empty, accessible_name="Appearance and workspace settings",
+        )
+        for control in (self.accent_input, self.apply_accent_button, self.reset_accent_button,
+                        *self.swatches, self.autosave, self.notifications, self.reduced_motion,
+                        self.live_metrics, self.density):
+            control.on("focus_gained", self._reveal_control)
         for key, control in (
             ("autosave", self.autosave),
             ("notifications", self.notifications),
@@ -293,9 +349,12 @@ class StudioSettings(Panel):
         ):
             control.on("changed", self._switch_handler(key))
         self.density.on("changed", self._density_changed)
-        self.add(
+        self.add(self.scroll)
+        self.scroll.add(
             self.heading,
             self.subtitle,
+            self.appearance_card,
+            self.runtime_heading,
             self.autosave,
             self.notifications,
             self.reduced_motion,
@@ -317,17 +376,75 @@ class StudioSettings(Panel):
 
     def prepare_layout(self, viewport: Rect) -> None:
         self._set_layout_bounds(viewport)
-        x, y = viewport.x + 30, viewport.y + 28
-        width = max(0.0, viewport.width - 60)
-        self.heading._set_layout_bounds(Rect(x, y, width, 38))
-        self.subtitle._set_layout_bounds(Rect(x, y + 46, width, 24))
-        self.autosave._set_layout_bounds(Rect(x, y + 100, width, 40))
-        self.notifications._set_layout_bounds(Rect(x, y + 150, width, 40))
-        self.reduced_motion._set_layout_bounds(Rect(x, y + 200, width, 40))
-        self.live_metrics._set_layout_bounds(Rect(x, y + 250, width, 40))
-        self.density_label._set_layout_bounds(Rect(x, y + 316, width, 24))
-        self.density._set_layout_bounds(Rect(x, y + 348, min(420.0, width), 36))
-        self.status._set_layout_bounds(Rect(x, y + 410, width, 26))
+        self.scroll._set_layout_bounds(viewport)
+        # ScrollView children use content-local coordinates, independent of the
+        # dock pane's position. Every setting stays reachable on compact windows.
+        x, width = 24.0, max(0.0, viewport.width - 48)
+        self.heading._set_layout_bounds(Rect(x, 24, width, 42))
+        self.subtitle.font_size = 13 if width < 500 else 14
+        self.subtitle._set_layout_bounds(Rect(x, 72, width, 24))
+        narrow = width < 650
+        card_height = 258.0 if narrow else 210.0
+        self.appearance_card._set_layout_bounds(Rect(x, 112, width, card_height))
+        inner_x, inner_width = x + 16, max(0.0, width - 32)
+        self.accent_caption._set_layout_bounds(Rect(inner_x, 132, inner_width, 20))
+        input_width = max(0, inner_width - 172)
+        self.accent_input._set_layout_bounds(Rect(inner_x, 166, input_width, 42))
+        self.apply_accent_button._set_layout_bounds(Rect(inner_x + input_width + 8, 166, 74, 42))
+        self.reset_accent_button._set_layout_bounds(Rect(inner_x + input_width + 90, 166, 82, 42))
+        columns = 3 if narrow else 6
+        swatch_width = max(0, (inner_width - (columns - 1) * 8) / columns)
+        for index, swatch in enumerate(self.swatches):
+            swatch._set_layout_bounds(Rect(inner_x + (index % columns) * (swatch_width + 8),
+                                           226 + (index // columns) * 48, swatch_width, 38))
+        self.accent_status._set_layout_bounds(Rect(inner_x, 112 + card_height - 38,
+                                                   inner_width, 24))
+        y = 112 + card_height + 28
+        self.runtime_heading._set_layout_bounds(Rect(x, y, width, 32))
+        for index, control in enumerate((self.autosave, self.notifications,
+                                         self.reduced_motion, self.live_metrics)):
+            control._set_layout_bounds(Rect(x, y + 46 + index * 46, width, 40))
+        self.density_label._set_layout_bounds(Rect(x, y + 244, width, 24))
+        self.density._set_layout_bounds(Rect(x, y + 278, min(420.0, width), 36))
+        self.status._set_layout_bounds(Rect(x, y + 332, width, 26))
+        self.scroll.set_content_size(width=viewport.width, height=y + 382)
+
+    def set_accent(self, value: str | None) -> bool:
+        """Validate before emitting a change; bad input leaves the active theme intact."""
+        try:
+            theme = self.effective_theme or FUTURE_DARK
+            normalized = None if value is None else theme.with_accent(value).palette.accent
+        except ValueError:
+            self.accent_status.text = "Use an opaque hex color, e.g. #B6A0FF."
+            return False
+        self.accent = normalized
+        if normalized is not None:
+            self.accent_input.value = normalized
+        self.accent_status.text = ("Default appearance restored." if normalized is None
+                                   else f"{normalized} applied throughout Studio.")
+        self.emit("accent_changed", value=normalized)
+        return True
+
+    def _accent_handler(self, color: str) -> Callable[[Event], None]:
+        def choose(_event: Event) -> None:
+            self.set_accent(color)
+        return choose
+
+    def _submit_accent(self, _event: Event) -> None:
+        self.set_accent(self.accent_input.value)
+
+    def _reset_accent(self, _event: Event) -> None:
+        self.set_accent(None)
+
+    def _reveal_control(self, event: Event) -> None:
+        control = event.source
+        if not isinstance(control, (Button, Input, Switch, Slider)):
+            return
+        top, bottom = self.scroll.scroll_y, self.scroll.scroll_y + self.scroll.bounds.height
+        if control.bounds.y < top + 8:
+            self.scroll.scroll_to(y=control.bounds.y - 8)
+        elif control.bounds.bottom > bottom - 8:
+            self.scroll.scroll_to(y=control.bounds.bottom - self.scroll.bounds.height + 8)
 
     def _switch_handler(self, key: str) -> Callable[[Event], None]:
         def changed(event: Event) -> None:

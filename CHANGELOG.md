@@ -4,6 +4,19 @@ All notable changes to SwirUI will be documented in this file.
 
 The project uses semantic versioning where practical during development. Breaking API changes may occur before 1.0.
 
+## [0.1.0b4] - 2026-11-25
+
+- Added `Theme.with_accent(hex_color)` for coherent brand colors, interaction
+  states, foreground, selection and focus while retaining authored materials,
+  geometry and motion. Generated accent-state label contrast is at least 4.5:1;
+  focus contrast against the opaque canvas is at least 3:1.
+- Added live Studio accent authoring with six swatches, custom hex input and
+  reset. Branding survives light/dark, material and reduced-motion changes.
+- Made all workspace settings reachable in compact windows through scrolling,
+  a position indicator and automatic reveal of keyboard-focused controls.
+- Corrected mini-history bar fills to use linear GPU color values, matching
+  the palette instead of appearing washed out. Updated cursor-free native captures.
+
 ## [0.1.0b3] - 2026-11-04
 
 - Refined Studio hierarchy with a perspective-layer header, larger metric
