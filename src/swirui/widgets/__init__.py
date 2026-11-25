@@ -72,6 +72,7 @@ from .runtime import (
 )
 from .scroll_runtime import WidgetRuntime, mount
 from .scroll_view_routed import ScrollView
+from .silk_ribbon import SilkRibbon
 from .slider import RangeSlider, Slider
 from .specialized_charts import (
     CandlestickChart,
@@ -82,7 +83,7 @@ from .specialized_charts import (
 )
 from .spectrum import SpectrumVisualizer, spectrum_magnitudes_pcm16
 from .split_view import SplitView
-from .streaming_charts import StreamingChartSeries, StreamingLineChart
+from .streaming_charts import StreamingAreaChart, StreamingChartSeries, StreamingLineChart
 from .surfaces import Card, Frame, GlassCard, Panel
 from .tabs import TabItem, Tabs
 from .terminal import Terminal
@@ -203,10 +204,12 @@ __all__ = [
     "SceneRenderable",
     "ScrollView",
     "Sidebar",
+    "SilkRibbon",
     "Slider",
     "SpectrumVisualizer",
     "SplitView",
     "Stack",
+    "StreamingAreaChart",
     "StreamingChartSeries",
     "StreamingLineChart",
     "Switch",

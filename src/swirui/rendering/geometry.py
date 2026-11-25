@@ -122,6 +122,29 @@ class Path2D:
     def polygon(cls, *points: Point) -> Path2D:
         return cls(tuple(points))
 
+    @classmethod
+    def horizontal_band(cls, top: tuple[Point, ...], bottom: tuple[Point, ...]) -> Path2D:
+        """Build a filled strip from matching, strictly increasing x coordinates."""
+        if len(top) < 2 or len(top) != len(bottom):
+            raise ValueError("Band edges must have the same length and at least two columns.")
+        previous_x = -math.inf
+        for upper, lower in zip(top, bottom, strict=True):
+            if not all(map(math.isfinite, (upper.x, upper.y, lower.y))):
+                raise ValueError("Band coordinates must be finite.")
+            if upper.x != lower.x or upper.x <= previous_x or upper.y >= lower.y:
+                raise ValueError("Band edges must be ordered at matching, increasing x positions.")
+            previous_x = upper.x
+        # Disjoint x intervals and a positive height guarantee simple convex
+        # cells. Their shared diagonal gives the triangulation directly.
+        triangles: list[Triangle] = []
+        for i in range(len(top) - 1):
+            triangles.extend(((top[i], top[i + 1], bottom[i + 1]),
+                              (top[i], bottom[i + 1], bottom[i])))
+        band = object.__new__(cls)
+        object.__setattr__(band, "points", (*top, *reversed(bottom)))
+        object.__setattr__(band, "_triangles", tuple(triangles))
+        return band
+
     @property
     def bounds(self) -> Rect:
         xs = [point.x for point in self.points]

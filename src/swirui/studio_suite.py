@@ -133,6 +133,8 @@ class StudioSuite(Studio):
         self.settings.on("settings_changed", self._settings_changed)
         self.settings.on("accent_changed", self._accent_changed)
         self.dashboard.on("sampled", self._sampled)
+        for material_button in self.dashboard.material_buttons:
+            material_button.on("click", self._open_material)
         self.clear()
         self.add(
             self.brand,
@@ -209,6 +211,16 @@ class StudioSuite(Studio):
             self.preview.reduced_motion = reduced
             self.preview.apply_theme()
             self._apply_accent()
+
+    def _open_material(self, event: Event) -> None:
+        button = event.source
+        if isinstance(button, Button):
+            self.inspector.set_value("material", button.text.lower())
+            if self.preview.material != button.text.lower():
+                self.preview.set_material(button.text)
+            self.activate("preview")
+            if self.mounted_window is not None:
+                self.mounted_window.focus_component(self.preview.project)
 
     def _accent_changed(self, _event: Event) -> None:
         self._apply_accent()

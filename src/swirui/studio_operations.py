@@ -8,44 +8,35 @@ from collections.abc import Callable
 from . import (
     Badge,
     Button,
+    ButtonVariant,
     ChartPoint,
     Input,
     Label,
     Panel,
     ProgressRing,
     ScrollView,
+    SilkRibbon,
     Slider,
+    StreamingAreaChart,
     StreamingChartSeries,
-    StreamingLineChart,
     SurfaceStyle,
     Switch,
     ThemeSurface,
 )
 from .core import Event
-from .rendering import CornerRadius, PerspectivePlane, Rect, SceneNode, SceneNodeKind
+from .rendering import CornerRadius, Rect, SceneNode, SceneNodeKind
 from .theme import FUTURE_DARK, ColorRole
 
 
 class StudioHero(Panel):
-    """Quiet, palette-aware perspective artwork behind the workspace heading."""
+    """Backdrop for the material library and its controls."""
 
     def build_scene_node(self) -> SceneNode:
         theme = self.effective_theme or FUTURE_DARK
-        node = SceneNode(self.key, SceneNodeKind.RECTANGLE, self.bounds,
-                         fill=theme.surface_color("raised"),
+        return SceneNode(self.key, SceneNodeKind.RECTANGLE, self.bounds,
+                         fill=theme.surface_color("surface"),
                          corner_radius=CornerRadius.uniform(18), clip_to_bounds=True,
                          hit_testable=False, opacity=self.opacity, z_index=self.z_index)
-        if self.bounds.width >= 660 and self.bounds.height >= 120:
-            plane = PerspectivePlane(rotation_x_degrees=48, rotation_y_degrees=-24)
-            for index in range(3):
-                bounds = Rect(self.bounds.right - 204 + index * 10,
-                              self.bounds.y + 22 - index * 9, 142, 112)
-                color = theme.surface_color("accent" if index < 2 else "focus")
-                node.add(plane.to_scene_node(
-                    f"{self.key}:layer:{index}", bounds,
-                    fill=color.with_alpha(.10 + index * .08), hit_testable=False,
-                ))
-        return node
 
 
 class StudioSampleBars(Panel):
@@ -96,7 +87,7 @@ class StudioDashboard(Panel):
         self.gpu_stream = StreamingChartSeries(
             "gpu", "GPU", gpu_points, capacity=60
         )
-        self.chart = StreamingLineChart(
+        self.chart = StreamingAreaChart(
             (self.cpu_stream, self.gpu_stream),
             bounds=empty,
             key="studio-live-performance",
@@ -105,13 +96,13 @@ class StudioDashboard(Panel):
             y_max=100,
         )
         self.status = Badge("DEMO DATA", bounds=empty)
-        self.kicker = Label("YOUR NEXT INTERFACE STARTS HERE", bounds=empty,
-                            font_size=11, opacity=.7)
-        self.heading = Label("Design what’s next.", bounds=empty, font_size=34)
-        self.subtitle = Label(
-            "Your code. Your materials. Your signature.",
-            bounds=empty,
-            font_size=14,
+        self.heading = Label("Material library", bounds=empty, font_size=36)
+        self.subtitle = Label("Open a material in the preview canvas.", bounds=empty, font_size=14)
+        self.ribbon = SilkRibbon(bounds=empty)
+        self.material_buttons = tuple(
+            Button(kind.title(), bounds=empty, variant=ButtonVariant.SECONDARY,
+                   accessible_name=f"Open {kind} material preview")
+            for kind in ("glass", "acrylic", "solid")
         )
         self.cpu_label = Label("CPU 49%", bounds=empty, font_size=18)
         self.gpu_label = Label("GPU 46%", bounds=empty, font_size=18)
@@ -127,7 +118,7 @@ class StudioDashboard(Panel):
         self.pulse_button.on("click", lambda _: self.pulse())
         self._sample_index = len(cpu_points)
         self.hero = StudioHero(bounds=empty)
-        self.hero.add(self.kicker, self.heading, self.subtitle)
+        self.hero.add(self.ribbon, self.heading, self.subtitle, *self.material_buttons)
         self.metric_cards = tuple(ThemeSurface(
             bounds=empty, style=SurfaceStyle(elevation=4, border_opacity=.45,
                                              glow_radius=8, glow_opacity=.015),
@@ -206,18 +197,26 @@ class StudioDashboard(Panel):
         gap = 8.0 if compact else 12.0
         x, y = viewport.x + pad, viewport.y + pad
         width = max(0.0, viewport.width - 2 * pad)
-        hero_height = min(64.0 if compact else 144.0, viewport.height * .24)
+        hero_height = min(74.0 if compact else 176.0, viewport.height * .25)
         card_height = min(56.0 if compact else 104.0, viewport.height * .19)
         self.hero._set_layout_bounds(Rect(x, y, width, hero_height))
-        text_width = max(0, width - (220 if width >= 660 else 40))
-        self.kicker.visible = hero_height >= 120
-        self.kicker._set_layout_bounds(Rect(x + 22, y + 16, text_width, 18))
-        self.heading.font_size = 34 if width >= 660 else 26
-        self.heading._set_layout_bounds(Rect(x + 20, y + (40 if self.kicker.visible else 12),
-                                             text_width, 44))
-        self.subtitle.visible = hero_height >= 100
-        self.subtitle._set_layout_bounds(Rect(x + 22, y + (91 if self.kicker.visible else 68),
-                                              text_width, 22))
+        inset = 12 if compact else 20
+        button_width = min(78.0, max(0.0, (width - 2 * inset - 12) / 3))
+        controls_width = 3 * button_width + 12
+        detail = hero_height >= 120
+        self.heading.font_size = 36 if detail else 19
+        self.heading._set_layout_bounds(Rect(x + inset, y + (12 if detail else 2),
+                                             controls_width + 16, 46 if detail else 26))
+        self.subtitle.visible = detail
+        self.subtitle._set_layout_bounds(Rect(x + inset, y + 65, controls_width + 20, 22))
+        button_height = 34 if detail else 28
+        button_y = y + hero_height - button_height - (14 if detail else 5)
+        for index, button in enumerate(self.material_buttons):
+            button._set_layout_bounds(Rect(x + inset + index * (button_width + 6),
+                                           button_y, button_width, button_height))
+        art_left = x + inset + controls_width + 22
+        self.ribbon._set_layout_bounds(Rect(art_left, y, max(0, x + width - art_left - 8),
+                                             hero_height))
         cards_y = y + hero_height + gap
         card_width = max(0, (width - 2 * gap) / 3)
         for index, (card, caption, value) in enumerate(zip(

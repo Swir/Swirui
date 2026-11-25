@@ -7,7 +7,7 @@ pointer highlight, title bar and desktop overlays are never part of this frame.
 No cursor was painted out and no mockup was substituted for running UI.
 
 Captured on 2026-11-25 with AMD Radeon(TM) Graphics / DX12, Python 3.13,
-the 0.1.0b4 Python candidate and the published 0.1.0b3 native renderer.
+the 0.1.0b5 Python candidate and the published 0.1.0b4 native renderer.
 This release changes Python visuals; its native source is unchanged apart from
 the package version. Release qualification separately rebuilds the matching core.
 The dashboard data is generated demonstration data, including its FPS value.

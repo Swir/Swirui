@@ -13,7 +13,7 @@ from threading import RLock
 from swirui.rendering import Color, Rect
 
 from .charts import ChartPoint, ChartSeries
-from .line_area_chart import LineChart
+from .line_area_chart import AreaChart, LineChart
 
 
 class StreamingChartSeries:
@@ -282,4 +282,10 @@ class StreamingLineChart(LineChart):
         return normalized
 
 
-__all__ = ["StreamingChartSeries", "StreamingLineChart"]
+class StreamingAreaChart(StreamingLineChart, AreaChart):
+    """Bounded streaming series drawn as filled areas with a zero baseline."""
+
+    chart_kind = "streaming area"
+
+
+__all__ = ["StreamingAreaChart", "StreamingChartSeries", "StreamingLineChart"]

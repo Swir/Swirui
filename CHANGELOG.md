@@ -4,6 +4,14 @@ All notable changes to SwirUI will be documented in this file.
 
 The project uses semantic versioning where practical during development. Breaking API changes may occur before 1.0.
 
+## 0.1.0b5 — 2026-11-25
+
+- Added the theme-aware `SilkRibbon` widget and `StreamingAreaChart`.
+- Studio opens glass, acrylic and solid previews directly from the dashboard.
+  The ribbon also runs behind the preview surface, and the activity chart
+  retains selection and zoom as it draws the sample history.
+- Updated native dark, light and material preview screenshots in the README.
+
 ## [0.1.0b4] - 2026-11-25
 
 - Added `Theme.with_accent(hex_color)` for coherent brand colors, interaction

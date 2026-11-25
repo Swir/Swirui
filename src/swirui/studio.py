@@ -26,6 +26,7 @@ from . import (
     Modal,
     Panel,
     PropertyItem,
+    SilkRibbon,
     SurfaceStyle,
     Switch,
     Terminal,
@@ -38,7 +39,7 @@ from . import (
 )
 from .core import Event
 from .platforms import PlatformEvent, PlatformEventKind
-from .rendering import Color, Rect, WgpuRenderer
+from .rendering import Rect, WgpuRenderer
 
 MaterialKind = Literal["solid", "glass", "acrylic"]
 
@@ -55,11 +56,7 @@ class StudioPreview(Panel):
         self.reduced_motion = False
         self.accent: str | None = None
         self.status = Badge("LIVE PREVIEW", bounds=empty)
-        self.blob = Panel(
-            bounds=empty,
-            background=Color(0.02, 0.22, 0.42, 0.9),
-            corner_radius=120,
-        )
+        self.backdrop = SilkRibbon(bounds=empty)
         self.surface = ThemeSurface(bounds=empty)
         self.heading = Label("Build beyond ordinary.", bounds=empty, font_size=30)
         self.subtitle = Label(
@@ -86,7 +83,7 @@ class StudioPreview(Panel):
         )
         self.create.on("click", lambda _: self._launch())
         self.motion.on("changed", lambda _: self.apply_theme())
-        self.add(self.blob, self.status, self.surface, self.footer)
+        self.add(self.backdrop, self.status, self.surface, self.footer)
         self.apply_theme()
 
     def prepare_layout(self, viewport: Rect) -> None:
@@ -103,7 +100,8 @@ class StudioPreview(Panel):
             surface_width,
             surface_height,
         )
-        self.blob._set_layout_bounds(Rect(surface.right - 130, surface.y - 24, 150, 150))
+        self.backdrop._set_layout_bounds(Rect(viewport.x + 8, surface.y - 22,
+                                              max(0, width - 16), surface_height + 44))
         self.surface._set_layout_bounds(surface)
         compact = surface.height < 320
         inner_x = surface.x + 26
