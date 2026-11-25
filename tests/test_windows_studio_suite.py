@@ -91,6 +91,21 @@ def test_studio_suite_dashboard_settings_notifications_keep_one_native_context(
         assert bytes(rgba) not in images
         assert studio.preview.result.bounds.bottom <= studio.preview.surface.bounds.bottom
         assert renderer._contexts[window.native_handle.value] is context
+        # Sample the card pixels, excluding the tuner, text messages and thumb.
+        surface = studio.preview.surface.bounds
+        row = int((surface.bottom - 25) * window.scale) * width * 4
+        start = row + int((surface.x + 28) * window.scale) * 4
+        end = row + int((surface.right - 28) * window.scale) * 4
+        previous_card = bytes(rgba[start:end])
+        tuner = studio.preview.tint.bounds
+        for kind in (PlatformEventKind.POINTER_DOWN, PlatformEventKind.POINTER_UP):
+            window._apply_platform_event(PlatformEvent(
+                kind, window.native_handle, x=(tuner.x + 12) * window.scale,
+                y=(tuner.y + tuner.height / 2) * window.scale, button=PointerButton.LEFT,
+            ))
+        app.render_pending(app._frame_schedulers[window].stats.last_frame_time + 1)
+        assert studio.preview.tint.value < 20
+        assert bytes(context.read_scene_rgba()[2][start:end]) != previous_card
         studio.activate("settings")
         window.focus_component(studio.settings.density)
         app.render_pending(app._frame_schedulers[window].stats.last_frame_time + 1)

@@ -1,7 +1,67 @@
-from swirui import FUTURE_LIGHT, Window, mount
+from swirui import FUTURE_LIGHT, ClipboardError, MemoryClipboard, ThemePackage, Window, mount
 from swirui.rendering import Rect
 from swirui.studio_operations import StudioDashboard
 from swirui.studio_suite import StudioSuite
+
+
+def test_preview_copies_both_authored_finishes_and_preserves_input(tmp_path):
+    clipboard = MemoryClipboard("previous text")
+    window = Window(clipboard=clipboard)
+    studio = StudioSuite()
+    runtime = mount(window, studio)
+    try:
+        preview = studio.preview
+        preview.project.value = "Szkło"
+        studio.toggle_theme()
+        studio.settings.set_accent("#DB237C")
+        studio.inspector.set_value("material", "acrylic")
+        studio.inspector.set_value("depth", 5)
+        studio.settings.reduced_motion.checked = True
+        preview.tint.value = 32
+        preview.glow.value = 18
+        preview.copy_theme.emit("click")
+        package = ThemePackage.loads(clipboard.read_text())
+        package.save(tmp_path / "finish.json")
+        assert ThemePackage.load(tmp_path / "finish.json").default == preview.theme
+        assert package.default_theme == "light" and package.name == "Szkło"
+        for variant in package.themes.values():
+            assert variant.surface_style == preview.theme.surface_style
+            assert variant.surface_style.tint_opacity == .32
+            assert variant.surface_style.glow_opacity == .18
+            assert variant.palette.accent == "#DB237C" and variant.reduced_motion
+        assert package.themes["dark"].palette.canvas != package.default.palette.canvas
+        saved = clipboard.read_text()
+        preview.project.value = "X" * 121
+        preview.copy_theme.emit("click")
+        assert clipboard.read_text() == saved
+        assert "120" in preview.result.text
+        studio.inspector.set_value("material", "solid")
+        assert not preview.tint.enabled and preview.glow.enabled
+        studio.inspector.set_value("material", "glass")
+        assert preview.tint.enabled and preview.tint.value == 32
+        studio.execute_command("reset")
+        assert (preview.tint.value, preview.glow.value) == (74, 5.5)
+    finally:
+        runtime.unmount()
+
+
+def test_export_reports_unavailable_clipboard_and_retries(monkeypatch):
+    clipboard = MemoryClipboard("original")
+    window = Window(clipboard=clipboard)
+    studio = StudioSuite()
+    runtime = mount(window, studio)
+    try:
+        def busy(_text):
+            raise ClipboardError("busy")
+
+        with monkeypatch.context() as patch:
+            patch.setattr(clipboard, "write_text", busy)
+            studio.preview.copy_theme.emit("click")
+        assert "unavailable" in studio.preview.result.text and clipboard.read_text() == "original"
+        studio.preview.copy_theme.emit("click")
+        assert ThemePackage.loads(clipboard.read_text()).default == studio.preview.theme
+    finally:
+        runtime.unmount()
 
 
 def test_studio_accent_survives_theme_material_and_motion_changes():

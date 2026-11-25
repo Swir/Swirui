@@ -4,6 +4,13 @@ All notable changes to SwirUI will be documented in this file.
 
 The project uses semantic versioning where practical during development. Breaking API changes may occur before 1.0.
 
+## 0.1.0b6 — 2026-11-25
+
+- Studio previews now expose live tint and edge-glow controls. Wide previews
+  show the accent palette in its rest, hover and pressed states.
+- Copy the current finish as a portable JSON theme package with light and dark
+  variants, ready to load in another SwirUI application.
+
 ## 0.1.0b5 — 2026-11-25
 
 - Added the theme-aware `SilkRibbon` widget and `StreamingAreaChart`.
