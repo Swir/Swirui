@@ -13,6 +13,7 @@ from . import (
     Badge,
     Button,
     ButtonVariant,
+    ClipboardError,
     CodeEditor,
     CommandItem,
     CommandPalette,
@@ -27,9 +28,12 @@ from . import (
     Panel,
     PropertyItem,
     SilkRibbon,
+    Slider,
     SurfaceStyle,
     Switch,
     Terminal,
+    Theme,
+    ThemePackage,
     ThemeSurface,
     TreeNode,
     TreeView,
@@ -40,6 +44,7 @@ from . import (
 from .core import Event
 from .platforms import PlatformEvent, PlatformEventKind
 from .rendering import Rect, WgpuRenderer
+from .theme import ColorRole
 
 MaterialKind = Literal["solid", "glass", "acrylic"]
 
@@ -55,12 +60,15 @@ class StudioPreview(Panel):
         self.light = False
         self.reduced_motion = False
         self.accent: str | None = None
-        self.status = Badge("LIVE PREVIEW", bounds=empty)
+        self.status = Badge("Glass", bounds=empty)
+        self.copy_theme = Button("Copy theme JSON", bounds=empty, font_size=14,
+                                 variant=ButtonVariant.SECONDARY)
+        self.copy_theme.on("click", self._copy_theme)
         self.backdrop = SilkRibbon(bounds=empty)
         self.surface = ThemeSurface(bounds=empty)
         self.heading = Label("Build beyond ordinary.", bounds=empty, font_size=30)
         self.subtitle = Label(
-            "Shape every detail. Make it yours.",
+            "Project name",
             bounds=empty,
             font_size=15,
         )
@@ -68,6 +76,13 @@ class StudioPreview(Panel):
         self.motion = Switch("Enable motion", bounds=empty, checked=True)
         self.create = Button("Launch preview", bounds=empty)
         self.result = Label("Ready for your next idea.", bounds=empty, font_size=14)
+        self.palette_label = Label("Accent states", bounds=empty, font_size=15)
+        self.swatch_chips = tuple(Panel(bounds=empty, corner_radius=9) for _ in range(3))
+        self.swatch_labels = tuple(Label(name, bounds=empty, font_size=12)
+                                   for name in ("Rest", "Hover", "Pressed"))
+        self.swatch_hex = tuple(Label("", bounds=empty, font_size=13) for _ in range(3))
+        self.surface.add(self.palette_label, *self.swatch_chips, *self.swatch_labels,
+                         *self.swatch_hex)
         self.surface.add(
             self.heading,
             self.subtitle,
@@ -76,23 +91,29 @@ class StudioPreview(Panel):
             self.create,
             self.result,
         )
-        self.footer = Label(
-            "EDIT MATERIALS AND DEPTH IN THE INSPECTOR",
-            bounds=empty,
-            font_size=11,
-        )
+        self.footer = Panel(bounds=empty, corner_radius=12)
+        self.tint = Slider(bounds=empty, value=74, accessible_name="Material tint opacity")
+        self.glow = Slider(bounds=empty, value=5.5, maximum=50, step=.5,
+                           accessible_name="Edge glow opacity")
+        self.tint_label = Label("", bounds=empty, font_size=14)
+        self.glow_label = Label("", bounds=empty, font_size=14)
+        self.footer.add(self.tint_label, self.tint, self.glow_label, self.glow)
+        self.tint.on("changed", lambda _: self.apply_theme())
+        self.glow.on("changed", lambda _: self.apply_theme())
         self.create.on("click", lambda _: self._launch())
         self.motion.on("changed", lambda _: self.apply_theme())
-        self.add(self.backdrop, self.status, self.surface, self.footer)
+        self.add(self.backdrop, self.status, self.copy_theme, self.surface, self.footer)
         self.apply_theme()
 
     def prepare_layout(self, viewport: Rect) -> None:
         self._set_layout_bounds(viewport)
         width, height = viewport.width, viewport.height
         pad = 24.0
-        self.status._set_layout_bounds(Rect(viewport.x + pad, viewport.y + 16, 148, 30))
+        self.status._set_layout_bounds(Rect(viewport.x + pad, viewport.y + 16, 164, 32))
         surface_width = min(680.0, max(0.0, width - 2 * pad))
-        available_height = max(0.0, height - 90)
+        self.copy_theme._set_layout_bounds(Rect(viewport.right - pad - 162, viewport.y + 14,
+                                               162, 34))
+        available_height = max(0.0, height - 138)
         surface_height = min(380.0, available_height)
         surface = Rect(
             viewport.x + (width - surface_width) / 2,
@@ -106,6 +127,20 @@ class StudioPreview(Panel):
         compact = surface.height < 320
         inner_x = surface.x + 26
         inner_width = max(0.0, surface.width - 52)
+        show_palette = surface_width >= 590 and not compact
+        self.palette_label.visible = show_palette
+        palette_x = surface.right - 207
+        self.palette_label._set_layout_bounds(Rect(palette_x, surface.y + 35, 184, 24))
+        for row, (chip, label, hex_value) in enumerate(zip(
+            self.swatch_chips, self.swatch_labels, self.swatch_hex, strict=True,
+        )):
+            chip.visible = label.visible = hex_value.visible = show_palette
+            top = surface.y + 87 + row * 65
+            chip._set_layout_bounds(Rect(palette_x, top, 39, 39))
+            label._set_layout_bounds(Rect(palette_x + 51, top, 107, 17))
+            hex_value._set_layout_bounds(Rect(palette_x + 51, top + 18, 107, 20))
+        if show_palette:
+            inner_width = max(0, palette_x - inner_x - 26)
         self.heading.font_size = 24 if compact or surface.width < 440 else 30
         self.heading._set_layout_bounds(Rect(inner_x, surface.y + (14 if compact else 22),
                                              inner_width, 38))
@@ -120,29 +155,67 @@ class StudioPreview(Panel):
         self.result._set_layout_bounds(
             Rect(inner_x, surface.y + (196 if compact else 270), inner_width, 24)
         )
-        self.footer._set_layout_bounds(
-            Rect(viewport.x + pad, viewport.bottom - 28, max(0.0, width - 2 * pad), 18)
-        )
+        tray = Rect(viewport.x + pad, viewport.bottom - 72, max(0, width - 2 * pad), 62)
+        self.footer._set_layout_bounds(tray)
+        lane = max(0, (tray.width - 48) / 2)
+        for column, (label, slider) in enumerate(((self.tint_label, self.tint),
+                                                   (self.glow_label, self.glow))):
+            left = tray.x + 12 + column * (lane + 24)
+            label._set_layout_bounds(Rect(left, tray.y + 3, lane, 21))
+            slider._set_layout_bounds(Rect(left, tray.y + 25, lane, 32))
 
-    def apply_theme(self) -> None:
-        base = FUTURE_LIGHT if self.light else NEON_BLUE
+    def _material_theme(self, light: bool) -> Theme:
+        base = FUTURE_LIGHT if light else NEON_BLUE
         if self.accent is not None:
             base = base.with_accent(self.accent)
-        self.theme = replace(
+        return replace(
             base,
             reduced_motion=self.reduced_motion or not self.motion.checked,
             surface_style=SurfaceStyle(
                 kind=self.material,
-                tint_opacity=0.74,
+                tint_opacity=self.tint.value / 100,
                 elevation=14,
                 glow_radius=18,
-                glow_opacity=0.055,
+                glow_opacity=self.glow.value / 100,
                 depth_layers=self.depth,
                 depth_spacing=7,
                 tilt_x=8,
                 tilt_y=-11,
             ),
         )
+
+    def apply_theme(self) -> None:
+        theme = self._material_theme(self.light)
+        self.theme = theme
+        unit = "layer" if self.depth == 1 else "layers"
+        self.status.text = f"{self.material.title()} · {self.depth} {unit}"
+        self.tint.enabled = self.material != "solid"
+        tint = f"{self.tint.value:g}%" if self.tint.enabled else "opaque"
+        self.tint_label.text = f"Tint · {tint}"
+        self.glow_label.text = f"Edge glow · {self.glow.value:g}%"
+        roles: tuple[ColorRole, ...] = ("accent", "accent_hover", "accent_pressed")
+        for chip, label, role in zip(self.swatch_chips, self.swatch_hex, roles, strict=True):
+            chip.background = theme.surface_color(role)
+            label.text = getattr(theme.palette, role)
+
+    def theme_package(self) -> ThemePackage:
+        """Snapshot the authored finish in both modes, defaulting to the visible mode."""
+        variants = {"dark": self._material_theme(False), "light": self._material_theme(True)}
+        return ThemePackage(self.project.value.strip() or "Studio theme", variants,
+                            "light" if self.light else "dark")
+
+    def _copy_theme(self, _event: Event) -> None:
+        try:
+            data = self.theme_package().dumps()
+            if self.mounted_window is None:
+                raise ClipboardError("No clipboard provider")
+            self.mounted_window.set_clipboard_text(data)
+        except ClipboardError:
+            self.result.text = "Clipboard unavailable. Try copying again."
+        except ValueError:
+            self.result.text = "Use a valid project name (up to 120 characters)."
+        else:
+            self.result.text = "Copied dark and light theme JSON."
 
     def set_title(self, value: str) -> None:
         text = value.strip()
@@ -170,6 +243,8 @@ class StudioPreview(Panel):
             self.light = False
             self.heading.text = "Build beyond ordinary."
             self.project.value = "Neon workspace"
+            self.tint.value = 74
+            self.glow.value = 5.5
             self.motion.checked = True
             self.result.text = "Ready for your next idea."
             self.apply_theme()
