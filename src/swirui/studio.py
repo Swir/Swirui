@@ -53,6 +53,7 @@ class StudioPreview(Panel):
         self.depth = 3
         self.light = False
         self.reduced_motion = False
+        self.accent: str | None = None
         self.status = Badge("LIVE PREVIEW", bounds=empty)
         self.blob = Panel(
             bounds=empty,
@@ -127,6 +128,8 @@ class StudioPreview(Panel):
 
     def apply_theme(self) -> None:
         base = FUTURE_LIGHT if self.light else NEON_BLUE
+        if self.accent is not None:
+            base = base.with_accent(self.accent)
         self.theme = replace(
             base,
             reduced_motion=self.reduced_motion or not self.motion.checked,

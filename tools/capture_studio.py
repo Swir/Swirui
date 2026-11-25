@@ -43,7 +43,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--theme", choices=("dark", "light"), default="dark")
-    parser.add_argument("--pane", choices=("dashboard", "preview"), default="dashboard")
+    parser.add_argument("--pane", choices=("dashboard", "preview", "settings"), default="dashboard")
+    parser.add_argument("--accent", help="Opaque hex accent, e.g. #7FE0BF")
     parser.add_argument("--width", type=int, default=1600)
     parser.add_argument("--height", type=int, default=1000)
     args = parser.parse_args()
@@ -58,6 +59,8 @@ def main() -> None:
     window.on("resized", lambda _: studio.resize_to(window.width, window.height))
     if args.theme == "light":
         studio.toggle_theme()
+    if args.accent is not None and not studio.settings.set_accent(args.accent):
+        parser.error("--accent must be an opaque hex color")
     studio.activate(args.pane)
     mount(window, studio)
     animations = AnimationController(app, window)

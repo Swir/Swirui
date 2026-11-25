@@ -7,7 +7,7 @@ process-wide state. Existing explicit color overrides continue to take priority.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field, fields
+from dataclasses import dataclass, field, fields, replace
 from enum import StrEnum
 from functools import lru_cache
 from typing import Literal
@@ -85,6 +85,28 @@ def _swatch(value: str, linear: bool) -> Color:
     return Color(channel(color.r), channel(color.g), channel(color.b), color.a)
 
 
+def _hex(color: Color) -> str:
+    return "#" + "".join(f"{round(channel * 255):02X}" for channel in
+                         (color.r, color.g, color.b))
+
+
+def _mix(first: Color, second: Color, amount: float) -> Color:
+    return Color(*(a + (b - a) * amount for a, b in zip(
+        (first.r, first.g, first.b), (second.r, second.g, second.b), strict=True,
+    )))
+
+
+def _luminance(color: Color) -> float:
+    channels = (v / 12.92 if v <= .04045 else ((v + .055) / 1.055) ** 2.4
+                for v in (color.r, color.g, color.b))
+    return sum(c * weight for c, weight in zip(channels, (.2126, .7152, .0722), strict=True))
+
+
+def _contrast(first: Color, second: Color) -> float:
+    a, b = sorted((_luminance(first), _luminance(second)))
+    return (b + .05) / (a + .05)
+
+
 @dataclass(frozen=True, slots=True)
 class Theme:
     """Shared color, typography, geometry and motion choices.
@@ -120,6 +142,41 @@ class Theme:
 
     def text_color(self, role: ColorRole) -> Color:
         return _swatch(getattr(self.palette, role), False)
+
+    def with_accent(self, color: str) -> Theme:
+        """Return a branded copy with coordinated accent, states, focus and selection.
+
+        Accepts opaque RRGGBB/RRGGBBAA sRGB (optional #). The canvas must also
+        be opaque. Black/white on_accent has at least 4.5:1 contrast against
+        all three generated accent states; focus has at least 3:1 against canvas.
+        These token-level checks do not certify an application's accessibility.
+        Other palette roles, typography, motion and SurfaceStyle are preserved.
+        """
+        accent = Color.from_hex(color)
+        canvas = self.text_color("canvas")
+        if accent.a != 1 or canvas.a != 1:
+            raise ValueError("Accent authoring requires opaque accent and canvas colors.")
+        black, white = Color(0, 0, 0), Color(1, 1, 1)
+        foreground = max((black, white), key=lambda c: _contrast(c, accent))
+        # Prefer movement towards the label (also works for pure black/white),
+        # but move away if the quantized pressed state would lose text contrast.
+        away = white if foreground == black else black
+        target = foreground if _contrast(
+            foreground, Color.from_hex(_hex(_mix(accent, foreground, .24)))
+        ) >= 4.5 else away
+        endpoint = max((black, white), key=lambda c: _contrast(c, canvas))
+        focus = _hex(accent)
+        for step in range(21):
+            focus = _hex(_mix(accent, endpoint, step / 20))
+            if _contrast(Color.from_hex(focus), canvas) >= 3:
+                break
+        return replace(self, palette=replace(
+            self.palette, accent=_hex(accent),
+            accent_hover=_hex(_mix(accent, target, .12)),
+            accent_pressed=_hex(_mix(accent, target, .24)),
+            on_accent=_hex(foreground), focus=focus,
+            selection=_hex(_mix(canvas, accent, .24)),
+        ))
 
 
 DEFAULT_THEME = Theme()

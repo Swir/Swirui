@@ -1,7 +1,46 @@
-from swirui import FUTURE_LIGHT
+from swirui import FUTURE_LIGHT, Window, mount
 from swirui.rendering import Rect
 from swirui.studio_operations import StudioDashboard
 from swirui.studio_suite import StudioSuite
+
+
+def test_studio_accent_survives_theme_material_and_motion_changes():
+    studio = StudioSuite()
+    studio.preview.project.value = "My own look"
+    studio.settings.accent_input.value = "#FF7ADE"
+    studio.settings.apply_accent_button.emit("click")
+    assert studio.theme.palette.accent == studio.preview.theme.palette.accent == "#FF7ADE"
+    studio.toggle_theme()
+    studio.preview.set_material("acrylic")
+    studio.settings.reduced_motion.checked = True
+    assert studio.theme.palette.accent == studio.preview.theme.palette.accent == "#FF7ADE"
+    assert studio.preview.theme.reduced_motion and studio.theme.reduced_motion
+    assert studio.preview.project.value == "My own look"
+    theme = studio.theme
+    assert not studio.settings.set_accent("#wrong")
+    assert studio.theme is theme
+    studio.settings.reset_accent_button.emit("click")
+    assert studio.theme.palette == FUTURE_LIGHT.palette
+    assert studio.preview.theme.palette == FUTURE_LIGHT.palette
+    assert studio.settings.accent_input.value == FUTURE_LIGHT.palette.accent
+
+
+def test_compact_settings_reveal_keyboard_focus_without_recreating_controls():
+    window = Window(width=1024, height=720)
+    studio = StudioSuite()
+    studio.resize_to(1024, 720)
+    studio.activate("settings")
+    runtime = mount(window, studio)
+    settings = studio.settings
+    assert settings.scroll.max_scroll_y > 0
+    window.focus_component(settings.density)
+    assert settings.scroll.scroll_y > 0
+    assert settings.density.bounds.bottom <= (
+        settings.scroll.scroll_y + settings.scroll.bounds.height
+    )
+    window.focus_component(settings.accent_input)
+    assert settings.accent_input.bounds.y >= settings.scroll.scroll_y
+    runtime.unmount()
 
 
 def test_studio_navigation_does_not_overlap_at_supported_window_sizes() -> None:
