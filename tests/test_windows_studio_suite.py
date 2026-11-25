@@ -106,6 +106,21 @@ def test_studio_suite_dashboard_settings_notifications_keep_one_native_context(
         app.render_pending(app._frame_schedulers[window].stats.last_frame_time + 1)
         assert studio.preview.tint.value < 20
         assert bytes(context.read_scene_rgba()[2][start:end]) != previous_card
+        # The corner pixel changes on the actual button while keyboard focus stays on the slider.
+        window.focus_component(studio.preview.corners)
+        launch = studio.preview.create.bounds
+        pixel = 4 * (round((launch.y + 2) * window.scale) * width
+                     + round((launch.x + 2) * window.scale))
+        corners = []
+        for key, expected in ((0x24, 0), (0x23, 24)):  # Home, End
+            window._apply_platform_event(PlatformEvent(
+                PlatformEventKind.KEY_DOWN, window.native_handle, key_code=key,
+            ))
+            app.render_pending(app._frame_schedulers[window].stats.last_frame_time + 1)
+            assert studio.preview.theme.control_radius == expected
+            corners.append(bytes(context.read_scene_rgba()[2][pixel:pixel + 3]))
+        assert corners[0] != corners[1]
+        assert window.focused_component is studio.preview.corners
         studio.activate("settings")
         window.focus_component(studio.settings.density)
         app.render_pending(app._frame_schedulers[window].stats.last_frame_time + 1)

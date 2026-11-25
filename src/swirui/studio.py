@@ -96,11 +96,16 @@ class StudioPreview(Panel):
         self.tint = Slider(bounds=empty, value=74, accessible_name="Material tint opacity")
         self.glow = Slider(bounds=empty, value=5.5, maximum=50, step=.5,
                            accessible_name="Edge glow opacity")
+        self.corners = Slider(bounds=empty, value=NEON_BLUE.control_radius, maximum=24,
+                              accessible_name="Control corner radius")
         self.tint_label = Label("", bounds=empty, font_size=14)
         self.glow_label = Label("", bounds=empty, font_size=14)
-        self.footer.add(self.tint_label, self.tint, self.glow_label, self.glow)
-        self.tint.on("changed", lambda _: self.apply_theme())
-        self.glow.on("changed", lambda _: self.apply_theme())
+        self.corners_label = Label("", bounds=empty, font_size=14)
+        self._finish_controls = ((self.tint_label, self.tint), (self.glow_label, self.glow),
+                                 (self.corners_label, self.corners))
+        for label, slider in self._finish_controls:
+            self.footer.add(label, slider)
+            slider.on("changed", lambda _: self.apply_theme())
         self.create.on("click", lambda _: self._launch())
         self.motion.on("changed", lambda _: self.apply_theme())
         self.add(self.backdrop, self.status, self.copy_theme, self.surface, self.footer)
@@ -158,10 +163,11 @@ class StudioPreview(Panel):
         )
         tray = Rect(viewport.x + pad, viewport.bottom - 72, max(0, width - 2 * pad), 62)
         self.footer._set_layout_bounds(tray)
-        lane = max(0, (tray.width - 48) / 2)
-        for column, (label, slider) in enumerate(((self.tint_label, self.tint),
-                                                   (self.glow_label, self.glow))):
-            left = tray.x + 12 + column * (lane + 24)
+        gap = 12 if tray.width < 480 else 24
+        count = len(self._finish_controls)
+        lane = max(0, (tray.width - 24 - (count - 1) * gap) / count)
+        for column, (label, slider) in enumerate(self._finish_controls):
+            left = tray.x + 12 + column * (lane + gap)
             label._set_layout_bounds(Rect(left, tray.y + 3, lane, 21))
             slider._set_layout_bounds(Rect(left, tray.y + 25, lane, 32))
 
@@ -171,6 +177,7 @@ class StudioPreview(Panel):
             base = base.with_accent(self.accent)
         return replace(
             base,
+            control_radius=self.corners.value,
             reduced_motion=self.reduced_motion or not self.motion.checked,
             surface_style=SurfaceStyle(
                 kind=self.material,
@@ -194,6 +201,7 @@ class StudioPreview(Panel):
         tint = f"{self.tint.value:g}%" if self.tint.enabled else "opaque"
         self.tint_label.text = f"Tint · {tint}"
         self.glow_label.text = f"Edge glow · {self.glow.value:g}%"
+        self.corners_label.text = f"Corners · {self.corners.value:g}"
         roles: tuple[ColorRole, ...] = ("accent", "accent_hover", "accent_pressed")
         for chip, label, role in zip(self.swatch_chips, self.swatch_hex, roles, strict=True):
             chip.background = theme.surface_color(role)
@@ -246,6 +254,7 @@ class StudioPreview(Panel):
             self.project.value = "Neon workspace"
             self.tint.value = 74
             self.glow.value = 5.5
+            self.corners.value = NEON_BLUE.control_radius
             self.motion.checked = True
             self.result.text = "Ready for your next idea."
             self.apply_theme()

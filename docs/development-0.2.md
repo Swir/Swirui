@@ -20,3 +20,20 @@ This 960 × 460 capture is a direct readback of the Windows wgpu frame on AMD
 Radeon graphics with DX12. To reproduce it from the same checkout, run
 `python tools/capture_studio.py --pane comparison --output studio-comparison.png`.
 The OS cursor is outside the captured frame.
+
+## Shape your controls
+
+The **Corners** slider below the preview sets the radius of themed buttons,
+inputs and material cards in logical pixels. Drag from 0 for square corners
+to 24 for a rounded finish. With keyboard focus on the slider, the arrow keys
+change the value by one. Home and End jump to the two extremes.
+
+Both exported appearances carry the same `control_radius`. In your app,
+assign `ThemePackage.load("studio-theme.json").default` to the root panel's
+`theme` after saving the JSON from Studio. Controls with a locally specified
+radius keep their own shape.
+
+![Studio showing mint buttons and a glass card with the corner radius set to 24](screenshots/studio-corners.png)
+
+To reproduce this cursor-free native capture, run
+`python tools/capture_studio.py --pane preview --width 1440 --height 900 --accent "#7FE0BF" --corner-radius 24 --output studio-corners.png`.

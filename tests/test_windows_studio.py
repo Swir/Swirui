@@ -113,11 +113,13 @@ def test_launch_compare_refresh_and_close_real_preview_windows(record_property):
         assert dark.title.text == "Renamed" and len(app.windows) == 2
         studio.preview.project.value = "New design"
         studio.inspector.set_value("material", "acrylic")
+        studio.preview.corners.value = 0
         studio.preview.create.emit("click")
         assert child.root is proof and len(app.windows) == 2
         assert renderer._contexts[child.native_handle.value] is context
         assert dark.title.text == light.title.text == "New design"
         assert light.theme.surface_style.kind == "acrylic"
+        assert dark.theme.control_radius == light.theme.control_radius == 0
         child_handle = child.native_handle.value
         child.close()
         assert app.windows == [owner] and child_handle not in renderer._contexts

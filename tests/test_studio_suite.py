@@ -19,12 +19,14 @@ def test_preview_copies_both_authored_finishes_and_preserves_input(tmp_path):
         studio.settings.reduced_motion.checked = True
         preview.tint.value = 32
         preview.glow.value = 18
+        preview.corners.value = 24
         preview.copy_theme.emit("click")
         package = ThemePackage.loads(clipboard.read_text())
         package.save(tmp_path / "finish.json")
         assert ThemePackage.load(tmp_path / "finish.json").default == preview.theme
         assert package.default_theme == "light" and package.name == "Szkło"
         for variant in package.themes.values():
+            assert variant.control_radius == 24
             assert variant.surface_style == preview.theme.surface_style
             assert variant.surface_style.tint_opacity == .32
             assert variant.surface_style.glow_opacity == .18
@@ -41,6 +43,7 @@ def test_preview_copies_both_authored_finishes_and_preserves_input(tmp_path):
         assert preview.tint.enabled and preview.tint.value == 32
         studio.execute_command("reset")
         assert (preview.tint.value, preview.glow.value) == (74, 5.5)
+        assert preview.corners.value == 12 and preview.theme.control_radius == 12
     finally:
         runtime.unmount()
 
@@ -189,6 +192,9 @@ def test_preview_controls_fit_the_material_card_at_supported_sizes() -> None:
         assert preview.result.bounds.bottom <= surface.bottom
         assert preview.create.bounds.bottom < preview.result.bounds.y
         assert preview.project.bounds.bottom < preview.motion.bounds.y
+        assert preview.tint.bounds.right < preview.glow.bounds.x
+        assert preview.glow.bounds.right < preview.corners.bounds.x
+        assert preview.corners.bounds.right <= preview.footer.bounds.right
 
 
 def test_studio_suite_adds_dashboard_settings_and_notification_center() -> None:

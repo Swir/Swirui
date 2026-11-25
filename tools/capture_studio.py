@@ -47,6 +47,7 @@ def main() -> None:
     parser.add_argument("--pane", choices=("dashboard", "preview", "settings", "comparison"),
                         default="dashboard")
     parser.add_argument("--accent", help="Opaque hex accent, e.g. #7FE0BF")
+    parser.add_argument("--corner-radius", type=int, help="Authored control radius (0–24)")
     parser.add_argument("--width", type=int, default=1600)
     parser.add_argument("--height", type=int, default=1000)
     args = parser.parse_args()
@@ -63,6 +64,11 @@ def main() -> None:
         studio.toggle_theme()
     if args.accent is not None and not studio.settings.set_accent(args.accent):
         parser.error("--accent must be an opaque hex color")
+    if args.corner_radius is not None:
+        corners = studio.preview.corners
+        if not corners.minimum <= args.corner_radius <= corners.maximum:
+            parser.error("--corner-radius must be between 0 and 24")
+        corners.value = args.corner_radius
     studio.activate("preview" if args.pane == "comparison" else args.pane)
     mount(window, studio)
     bind_comparison(app, window, studio.preview)
