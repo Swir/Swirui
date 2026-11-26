@@ -103,14 +103,16 @@ jobs:
         run: cargo check --manifest-path native/Cargo.toml --all-targets
 
       - name: Build PyO3 extension
-        working-directory: native
-        run: maturin build --release --interpreter python --out ../dist-native
+        run: maturin build --release --locked --manifest-path native/Cargo.toml --interpreter python --out dist-native
 
       - name: Install PyO3 extension
         shell: pwsh
         run: |
-          $wheel = (Get-ChildItem dist-native\*.whl | Select-Object -First 1).FullName
-          python -m pip install $wheel
+          $wheels = @(Get-ChildItem dist-native\*.whl)
+          if ($wheels.Count -ne 1) { throw "Expected one Windows SwirUI wheel." }
+          python -m pip install --force-reinstall --no-deps $wheels[0].FullName
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m swirui doctor --json
 
       - name: Verify integrated Studio
         run: >
