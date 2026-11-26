@@ -4,6 +4,7 @@ from swirui import studio_comparison as comparison_module
 from swirui import studio_suite as studio_module
 from swirui.rendering import Rect
 from swirui.studio import Studio
+from swirui.widgets import compile_component_scene
 
 
 def test_studio_integrates_preview_code_assets_hierarchy_inspector_and_console() -> None:
@@ -163,3 +164,34 @@ def test_preview_theme_shows_default_first_and_respects_a_single_variant(tmp_pat
     ThemePackage("Solo", {"solo": NEON_BLUE}, "solo").save(path)
     assert cli.main(command) == 0
     assert [pane.mode for pane in roots[-1].panes] == ["solo"]
+
+
+def test_comparison_reflows_both_forms_at_the_minimum_width_and_restores_them():
+    package = ThemePackage("Field notes", {"paper": FUTURE_LIGHT, "ink": NEON_BLUE}, "paper")
+    root = comparison_module.AppearanceComparison(package, "Project settings",
+                                                  variants=("ink", "paper"))
+    first, second = root.panes
+    second.field.value = "Unsubmitted edit"
+    second.field.select(12, 4)
+    for width, height in ((960, 460), (639, 390), (320, 390), (420, 840), (640, 390)):
+        scene = compile_component_scene(root, width=width, height=height)
+        if width < 640:
+            assert first.bounds.bottom == second.bounds.y
+            assert first.bounds.width == second.bounds.width == width
+        else:
+            assert first.bounds.right == second.bounds.x
+            assert first.bounds.height == second.bounds.height == height
+        for pane in root.panes:
+            if pane.bounds.height < 370:
+                assert pane.title.bounds.right < pane.mode_label.bounds.x
+                assert pane.field.bounds.right < pane.apply.bounds.x
+                assert pane.field.bounds.y == pane.apply.bounds.y
+            for widget in (pane.mode_label, pane.title, pane.card, pane.headline,
+                           pane.caption, pane.field, pane.apply):
+                b = widget.bounds
+                assert pane.bounds.x <= b.x < b.right <= pane.bounds.right
+                assert pane.bounds.y <= b.y < b.bottom <= pane.bounds.bottom
+            assert scene.hit_test_xy(pane.apply.bounds.x + 20,
+                                     pane.apply.bounds.y + 18).key == pane.apply.key
+        assert second.field.value == "Unsubmitted edit" and second.field.caret_index == 4
+        assert second.field.selected_text == "bmitted "

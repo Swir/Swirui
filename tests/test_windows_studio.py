@@ -128,14 +128,26 @@ def test_saved_theme_cli_renders_both_authored_accents_in_requested_order(tmp_pa
         first, second = window.root.panes
         assert (first.mode, second.mode) == ("day", "night")
         context = app.renderer._contexts[window.native_handle.value]
-        width, _, pixels = context.read_scene_rgba()
-        for pane, color in ((first, (227, 128, 68)), (second, (127, 224, 191))):
-            button = pane.apply.bounds
-            offset = 4 * (round((button.bottom - 6) * window.scale) * width
-                          + round((button.x + button.width / 2) * window.scale))
-            assert tuple(pixels[offset:offset + 3]) == pytest.approx(color, abs=1)
         window.focus_component(first.field)
         first.field.value = "Local edit"
+        first.field.select(10, 6)
+        for w, h in ((960, 460), (320, 390), (720, 420)):
+            window.resize(w, h)
+            app.process_events()
+            app.render_pending(app._frame_schedulers[window].stats.last_frame_time + 1)
+            assert window.width == w and window.height == h
+            assert app.renderer._contexts[window.native_handle.value] is context
+            assert window.focused_component is first.field and first.field.selected_text == "edit"
+            if w == 320:
+                assert first.bounds.bottom == second.bounds.y
+            else:
+                assert first.bounds.right == second.bounds.x
+            width, _, pixels = context.read_scene_rgba()
+            for pane, color in ((first, (227, 128, 68)), (second, (127, 224, 191))):
+                button = pane.apply.bounds
+                offset = 4 * (round((button.bottom - 6) * window.scale) * width
+                              + round((button.x + button.width / 2) * window.scale))
+                assert tuple(pixels[offset:offset + 3]) == pytest.approx(color, abs=1)
         window._apply_platform_event(PlatformEvent(
             PlatformEventKind.KEY_DOWN, window.native_handle, key_code=13,
         ))
@@ -232,9 +244,11 @@ def test_launch_compare_refresh_and_close_real_preview_windows(record_property):
         right_pixel = left_pixel + (width // 2) * 4
         assert pixels[left_pixel:left_pixel + 3] != pixels[right_pixel:right_pixel + 3]
 
-        child.resize(640, 390)
+        child.resize(380, 480)
         app.process_events()
-        assert dark.bounds.right <= light.bounds.x
+        assert child.width == 380 and dark.bounds.bottom == light.bounds.y
+        assert light.mode_label.text == "Light"
+        assert light.mode_label.accessible_name == "Light appearance"
         assert light.apply.bounds.right <= child.width
         assert dark.card.bounds.bottom <= child.height
         light.field.value = "Renamed"

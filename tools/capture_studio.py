@@ -52,11 +52,16 @@ def main() -> None:
                         help="Show focus on the Enable motion switch in the preview")
     parser.add_argument("--width", type=int, default=1600)
     parser.add_argument("--height", type=int, default=1000)
+    parser.add_argument("--comparison-size", type=int, nargs=2, metavar=("WIDTH", "HEIGHT"),
+                        help="Resize the comparison window before capturing its frame")
     args = parser.parse_args()
     if args.width < 1024 or args.height < 720:
         parser.error("Studio requires at least 1024 × 720 logical pixels")
     if args.focus_motion and args.pane != "preview":
         parser.error("--focus-motion requires --pane preview")
+    if args.comparison_size and (args.pane != "comparison" or args.comparison_size[0] < 320
+                                 or args.comparison_size[1] < 390):
+        parser.error("--comparison-size requires --pane comparison and at least 320 × 390")
     renderer = WgpuRenderer()
     app = App("SwirUI Studio capture", renderer=renderer)
     window = app.add_window(Window(width=args.width, height=args.height,
@@ -90,6 +95,8 @@ def main() -> None:
         if args.pane == "comparison":
             studio.preview.create.emit("click")
             target, = [candidate for candidate in app.windows if candidate is not window]
+            if args.comparison_size:
+                target.resize(*args.comparison_size)
             app.process_events()
         app.invalidate(target)
         last = app._frame_schedulers[target].stats.last_frame_time

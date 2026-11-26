@@ -30,18 +30,24 @@ if TYPE_CHECKING:
     from .theme import Theme
 
 
+_MIN_PANE_WIDTH = 320
+
+
 class _AppearancePane(Panel):
     def __init__(self, mode: str) -> None:
         empty = Rect(0, 0, 0, 0)
         super().__init__(bounds=empty, clip_to_bounds=True)
         self.mode = mode
-        label = f"{mode.title()} appearance" if mode in ("dark", "light") else mode
-        self.mode_label = Badge(label, bounds=empty)
-        self._badge_width = max(150, measure_text_block(label, font_size=13).width + 16)
-        self.title = Label("", bounds=empty, font_size=31)
+        self._short_label = mode.title() if mode in ("dark", "light") else mode
+        self._full_label = f"{self._short_label} appearance" if mode in ("dark", "light") else mode
+        self.mode_label = Badge(self._full_label, bounds=empty, accessible_name=self._full_label)
+        self._badge_width = max(150, measure_text_block(self._full_label, font_size=13).width + 16)
+        short_text_width = measure_text_block(self._short_label, font_size=13).width
+        self._short_badge_width = max(60, short_text_width + 16)
+        self.title = Label("", bounds=empty, font_size=31, clip_to_bounds=True)
         self.ribbon = SilkRibbon(bounds=empty)
         self.card = ThemeSurface(bounds=empty)
-        self.headline = Label("", bounds=empty, font_size=23)
+        self.headline = Label("", bounds=empty, font_size=23, clip_to_bounds=True)
         self.caption = Label("Project name", bounds=empty, font_size=13)
         self.field = Input("", bounds=empty, accessible_name=f"{mode.title()} preview project name")
         self.apply = Button("Apply name", bounds=empty, text_align="center")
@@ -51,9 +57,17 @@ class _AppearancePane(Panel):
     def prepare_layout(self, viewport: Rect) -> None:
         self._set_layout_bounds(viewport)
         x, y, w, h = viewport.x, viewport.y, viewport.width, viewport.height
+        compact = h < 370
+        self.mode_label.text = self._short_label if compact else self._full_label
+        self.title.font_size = 21 if compact else 31
+        self.headline.font_size = 18 if compact else 23
+        if compact:
+            self._arrange_short_pane(viewport)
+            return
         pad = 20 if w < 400 else 32
         inner = max(0, w - 2 * pad)
-        self.mode_label._set_layout_bounds(Rect(x + pad, y + 20, min(inner, self._badge_width), 30))
+        badge_width = min(inner, self._badge_width)
+        self.mode_label._set_layout_bounds(Rect(x + pad, y + 20, badge_width, 30))
         self.title._set_layout_bounds(Rect(x + pad, y + 59, inner, 48))
         card_y = y + max(131, (h - 220) * .72)
         self.ribbon._set_layout_bounds(Rect(x + 3, max(y + 94, card_y - 70), max(0, w - 6), 200))
@@ -64,6 +78,24 @@ class _AppearancePane(Panel):
         self.caption._set_layout_bounds(Rect(left, card_y + 63, content, 20))
         self.field._set_layout_bounds(Rect(left, card_y + 88, content, 40))
         self.apply._set_layout_bounds(Rect(left, card_y + 152, min(content, 128), 40))
+
+    def _arrange_short_pane(self, viewport: Rect) -> None:
+        left, top = viewport.x + 16, viewport.y
+        inner = max(0, viewport.width - 32)
+        badge = min(inner * .43, self._short_badge_width)
+        self.mode_label._set_layout_bounds(Rect(left + inner - badge, top + 12, badge, 28))
+        self.title._set_layout_bounds(Rect(left, top + 10, max(0, inner - badge - 10), 32))
+        card_y = top + 52 + max(0, viewport.height - 195) * .5
+        self.ribbon._set_layout_bounds(Rect(viewport.x + 2, card_y - 34,
+                                            max(0, viewport.width - 4), 116))
+        self.card._set_layout_bounds(Rect(left, card_y, inner, 114))
+        content_x, content_w = left + 14, max(0, inner - 28)
+        self.headline._set_layout_bounds(Rect(content_x, card_y + 9, content_w, 26))
+        self.caption._set_layout_bounds(Rect(content_x, card_y + 40, content_w, 20))
+        button = min(112, content_w * .42)
+        field = max(0, content_w - button - 8)
+        self.field._set_layout_bounds(Rect(content_x, card_y + 64, field, 38))
+        self.apply._set_layout_bounds(Rect(content_x + content_w - button, card_y + 64, button, 38))
 
 
 class AppearanceComparison(Panel):
@@ -108,7 +140,14 @@ class AppearanceComparison(Panel):
 
     def prepare_layout(self, viewport: Rect) -> None:
         self._set_layout_bounds(viewport)
-        width = viewport.width / len(self.panes)
+        count = len(self.panes)
+        if count == 2 and viewport.width < 2 * _MIN_PANE_WIDTH:
+            height = viewport.height / count
+            for index, pane in enumerate(self.panes):
+                pane._set_layout_bounds(Rect(viewport.x, viewport.y + index * height,
+                                             viewport.width, height))
+            return
+        width = viewport.width / count
         for index, pane in enumerate(self.panes):
             pane._set_layout_bounds(Rect(viewport.x + index * width, viewport.y, width,
                                          viewport.height))
@@ -121,7 +160,7 @@ def run_package_preview(root: AppearanceComparison, *, smoke_test: bool = False)
     app = App("SwirUI theme preview", renderer=renderer)
     window = app.add_window(Window(title=f"{root.panes[0].title.text} · Theme preview",
                                    width=480 * count, height=460,
-                                   min_width=320 * count, min_height=390))
+                                   min_width=_MIN_PANE_WIDTH, min_height=390))
     mount(window, root)
     try:
         if not smoke_test:
@@ -166,7 +205,8 @@ def bind_comparison(app: App, owner: Window, preview: StudioPreview) -> None:
                 child.show()
             preview.result.text = "Comparison updated."
             return
-        window = Window(title=title, width=960, height=460, min_width=640, min_height=390)
+        window = Window(title=title, width=960, height=460, min_width=_MIN_PANE_WIDTH,
+                        min_height=390)
         mount(window, AppearanceComparison(package, preview.heading.text))
         try:
             app.add_window(window)

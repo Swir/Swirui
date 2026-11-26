@@ -29,6 +29,18 @@ Radeon graphics with DX12. To reproduce it from the same checkout, run
 `python tools/capture_studio.py --pane comparison --accent "#FF7ADE" --corner-radius 24 --output studio-comparison.png`.
 The OS cursor is outside the captured frame.
 
+Narrow the comparison to less than 640 logical pixels to see the first
+appearance above the second. Both forms stay editable down to a 320 × 390
+window. In a short pane the project field shares a row with **Apply name**.
+Widen the window again to return to the side-by-side view. A field you
+were editing keeps keyboard focus, its draft text and its selection.
+The same layout works with saved packages opened by `preview-theme`.
+
+![Mint glass cards in a 400 × 540 Windows preview, with the dark form above the light form](screenshots/studio-comparison-compact.png)
+
+To reproduce this Windows/wgpu capture without a cursor, run
+`python tools/capture_studio.py --pane comparison --comparison-size 400 540 --accent "#7FE0BF" --corner-radius 18 --output studio-comparison-compact.png`.
+
 The **Apply name** buttons center their captions using the width of the shaped
 text. You can use the same alignment for buttons in your app.
 
