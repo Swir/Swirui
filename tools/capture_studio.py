@@ -48,11 +48,15 @@ def main() -> None:
                         default="dashboard")
     parser.add_argument("--accent", help="Opaque hex accent, e.g. #7FE0BF")
     parser.add_argument("--corner-radius", type=int, help="Authored control radius (0–24)")
+    parser.add_argument("--focus-motion", action="store_true",
+                        help="Show focus on the Enable motion switch in the preview")
     parser.add_argument("--width", type=int, default=1600)
     parser.add_argument("--height", type=int, default=1000)
     args = parser.parse_args()
     if args.width < 1024 or args.height < 720:
         parser.error("Studio requires at least 1024 × 720 logical pixels")
+    if args.focus_motion and args.pane != "preview":
+        parser.error("--focus-motion requires --pane preview")
     renderer = WgpuRenderer()
     app = App("SwirUI Studio capture", renderer=renderer)
     window = app.add_window(Window(width=args.width, height=args.height,
@@ -81,6 +85,8 @@ def main() -> None:
         for interaction in interactions:
             interaction.dispose()
         target = window
+        if args.focus_motion:
+            window.focus_component(studio.preview.motion)
         if args.pane == "comparison":
             studio.preview.create.emit("click")
             target, = [candidate for candidate in app.windows if candidate is not window]

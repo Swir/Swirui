@@ -37,6 +37,8 @@ Use Ctrl+Left or Ctrl+Right to move by word in a text field. Hold Shift to
 select the same range, including across lines in a `TextArea`.
 In your own app, use `Button("Save", bounds=bounds, text_align="center")` to
 center an action label. `IconButton` centers its glyph by default.
+Tabbing through checkboxes, radio buttons and switches outlines the focused
+control, even when its checked color matches the theme's focus color.
 [Try the development preview](https://github.com/Swir/Swirui/blob/development/0.2/docs/development-0.2.md).
 
 ![SwirUI Studio in dark appearance, captured without a cursor](https://raw.githubusercontent.com/Swir/Swirui/v0.1.0b6/docs/screenshots/studio-dark.png)

@@ -201,6 +201,30 @@ class _ToggleControl(Widget):
     def _build_indicator(self, root: SceneNode, bounds: Rect) -> None:
         raise NotImplementedError
 
+    def _add_indicator_face(
+        self, root: SceneNode, bounds: Rect, radius: float, suffix: str
+    ) -> Rect:
+        def layer(name: str, fill: Color) -> None:
+            root.add(SceneNode(
+                key=f"{self.key}:{name}", kind=SceneNodeKind.RECTANGLE, bounds=bounds,
+                fill=fill, corner_radius=CornerRadius.uniform(radius),
+                z_index=1, hit_testable=False,
+            ))
+
+        if self._focused and self.enabled:
+            focus = self._theme.surface_color("focus") if self._theme else _ACCENT_HOVER
+            gap = self._theme.surface_color("canvas") if self._theme else _SURFACE
+            unit = min(1.0, min(bounds.width, bounds.height) / 8)
+            # Keep the entire cue inside even a tightly clipped control. The
+            # separator distinguishes focus when a theme uses its accent for both.
+            for name, color, inset in (("focus", focus, 2 * unit), ("focus-gap", gap, unit)):
+                layer(name, color)
+                bounds = Rect(bounds.x + inset, bounds.y + inset,
+                              bounds.width - 2 * inset, bounds.height - 2 * inset)
+                radius = max(0.0, radius - inset)
+        layer(suffix, self._surface_color())
+        return bounds
+
     def _surface_color(self) -> Color:
         if not self.enabled:
             return self._surface_disabled
@@ -340,17 +364,7 @@ class Checkbox(_ToggleControl):
         )
 
     def _build_indicator(self, root: SceneNode, bounds: Rect) -> None:
-        root.add(
-            SceneNode(
-                key=f"{self.key}:indicator",
-                kind=SceneNodeKind.RECTANGLE,
-                bounds=bounds,
-                z_index=1,
-                fill=self._surface_color(),
-                corner_radius=CornerRadius.uniform(min(5.0, bounds.width * 0.24)),
-                hit_testable=False,
-            )
-        )
+        bounds = self._add_indicator_face(root, bounds, min(5.0, bounds.width * 0.24), "indicator")
         if self.checked:
             root.add(
                 SceneNode(
@@ -360,7 +374,7 @@ class Checkbox(_ToggleControl):
                     z_index=2,
                     fill=self._mark_text,
                     text="✓",
-                    font_size=max(10.0, bounds.height * 0.72),
+                    font_size=min(bounds.height / 1.25, max(10.0, bounds.height * 0.72)),
                     font_family="Segoe UI Symbol",
                     hit_testable=False,
                 )
@@ -414,17 +428,7 @@ class RadioButton(_ToggleControl):
 
     def _build_indicator(self, root: SceneNode, bounds: Rect) -> None:
         radius = min(bounds.width, bounds.height) * 0.5
-        root.add(
-            SceneNode(
-                key=f"{self.key}:indicator",
-                kind=SceneNodeKind.RECTANGLE,
-                bounds=bounds,
-                z_index=1,
-                fill=self._surface_color(),
-                corner_radius=CornerRadius.uniform(radius),
-                hit_testable=False,
-            )
-        )
+        bounds = self._add_indicator_face(root, bounds, radius, "indicator")
         if not self.checked:
             return
         diameter = min(bounds.width, bounds.height) * 0.42
@@ -469,22 +473,15 @@ class Switch(_ToggleControl):
         )
 
     def _build_indicator(self, root: SceneNode, bounds: Rect) -> None:
-        root.add(
-            SceneNode(
-                key=f"{self.key}:track",
-                kind=SceneNodeKind.RECTANGLE,
-                bounds=bounds,
-                z_index=1,
-                fill=self._surface_color(),
-                corner_radius=CornerRadius.uniform(bounds.height * 0.5),
-                hit_testable=False,
-            )
-        )
-        knob_size = max(0.0, min(bounds.height - 6.0, bounds.width - 6.0))
+        original_size = min(bounds.width, bounds.height)
+        bounds = self._add_indicator_face(root, bounds, bounds.height * 0.5, "track")
+        size = min(bounds.width, bounds.height)
+        knob_size = max(0.0, original_size - 6.0) * (size / original_size)
         if knob_size <= 0.0:
             return
-        left = bounds.x + 3.0
-        right = bounds.right - 3.0 - knob_size
+        margin = (size - knob_size) * 0.5
+        left = bounds.x + margin
+        right = bounds.right - margin - knob_size
         x = right if self.checked else left
         y = bounds.y + ((bounds.height - knob_size) * 0.5)
         root.add(

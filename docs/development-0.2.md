@@ -55,10 +55,16 @@ assign `ThemePackage.load("studio-theme.json").default` to the root panel's
 `theme` after saving the JSON from Studio. Controls with a locally specified
 radius keep their own shape.
 
-![Studio showing mint buttons and a glass card with the corner radius set to 24](screenshots/studio-corners.png)
+Tab to **Enable motion** in the preview. A thin outline follows the switch
+and a line in the theme's canvas color separates it from the track. This
+keeps focus visible when the switch is already on. Your app's `Checkbox`,
+`RadioButton` and `Switch` inherit the same treatment from their theme.
+Press Space to activate the focused control, then Tab to move on.
+
+![Mint glass card with the corner radius set to 24 and keyboard focus on the checked Enable motion switch](screenshots/studio-corners.png)
 
 To reproduce this cursor-free native capture, run
-`python tools/capture_studio.py --pane preview --width 1440 --height 900 --accent "#7FE0BF" --corner-radius 24 --output studio-corners.png`.
+`python tools/capture_studio.py --pane preview --width 1440 --height 900 --accent "#7FE0BF" --corner-radius 24 --focus-motion --output studio-corners.png`.
 
 ## Try a saved theme
 

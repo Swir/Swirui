@@ -1,4 +1,8 @@
+import pytest
+
 from swirui import (
+    FUTURE_DARK,
+    FUTURE_LIGHT,
     Checkbox,
     Component,
     RadioButton,
@@ -202,3 +206,47 @@ def test_toggle_text_updates_automatic_accessible_name() -> None:
     checkbox.text = "New label"
 
     assert checkbox.accessible_name == "New label"
+
+
+@pytest.mark.parametrize("control", [Checkbox, RadioButton, Switch])
+@pytest.mark.parametrize("checked", [False, True])
+def test_tab_focus_outlines_toggle_without_moving_label_or_hit_target(control, checked):
+    window = Window()
+    root = Component(theme=FUTURE_DARK)
+    widget = control("Motion", key="option", bounds=Rect(12, 14, 160, 38), checked=checked)
+    following = Checkbox("Next", bounds=Rect(12, 60, 160, 38))
+    root.add(widget, following)
+    mount(window, root)
+    initial_label = _node(window.scene, "option:label").bounds
+    face_key = "option:track" if control is Switch else "option:indicator"
+    footprint = _node(window.scene, face_key).bounds
+    _key(window, PlatformEventKind.KEY_DOWN, 0x09)
+    assert window.focused_component is widget
+    for theme in (FUTURE_DARK, FUTURE_LIGHT):
+        root.theme = theme
+        ring = _node(window.scene, "option:focus")
+        assert ring.bounds == footprint and ring.fill == theme.surface_color("focus")
+        assert not ring.hit_testable
+        assert _node(window.scene, "option:focus-gap").fill == theme.surface_color("canvas")
+        assert _node(window.scene, "option:label").bounds == initial_label
+        assert window.scene.hit_test(Point(13, 33)).key == "option"
+        assert widget.checked == widget.accessible_checked == checked
+    _key(window, PlatformEventKind.KEY_DOWN, 0x09)
+    assert window.focused_component is following
+    assert not any(n.key == "option:focus" for n in window.scene.walk())
+    assert _node(window.scene, face_key).bounds == footprint
+
+
+def test_compact_standalone_switch_keeps_thumb_and_drops_focus_cue_when_disabled():
+    window = Window()
+    switch = Switch("", key="compact", bounds=Rect(0, 0, 18, 10), checked=True)
+    mount(window, switch)
+    window.focus_component(switch)
+    ring = _node(window.scene, "compact:focus").bounds
+    face = _node(window.scene, "compact:track").bounds
+    knob = _node(window.scene, "compact:knob").bounds
+    assert ring == switch.bounds and knob.width > 0
+    assert face.x < knob.x < knob.right < face.right
+    switch.enabled = False
+    assert not any(n.key.startswith("compact:focus") for n in window.scene.walk())
+    assert switch.checked
