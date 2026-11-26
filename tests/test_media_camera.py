@@ -7,7 +7,7 @@ import pytest
 
 from swirui.camera import CameraDevice, NativeCameraCapture, camera_devices
 from swirui.media import ImageFrame
-from swirui.rendering import Rect
+from swirui.rendering import Point, Rect
 from swirui.widgets.camera_view import CameraView
 
 
@@ -103,11 +103,13 @@ def test_camera_view_refreshes_one_persistent_resource(monkeypatch: pytest.Monke
         "demo:camera",
         bounds=Rect(0.0, 0.0, 320.0, 180.0),
         accessible_name="Camera preview",
+        image_position=Point(1, 0),
     )
 
     assert renderer.calls[-1][3] == bytes((20, 0, 0, 255)) * 2
     view.refresh()
     assert renderer.calls[-1][3] == bytes((40, 0, 0, 255)) * 2
+    assert view.build_scene_node().children[0].bounds == Rect(-40, 0, 360, 180)
 
     view.pause().refresh()
     assert len(renderer.calls) == 2

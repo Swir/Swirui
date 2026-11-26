@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from swirui.camera import CameraSource, validate_camera_frame
 from swirui.media import ImageFrame, ImageResourceRegistrar
-from swirui.rendering.geometry import Rect
+from swirui.rendering.geometry import Point, Rect
 
-from .image import Image, ImageFit
+from .image import _CENTER, Image, ImageFit
 
 
 class CameraView(Image):
@@ -20,6 +20,7 @@ class CameraView(Image):
         *,
         bounds: Rect,
         fit: ImageFit = ImageFit.COVER,
+        image_position: Point = _CENTER,
         active: bool = True,
         key: str | None = None,
         opacity: float = 1.0,
@@ -28,6 +29,7 @@ class CameraView(Image):
         accessible_name: str | None = None,
         accessible_description: str | None = None,
     ) -> None:
+        self._validate_image_position(image_position)
         self._source = source
         self._renderer = renderer
         self._active = bool(active)
@@ -39,6 +41,7 @@ class CameraView(Image):
             pixel_height=frame.height,
             bounds=bounds,
             fit=fit,
+            image_position=image_position,
             key=key,
             opacity=opacity,
             z_index=z_index,

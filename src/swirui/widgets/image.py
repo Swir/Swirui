@@ -5,10 +5,12 @@ from __future__ import annotations
 from enum import StrEnum
 
 from swirui.core import AccessibilityRole
-from swirui.rendering.geometry import Rect, Size
+from swirui.rendering.geometry import Point, Rect, Size
 from swirui.rendering.scene import SceneNode, SceneNodeKind
 
 from .base import Widget
+
+_CENTER = Point(0.5, 0.5)
 
 
 class ImageFit(StrEnum):
@@ -31,6 +33,7 @@ class Image(Widget):
         pixel_height: int,
         bounds: Rect,
         fit: ImageFit = ImageFit.CONTAIN,
+        image_position: Point = _CENTER,
         key: str | None = None,
         opacity: float = 1.0,
         z_index: int = 0,
@@ -43,6 +46,7 @@ class Image(Widget):
             pixel_width, pixel_height
         )
         self._fit = ImageFit(fit)
+        self._image_position = self._validate_image_position(image_position)
         super().__init__(
             bounds=bounds,
             key=key,
@@ -96,6 +100,18 @@ class Image(Widget):
             max(self.preferred_size.height, float(self._pixel_height)),
         )
 
+    @property
+    def image_position(self) -> Point:
+        """Align the fitted image from left/top (0) to right/bottom (1) on each axis."""
+        return self._image_position
+
+    @image_position.setter
+    def image_position(self, value: Point) -> None:
+        position = self._validate_image_position(value)
+        if position != self._image_position:
+            self._image_position = position
+            self.invalidate(reason="image_position")
+
     def build_scene_node(self) -> SceneNode:
         image_bounds = self._image_bounds()
         root = SceneNode(
@@ -135,11 +151,19 @@ class Image(Widget):
             width = source_width * scale
             height = source_height * scale
         return Rect(
-            bounds.x + (bounds.width - width) / 2.0,
-            bounds.y + (bounds.height - height) / 2.0,
+            bounds.x + (bounds.width - width) * self._image_position.x,
+            bounds.y + (bounds.height - height) * self._image_position.y,
             width,
             height,
         )
+
+    @staticmethod
+    def _validate_image_position(value: Point) -> Point:
+        if not isinstance(value, Point):
+            raise TypeError("image_position must be a Point.")
+        if not (0.0 <= value.x <= 1.0 and 0.0 <= value.y <= 1.0):
+            raise ValueError("image_position coordinates must be between 0 and 1.")
+        return value
 
     @staticmethod
     def _validate_resource_id(value: str) -> str:

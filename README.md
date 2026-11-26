@@ -45,6 +45,9 @@ In your own app, use `Button("Save", bounds=bounds, text_align="center")` to
 center an action label. `IconButton` centers its glyph by default.
 Tabbing through checkboxes, radio buttons and switches outlines the focused
 control, even when its checked color matches the theme's focus color.
+For image cards, set `image_position=Point(1, 0.5)` with `ImageFit.COVER`
+to keep the right edge in view as the card narrows. Try the live crop slider
+with `python examples/image_framing.py` from the 0.2 source checkout.
 [Try the development preview](https://github.com/Swir/Swirui/blob/development/0.2/docs/development-0.2.md).
 
 ![SwirUI Studio in dark appearance, captured without a cursor](https://raw.githubusercontent.com/Swir/Swirui/v0.1.0b6/docs/screenshots/studio-dark.png)

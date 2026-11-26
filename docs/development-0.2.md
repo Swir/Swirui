@@ -56,6 +56,36 @@ Set `save.text_align` to `"left"`, `"center"` or `"right"` to position the
 caption inside the button's padding. The default `"auto"` on regular buttons
 uses the renderer's paragraph alignment. Icon buttons default to `"center"`.
 
+## Frame images in your own app
+
+Run `python examples/image_framing.py` from the checkout. The left pane shows
+the whole source image. Drag **Horizontal position** under the square crop
+or focus the slider and use the arrow keys to pan across the same source.
+
+![The source contains both Studio appearances. The square crop displays the right-hand light appearance.](screenshots/image-position.png)
+
+After registering a decoded image with your renderer, choose which edge a
+card keeps when its aspect ratio changes.
+
+```python
+from swirui.rendering import Point, Rect
+from swirui.widgets import Image, ImageFit
+
+asset.register_frame(renderer, "cover")
+cover = Image("cover", pixel_width=asset.width, pixel_height=asset.height,
+              bounds=Rect(0, 0, 256, 256), fit=ImageFit.COVER,
+              image_position=Point(1, 0.5))
+root.add(cover)
+cover.image_position = Point(0.25, 0.5)
+```
+
+The two coordinates run from 0 (left or top) to 1 (right or bottom).
+Both default to 0.5. With `COVER` they control the crop. With `CONTAIN`
+they position the whole image within the spare space. `NONE` aligns the
+image at its intrinsic size and `FILL` spans the entire frame. Changing the
+position reuses the existing GPU texture. The same property works on
+`CameraView`, `VideoPlayer` and `Lottie`.
+
 ## Shape your controls
 
 The **Corners** slider below the preview sets the radius of themed buttons,

@@ -6,7 +6,7 @@ import types
 import pytest
 
 from swirui.media import decode_lottie
-from swirui.rendering import Rect
+from swirui.rendering import Point, Rect
 from swirui.widgets.lottie import Lottie
 
 LOTTIE = b'{"v":"5.7.4","fr":30,"ip":0,"op":30,"w":20,"h":10,"layers":[{"ty":1}]}'
@@ -70,7 +70,8 @@ def test_lottie_widget_registers_and_rebinds_frames(monkeypatch: pytest.MonkeyPa
         composition,
         renderer,
         "demo:lottie",
-        bounds=Rect(0.0, 0.0, 200.0, 100.0),
+        bounds=Rect(0.0, 0.0, 200.0, 120.0),
+        image_position=Point(0, 1),
         render_width=40,
         render_height=20,
     )
@@ -81,6 +82,7 @@ def test_lottie_widget_registers_and_rebinds_frames(monkeypatch: pytest.MonkeyPa
     assert widget.elapsed_ms == pytest.approx(500.0)
     assert len(renderer.calls) == 2
     assert renderer.calls[-1][3] != renderer.calls[0][3]
+    assert widget.build_scene_node().children[0].bounds == Rect(0, 20, 200, 100)
 
     widget.pause().tick(250.0)
     assert widget.elapsed_ms == pytest.approx(500.0)

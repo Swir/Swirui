@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from swirui.media import ImageResourceRegistrar, LottieComposition
-from swirui.rendering.geometry import Rect
+from swirui.rendering.geometry import Point, Rect
 
-from .image import Image, ImageFit
+from .image import _CENTER, Image, ImageFit
 
 
 class Lottie(Image):
@@ -25,6 +25,7 @@ class Lottie(Image):
         *,
         bounds: Rect,
         fit: ImageFit = ImageFit.CONTAIN,
+        image_position: Point = _CENTER,
         loop: bool = True,
         autoplay: bool = True,
         render_width: int | None = None,
@@ -40,6 +41,7 @@ class Lottie(Image):
             raise ValueError("render_width must be greater than zero.")
         if render_height is not None and render_height <= 0:
             raise ValueError("render_height must be greater than zero.")
+        self._validate_image_position(image_position)
         self._composition = composition
         self._renderer = renderer
         self._loop = bool(loop)
@@ -61,6 +63,7 @@ class Lottie(Image):
             pixel_height=frame.height,
             bounds=bounds,
             fit=fit,
+            image_position=image_position,
             key=key,
             opacity=opacity,
             z_index=z_index,

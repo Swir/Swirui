@@ -6,7 +6,7 @@ import types
 import pytest
 
 from swirui.media import ImageFrame
-from swirui.rendering import Rect
+from swirui.rendering import Point, Rect
 from swirui.video import VideoClip, video_clip_from_rgba_frames
 from swirui.widgets.video_player import VideoPlayer
 
@@ -96,6 +96,7 @@ def test_video_player_rebinds_persistent_resource(monkeypatch: pytest.MonkeyPatc
         renderer,
         "demo:video",
         bounds=Rect(0.0, 0.0, 320.0, 180.0),
+        image_position=Point(0, 1),
         loop=True,
     )
 
@@ -104,6 +105,7 @@ def test_video_player_rebinds_persistent_resource(monkeypatch: pytest.MonkeyPatc
     player.tick(500.0)
     assert player.elapsed_ms == pytest.approx(500.0)
     assert renderer.calls[-1][3] == solid(20)
+    assert player.build_scene_node().children[0].bounds == Rect(0, 20, 320, 160)
 
     player.pause().tick(500.0)
     assert player.elapsed_ms == pytest.approx(500.0)
