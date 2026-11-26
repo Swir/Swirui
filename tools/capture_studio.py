@@ -48,6 +48,10 @@ def main() -> None:
                         default="dashboard")
     parser.add_argument("--accent", help="Opaque hex accent, e.g. #7FE0BF")
     parser.add_argument("--corner-radius", type=int, help="Authored control radius (0–24)")
+    parser.add_argument("--layer-tilt", type=int, nargs=2, metavar=("X", "Y"),
+                        help="Inspector angles in degrees (−35 to 35)")
+    parser.add_argument("--depth-layers", type=int, choices=range(9),
+                        help="Number of decorative layers behind the card")
     parser.add_argument("--focus-motion", action="store_true",
                         help="Show focus on the Enable motion switch in the preview")
     parser.add_argument("--width", type=int, default=1600)
@@ -59,6 +63,8 @@ def main() -> None:
         parser.error("Studio requires at least 1024 × 720 logical pixels")
     if args.focus_motion and args.pane != "preview":
         parser.error("--focus-motion requires --pane preview")
+    if args.layer_tilt and any(abs(angle) > 35 for angle in args.layer_tilt):
+        parser.error("--layer-tilt angles must be between -35 and 35 degrees")
     if args.comparison_size and (args.pane != "comparison" or args.comparison_size[0] < 320
                                  or args.comparison_size[1] < 390):
         parser.error("--comparison-size requires --pane comparison and at least 320 × 390")
@@ -73,6 +79,11 @@ def main() -> None:
         studio.toggle_theme()
     if args.accent is not None and not studio.settings.set_accent(args.accent):
         parser.error("--accent must be an opaque hex color")
+    if args.layer_tilt:
+        studio.inspector.set_value("tilt_x", args.layer_tilt[0])
+        studio.inspector.set_value("tilt_y", args.layer_tilt[1])
+    if args.depth_layers is not None:
+        studio.inspector.set_value("depth", args.depth_layers)
     if args.corner_radius is not None:
         corners = studio.preview.corners
         if not corners.minimum <= args.corner_radius <= corners.maximum:

@@ -99,9 +99,22 @@ started with, even when you move across the other handle.
 With keyboard focus on the slider, the arrow keys
 change the value by one. Home and End jump to the two extremes.
 
-In the Inspector, increase the depth to see the stacked layers behind the card.
-Each layer takes its corner radius from the theme before it tilts, so the curve
-follows the perspective of the card. Your app's `ThemeSurface` uses the same geometry.
+In the Inspector, set **Depth layers** to 6 to see the stack behind the card.
+Click the value beside **Tilt X (°)**, press Delete to clear it, type `-24`
+and press Enter. Set **Tilt Y (°)** to `32` the same way. X tilts the top
+and bottom edges and Y tilts the sides. Each accepts whole degrees from
+−35 to 35. The form stays in place while both appearances update.
+
+![Glass preview with six rounded layers tilted behind the card and both Inspector angles visible](screenshots/studio-tilt.png)
+
+To reproduce this cursor-free Windows/wgpu frame, run
+`python tools/capture_studio.py --pane preview --width 1440 --height 900 --accent "#67DCCA" --corner-radius 18 --depth-layers 6 --layer-tilt -24 32 --output studio-tilt.png`.
+
+**Save theme…** writes both angles to `surface_style.tilt_x` and
+`surface_style.tilt_y` in each variant. A `ThemeSurface` in your Python app
+uses those angles and the theme's corner radius when it draws the layers.
+Set **Depth layers** to 0 to hide the stack and raise it again to reuse the
+same angles.
 
 Both exported appearances carry the same `control_radius`. In your app,
 assign `ThemePackage.load("studio-theme.json").default` to the root panel's

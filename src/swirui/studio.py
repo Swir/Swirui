@@ -48,6 +48,7 @@ from .studio_comparison import bind_comparison
 from .theme import ColorRole
 
 MaterialKind = Literal["solid", "glass", "acrylic"]
+_DEFAULT_TILT = (8, -11)
 
 
 class StudioPreview(Panel):
@@ -58,6 +59,7 @@ class StudioPreview(Panel):
         empty = Rect(0, 0, 0, 0)
         self.material: MaterialKind = "glass"
         self.depth = 3
+        self.tilt_x, self.tilt_y = _DEFAULT_TILT
         self.light = False
         self.reduced_motion = False
         self.accent: str | None = None
@@ -198,8 +200,8 @@ class StudioPreview(Panel):
                 glow_opacity=self.glow.value / 100,
                 depth_layers=self.depth,
                 depth_spacing=7,
-                tilt_x=8,
-                tilt_y=-11,
+                tilt_x=self.tilt_x,
+                tilt_y=self.tilt_y,
             ),
         )
 
@@ -288,6 +290,7 @@ class StudioPreview(Panel):
         with state_transaction():
             self.material = "glass"
             self.depth = 3
+            self.tilt_x, self.tilt_y = _DEFAULT_TILT
             self.light = False
             self.heading.text = "Build beyond ordinary."
             self.project.value = "Neon workspace"
@@ -432,6 +435,10 @@ class Studio(Panel):
                 PropertyItem("title", "Headline", "Build beyond ordinary.", category="Content"),
                 PropertyItem("material", "Material", "glass", category="Appearance"),
                 PropertyItem("depth", "Depth layers", 3, category="Appearance"),
+                PropertyItem("tilt_x", "Tilt X (°)", self.preview.tilt_x, category="Appearance",
+                             description="Tilt the top and bottom edges, −35° to 35°."),
+                PropertyItem("tilt_y", "Tilt Y (°)", self.preview.tilt_y, category="Appearance",
+                             description="Tilt the sides of the depth layers, −35° to 35°."),
                 PropertyItem("light", "Light theme", False, category="Appearance"),
                 PropertyItem(
                     "renderer",
@@ -605,6 +612,8 @@ class Studio(Panel):
         self.inspector.set_value("title", self.preview.heading.text)
         self.inspector.set_value("material", self.preview.material)
         self.inspector.set_value("depth", self.preview.depth)
+        self.inspector.set_value("tilt_x", self.preview.tilt_x)
+        self.inspector.set_value("tilt_y", self.preview.tilt_y)
         self.inspector.set_value("light", self.preview.light)
 
     def _property_changed(self, event: Event) -> None:
@@ -627,6 +636,16 @@ class Studio(Panel):
             if depth != value:
                 self.inspector.set_value("depth", depth)
                 return
+        elif key in ("tilt_x", "tilt_y"):
+            angle = max(-35, min(35, int(value)))
+            if angle != value:
+                self.inspector.set_value(key, angle)
+                return
+            if key == "tilt_x":
+                self.preview.tilt_x = angle
+            else:
+                self.preview.tilt_y = angle
+            self.preview.apply_theme()
         elif key == "light":
             light = bool(value)
             if light != self.light:

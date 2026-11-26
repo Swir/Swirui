@@ -31,7 +31,9 @@ slider and still fine-tune it horizontally. Select **Launch preview** to try the
 dark and light versions side by side. Narrow the comparison window and the
 two forms stack vertically, keeping the current field and selection. Both
 versions follow changes to the material, accent and corners while the
-comparison is open. Select **Save theme…** to write both appearances to one
+comparison is open. In the Inspector, edit **Tilt X (°)** and **Tilt Y (°)**
+to turn the layers behind a card while its controls stay in place.
+Select **Save theme…** to write both appearances to one
 JSON file. To try them outside
 Studio, run `python -m swirui preview-theme studio-theme.json` from the
 folder where you saved it. **Copy theme JSON** also exports to the clipboard.

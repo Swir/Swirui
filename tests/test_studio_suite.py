@@ -36,10 +36,13 @@ def test_open_comparison_follows_edits_and_detaches_on_close():
             preview.tint.value = 43
             preview.glow.value = 18
             studio.inspector.set_value("depth", 6)
+            studio.inspector.set_value("tilt_x", -20)
+            studio.inspector.set_value("tilt_y", 31)
             studio.settings.reduced_motion.checked = True
         exported = preview.theme_package()
         assert seen == [exported.themes["dark"]]
         assert light.theme == exported.themes["light"]
+        assert (light.theme.surface_style.tilt_x, dark.theme.surface_style.tilt_y) == (-20, 31)
         assert light.theme.palette.accent == "#FF9DAF" and light.theme.reduced_motion
         with state_transaction():
             preview.corners.value = 0
@@ -50,6 +53,10 @@ def test_open_comparison_follows_edits_and_detaches_on_close():
         assert next_dark.theme.control_radius == 0
         studio.execute_command("reset")
         assert next_dark.theme == preview.theme_package().themes["dark"]
+        style = next_dark.theme.surface_style
+        assert (style.tilt_x, style.tilt_y) == (8, -11)
+        assert [item.value for item in studio.inspector.items
+                if item.key in ("tilt_x", "tilt_y")] == [8, -11]
         assert dark.theme == exported.themes["dark"]
     finally:
         app.stop()
@@ -67,6 +74,10 @@ def test_preview_copies_both_authored_finishes_and_preserves_input(tmp_path):
         studio.settings.set_accent("#DB237C")
         studio.inspector.set_value("material", "acrylic")
         studio.inspector.set_value("depth", 5)
+        studio.inspector.begin_edit("tilt_x").set_edit_buffer("-50").commit_edit()
+        studio.inspector.begin_edit("tilt_y").set_edit_buffer("42").commit_edit()
+        assert [item.value for item in studio.inspector.items
+                if item.key in ("tilt_x", "tilt_y")] == [-35, 35]
         studio.settings.reduced_motion.checked = True
         preview.tint.value = 32
         preview.glow.value = 18
@@ -80,6 +91,7 @@ def test_preview_copies_both_authored_finishes_and_preserves_input(tmp_path):
             assert variant.control_radius == 24
             assert variant.surface_style == preview.theme.surface_style
             assert variant.surface_style.tint_opacity == .32
+            assert (variant.surface_style.tilt_x, variant.surface_style.tilt_y) == (-35, 35)
             assert variant.surface_style.glow_opacity == .18
             assert variant.palette.accent == "#DB237C" and variant.reduced_motion
         assert package.themes["dark"].palette.canvas != package.default.palette.canvas
