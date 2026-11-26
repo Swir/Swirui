@@ -132,6 +132,10 @@ Use `SurfaceInteraction` with your own `ThemeSurface` containers and authored
 themes. The [material guide](https://github.com/Swir/Swirui/blob/v0.1.0b6/docs/custom-material-themes.md)
 shows how to control glass, acrylic, depth and motion from Python.
 
+In the 0.2 checkout, run `python examples/appearance_gallery.py`, leave the
+window idle, then switch between **Dark** and **Light**. The palette now fades
+from the current colors even after a long pause.
+
 ### One workspace, two appearances
 
 ![SwirUI Studio in light appearance, captured without a cursor](https://raw.githubusercontent.com/Swir/Swirui/v0.1.0b6/docs/screenshots/studio-light.png)

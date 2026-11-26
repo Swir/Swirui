@@ -2,6 +2,7 @@
 
 from swirui import (
     FUTURE_DARK,
+    AnimationController,
     App,
     Button,
     ButtonVariant,
@@ -53,8 +54,11 @@ def main() -> int:
         Label("Edit your workspace name. Switch looks. Your draft stays with you.",
               bounds=Rect(40, 644, 920, 32), font_size=16),
     )
+    app = App("SwirUI Appearance", renderer=WgpuRenderer())
+    app.add_window(window)
     mount(window, root)
-    controller = ThemeController(window)
+    animations = AnimationController(app, window)
+    controller = ThemeController(window, animations=animations)
 
     def update_labels(event: Event | None = None) -> None:
         with state_transaction():
@@ -76,9 +80,12 @@ def main() -> int:
     controller.on("changed", update_labels)
     update_labels()
     window.focus_component(draft)
-    app = App("SwirUI Appearance", renderer=WgpuRenderer())
-    app.add_window(window)
-    return app.run()
+    try:
+        return app.run()
+    finally:
+        controller.close()
+        animations.dispose()
+        app.stop()
 
 
 if __name__ == "__main__":

@@ -1,8 +1,12 @@
 import sys
+import time
+from dataclasses import replace
 
 import pytest
 
 from swirui import (
+    FUTURE_DARK,
+    FUTURE_LIGHT,
     THEME_PRESETS,
     AnimationController,
     App,
@@ -15,6 +19,62 @@ from swirui import (
 )
 from swirui.platforms.windows import Win32PlatformBackend
 from swirui.rendering import Rect, WgpuRenderer
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows/wgpu required")
+def test_theme_switch_after_idle_presents_an_intermediate_gpu_frame(monkeypatch):
+    renderer = WgpuRenderer()
+    app = App(renderer=renderer)
+    window = app.add_window(Window(width=360, height=240))
+    root = Panel(bounds=Rect(0, 0, 360, 240))
+    field = Input("Field notes", bounds=Rect(24, 30, 250, 40))
+    root.add(field)
+    mount(window, root)
+    driver = AnimationController(app, window)
+    light = replace(FUTURE_LIGHT, motion_duration=.24)
+    themes = ThemeController(window, mode="dark", dark=FUTURE_DARK, light=light, animations=driver)
+    try:
+        app.start()
+        app.process_events()
+        window.focus_component(field)
+        field.select(6, 11)
+        context = renderer._contexts[window.native_handle.value]
+
+        def surface_pixel():
+            width, _, rgba = context.read_scene_rgba()
+            i = 4 * (round(120 * window.scale) * width + round(40 * window.scale))
+            return tuple(rgba[i:i + 3])
+
+        now = time.monotonic()
+        monkeypatch.setattr(time, "monotonic", lambda: now)
+        now += 1
+        app.invalidate(window)
+        app.render_pending()
+        dark_pixel = surface_pixel()
+        now += 4  # The window has presented no frames since the user stopped editing.
+        themes.mode = "light"
+        now += .12
+        assert app.render_pending() == 1
+        assert surface_pixel() == dark_pixel
+        now += .14
+        assert app.render_pending() == 1
+        middle = surface_pixel()
+        now += .04
+        assert app.render_pending() == 1
+        light_pixel = surface_pixel()
+        # The palette interpolates in linear light. Readback is encoded in sRGB.
+        for start, mid, end in zip(dark_pixel, middle, light_pixel, strict=True):
+            assert start + 12 < mid < end - 12
+        target = light.text_color("surface")
+        expected_pixel = tuple(round(channel * 255) for channel in (target.r, target.g, target.b))
+        assert light_pixel == pytest.approx(expected_pixel, abs=1)
+        assert root.theme is light and not themes.transitioning
+        assert field.selected_text == "notes" and window.focused_component is field
+        assert renderer._contexts[window.native_handle.value] is context
+    finally:
+        themes.close()
+        driver.dispose()
+        app.stop()
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Windows/wgpu required")

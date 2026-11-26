@@ -132,6 +132,36 @@ Press Space to activate the focused control, then Tab to move on.
 To reproduce this cursor-free native capture, run
 `python tools/capture_studio.py --pane preview --width 1440 --height 900 --accent "#7FE0BF" --corner-radius 24 --focus-motion --output studio-corners.png`.
 
+## Animate a theme switch
+
+To try an animated theme switch in a running app, launch
+`python examples/appearance_gallery.py`. Select **Dark**, pause for a few
+seconds, then select **Light**. Watch the background and buttons change
+together. The card on the right keeps its own dark theme. You can type a
+workspace name before switching and continue editing it afterward.
+
+![The gallery fades from dark to light while the card on the right stays dark](screenshots/gallery-theme-fade.png)
+
+The animation shows nine cursor-free frames read from the Windows/wgpu
+renderer, sampled on a controlled clock and played at quarter speed.
+
+In your app, pass the window's `AnimationController` to `ThemeController`
+to enable these transitions. Each new animation starts timing when you play
+it, including when another animation is already running. A theme with
+`reduced_motion=True` switches immediately.
+
+```python
+from swirui import AnimationController, ThemeController, ThemeMode
+
+animations = AnimationController(app, window)
+appearance = ThemeController(window, mode=ThemeMode.DARK, animations=animations)
+
+def use_light(_event):
+    appearance.mode = ThemeMode.LIGHT
+
+light_button.on("click", use_light)
+```
+
 ## Try a saved theme
 
 In the preview toolbar, select **Save theme…** and choose a folder and filename
