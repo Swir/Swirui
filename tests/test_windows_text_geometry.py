@@ -5,12 +5,42 @@ import sys
 
 import pytest
 
-from swirui import App, Input, Window, mount
+from swirui import App, Button, IconButton, Input, Panel, Window, mount
 from swirui.platforms.windows import Win32PlatformBackend
 from swirui.rendering import Color, Rect, WgpuRenderer
 from swirui.rendering.text_layout import NativeTextShaper
 
 pytestmark = pytest.mark.skipif(sys.platform != "win32", reason="Windows native fonts and wgpu")
+
+
+def test_action_labels_and_icons_center_their_ink_on_wgpu(record_property):
+    renderer = WgpuRenderer()
+    app = App(platform_backend=Win32PlatformBackend(), renderer=renderer)
+    window = app.add_window(Window(width=320, height=240))
+    root = Panel(bounds=Rect(0, 0, 320, 240), background=Color(0, 0, 0))
+    ink = Color(1, 1, 1)
+    controls = (
+        Button("iiiiWW", bounds=Rect(20, 20, 250, 40), foreground=ink, text_align="center"),
+        Button("שלום", bounds=Rect(20, 80, 250, 40), foreground=ink, text_align="center"),
+        IconButton("★", bounds=Rect(210, 145, 60, 60), accessible_name="Favorite", foreground=ink),
+    )
+    root.add(*controls)
+    mount(window, root)
+    try:
+        app.start()
+        app.process_events()
+        width, _, frame = renderer._contexts[window.native_handle.value].read_scene_rgba()
+        for control in controls:
+            box, scale = control.bounds, window.scale
+            xs = [x for y in range(round(box.y * scale), round(box.bottom * scale))
+                  for x in range(round(box.x * scale), round(box.right * scale))
+                  if min(frame[(y * width + x) * 4:(y * width + x) * 4 + 3]) > 230]
+            assert xs and (min(xs) + max(xs)) / 2 == pytest.approx(
+                (box.x + box.width / 2) * scale, abs=3 * scale)
+        record_property("adapter", renderer.adapter_name)
+        record_property("backend", renderer.graphics_backend)
+    finally:
+        app.stop()
 
 
 @pytest.mark.parametrize("scale", [1.0, 1.5, 2.0])

@@ -62,7 +62,7 @@ class StudioPreview(Panel):
         self.reduced_motion = False
         self.accent: str | None = None
         self.status = Badge("Glass", bounds=empty)
-        self.copy_theme = Button("Copy theme JSON", bounds=empty, font_size=14,
+        self.copy_theme = Button("Copy theme JSON", bounds=empty, font_size=14, text_align="center",
                                  variant=ButtonVariant.SECONDARY)
         self.copy_theme.on("click", self._copy_theme)
         self.backdrop = SilkRibbon(bounds=empty)
@@ -75,7 +75,7 @@ class StudioPreview(Panel):
         )
         self.project = Input("Neon workspace", bounds=empty, font_size=16)
         self.motion = Switch("Enable motion", bounds=empty, checked=True)
-        self.create = Button("Launch preview", bounds=empty)
+        self.create = Button("Launch preview", bounds=empty, text_align="center")
         self.result = Label("Ready for your next idea.", bounds=empty, font_size=14)
         self.palette_label = Label("Accent states", bounds=empty, font_size=15)
         self.swatch_chips = tuple(Panel(bounds=empty, corner_radius=9) for _ in range(3))

@@ -2,7 +2,7 @@
 
 import pytest
 
-from swirui import FUTURE_DARK, FUTURE_LIGHT, Input, PasswordInput, Window, mount
+from swirui import FUTURE_DARK, FUTURE_LIGHT, Button, Input, PasswordInput, Window, mount
 from swirui.rendering import Rect
 from swirui.rendering.text_layout import NativeTextShaper, TextLineLayout
 
@@ -25,6 +25,37 @@ class ProportionalShaper:
 
 def node(field, suffix):
     return next(n for n in field.build_scene_node().walk() if n.key == field.key + suffix)
+
+
+def test_button_label_alignment_uses_shaped_width_and_keeps_the_hit_target():
+    window = Window()
+    button = Button("iiiiW", bounds=Rect(20, 30, 120, 40))
+    mount(window, button)
+    shaper = ProportionalShaper()
+    window._set_text_shaper(shaper)
+    assert node(button, ":content").bounds.width == 96  # automatic, full padded width
+    for align, x in (("center", 66), ("right", 100), ("left", 32)):
+        button.text_align = align
+        label = node(button, ":content")
+        assert (label.bounds.x, label.bounds.width) == (x, 28)
+        assert button.build_scene_node().bounds == Rect(20, 30, 120, 40)
+    assert len(shaper.calls) == 1
+    button.bounds = Rect(20, 30, 180, 40)
+    button.text_align = "center"
+    assert node(button, ":content").bounds.x == 96
+    assert len(shaper.calls) == 1
+    window._set_scale(1.5)
+    assert shaper.calls[-1][-1] == 1.5
+    button.bounds = Rect(20, 30, 120, 40)
+    button.text_align = "left"
+    button.text = "WWWWWWWWWW"
+    assert node(button, ":content").bounds.width == 96
+    button.text = "ii\nsecond line"
+    assert node(button, ":content").text == button.text
+    assert shaper.calls[-1][0] == "ii"
+    with pytest.raises(ValueError, match="text_align"):
+        button.text_align = "diagonal"
+    assert button.text_align == "left"
 
 
 def test_proportional_caret_selection_and_click_use_the_same_advances():

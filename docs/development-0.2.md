@@ -24,6 +24,21 @@ Radeon graphics with DX12. To reproduce it from the same checkout, run
 `python tools/capture_studio.py --pane comparison --accent "#FF7ADE" --corner-radius 24 --output studio-comparison.png`.
 The OS cursor is outside the captured frame.
 
+The **Apply name** buttons center their captions using the width of the shaped
+text. You can use the same alignment for buttons in your app.
+
+```python
+from swirui import Button, IconButton
+from swirui.rendering import Rect
+
+save = Button("Save project", bounds=Rect(24, 20, 176, 44), text_align="center")
+favorite = IconButton("★", bounds=Rect(212, 20, 44, 44), accessible_name="Favorite")
+```
+
+Set `save.text_align` to `"left"`, `"center"` or `"right"` to position the
+caption inside the button's padding. The default `"auto"` on regular buttons
+uses the renderer's paragraph alignment. Icon buttons default to `"center"`.
+
 ## Shape your controls
 
 The **Corners** slider below the preview sets the radius of themed buttons,

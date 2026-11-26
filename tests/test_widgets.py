@@ -231,6 +231,9 @@ def test_icon_button_requires_semantic_name_and_uses_button_role() -> None:
     assert icon.accessible_name == "Favorite"
     assert icon.accessibility_role is AccessibilityRole.BUTTON
     assert icon.build_scene_node().kind is SceneNodeKind.RECTANGLE
+    glyph = icon.build_scene_node().children[0]
+    assert glyph.bounds.x > 0
+    assert glyph.bounds.x + glyph.bounds.width / 2 == pytest.approx(22)
 
 
 def test_widget_runtime_scene_changes_schedule_real_app_frame() -> None:

@@ -44,7 +44,7 @@ class _AppearancePane(Panel):
         self.headline = Label("", bounds=empty, font_size=23)
         self.caption = Label("Project name", bounds=empty, font_size=13)
         self.field = Input("", bounds=empty, accessible_name=f"{mode.title()} preview project name")
-        self.apply = Button("Apply name", bounds=empty)
+        self.apply = Button("Apply name", bounds=empty, text_align="center")
         self.card.add(self.headline, self.caption, self.field, self.apply)
         self.add(self.ribbon, self.mode_label, self.title, self.card)
 

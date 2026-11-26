@@ -423,6 +423,10 @@ class Window(EventEmitter):
             return
         old_scale = self.scale
         self.scale = scale
+        # Shaped advances are measured at the monitor's physical scale. Refresh
+        # retained text positions while keeping layout dimensions in logical pixels.
+        if self._text_shaper is not None and self.root is not None:
+            self.root.invalidate(reason="text_editing_geometry")
         self.emit(
             "scale_changed",
             old_scale=old_scale,
