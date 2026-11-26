@@ -32,6 +32,8 @@ material, accent and corners while the comparison is open. Select **Save
 theme…** to write both appearances to one JSON file. To try them outside
 Studio, run `python -m swirui preview-theme studio-theme.json` from the
 folder where you saved it. **Copy theme JSON** also exports to the clipboard.
+The `SilkRibbon` behind each preview card now has a continuous satin fold.
+Its highlight and shaded reverse follow your accent when you switch themes.
 Text fields in the preview and in your own apps support mouse drag selection.
 On Windows, Shift+click extends the selection from its original anchor.
 Use Ctrl+Left or Ctrl+Right to move by word in a text field. Hold Shift to

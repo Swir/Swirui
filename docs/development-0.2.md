@@ -17,7 +17,12 @@ For example, choose **Rose** in **Settings → Signature color**, then move
 edits. Select **Launch preview** again when you want to restore the sample to
 the current project name. Closing the comparison leaves Studio open.
 
-![The dark and light forms after applying the same rose accent and rounded corners in Studio](screenshots/studio-comparison.png)
+![A rose satin ribbon folding behind dark and light glass cards with rounded corners](screenshots/studio-comparison.png)
+
+The ribbon behind each card has two faces. A narrow highlight follows the
+fold into a shaded reverse. To use it in your own window, add a `SilkRibbon`
+to a themed panel before adding the controls you want in front. Changing the
+panel's accent recolors the ribbon and reuses its existing geometry.
 
 This 960 × 460 capture is a direct readback of the Windows wgpu frame on AMD
 Radeon graphics with DX12. To reproduce it from the same checkout, run
