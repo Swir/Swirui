@@ -48,7 +48,13 @@ uses the renderer's paragraph alignment. Icon buttons default to `"center"`.
 
 The **Corners** slider below the preview sets the radius of themed buttons,
 inputs and material cards in logical pixels. Drag from 0 for square corners
-to 24 for a rounded finish. With keyboard focus on the slider, the arrow keys
+to 24 for a rounded finish. Keep the mouse button down and move above or
+below the track. Moving horizontally still adjusts the corners. On Windows
+you can drag beyond the window edge and release there. Your app's `Slider`
+and `RangeSlider` use the same gesture. A range drag keeps the handle you
+started with, even when you move across the other handle.
+
+With keyboard focus on the slider, the arrow keys
 change the value by one. Home and End jump to the two extremes.
 
 In the Inspector, increase the depth to see the stacked layers behind the card.

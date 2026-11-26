@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import math
-from typing import Literal
+from abc import abstractmethod
+from typing import TYPE_CHECKING, Literal
 
 from swirui.core import AccessibilityRole, Event
 from swirui.platforms import PlatformEvent, PlatformEventKind, PointerButton
@@ -12,6 +13,9 @@ from swirui.rendering.scene import SceneNode, SceneNodeKind
 from swirui.theme import Theme
 
 from .base import ThemeStyle, Widget
+
+if TYPE_CHECKING:
+    from swirui.window import Window
 
 ThumbName = Literal["lower", "upper"]
 
@@ -76,11 +80,135 @@ def _format_value(value: float) -> str:
     return f"{value:g}"
 
 
-class Slider(Widget):
-    """Focusable horizontal slider with retained GPU geometry."""
-
+class _SliderBase(Widget):
     thumb_size = 18.0
     track_height = 6.0
+    _minimum: float
+    _maximum: float
+    _hovered: bool
+    _focused: bool
+    _dragging: bool
+
+    def _bind_drag(self) -> None:
+        self.on("pointer_enter", self._on_pointer_enter)
+        self.on("pointer_leave", self._on_pointer_leave)
+        self.on("pointer_down", self._on_pointer_down)
+        self.on("pointer_move", self._on_pointer_move)
+        self.on("pointer_up", self._on_pointer_up)
+        self.on("pointer_capture_lost", self._on_capture_lost)
+        self.on("focus_gained", self._on_focus_gained)
+        self.on("focus_lost", self._on_focus_lost)
+        self.on("invalidated", self._on_invalidated)
+
+    def on_unmount(self, window: Window) -> None:
+        window.release_pointer_capture(self)
+        super().on_unmount(window)
+
+    def _on_pointer_enter(self, _event: Event) -> None:
+        if self.enabled and not self._hovered:
+            self._hovered = True
+            self.invalidate(reason="pointer_enter")
+
+    def _on_pointer_leave(self, _event: Event) -> None:
+        if self._hovered:
+            self._hovered = False
+            self.invalidate(reason="pointer_leave")
+
+    def _on_pointer_down(self, event: Event) -> None:
+        native = self._platform_event(event, PlatformEventKind.POINTER_DOWN)
+        if (event.source is not self or event.default_prevented or not self.enabled
+                or native is None or native.button is not PointerButton.LEFT or native.x is None):
+            return
+        window = self.mounted_window
+        path = event.data.get("component_path", ())
+        if any(not item.enabled or not item.visible for item in path):
+            return
+        self._dragging = True
+        if window is not None:
+            window.capture_pointer(self)
+        if self._dragging:
+            self._update_drag(self._value_from_x(native.x), event, initial=True)
+            self.invalidate(reason="pointer_down")
+
+    def _on_pointer_move(self, event: Event) -> None:
+        native = self._platform_event(event, PlatformEventKind.POINTER_MOVE)
+        if self._dragging and self.enabled and native is not None and native.x is not None:
+            self._update_drag(self._value_from_x(native.x), event)
+
+    def _on_pointer_up(self, event: Event) -> None:
+        native = self._platform_event(event, PlatformEventKind.POINTER_UP)
+        if not self._dragging or native is None or native.button is not PointerButton.LEFT:
+            return
+        self._dragging = False
+        if self.enabled and native.x is not None:
+            self._update_drag(self._value_from_x(native.x), event)
+        self.invalidate(reason="pointer_up")
+
+    @abstractmethod
+    def _update_drag(self, value: float, event: Event, *, initial: bool = False) -> None:
+        """Apply a pointer position, choosing the range thumb only at press time."""
+
+    def _on_capture_lost(self, _event: Event) -> None:
+        if self._dragging:
+            self._dragging = False
+            self.invalidate(reason="pointer_capture_lost")
+
+    def _on_focus_gained(self, _event: Event) -> None:
+        if not self._focused:
+            self._focused = True
+            self.invalidate(reason="focus_gained")
+
+    def _on_focus_lost(self, _event: Event) -> None:
+        changed = self._focused or self._dragging
+        self._focused = self._dragging = False
+        if self.mounted_window is not None:
+            self.mounted_window.release_pointer_capture(self)
+        if changed:
+            self.invalidate(reason="focus_lost")
+
+    def _on_invalidated(self, event: Event) -> None:
+        if (event.data.get("reason") in ("enabled", "visible")
+                and not (self.enabled and self.visible)):
+            self._hovered = self._dragging = False
+            if self.mounted_window is not None:
+                self.mounted_window.release_pointer_capture(self)
+
+    @staticmethod
+    def _platform_event(event: Event, kind: PlatformEventKind) -> PlatformEvent | None:
+        native = event.data.get("event")
+        if isinstance(native, PlatformEvent) and native.kind is kind:
+            return native
+        return None
+
+    def _track_geometry(self) -> tuple[float, float, float]:
+        inset = min(self.thumb_size / 2.0, self.bounds.width / 2.0)
+        return (
+            self.bounds.x + inset,
+            self.bounds.right - inset,
+            self.bounds.y + self.bounds.height / 2.0,
+        )
+
+    def _thumb_bounds(self, value: float) -> Rect:
+        left, right, center_y = self._track_geometry()
+        center_x = left + (right - left) * self._ratio(value)
+        size = min(self.thumb_size, self.bounds.height, self.bounds.width)
+        return Rect(center_x - size / 2.0, center_y - size / 2.0, size, size)
+
+    def _ratio(self, value: float) -> float:
+        return (value - self._minimum) / (self._maximum - self._minimum)
+
+    def _value_from_x(self, x: float) -> float:
+        left, right, _ = self._track_geometry()
+        if right <= left or x <= left:
+            return self._minimum
+        if x >= right:
+            return self._maximum
+        ratio = (x - left) / (right - left)
+        return self._minimum + ratio * (self._maximum - self._minimum)
+
+
+class Slider(_SliderBase):
+    """Focusable horizontal slider with retained GPU geometry."""
 
     def __init__(
         self,
@@ -107,7 +235,7 @@ class Slider(Widget):
         self._minimum, self._maximum, self._step = _validate_range(minimum, maximum, step)
         self._value = _snap(value, self._minimum, self._maximum, self._step)
         self._hovered = False
-        self._pressed = False
+        self._dragging = False
         self._focused = False
         super().__init__(
             bounds=bounds,
@@ -121,15 +249,8 @@ class Slider(Widget):
         )
         self._bind_theme(theme, _slider_theme_styles())
         self._sync_accessibility()
-        self.on("pointer_enter", self._on_pointer_enter)
-        self.on("pointer_leave", self._on_pointer_leave)
-        self.on("pointer_down", self._on_pointer_down)
-        self.on("pointer_move", self._on_pointer_move)
-        self.on("pointer_up", self._on_pointer_up)
+        self._bind_drag()
         self.on("key_down", self._on_key_down)
-        self.on("focus_gained", self._on_focus_gained)
-        self.on("focus_lost", self._on_focus_lost)
-        self.on("invalidated", self._on_invalidated)
 
     @property
     def minimum(self) -> float:
@@ -220,42 +341,11 @@ class Slider(Widget):
         )
         return root
 
-    def _track_geometry(self) -> tuple[float, float, float]:
-        inset = min(self.thumb_size / 2.0, self.bounds.width / 2.0)
-        return (
-            self.bounds.x + inset,
-            self.bounds.right - inset,
-            self.bounds.y + self.bounds.height / 2.0,
-        )
-
-    def _thumb_bounds(self, value: float) -> Rect:
-        left, right, center_y = self._track_geometry()
-        center_x = left + (right - left) * self._ratio(value)
-        size = min(self.thumb_size, self.bounds.height, self.bounds.width)
-        return Rect(center_x - size / 2.0, center_y - size / 2.0, size, size)
-
-    def _ratio(self, value: float) -> float:
-        return (value - self._minimum) / (self._maximum - self._minimum)
-
-    def _value_from_x(self, x: float) -> float:
-        left, right, _ = self._track_geometry()
-        if right <= left:
-            return self._minimum
-        ratio = _clamp((x - left) / (right - left), 0.0, 1.0)
-        return self._minimum + ratio * (self._maximum - self._minimum)
-
-    def _set_value(self, value: float, *, input_event: Event | None) -> None:
-        normalized = _snap(value, self._minimum, self._maximum, self._step)
-        if normalized == self._value:
-            return
-        old_value = self._value
-        self._value = normalized
-        self._sync_accessibility()
-        self.invalidate(reason="value")
-        self.emit("changed", old_value=old_value, value=normalized, input_event=input_event)
-
-    def _set_exact_endpoint(self, value: float, *, input_event: Event | None) -> None:
-        normalized = _clamp(value, self._minimum, self._maximum)
+    def _set_value(
+        self, value: float, *, input_event: Event | None, exact_endpoint: bool = False,
+    ) -> None:
+        normalized = value if exact_endpoint else _snap(value, self._minimum, self._maximum,
+                                                         self._step)
         if normalized == self._value:
             return
         old_value = self._value
@@ -273,45 +363,12 @@ class Slider(Widget):
     def _thumb_color(self) -> Color:
         if not self.enabled:
             return self._thumb_disabled
-        if self._hovered or self._pressed:
+        if self._hovered or self._dragging:
             return self._accent_hover
         return self._thumb
 
-    def _on_pointer_enter(self, _event: Event) -> None:
-        if self.enabled and not self._hovered:
-            self._hovered = True
-            self.invalidate(reason="pointer_enter")
-
-    def _on_pointer_leave(self, _event: Event) -> None:
-        changed = self._hovered or self._pressed
-        self._hovered = False
-        self._pressed = False
-        if changed:
-            self.invalidate(reason="pointer_leave")
-
-    def _on_pointer_down(self, event: Event) -> None:
-        native = self._platform_event(event, PlatformEventKind.POINTER_DOWN)
-        if not self.enabled or native is None or native.button is not PointerButton.LEFT:
-            return
-        self._pressed = True
-        if native.x is not None:
-            self._set_value(self._value_from_x(native.x), input_event=event)
-        self.invalidate(reason="pointer_down")
-
-    def _on_pointer_move(self, event: Event) -> None:
-        native = self._platform_event(event, PlatformEventKind.POINTER_MOVE)
-        if self.enabled and self._pressed and native is not None and native.x is not None:
-            self._set_value(self._value_from_x(native.x), input_event=event)
-
-    def _on_pointer_up(self, event: Event) -> None:
-        native = self._platform_event(event, PlatformEventKind.POINTER_UP)
-        if native is None or native.button is not PointerButton.LEFT:
-            return
-        if self._pressed and native.x is not None and self.enabled:
-            self._set_value(self._value_from_x(native.x), input_event=event)
-        if self._pressed:
-            self._pressed = False
-            self.invalidate(reason="pointer_up")
+    def _update_drag(self, value: float, event: Event, *, initial: bool = False) -> None:
+        self._set_value(value, input_event=event, exact_endpoint=value == self.maximum)
 
     def _on_key_down(self, event: Event) -> None:
         native = self._platform_event(event, PlatformEventKind.KEY_DOWN)
@@ -327,43 +384,16 @@ class Slider(Widget):
         elif key == _VK_PAGE_UP:
             self._set_value(self._value + self._step * 10.0, input_event=event)
         elif key == _VK_HOME:
-            self._set_exact_endpoint(self._minimum, input_event=event)
+            self._set_value(self.minimum, input_event=event, exact_endpoint=True)
         elif key == _VK_END:
-            self._set_exact_endpoint(self._maximum, input_event=event)
+            self._set_value(self.maximum, input_event=event, exact_endpoint=True)
         else:
             return
         event.prevent_default()
 
-    def _on_focus_gained(self, _event: Event) -> None:
-        if not self._focused:
-            self._focused = True
-            self.invalidate(reason="focus_gained")
 
-    def _on_focus_lost(self, _event: Event) -> None:
-        changed = self._focused or self._pressed
-        self._focused = False
-        self._pressed = False
-        if changed:
-            self.invalidate(reason="focus_lost")
-
-    def _on_invalidated(self, event: Event) -> None:
-        if event.data.get("reason") == "enabled" and not self.enabled:
-            self._hovered = False
-            self._pressed = False
-
-    @staticmethod
-    def _platform_event(event: Event, kind: PlatformEventKind) -> PlatformEvent | None:
-        native = event.data.get("event")
-        if isinstance(native, PlatformEvent) and native.kind is kind:
-            return native
-        return None
-
-
-class RangeSlider(Widget):
+class RangeSlider(_SliderBase):
     """Two-thumb horizontal slider for selecting a bounded interval."""
-
-    thumb_size = 18.0
-    track_height = 6.0
 
     def __init__(
         self,
@@ -411,15 +441,8 @@ class RangeSlider(Widget):
         )
         self._bind_theme(theme, _slider_theme_styles())
         self._sync_accessibility()
-        self.on("pointer_enter", self._on_pointer_enter)
-        self.on("pointer_leave", self._on_pointer_leave)
-        self.on("pointer_down", self._on_pointer_down)
-        self.on("pointer_move", self._on_pointer_move)
-        self.on("pointer_up", self._on_pointer_up)
+        self._bind_drag()
         self.on("key_down", self._on_key_down)
-        self.on("focus_gained", self._on_focus_gained)
-        self.on("focus_lost", self._on_focus_lost)
-        self.on("invalidated", self._on_invalidated)
 
     @property
     def minimum(self) -> float:
@@ -523,30 +546,6 @@ class RangeSlider(Widget):
             )
         return root
 
-    def _track_geometry(self) -> tuple[float, float, float]:
-        inset = min(self.thumb_size / 2.0, self.bounds.width / 2.0)
-        return (
-            self.bounds.x + inset,
-            self.bounds.right - inset,
-            self.bounds.y + self.bounds.height / 2.0,
-        )
-
-    def _ratio(self, value: float) -> float:
-        return (value - self._minimum) / (self._maximum - self._minimum)
-
-    def _thumb_bounds(self, value: float) -> Rect:
-        left, right, center_y = self._track_geometry()
-        center_x = left + (right - left) * self._ratio(value)
-        size = min(self.thumb_size, self.bounds.height, self.bounds.width)
-        return Rect(center_x - size / 2.0, center_y - size / 2.0, size, size)
-
-    def _value_from_x(self, x: float) -> float:
-        left, right, _ = self._track_geometry()
-        if right <= left:
-            return self._minimum
-        ratio = _clamp((x - left) / (right - left), 0.0, 1.0)
-        return self._minimum + ratio * (self._maximum - self._minimum)
-
     def _nearest_thumb(self, value: float) -> ThumbName:
         lower_distance = abs(value - self._lower_value)
         upper_distance = abs(value - self._upper_value)
@@ -603,55 +602,11 @@ class RangeSlider(Widget):
             return self._accent_hover
         return self._thumb
 
-    def _on_pointer_enter(self, _event: Event) -> None:
-        if self.enabled and not self._hovered:
-            self._hovered = True
-            self.invalidate(reason="pointer_enter")
-
-    def _on_pointer_leave(self, _event: Event) -> None:
-        changed = self._hovered or self._dragging
-        self._hovered = False
-        self._dragging = False
-        if changed:
-            self.invalidate(reason="pointer_leave")
-
-    def _on_pointer_down(self, event: Event) -> None:
-        native = self._platform_event(event, PlatformEventKind.POINTER_DOWN)
-        if (
-            not self.enabled
-            or native is None
-            or native.button is not PointerButton.LEFT
-            or native.x is None
-        ):
-            return
-        value = self._value_from_x(native.x)
-        self._active_thumb = self._nearest_thumb(value)
-        self._dragging = True
-        self._set_thumb_value(self._active_thumb, value, input_event=event)
-        self.invalidate(reason="pointer_down")
-
-    def _on_pointer_move(self, event: Event) -> None:
-        native = self._platform_event(event, PlatformEventKind.POINTER_MOVE)
-        if self.enabled and self._dragging and native is not None and native.x is not None:
-            self._set_thumb_value(
-                self._active_thumb,
-                self._value_from_x(native.x),
-                input_event=event,
-            )
-
-    def _on_pointer_up(self, event: Event) -> None:
-        native = self._platform_event(event, PlatformEventKind.POINTER_UP)
-        if native is None or native.button is not PointerButton.LEFT:
-            return
-        if self.enabled and self._dragging and native.x is not None:
-            self._set_thumb_value(
-                self._active_thumb,
-                self._value_from_x(native.x),
-                input_event=event,
-            )
-        if self._dragging:
-            self._dragging = False
-            self.invalidate(reason="pointer_up")
+    def _update_drag(self, value: float, event: Event, *, initial: bool = False) -> None:
+        if initial:
+            self._active_thumb = self._nearest_thumb(value)
+        self._set_thumb_value(self._active_thumb, value, input_event=event,
+                             exact_endpoint=value == self.maximum)
 
     def _on_key_down(self, event: Event) -> None:
         native = self._platform_event(event, PlatformEventKind.KEY_DOWN)
@@ -683,27 +638,3 @@ class RangeSlider(Widget):
             exact_endpoint=exact,
         )
         event.prevent_default()
-
-    def _on_focus_gained(self, _event: Event) -> None:
-        if not self._focused:
-            self._focused = True
-            self.invalidate(reason="focus_gained")
-
-    def _on_focus_lost(self, _event: Event) -> None:
-        changed = self._focused or self._dragging
-        self._focused = False
-        self._dragging = False
-        if changed:
-            self.invalidate(reason="focus_lost")
-
-    def _on_invalidated(self, event: Event) -> None:
-        if event.data.get("reason") == "enabled" and not self.enabled:
-            self._hovered = False
-            self._dragging = False
-
-    @staticmethod
-    def _platform_event(event: Event, kind: PlatformEventKind) -> PlatformEvent | None:
-        native = event.data.get("event")
-        if isinstance(native, PlatformEvent) and native.kind is kind:
-            return native
-        return None

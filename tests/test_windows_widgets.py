@@ -58,6 +58,55 @@ def _send_click(user32: Any, hwnd: int, x: int, y: int) -> None:
     user32.SendMessageW(ctypes.c_void_p(hwnd), 0x0202, 0, point)
 
 
+@pytest.mark.skipif(sys.platform != "win32", reason="Win32 capture and wgpu readback required")
+def test_slider_drag_updates_gpu_track_outside_the_client_and_releases_capture() -> None:
+    renderer = WgpuRenderer()
+    app = App(platform_backend=_isolated_backend(), renderer=renderer)
+    window = app.add_window(Window(width=420, height=240))
+    single = Slider(bounds=Rect(20, 24, 250, 40), maximum=10, step=3, value=6)
+    interval = RangeSlider(bounds=Rect(20, 96, 250, 40), maximum=10, step=3,
+                           lower_value=0, upper_value=6)
+    root = Component("ranges")
+    root.add(single, interval)
+    mount(window, root)
+    try:
+        app.start()
+        app.process_events()
+        hwnd = window.native_handle.value
+        user32 = _user32()
+        user32.GetCapture.argtypes, user32.GetCapture.restype = [], ctypes.c_void_p
+        context = renderer._contexts[hwnd]
+
+        def mouse(message, flags, x, y):
+            point = _lparam(round(x * window.scale), round(y * window.scale))
+            user32.SendMessageW(hwnd, message, flags, point)
+            app.process_events()
+
+        def track_pixels(y):
+            app.render_pending(app._frame_schedulers[window].stats.last_frame_time + 1)
+            width, _, frame = context.read_scene_rgba()
+            row = round(y * window.scale) * width
+            offsets = [4 * (row + round(x * window.scale)) for x in (80, 225)]
+            return tuple(bytes(frame[i:i + 3]) for i in offsets)
+
+        for slider in (single, interval):
+            y = slider.bounds.y + slider.bounds.height / 2
+            filled, empty = track_pixels(y)
+            assert filled != empty
+            mouse(0x0201, 1, 168, y)  # WM_LBUTTONDOWN on the thumb
+            assert user32.GetCapture() == hwnd and window.pointer_capture_component is slider
+            mouse(0x0200, 1, 460, -30)  # WM_MOUSEMOVE above and beyond the client
+            assert (slider.value if slider is single else interval.upper_value) == 10
+            assert track_pixels(y) == (filled, filled)
+            mouse(0x0202, 0, -30, -30)  # WM_LBUTTONUP at the opposite end
+            assert not user32.GetCapture() and window.pointer_capture_component is None
+            assert (slider.value if slider is single else interval.upper_value) == 0
+            assert track_pixels(y) == (empty, empty)
+        assert interval.lower_value == 0 and interval.active_thumb == "upper"
+    finally:
+        app.stop()
+
+
 @pytest.mark.skipif(sys.platform != "win32", reason="retained widget smoke requires Windows")
 def test_retained_text_inputs_route_real_win32_text_and_reuse_wgpu_context() -> None:
     renderer = WgpuRenderer()

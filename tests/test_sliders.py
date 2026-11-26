@@ -1,3 +1,5 @@
+import pytest
+
 from swirui import Component, RangeSlider, Slider, Window, build_accessibility_tree, mount
 from swirui.core import AccessibilityRole, Event
 from swirui.platforms import (
@@ -176,3 +178,58 @@ def test_range_slider_rejects_reversed_initial_interval() -> None:
         pass
     else:
         raise AssertionError("reversed range must raise ValueError")
+
+
+@pytest.mark.parametrize("kind", ["single", "range"])
+def test_drag_stays_with_slider_outside_track_and_releases_on_button_up(kind):
+    bounds = Rect(20, 20, 220, 36)
+    window = Window(width=400, height=180)
+    slider = (Slider(bounds=bounds, maximum=10, step=3) if kind == "single" else
+              RangeSlider(bounds=bounds, maximum=10, step=3, lower_value=3, upper_value=6))
+    other = Slider(bounds=Rect(20, 90, 220, 36))
+    root = Component("root")
+    root.add(slider, other)
+    mount(window, root)
+    values = []
+    slider.on("changed", lambda _: values.append(
+        slider.value if isinstance(slider, Slider) else slider.upper_value))
+    _pointer(window, PlatformEventKind.POINTER_MOVE, x=150, y=38)
+    _pointer(window, PlatformEventKind.POINTER_DOWN, x=150, y=38)
+    assert window.pointer_capture_component is slider
+    _pointer(window, PlatformEventKind.POINTER_MOVE, x=90, y=105)
+    assert values[-1] == 3 and other.value == 0
+    _pointer(window, PlatformEventKind.POINTER_MOVE, x=-25, y=105)
+    assert values[-1] == (3 if kind == "range" else 0)
+    _pointer(window, PlatformEventKind.POINTER_UP, x=470, y=-15)
+    assert values[-1] == 10 and window.pointer_capture_component is None
+    _pointer(window, PlatformEventKind.POINTER_MOVE, x=30, y=38)
+    assert values[-1] == 10
+    if isinstance(slider, RangeSlider):
+        assert slider.lower_value == 3 and slider.active_thumb == "upper"
+
+
+@pytest.mark.parametrize("cancel", ["disable", "hide", "unmount", "release", "focus"])
+def test_cancelled_slider_drag_never_resumes_on_hover(cancel):
+    window = Window(width=400, height=180)
+    root = Component("root")
+    slider = Slider(bounds=Rect(20, 20, 220, 36))
+    root.add(slider)
+    mount(window, root)
+    _pointer(window, PlatformEventKind.POINTER_DOWN, x=130, y=38)
+    assert window.pointer_capture_component is slider and slider.value == 50
+    if cancel == "disable":
+        slider.enabled = False
+        slider.enabled = True
+    elif cancel == "hide":
+        slider.visible = False
+        slider.visible = True
+    elif cancel == "unmount":
+        root.remove(slider)
+        root.add(slider)
+    elif cancel == "release":
+        window.release_pointer_capture(slider)
+    else:
+        window.focus_component(None)
+    assert window.pointer_capture_component is None
+    _pointer(window, PlatformEventKind.POINTER_MOVE, x=200, y=38)
+    assert slider.value == 50

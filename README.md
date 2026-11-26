@@ -26,7 +26,8 @@
 
 On the 0.2 development branch, drag **Corners** to shape the buttons, fields
 and material cards in your design. The tilted layers behind each card follow
-the same corner radius. Select **Launch preview** to try the
+the same corner radius. While dragging, you can move above or below the
+slider and still fine-tune it horizontally. Select **Launch preview** to try the
 dark and light versions side by side. Both versions follow changes to the
 material, accent and corners while the comparison is open. Select **Save
 theme…** to write both appearances to one JSON file. To try them outside
