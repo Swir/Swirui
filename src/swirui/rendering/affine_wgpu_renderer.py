@@ -10,7 +10,7 @@ from swirui.window import Window
 
 from .affine import Affine2D
 from .custom_wgpu_renderer import WgpuRenderer as _CustomWgpuRenderer
-from .geometry import Color, CornerRadius, Point, Rect
+from .geometry import Color, CornerRadius, Point, Rect, rounded_rectangle_outline
 from .scene import ClipRegion, Scene, SceneNodeKind
 from .wgpu_renderer import ImageInstance, RectangleInstance, TextInstance
 
@@ -33,7 +33,6 @@ AffineScenePayload: TypeAlias = tuple[
 ]
 
 _DEFAULT_TEXT_COLOR = Color(1.0, 1.0, 1.0, 1.0)
-_ROUNDED_CORNER_SEGMENTS = 8
 _TEXT_TRANSFORM_EPSILON = 1.0e-12
 
 
@@ -295,7 +294,7 @@ class WgpuRenderer(_CustomWgpuRenderer):
         transform: Affine2D,
         scale: float,
     ) -> None:
-        outline = self._rounded_rectangle_outline(bounds, radius)
+        outline = rounded_rectangle_outline(bounds, radius)
         if len(outline) < 3:
             return
 
@@ -316,72 +315,6 @@ class WgpuRenderer(_CustomWgpuRenderer):
                         *physical_transform,
                     )
                 )
-
-    @staticmethod
-    def _rounded_rectangle_outline(
-        bounds: Rect,
-        radius: CornerRadius,
-    ) -> tuple[Point, ...]:
-        max_radius = min(bounds.width, bounds.height) * 0.5
-        radii = (
-            min(radius.top_left, max_radius),
-            min(radius.top_right, max_radius),
-            min(radius.bottom_right, max_radius),
-            min(radius.bottom_left, max_radius),
-        )
-        points: list[Point] = []
-
-        def append_point(point: Point) -> None:
-            if not points or points[-1] != point:
-                points.append(point)
-
-        def append_arc(
-            center_x: float,
-            center_y: float,
-            corner_radius: float,
-            start_angle: float,
-        ) -> None:
-            if corner_radius == 0.0:
-                append_point(Point(center_x, center_y))
-                return
-            step = (math.pi * 0.5) / _ROUNDED_CORNER_SEGMENTS
-            for segment in range(_ROUNDED_CORNER_SEGMENTS + 1):
-                angle = start_angle + step * segment
-                append_point(
-                    Point(
-                        center_x + math.cos(angle) * corner_radius,
-                        center_y + math.sin(angle) * corner_radius,
-                    )
-                )
-
-        top_left, top_right, bottom_right, bottom_left = radii
-        append_arc(
-            bounds.x + top_left,
-            bounds.y + top_left,
-            top_left,
-            math.pi,
-        )
-        append_arc(
-            bounds.right - top_right,
-            bounds.y + top_right,
-            top_right,
-            math.pi * 1.5,
-        )
-        append_arc(
-            bounds.right - bottom_right,
-            bounds.bottom - bottom_right,
-            bottom_right,
-            0.0,
-        )
-        append_arc(
-            bounds.x + bottom_left,
-            bounds.bottom - bottom_left,
-            bottom_left,
-            math.pi * 0.5,
-        )
-        if len(points) > 1 and points[0] == points[-1]:
-            points.pop()
-        return tuple(points)
 
     @staticmethod
     def _transformed_text_geometry(

@@ -68,6 +68,39 @@ def test_perspective_depth_moves_surface_toward_camera() -> None:
     assert raised_bounds.height > base_bounds.height
 
 
+def test_rounded_outline_projects_the_authored_tangent_under_tilt() -> None:
+    # The top edge's midpoint is a tangent on this capsule. Choose a pivot on
+    # the left edge so both the rotation and the camera affect its projection.
+    bounds = Rect(20, 30, 80, 120)
+    plane = PerspectivePlane(rotation_y_degrees=60, perspective=200, origin=Point(0, 0))
+    box, path = plane.projected_path(bounds, corner_radius=1000)
+    scale = 200 / (200 + 40 * math.sin(math.radians(60)))
+    tangent_x = 20 + 40 * math.cos(math.radians(60)) * scale
+    assert any(box.x + p.x == pytest.approx(tangent_x)
+               and box.y + p.y == pytest.approx(30) for p in path.points)
+    assert len(path.points) == len(set(path.points)) > 4
+    assert not path.contains(Point(20 - box.x, 30 - box.y))
+    assert plane.projected_path(bounds, corner_radius=40) == (box, path)
+
+
+@pytest.mark.parametrize("radius", [-1, math.nan, math.inf])
+def test_perspective_rejects_invalid_radius(radius: float) -> None:
+    with pytest.raises(ValueError, match="corner_radius"):
+        PerspectivePlane().projected_path(Rect(0, 0, 100, 60), corner_radius=radius)
+
+
+def test_clamped_circle_is_centered_and_fills_its_projected_fan() -> None:
+    node = PerspectivePlane().to_scene_node(
+        "circle", Rect(5, 7, 20, 20), corner_radius=999, fill=Color.from_hex("#123456"),
+    )
+    assert node.bounds == Rect(5, 7, 20, 20)
+    assert node.hit_test(Point(6, 8)) is None
+    assert node.hit_test(Point(15, 17)) is node
+    area = sum(abs((b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x)) / 2
+               for a, b, c in node.path.triangulate())
+    assert area == pytest.approx(math.pi * 100, rel=0.01)
+
+
 def test_perspective_plane_validates_geometry_and_camera_crossing() -> None:
     with pytest.raises(ValueError, match="rotation_x_degrees"):
         PerspectivePlane(rotation_x_degrees=81.0)

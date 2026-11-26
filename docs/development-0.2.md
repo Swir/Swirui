@@ -31,6 +31,10 @@ inputs and material cards in logical pixels. Drag from 0 for square corners
 to 24 for a rounded finish. With keyboard focus on the slider, the arrow keys
 change the value by one. Home and End jump to the two extremes.
 
+In the Inspector, increase the depth to see the stacked layers behind the card.
+Each layer takes its corner radius from the theme before it tilts, so the curve
+follows the perspective of the card. Your app's `ThemeSurface` uses the same geometry.
+
 Both exported appearances carry the same `control_radius`. In your app,
 assign `ThemePackage.load("studio-theme.json").default` to the root panel's
 `theme` after saving the JSON from Studio. Controls with a locally specified

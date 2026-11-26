@@ -87,6 +87,42 @@ class CornerRadius:
         return cls(radius, radius, radius, radius)
 
 
+# Eight segments per quarter turn. Emit the two tangent endpoints exactly.
+_QUARTER_ARC = tuple(
+    (math.cos(i * math.pi / 16), math.sin(i * math.pi / 16)) for i in range(1, 8)
+)
+_QUARTER_ARCS = (
+    tuple((-u, -v) for u, v in _QUARTER_ARC),
+    tuple((v, -u) for u, v in _QUARTER_ARC),
+    _QUARTER_ARC,
+    tuple((-v, u) for u, v in _QUARTER_ARC),
+)
+
+
+def rounded_rectangle_outline(bounds: Rect, radius: CornerRadius) -> tuple[Point, ...]:
+    """Clockwise contour shared by the affine and perspective renderers."""
+    limit = min(bounds.width, bounds.height) * 0.5
+    tl, tr, br, bl = (min(r, limit) for r in (
+        radius.top_left, radius.top_right, radius.bottom_right, radius.bottom_left
+    ))
+    x, y, right, bottom = bounds.x, bounds.y, bounds.right, bounds.bottom
+    points: list[Point] = []
+
+    def arc(start: Point, end: Point, cx: float, cy: float, r: float, quadrant: int) -> None:
+        points.append(start)
+        if r:
+            for u, v in _QUARTER_ARCS[quadrant]:
+                points.append(Point(cx + r * u, cy + r * v))
+            points.append(end)
+
+    # The tangent endpoints lie exactly on the edges, including on capsules.
+    arc(Point(x, y + tl), Point(x + tl, y), x + tl, y + tl, tl, 0)
+    arc(Point(right - tr, y), Point(right, y + tr), right - tr, y + tr, tr, 1)
+    arc(Point(right, bottom - br), Point(right - br, bottom), right - br, bottom - br, br, 2)
+    arc(Point(x + bl, bottom), Point(x, bottom - bl), x + bl, bottom - bl, bl, 3)
+    return tuple(dict.fromkeys(points))
+
+
 @dataclass(frozen=True, slots=True)
 class Path2D:
     """A simple closed polygon path expressed in local logical coordinates.
@@ -121,6 +157,22 @@ class Path2D:
     @classmethod
     def polygon(cls, *points: Point) -> Path2D:
         return cls(tuple(points))
+
+    @classmethod
+    def _from_convex_outline(cls, points: tuple[Point, ...]) -> Path2D:
+        """Prepare a triangle fan for geometry already known to be convex and ordered."""
+        # Very small corners can project onto the same representable coordinate.
+        points = tuple(dict.fromkeys(points))
+        if any(not math.isfinite(v) for p in points for v in (p.x, p.y)):
+            raise ValueError("Path2D vertices must use finite coordinates.")
+        if len(points) < 3 or abs(_signed_area(points)) <= 1.0e-9:
+            raise ValueError("Path2D polygon area must be non-zero.")
+        path = object.__new__(cls)
+        object.__setattr__(path, "points", points)
+        object.__setattr__(path, "_triangles", tuple(
+            (points[0], points[i], points[i + 1]) for i in range(1, len(points) - 1)
+        ))
+        return path
 
     @classmethod
     def horizontal_band(cls, top: tuple[Point, ...], bottom: tuple[Point, ...]) -> Path2D:

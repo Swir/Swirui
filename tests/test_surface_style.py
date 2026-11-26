@@ -23,7 +23,11 @@ def test_style_builds_bounded_noninteractive_layers(kind):
     style = SurfaceStyle(kind=kind, depth_layers=3, elevation=12, glow_radius=16)
     root = style.to_scene_node("sample", Rect(0, 0, 400, 260), FUTURE_DARK)
     nodes = list(root.walk())
-    assert len([node for node in nodes if node.kind is SceneNodeKind.PATH]) == 3
+    layers = [node for node in nodes if node.kind is SceneNodeKind.PATH]
+    assert len(layers) == 3
+    assert layers[0].path.triangle_count > 2
+    assert all(layer.path is layers[0].path for layer in layers)
+    assert layers[0].bounds.y - layers[1].bounds.y == pytest.approx(style.depth_spacing)
     assert all(not node.hit_testable for node in nodes)
     assert len(nodes) < 100
     assert any(":material" in node.key for node in nodes) == (kind != "solid")

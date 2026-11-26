@@ -25,7 +25,8 @@
 ## 📸 Native Studio
 
 On the 0.2 development branch, drag **Corners** to shape the buttons, fields
-and material cards in your design. Select **Launch preview** to try the
+and material cards in your design. The tilted layers behind each card follow
+the same corner radius. Select **Launch preview** to try the
 dark and light versions side by side. Both versions follow changes to the
 material, accent and corners while the comparison is open. Use **Copy
 theme JSON** to bring the same design into your own app. To try a saved
