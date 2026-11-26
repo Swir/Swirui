@@ -11,6 +11,7 @@ surface while preserving the existing event, monitor and DPI implementation.
 from __future__ import annotations
 
 import ctypes
+from pathlib import Path
 from typing import Any
 
 from ._windows_legacy import (
@@ -33,6 +34,7 @@ from .base import NativeWindowSpec
 from .events import ColorScheme, NativeWindowHandle, PlatformEvent, PlatformEventKind
 from .windows_appearance import read_app_color_scheme
 from .windows_clipboard import Win32TextClipboard
+from .windows_files import choose_save_file
 
 _WM_GETMINMAXINFO = 0x0024
 _WM_SETTINGCHANGE = 0x001A
@@ -78,6 +80,10 @@ class Win32PlatformBackend(_LegacyWin32PlatformBackend):
     def get_clipboard_text(self, handle: NativeWindowHandle) -> str | None:
         self._require_window(handle)
         return self._clipboard.read_text(handle.value)
+
+    def choose_save_file(self, handle: NativeWindowHandle, name: str, title: str) -> Path | None:
+        self._require_window(handle)
+        return choose_save_file(handle.value, name, title)
 
     def get_system_color_scheme(self) -> ColorScheme | None:
         """Read the Windows app preference without changing system settings."""

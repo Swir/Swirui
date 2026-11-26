@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from .clipboard import ClipboardError, TextClipboard
@@ -102,6 +103,21 @@ class Window(EventEmitter):
         self._text_shaper = shaper
         if self.root is not None:
             self.root.invalidate(reason="text_editing_geometry")
+
+    def choose_save_file(self, suggested_name: str, *, title: str = "Save As") -> Path | None:
+        """Choose a destination in the owned Windows dialog. Cancel returns None.
+
+        The filename's suffix supplies the initial filter and default extension.
+        The caller writes the selected file. A backend without a native dialog
+        raises NotImplementedError.
+        """
+        if not suggested_name or "\0" in suggested_name or "\0" in title:
+            raise ValueError("Supply a filename and dialog text without NUL characters.")
+        choose = getattr(self._platform_backend, "choose_save_file", None)
+        if self.native_handle is None or choose is None:
+            raise NotImplementedError("This window has no native Save As dialog.")
+        destination: Path | None = choose(self.native_handle, suggested_name, title)
+        return destination
 
     def get_clipboard_text(self) -> str | None:
         """Read plain Unicode text using the native or explicitly supplied clipboard."""

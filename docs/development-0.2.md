@@ -5,7 +5,7 @@ run `python -m swirui studio`. In **Overview → Material library**, choose a
 material, then select **Launch preview**.
 
 The preview opens the same form in dark and light appearances. Both use the
-themes from **Copy theme JSON**, so you can inspect the finish, focus ring and
+themes exported by **Save theme…**, so you can inspect the finish, focus ring and
 button states your app will inherit. Tab to a project name, type a new name
 and press Enter or select **Apply name**. Both halves update together. Your
 Studio project keeps its original name.
@@ -68,9 +68,15 @@ To reproduce this cursor-free native capture, run
 
 ## Try a saved theme
 
-Save the text from **Copy theme JSON** as `studio-theme.json`, then run
-`python -m swirui preview-theme studio-theme.json` from the 0.2 development
-checkout. The window opens with the package default first, followed by the
+In the preview toolbar, select **Save theme…** and choose a folder and filename
+in the Windows dialog. The file includes both appearances and opens in the
+appearance you selected in Studio. **Copy theme JSON** puts the same package
+on the clipboard.
+
+From the folder containing your saved file, run
+`python -m swirui preview-theme studio-theme.json` using your development
+environment. Substitute your filename if you renamed the package.
+The window opens with the package default first, followed by the
 first other variant in file order. A single variant fills the window. Try
 typing a new project name or tabbing between controls. Sample edits stay in
 the preview window.

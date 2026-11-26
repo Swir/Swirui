@@ -28,9 +28,10 @@ On the 0.2 development branch, drag **Corners** to shape the buttons, fields
 and material cards in your design. The tilted layers behind each card follow
 the same corner radius. Select **Launch preview** to try the
 dark and light versions side by side. Both versions follow changes to the
-material, accent and corners while the comparison is open. Use **Copy
-theme JSON** to bring the same design into your own app. To try a saved
-package, run `python -m swirui preview-theme studio-theme.json`.
+material, accent and corners while the comparison is open. Select **Save
+theme…** to write both appearances to one JSON file. To try them outside
+Studio, run `python -m swirui preview-theme studio-theme.json` from the
+folder where you saved it. **Copy theme JSON** also exports to the clipboard.
 Text fields in the preview and in your own apps support mouse drag selection.
 On Windows, Shift+click extends the selection from its original anchor.
 Use Ctrl+Left or Ctrl+Right to move by word in a text field. Hold Shift to

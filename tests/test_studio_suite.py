@@ -118,6 +118,59 @@ def test_export_reports_unavailable_clipboard_and_retries(monkeypatch):
         runtime.unmount()
 
 
+def test_save_theme_preserves_authored_variants_and_recovers_from_cancel_or_io_error(
+    tmp_path, monkeypatch,
+):
+    clipboard = MemoryClipboard("previous text")
+    window = Window(clipboard=clipboard)
+    studio = StudioSuite()
+    runtime = mount(window, studio)
+    try:
+        preview = studio.preview
+        studio.toggle_theme()
+        studio.settings.set_accent("#DB237C")
+        preview.set_material("acrylic")
+        preview.corners.value = 19
+        preview.project.value = "Szkło"
+        preview.project.select(1, 3)
+        expected = preview.theme_package()
+        target = tmp_path / "moje szkło.json"
+        target.write_text("previous file", encoding="utf-8")
+        destinations = iter([None, tmp_path / "missing" / "theme.json", target])
+
+        def choose(name, *, title):
+            assert name == "studio-theme.json" and title == "Save SwirUI theme"
+            return next(destinations)
+
+        monkeypatch.setattr(window, "choose_save_file", choose)
+        preview.save_theme.emit("click")
+        assert preview.result.text == "Save cancelled."
+        assert target.read_text(encoding="utf-8") == "previous file"
+        preview.save_theme.emit("click")
+        assert "Could not save" in preview.result.text
+        preview.save_theme.emit("click")
+        assert ThemePackage.load(target) == expected
+        assert preview.result.text == f"Saved {target.name}."
+        assert clipboard.read_text() == "previous text" and preview.project.selected_text == "zk"
+        preview.project.value = "x" * 121
+        preview.save_theme.emit("click")
+        assert "project name" in preview.result.text and ThemePackage.load(target) == expected
+    finally:
+        runtime.unmount()
+
+
+def test_save_and_copy_buttons_fit_beside_the_material_badge():
+    preview = StudioSuite().preview
+    for width in (320, 400, 460, 900):
+        bounds = Rect(44, 25, width, 500)
+        preview.prepare_layout(bounds)
+        assert bounds.x <= preview.status.bounds.x
+        assert preview.status.bounds.right <= preview.copy_theme.bounds.x
+        assert preview.status.visible == (width == 900)
+        assert preview.copy_theme.bounds.right < preview.save_theme.bounds.x
+        assert preview.save_theme.bounds.right <= bounds.right
+
+
 def test_studio_accent_survives_theme_material_and_motion_changes():
     studio = StudioSuite()
     studio.preview.project.value = "My own look"

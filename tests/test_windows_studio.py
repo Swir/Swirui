@@ -10,6 +10,96 @@ from swirui.studio import Studio
 from swirui.studio_comparison import AppearanceComparison, bind_comparison
 
 
+def _exercise_save_dialog(target):
+    import ctypes
+    import threading
+    import time
+
+    from swirui.rendering import NullRenderer
+
+    user32 = ctypes.WinDLL("user32")
+    hwnd = ctypes.c_void_p
+    uint = ctypes.c_uint
+    text_buffer = ctypes.c_wchar_p
+    enum_proc = ctypes.WINFUNCTYPE(ctypes.c_int, hwnd, ctypes.c_ssize_t)
+    user32.GetLastActivePopup.argtypes, user32.GetLastActivePopup.restype = [hwnd], hwnd
+    user32.GetWindow.argtypes, user32.GetWindow.restype = [hwnd, uint], hwnd
+    user32.GetWindowTextW.argtypes = [hwnd, text_buffer, ctypes.c_int]
+    user32.GetClassNameW.argtypes = [hwnd, text_buffer, ctypes.c_int]
+    user32.EnumChildWindows.argtypes = [hwnd, enum_proc, ctypes.c_ssize_t]
+    user32.SendMessageW.argtypes = [hwnd, uint, ctypes.c_size_t, text_buffer]
+    user32.PostMessageW.argtypes = [hwnd, uint, ctypes.c_size_t, ctypes.c_ssize_t]
+    title = "SwirUI theme export test"
+    suggested = "studio-theme.json"
+    app = App(title, renderer=NullRenderer())
+    window = app.add_window(Window(width=320, height=200))
+
+    def answer(owner, accept):
+        filename_set = False
+
+        def read(function, handle):
+            buf = ctypes.create_unicode_buffer(1024)
+            function(handle, buf, len(buf))
+            return buf.value
+
+        @enum_proc
+        def set_filename(child, _):
+            nonlocal filename_set
+            if (read(user32.GetClassNameW, child) == "Edit"
+                    and read(user32.GetWindowTextW, child) in (suggested, "studio-theme")):
+                # Type the full destination without an extension to exercise the JSON filter.
+                typed = str(target.with_suffix(""))
+                user32.SendMessageW(child, 0x000C, 0, typed)  # WM_SETTEXT
+                if read(user32.GetWindowTextW, child) == typed:
+                    filename_set = True
+                    return 0
+            return 1
+
+        deadline = time.monotonic() + 12
+        while time.monotonic() < deadline:
+            dialog = user32.GetLastActivePopup(owner)
+            if (dialog and dialog != owner and user32.GetWindow(dialog, 4) == owner
+                    and read(user32.GetWindowTextW, dialog) == title):
+                if not accept:
+                    user32.PostMessageW(dialog, 0x0010, 0, 0)  # WM_CLOSE
+                    return
+                user32.EnumChildWindows(dialog, set_filename, 0)
+                if filename_set:
+                    user32.PostMessageW(dialog, 0x0111, 1, 0)  # WM_COMMAND, IDOK
+                    return
+            time.sleep(0.05)
+
+    try:
+        app.start()
+        for accept in (False, True):
+            thread = threading.Thread(target=answer, args=(window.native_handle.value, accept),
+                                      daemon=True)
+            thread.start()
+            result = window.choose_save_file(suggested, title=title)
+            thread.join(2)
+            assert result == (target if accept else None)
+            assert not target.exists()
+    finally:
+        app.stop()
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows Save As dialog required")
+def test_owned_save_dialog_cancels_and_returns_unicode_json_path(tmp_path):
+    from multiprocessing import get_context
+
+    child = get_context("spawn").Process(target=_exercise_save_dialog,
+                                         args=(tmp_path / "Zażółć motif.json",))
+    child.start()
+    try:
+        child.join(35)
+        assert child.exitcode == 0, "Windows Save As failed or timed out"
+    finally:
+        if child.is_alive():
+            child.kill()
+            child.join()
+        child.close()
+
+
 @pytest.mark.skipif(sys.platform != "win32", reason="Windows/wgpu required")
 def test_saved_theme_cli_renders_both_authored_accents_in_requested_order(tmp_path, monkeypatch):
     path = tmp_path / "Copper and mint.json"

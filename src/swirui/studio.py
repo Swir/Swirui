@@ -65,6 +65,8 @@ class StudioPreview(Panel):
         self.copy_theme = Button("Copy theme JSON", bounds=empty, font_size=14, text_align="center",
                                  variant=ButtonVariant.SECONDARY)
         self.copy_theme.on("click", self._copy_theme)
+        self.save_theme = Button("Save theme…", bounds=empty, font_size=14, text_align="center")
+        self.save_theme.on("click", self._save_theme)
         self.backdrop = SilkRibbon(bounds=empty)
         self.surface = ThemeSurface(bounds=empty)
         self.heading = Label("Build beyond ordinary.", bounds=empty, font_size=30)
@@ -108,17 +110,26 @@ class StudioPreview(Panel):
             slider.on("changed", lambda _: self.apply_theme())
         self.create.on("click", lambda _: self._launch())
         self.motion.on("changed", lambda _: self.apply_theme())
-        self.add(self.backdrop, self.status, self.copy_theme, self.surface, self.footer)
+        self.add(self.backdrop, self.status, self.copy_theme, self.save_theme, self.surface,
+                 self.footer)
         self.apply_theme()
 
     def prepare_layout(self, viewport: Rect) -> None:
         self._set_layout_bounds(viewport)
         width, height = viewport.width, viewport.height
         pad = 24.0
-        self.status._set_layout_bounds(Rect(viewport.x + pad, viewport.y + 16, 164, 32))
+        toolbar_width = max(0, width - 2 * pad)
+        gap = min(8.0, toolbar_width)
+        half = (toolbar_width - gap) / 2
+        save_width, copy_width = min(130.0, half), min(150.0, half)
+        save_x = viewport.right - pad - save_width
+        copy_x = save_x - gap - copy_width
+        status_width = min(164, max(0, copy_x - gap - viewport.x - pad))
+        self.status.visible = status_width >= 144
+        self.status._set_layout_bounds(Rect(viewport.x + pad, viewport.y + 16, status_width, 32))
+        self.copy_theme._set_layout_bounds(Rect(copy_x, viewport.y + 14, copy_width, 34))
+        self.save_theme._set_layout_bounds(Rect(save_x, viewport.y + 14, save_width, 34))
         surface_width = min(680.0, max(0.0, width - 2 * pad))
-        self.copy_theme._set_layout_bounds(Rect(viewport.right - pad - 162, viewport.y + 14,
-                                               162, 34))
         available_height = max(0.0, height - 138)
         surface_height = min(380.0, available_height)
         surface = Rect(
@@ -229,6 +240,28 @@ class StudioPreview(Panel):
             self.result.text = "Use a valid project name (up to 120 characters)."
         else:
             self.result.text = "Copied dark and light theme JSON."
+
+    def _save_theme(self, _event: Event) -> None:
+        try:
+            package = self.theme_package()
+        except ValueError:
+            self.result.text = "Use a valid project name (up to 120 characters)."
+            return
+        window = self.mounted_window
+        if window is None:
+            return
+        try:
+            path = window.choose_save_file("studio-theme.json", title="Save SwirUI theme")
+            if path is None:
+                self.result.text = "Save cancelled."
+                return
+            package.save(path)
+        except NotImplementedError:
+            self.result.text = "File dialog unavailable. Use Copy theme JSON."
+        except OSError:
+            self.result.text = "Could not save. Check the destination and retry."
+        else:
+            self.result.text = f"Saved {path.name}."
 
     def set_title(self, value: str) -> None:
         text = value.strip() or "Build beyond ordinary."
