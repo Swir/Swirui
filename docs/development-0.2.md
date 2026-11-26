@@ -88,11 +88,18 @@ python -m swirui preview-theme field-notes.json --variant ink
 python -m swirui preview-theme field-notes.json --variant ink --variant paper
 ```
 
+Listing the variant keys works without a graphics backend.
 The first command opens the window below. In the paper variant, drag across
 the word **notes** in the project name field. The highlight follows the
 rendered letters. Release the mouse to keep the selection, or Shift+click to
 extend it. The same gesture works in your own `Input` and `TextArea` controls,
 including read-only fields. You can drag across lines in a `TextArea`.
-Listing the variant keys works without a graphics backend.
+
+To select **notes** with the keyboard, focus the project name, press Ctrl+End,
+then Ctrl+Shift+Left. Type a replacement to change just that word. Ctrl+Left
+and Ctrl+Right move between the starts of words and punctuation groups.
+Letters, digits and underscores stay together in names such as `theme_02`.
+In a `TextArea` or `CodeEditor`, Ctrl+Home and Ctrl+End jump to the start
+and end of the document. Hold Shift with either shortcut to extend a selection.
 
 ![The word notes selected in the paper variant beside the ink variant, captured without a cursor on Windows using AMD Radeon graphics and DX12](screenshots/saved-theme-preview.png)

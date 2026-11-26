@@ -33,6 +33,8 @@ theme JSON** to bring the same design into your own app. To try a saved
 package, run `python -m swirui preview-theme studio-theme.json`.
 Text fields in the preview and in your own apps support mouse drag selection.
 On Windows, Shift+click extends the selection from its original anchor.
+Use Ctrl+Left or Ctrl+Right to move by word in a text field. Hold Shift to
+select the same range, including across lines in a `TextArea`.
 In your own app, use `Button("Save", bounds=bounds, text_align="center")` to
 center an action label. `IconButton` centers its glyph by default.
 [Try the development preview](https://github.com/Swir/Swirui/blob/development/0.2/docs/development-0.2.md).

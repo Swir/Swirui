@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import unicodedata
 from bisect import bisect_right
 from collections import OrderedDict
 from typing import TYPE_CHECKING, Any
@@ -42,6 +43,24 @@ _DEFAULT_FOREGROUND = Color.from_hex("#F4FAFF")
 _DEFAULT_PLACEHOLDER = Color.from_hex("#8DA8B8")
 _DEFAULT_SELECTION = Color.from_hex("#125D83")
 _DEFAULT_CARET = Color.from_hex("#62E5FF")
+
+
+def _starts_word_run(text: str, index: int) -> bool:
+    """Return whether this interior offset starts a word or a punctuation run."""
+    left, right = text[index - 1], text[index]
+    if right.isspace():
+        return False
+    if left.isspace():
+        return True
+    # Combining marks and variation selectors stay with their base. Keep
+    # joined emoji together even when their components have different classes.
+    if "\u200d" in (left, right) or unicodedata.category(right).startswith("M"):
+        return False
+    index -= 1
+    while index > 0 and unicodedata.category(left).startswith("M"):
+        index -= 1
+        left = text[index]
+    return (left.isalnum() or left == "_") != (right.isalnum() or right == "_")
 
 
 class _TextInputBase(Widget):
@@ -617,35 +636,24 @@ class _TextInputBase(Widget):
         if not self.enabled or platform_event is None or platform_event.key_code is None:
             return
         key = platform_event.key_code
-        if (
-            platform_event.ctrl
-            and not platform_event.alt
-            and not platform_event.meta
-            and key in (_VK_C, _VK_X, _VK_V)
-        ):
+        if platform_event.alt or platform_event.meta:
+            return
+        ctrl = platform_event.ctrl
+        if ctrl and key in (_VK_C, _VK_X, _VK_V):
             self._clipboard_action(key, event)
-            event.prevent_default()
-            return
-        if (
-            platform_event.ctrl
-            and not platform_event.alt
-            and not platform_event.meta
-            and key == _VK_A
-        ):
+        elif ctrl and key == _VK_A:
             self.select_all()
-            event.prevent_default()
-            return
-        if platform_event.ctrl or platform_event.alt or platform_event.meta:
-            return
-
-        if key == _VK_LEFT:
-            self._move_horizontal(-1, extend=platform_event.shift)
-        elif key == _VK_RIGHT:
-            self._move_horizontal(1, extend=platform_event.shift)
+        elif key in (_VK_LEFT, _VK_RIGHT):
+            self._move_horizontal(-1 if key == _VK_LEFT else 1,
+                                  extend=platform_event.shift, by_word=ctrl)
         elif key == _VK_HOME:
-            self._move_caret(self._line_boundary(start=True), extend=platform_event.shift)
+            self._move_caret(0 if ctrl else self._line_boundary(start=True),
+                             extend=platform_event.shift)
         elif key == _VK_END:
-            self._move_caret(self._line_boundary(start=False), extend=platform_event.shift)
+            self._move_caret(len(self._value) if ctrl else self._line_boundary(start=False),
+                             extend=platform_event.shift)
+        elif ctrl:
+            return
         elif self._multiline and key == _VK_UP:
             self._move_vertical(-1, extend=platform_event.shift)
         elif self._multiline and key == _VK_DOWN:
@@ -758,11 +766,16 @@ class _TextInputBase(Widget):
         self.select(self._caret, self._caret + 1)
         self._replace_selection("", input_event=input_event)
 
-    def _move_horizontal(self, delta: int, *, extend: bool) -> None:
+    def _move_horizontal(self, delta: int, *, extend: bool, by_word: bool = False) -> None:
         if not extend and self.selection_start != self.selection_end:
             target = self.selection_start if delta < 0 else self.selection_end
+        elif by_word and self._mask_character is not None:
+            target = 0 if delta < 0 else len(self._value)
         else:
             target = self._caret + delta
+            if by_word:
+                while 0 < target < len(self._value) and not _starts_word_run(self._value, target):
+                    target += delta
         self._move_caret(target, extend=extend)
 
     def _move_vertical(self, delta: int, *, extend: bool) -> None:

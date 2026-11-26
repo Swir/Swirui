@@ -13,6 +13,53 @@ from swirui.rendering.text_layout import NativeTextShaper
 pytestmark = pytest.mark.skipif(sys.platform != "win32", reason="Windows native fonts and wgpu")
 
 
+def test_win32_word_shortcut_selects_the_shaped_glyphs(record_property):
+    renderer = WgpuRenderer(background=Color(0, 0, 0))
+    app = App(platform_backend=Win32PlatformBackend(), renderer=renderer)
+    window = app.add_window(Window(width=340, height=160))
+    field = Input("iii WWW", bounds=Rect(20, 20, 260, 60), font_size=24,
+                  focused_background=Color(0, 0, 0), selection_color=Color(0, 0, 1),
+                  caret_color=Color(1, 0, 0))
+    mount(window, field)
+    try:
+        app.start()
+        app.process_events()
+        window.focus_component(field)
+        user32 = app.platform_backend._user32
+        hwnd = window.native_handle.value
+        send = user32.SendMessageW
+        send.argtypes = [ctypes.c_void_p, ctypes.c_uint, ctypes.c_size_t, ctypes.c_ssize_t]
+        send.restype = ctypes.c_ssize_t
+        # Set modifier state on this test's window thread for the two messages.
+        state = (ctypes.c_ubyte * 256)()
+        assert user32.GetKeyboardState(state)
+        held = type(state).from_buffer_copy(state)
+        held[0x10] = held[0x11] = 0x80  # Shift and Ctrl
+        try:
+            assert user32.SetKeyboardState(held)
+            send(hwnd, 0x0100, 0x25, 1)  # WM_KEYDOWN, VK_LEFT
+            send(hwnd, 0x0101, 0x25, 0xC0000001)
+        finally:
+            assert user32.SetKeyboardState(state)
+        app.process_events()
+        assert field.selected_text == "WWW" and field.caret_index == 4
+        app.render_pending(app._frame_schedulers[window].stats.last_frame_time + 1)
+        width, _, rgba = renderer._contexts[hwnd].read_scene_rgba()
+        layout = window._text_shaper.shape_line(field.value, 24, "Segoe UI", window.scale)
+        y = round(59 * window.scale)
+        blue = [x for x in range(width) if rgba[(width * y + x) * 4 + 2] > 180
+                and rgba[(width * y + x) * 4] < 30]
+        assert blue
+        assert min(blue) == pytest.approx((30 + layout.carets[4]) * window.scale,
+                                          abs=3 * window.scale)
+        assert max(blue) == pytest.approx((30 + layout.carets[7]) * window.scale,
+                                          abs=3 * window.scale)
+        record_property("adapter", renderer.adapter_name)
+        record_property("backend", renderer.graphics_backend)
+    finally:
+        app.stop()
+
+
 def test_action_labels_and_icons_center_their_ink_on_wgpu(record_property):
     renderer = WgpuRenderer()
     app = App(platform_backend=Win32PlatformBackend(), renderer=renderer)

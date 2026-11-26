@@ -1,6 +1,6 @@
 import pytest
 
-from swirui import Component, Input, PasswordInput, TextArea, Window, mount
+from swirui import CodeEditor, Component, Input, PasswordInput, TextArea, Window, mount
 from swirui.core import AccessibilityRole, Event
 from swirui.platforms import (
     NativeWindowHandle,
@@ -189,6 +189,73 @@ def test_read_only_input_allows_focus_and_selection_but_rejects_mutation() -> No
 
     assert field.value == "locked"
     assert window.focused_component is field
+
+
+def test_word_jumps_follow_the_same_stops_in_both_directions():
+    window = Window()
+    parts = ("  ", "żółty_2", "::", "cafe\u0301  ", "❤️   ", "notes")
+    field = Input("".join(parts), bounds=Rect(0, 0, 120, 36))
+    mount(window, field)
+    window.focus_component(field)
+    field.select(0, 0)
+    stops = [0]
+    for part in parts:
+        stops.append(stops[-1] + len(part))
+    for key, expected in ((0x27, stops[1:]), (0x25, stops[-2::-1])):
+        for index in expected:
+            _send(window, PlatformEventKind.KEY_DOWN, key_code=key, ctrl=True)
+            assert field.caret_index == index
+    _send(window, PlatformEventKind.KEY_DOWN, key_code=0x25, ctrl=True)
+    assert field.caret_index == 0
+
+
+@pytest.mark.parametrize("control", [TextArea, CodeEditor])
+def test_keyboard_extends_reverses_and_collapses_word_selection_across_lines(control):
+    window = Window()
+    field = control("one two\n  three", bounds=Rect(0, 0, 180, 60), read_only=True)
+    mount(window, field)
+    window.focus_component(field)
+    field.select(4, 4)
+    _send(window, PlatformEventKind.KEY_DOWN, key_code=0x27, ctrl=True, shift=True)
+    assert field.selected_text == "two\n  "
+    _send(window, PlatformEventKind.KEY_DOWN, key_code=0x25, ctrl=True, shift=True)
+    assert not field.selected_text and field.caret_index == 4
+    _send(window, PlatformEventKind.KEY_DOWN, key_code=0x24, ctrl=True, shift=True)
+    assert field.selected_text == "one " and field.caret_index == 0
+    _send(window, PlatformEventKind.KEY_DOWN, key_code=0x23, ctrl=True, shift=True)
+    assert field.selected_text == "two\n  three"
+    _send(window, PlatformEventKind.KEY_DOWN, key_code=0x25, ctrl=True)
+    assert not field.selected_text and field.caret_index == 4
+    assert field.value == "one two\n  three"
+
+
+def test_word_selection_in_a_password_field_uses_the_visible_mask_as_one_run():
+    window = Window()
+    field = PasswordInput("ab c:d", bounds=Rect(0, 0, 160, 36))
+    mount(window, field)
+    window.focus_component(field)
+    _send(window, PlatformEventKind.KEY_DOWN, key_code=0x25, ctrl=True, shift=True)
+    assert (field.selection_start, field.selection_end) == (0, len(field.value))
+    _send(window, PlatformEventKind.TEXT_INPUT, text="new")
+    assert field.value == "new"
+
+
+def test_word_shortcut_replaces_only_the_selection_and_leaves_other_modifiers_available():
+    window = Window()
+    field = Input("Field notes", bounds=Rect(0, 0, 200, 40))
+    mount(window, field)
+    window.focus_component(field)
+    for modifiers in ({"ctrl": True, "alt": True}, {"ctrl": True, "meta": True}):
+        arrow = PlatformEvent(PlatformEventKind.KEY_DOWN, NativeWindowHandle(1),
+                              key_code=0x25, **modifiers)
+        assert not field.emit("key_down", event=arrow).default_prevented
+        assert field.caret_index == len(field.value)
+    changed = []
+    field.on("changed", changed.append)
+    _send(window, PlatformEventKind.KEY_DOWN, key_code=0x25, ctrl=True, shift=True)
+    assert field.selected_text == "notes" and not changed
+    _send(window, PlatformEventKind.TEXT_INPUT, text="guide")
+    assert field.value == "Field guide" and len(changed) == 1
 
 
 def test_text_input_validation_and_programmatic_normalization() -> None:
