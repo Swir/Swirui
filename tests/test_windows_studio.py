@@ -2,11 +2,46 @@ import sys
 
 import pytest
 
-from swirui import App, Window, mount
+from swirui import FUTURE_LIGHT, NEON_BLUE, App, ThemePackage, Window, mount
+from swirui import __main__ as cli
 from swirui.platforms import PlatformEvent, PlatformEventKind, PointerButton
 from swirui.rendering import WgpuRenderer
 from swirui.studio import Studio
 from swirui.studio_comparison import AppearanceComparison, bind_comparison
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows/wgpu required")
+def test_saved_theme_cli_renders_both_authored_accents_in_requested_order(tmp_path, monkeypatch):
+    path = tmp_path / "Copper and mint.json"
+    day = FUTURE_LIGHT.with_accent("#E38044")
+    night = NEON_BLUE.with_accent("#7FE0BF")
+    ThemePackage("Copper and mint", {"day": day, "night": night}, "night").save(path)
+    original = path.read_bytes()
+
+    def inspect_frame(app):
+        app.start()
+        app.process_events()
+        window, = app.windows
+        first, second = window.root.panes
+        assert (first.mode, second.mode) == ("day", "night")
+        context = app.renderer._contexts[window.native_handle.value]
+        width, _, pixels = context.read_scene_rgba()
+        for pane, color in ((first, (227, 128, 68)), (second, (127, 224, 191))):
+            button = pane.apply.bounds
+            offset = 4 * (round((button.bottom - 6) * window.scale) * width
+                          + round((button.x + button.width / 2) * window.scale))
+            assert tuple(pixels[offset:offset + 3]) == pytest.approx(color, abs=1)
+        window.focus_component(first.field)
+        first.field.value = "Local edit"
+        window._apply_platform_event(PlatformEvent(
+            PlatformEventKind.KEY_DOWN, window.native_handle, key_code=13,
+        ))
+        assert first.title.text == second.title.text == "Local edit"
+        return 0
+
+    monkeypatch.setattr(App, "run", inspect_frame)
+    assert cli.main(["preview-theme", str(path), "--variant", "day", "--variant", "night"]) == 0
+    assert path.read_bytes() == original
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Windows/wgpu required")

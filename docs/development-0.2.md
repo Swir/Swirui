@@ -40,3 +40,36 @@ radius keep their own shape.
 
 To reproduce this cursor-free native capture, run
 `python tools/capture_studio.py --pane preview --width 1440 --height 900 --accent "#7FE0BF" --corner-radius 24 --output studio-corners.png`.
+
+## Try a saved theme
+
+Save the text from **Copy theme JSON** as `studio-theme.json`, then run
+`python -m swirui preview-theme studio-theme.json` from the 0.2 development
+checkout. The window opens with the package default first, followed by the
+first other variant in file order. A single variant fills the window. Try
+typing a new project name or tabbing between controls. Sample edits stay in
+the preview window.
+
+The same command works with packages created in Python. This example pairs a
+light surface with a green glass variant and its own typeface.
+
+```python
+from dataclasses import replace
+from swirui import MATRIX, MINIMAL, SurfaceStyle, ThemePackage
+
+paper = MINIMAL.with_accent("#346C57")
+ink = replace(MATRIX, surface_style=SurfaceStyle(kind="glass", depth_layers=3, elevation=10))
+ThemePackage("Field notes", {"paper": paper, "ink": ink}, "paper").save("field-notes.json")
+```
+
+```sh
+python -m swirui preview-theme field-notes.json
+python -m swirui preview-theme field-notes.json --list-variants
+python -m swirui preview-theme field-notes.json --variant ink
+python -m swirui preview-theme field-notes.json --variant ink --variant paper
+```
+
+The first command produced this Windows/wgpu frame on AMD Radeon graphics
+using DX12. Listing the variant keys works without a graphics backend.
+
+![Field notes in its paper and ink variants, captured from the native renderer without a cursor](screenshots/saved-theme-preview.png)

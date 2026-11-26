@@ -1,5 +1,6 @@
-from swirui import FUTURE_LIGHT
+from swirui import FUTURE_LIGHT, NEON_BLUE, ThemePackage
 from swirui import __main__ as cli
+from swirui import studio_comparison as comparison_module
 from swirui import studio_suite as studio_module
 from swirui.rendering import Rect
 from swirui.studio import Studio
@@ -118,3 +119,47 @@ def test_cli_dispatches_integrated_studio_smoke_test(monkeypatch) -> None:
 
     assert cli.main(["studio", "--smoke-test"]) == 0
     assert called == [True]
+
+
+def test_preview_theme_lists_and_validates_files_without_graphics(tmp_path, capsys, monkeypatch):
+    def unexpected_renderer_check():
+        raise AssertionError("Listing and validating a file must precede the graphics check")
+
+    monkeypatch.setattr(cli, "installation_report", unexpected_renderer_check)
+    path = tmp_path / "Mój motyw.json"
+    ThemePackage("Custom", {"day": FUTURE_LIGHT, "night": NEON_BLUE}, "night").save(path)
+    command = ["preview-theme", str(path)]
+    assert cli.main([*command, "--list-variants"]) == 0
+    assert capsys.readouterr().out.splitlines() == ["day", "night (default)"]
+    for keys, message in ((["typo"], "Unknown variant"), (["day", "day"], "distinct"),
+                          (["day", "night", "day"], "one or two")):
+        flags = [part for key in keys for part in ("--variant", key)]
+        assert cli.main([*command, *flags]) == 1
+        assert message in capsys.readouterr().err
+    path.write_text("{}", encoding="utf-8")
+    assert cli.main(command) == 1 and "Theme package" in capsys.readouterr().err
+    assert cli.main(["preview-theme", str(tmp_path / "missing.json")]) == 1
+    assert "missing.json" in capsys.readouterr().err
+
+
+def test_preview_theme_shows_default_first_and_respects_a_single_variant(tmp_path, monkeypatch):
+    monkeypatch.setattr(cli, "installation_report", lambda: {"ready": True})
+    roots = []
+
+    def capture(root, *, smoke_test):
+        roots.append(root)
+        return 0
+
+    monkeypatch.setattr(comparison_module, "run_package_preview", capture)
+    path = tmp_path / "saved.json"
+    ThemePackage("Custom", {"day": FUTURE_LIGHT, "night": NEON_BLUE}, "night").save(path)
+    command = ["preview-theme", str(path)]
+    assert cli.main(command) == 0
+    assert [pane.mode for pane in roots[-1].panes] == ["night", "day"]
+    assert cli.main([*command, "--variant", "day"]) == 0
+    pane, = roots[-1].panes
+    roots[-1].prepare_layout(Rect(0, 0, 480, 460))
+    assert pane.theme == FUTURE_LIGHT and pane.bounds.width == 480
+    ThemePackage("Solo", {"solo": NEON_BLUE}, "solo").save(path)
+    assert cli.main(command) == 0
+    assert [pane.mode for pane in roots[-1].panes] == ["solo"]

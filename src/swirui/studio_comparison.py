@@ -1,7 +1,8 @@
-"""Native side-by-side preview of an authored Studio design."""
+"""Native appearance previews for Studio designs and saved theme packages."""
 
 from __future__ import annotations
 
+import json
 from typing import TYPE_CHECKING
 
 from . import (
@@ -18,8 +19,9 @@ from . import (
 )
 from .core import Event, state_transaction
 from .core.state import schedule_reactive_update
-from .rendering import Rect
+from .rendering import Rect, WgpuRenderer
 from .widgets import mount
+from .widgets.measurement import measure_text_block
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -33,7 +35,9 @@ class _AppearancePane(Panel):
         empty = Rect(0, 0, 0, 0)
         super().__init__(bounds=empty, clip_to_bounds=True)
         self.mode = mode
-        self.mode_label = Badge(f"{mode.title()} appearance", bounds=empty)
+        label = f"{mode.title()} appearance" if mode in ("dark", "light") else mode
+        self.mode_label = Badge(label, bounds=empty)
+        self._badge_width = max(150, measure_text_block(label, font_size=13).width + 16)
         self.title = Label("", bounds=empty, font_size=31)
         self.ribbon = SilkRibbon(bounds=empty)
         self.card = ThemeSurface(bounds=empty)
@@ -49,7 +53,7 @@ class _AppearancePane(Panel):
         x, y, w, h = viewport.x, viewport.y, viewport.width, viewport.height
         pad = 20 if w < 400 else 32
         inner = max(0, w - 2 * pad)
-        self.mode_label._set_layout_bounds(Rect(x + pad, y + 20, 150, 30))
+        self.mode_label._set_layout_bounds(Rect(x + pad, y + 20, min(inner, self._badge_width), 30))
         self.title._set_layout_bounds(Rect(x + pad, y + 59, inner, 48))
         card_y = y + max(131, (h - 220) * .72)
         self.ribbon._set_layout_bounds(Rect(x + 3, max(y + 94, card_y - 70), max(0, w - 6), 200))
@@ -63,11 +67,17 @@ class _AppearancePane(Panel):
 
 
 class AppearanceComparison(Panel):
-    """Two interactive instances of the same form using the exported Studio themes."""
+    """One or two interactive instances of the same form using authored themes."""
 
-    def __init__(self, package: ThemePackage, headline: str) -> None:
+    def __init__(self, package: ThemePackage, headline: str, *,
+                 variants: tuple[str, ...] = ("dark", "light")) -> None:
+        if len(variants) not in (1, 2) or len(set(variants)) != len(variants):
+            raise ValueError("Choose one or two distinct variant keys.")
+        for key in variants:
+            if key not in package.themes:
+                raise ValueError(f"Unknown variant {key!r}. Available: {', '.join(package.themes)}")
         super().__init__(bounds=Rect(0, 0, 960, 460))
-        self.panes = (_AppearancePane("dark"), _AppearancePane("light"))
+        self.panes = tuple(_AppearancePane(key) for key in variants)
         self.add(*self.panes)
         for pane in self.panes:
             pane.field.on("submitted", self._rename)
@@ -98,10 +108,34 @@ class AppearanceComparison(Panel):
 
     def prepare_layout(self, viewport: Rect) -> None:
         self._set_layout_bounds(viewport)
-        half = viewport.width / 2
+        width = viewport.width / len(self.panes)
         for index, pane in enumerate(self.panes):
-            pane._set_layout_bounds(Rect(viewport.x + index * half, viewport.y, half,
+            pane._set_layout_bounds(Rect(viewport.x + index * width, viewport.y, width,
                                          viewport.height))
+
+
+def run_package_preview(root: AppearanceComparison, *, smoke_test: bool = False) -> int:
+    """Display an interactive sample without modifying the source package."""
+    count = len(root.panes)
+    renderer = WgpuRenderer()
+    app = App("SwirUI theme preview", renderer=renderer)
+    window = app.add_window(Window(title=f"{root.panes[0].title.text} · Theme preview",
+                                   width=480 * count, height=460,
+                                   min_width=320 * count, min_height=390))
+    mount(window, root)
+    try:
+        if not smoke_test:
+            return app.run()
+        app.start()
+        app.process_events()
+        if renderer.frames_rendered < 1 or not renderer.adapter_name:
+            raise RuntimeError("No native theme preview frame was rendered")
+        print(json.dumps({"rendered": True, "adapter": renderer.adapter_name,
+                          "backend": renderer.graphics_backend,
+                          "variants": [pane.mode for pane in root.panes]}))
+        return 0
+    finally:
+        app.stop()
 
 
 def bind_comparison(app: App, owner: Window, preview: StudioPreview) -> None:
