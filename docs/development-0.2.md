@@ -69,7 +69,11 @@ python -m swirui preview-theme field-notes.json --variant ink
 python -m swirui preview-theme field-notes.json --variant ink --variant paper
 ```
 
-The first command produced this Windows/wgpu frame on AMD Radeon graphics
-using DX12. Listing the variant keys works without a graphics backend.
+The first command opens the window below. In the paper variant, drag across
+the word **notes** in the project name field. The highlight follows the
+rendered letters. Release the mouse to keep the selection, or Shift+click to
+extend it. The same gesture works in your own `Input` and `TextArea` controls,
+including read-only fields. You can drag across lines in a `TextArea`.
+Listing the variant keys works without a graphics backend.
 
-![Field notes in its paper and ink variants, captured from the native renderer without a cursor](screenshots/saved-theme-preview.png)
+![The word notes selected in the paper variant beside the ink variant, captured without a cursor on Windows using AMD Radeon graphics and DX12](screenshots/saved-theme-preview.png)

@@ -36,6 +36,8 @@ _WM_KEYDOWN = 0x0100
 _WM_KEYUP = 0x0101
 _WM_CHAR = 0x0102
 _WM_MOUSEMOVE = 0x0200
+_MK_SHIFT = 0x0004
+_MK_CONTROL = 0x0008
 _WM_LBUTTONDOWN = 0x0201
 _WM_LBUTTONUP = 0x0202
 _WM_RBUTTONDOWN = 0x0204
@@ -595,7 +597,7 @@ class Win32PlatformBackend:
                 self._events.append(PlatformEvent(PlatformEventKind.FOCUS, handle, focused=False))
             elif message == _WM_MOUSEMOVE:
                 self._events.append(
-                    self._pointer_event(PlatformEventKind.POINTER_MOVE, handle, lparam)
+                    self._pointer_event(PlatformEventKind.POINTER_MOVE, handle, lparam, wparam)
                 )
             elif message in (_WM_LBUTTONDOWN, _WM_RBUTTONDOWN, _WM_MBUTTONDOWN):
                 self._events.append(
@@ -603,6 +605,7 @@ class Win32PlatformBackend:
                         PlatformEventKind.POINTER_DOWN,
                         handle,
                         lparam,
+                        wparam,
                         self._pointer_button(message),
                     )
                 )
@@ -612,6 +615,7 @@ class Win32PlatformBackend:
                         PlatformEventKind.POINTER_UP,
                         handle,
                         lparam,
+                        wparam,
                         self._pointer_button(message),
                     )
                 )
@@ -644,6 +648,7 @@ class Win32PlatformBackend:
         kind: PlatformEventKind,
         handle: NativeWindowHandle,
         lparam: int,
+        key_state: int,
         button: PointerButton | None = None,
     ) -> PlatformEvent:
         return PlatformEvent(
@@ -652,6 +657,8 @@ class Win32PlatformBackend:
             x=float(_signed_word(int(lparam))),
             y=float(_signed_word(int(lparam) >> 16)),
             button=button,
+            shift=bool(key_state & _MK_SHIFT),
+            ctrl=bool(key_state & _MK_CONTROL),
         )
 
     @staticmethod

@@ -123,6 +123,7 @@ class _TextInputBase(Widget):
         self._padding = self._validate_non_negative(padding, "padding")
         self._caret = len(self._value)
         self._selection_anchor: int | None = None
+        self._selection_pointer: tuple[float, float] | None = None
         self._focused = False
         self._horizontal_offset = 0.0
         self._preferred_caret_x: float | None = None
@@ -144,6 +145,9 @@ class _TextInputBase(Widget):
             accessible_description=accessible_description,
         )
         self.on("pointer_down", self._on_pointer_down)
+        self.on("pointer_move", self._extend_pointer_selection)
+        self.on("pointer_up", self._extend_pointer_selection)
+        self.on("pointer_capture_lost", self._selection_capture_lost)
         self.on("key_down", self._on_key_down)
         self.on("text_input", self._on_text_input)
         self.on("focus_gained", self._on_focus_gained)
@@ -167,6 +171,8 @@ class _TextInputBase(Widget):
         )
 
     def on_unmount(self, window: Window) -> None:
+        if self._selection_pointer is not None:
+            window.release_pointer_capture(self)
         super().on_unmount(window)
         # Layout keys include their provider; release the font system when a
         # detached control outlives its window instead of retaining it in LRU keys.
@@ -571,6 +577,8 @@ class _TextInputBase(Widget):
         return self._mask_character * len(self._value)
 
     def _on_pointer_down(self, event: Event) -> None:
+        if event.source is not self or event.default_prevented:
+            return
         platform_event = self._platform_event(event, PlatformEventKind.POINTER_DOWN)
         if (
             not self.enabled
@@ -581,7 +589,28 @@ class _TextInputBase(Widget):
         ):
             return
         index = self._index_from_point(platform_event.x, platform_event.y)
+        window = self.mounted_window
+        if window is not None and window.focused_component is self:
+            self._selection_pointer = (platform_event.x, platform_event.y)
+            window.capture_pointer(self)
         self._move_caret(index, extend=platform_event.shift)
+
+    def _extend_pointer_selection(self, event: Event) -> None:
+        if self._selection_pointer is None or not self.enabled or event.source is not self:
+            return
+        pointer = event.data.get("event")
+        if not isinstance(pointer, PlatformEvent) or pointer.x is None or pointer.y is None:
+            return
+        if event.type == "pointer_up" and pointer.button is not PointerButton.LEFT:
+            return
+        # Releasing at the same point must not advance again after the caret scrolled into view.
+        point = (pointer.x, pointer.y)
+        if point != self._selection_pointer:
+            self._selection_pointer = point
+            self._move_caret(self._index_from_point(*point), extend=True)
+
+    def _selection_capture_lost(self, _event: Event) -> None:
+        self._selection_pointer = None
 
     def _on_key_down(self, event: Event) -> None:
         platform_event = self._platform_event(event, PlatformEventKind.KEY_DOWN)
@@ -680,6 +709,8 @@ class _TextInputBase(Widget):
             self.invalidate(reason="focus_gained")
 
     def _on_focus_lost(self, _event: Event) -> None:
+        if self._selection_pointer is not None and self.mounted_window is not None:
+            self.mounted_window.release_pointer_capture(self)
         if self._focused:
             self._focused = False
             self._selection_anchor = None

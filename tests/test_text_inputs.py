@@ -202,3 +202,48 @@ def test_text_input_validation_and_programmatic_normalization() -> None:
         Input(bounds=Rect(0.0, 0.0, 120.0, 36.0), max_length=-1)
     with pytest.raises(ValueError, match="mask_character"):
         PasswordInput(bounds=Rect(0.0, 0.0, 120.0, 36.0), mask_character="\n")
+
+
+def _pointer(window, kind, x, y, *, shift=False):
+    window._apply_platform_event(PlatformEvent(
+        kind, NativeWindowHandle(1), x=x * window.scale, y=y * window.scale,
+        button=None if kind is PlatformEventKind.POINTER_MOVE else PointerButton.LEFT,
+        shift=shift,
+    ))
+
+
+def test_drag_selects_backwards_outside_read_only_input_and_keeps_shift_anchor():
+    window = Window(width=400, height=180)
+    field = Input("abcdef", bounds=Rect(20, 20, 150, 44), read_only=True)
+    mount(window, field)
+    down, move, up = (PlatformEventKind.POINTER_DOWN, PlatformEventKind.POINTER_MOVE,
+                      PlatformEventKind.POINTER_UP)
+    _pointer(window, down, 160, 40)
+    assert window.pointer_capture_component is field
+    _pointer(window, move, 49, 40)
+    assert field.selected_text == "cdef"
+    _pointer(window, up, -10, 40)
+    assert field.selected_text == "abcdef" and field.caret_index == 0
+    assert window.pointer_capture_component is None
+    _pointer(window, move, 140, 40)
+    assert field.caret_index == 0
+    _pointer(window, down, 49, 40, shift=True)
+    _pointer(window, up, 58, 40)
+    assert field.selected_text == "def" and field.value == "abcdef"
+
+
+def test_multiline_drag_ends_on_capture_loss_and_unmount():
+    window = Window(width=400, height=180)
+    root = Component("root")
+    area = TextArea("one\ntwo\nthree", bounds=Rect(20, 20, 220, 120))
+    root.add(area)
+    mount(window, root)
+    _pointer(window, PlatformEventKind.POINTER_DOWN, 39, 32)
+    _pointer(window, PlatformEventKind.POINTER_MOVE, 49, 73)
+    assert area.selected_text == "ne\ntwo\nth"
+    window.release_pointer_capture()
+    _pointer(window, PlatformEventKind.POINTER_MOVE, 90, 32)
+    assert area.selected_text == "ne\ntwo\nth"
+    _pointer(window, PlatformEventKind.POINTER_DOWN, 39, 32)
+    root.remove(area)
+    assert window.pointer_capture_component is None

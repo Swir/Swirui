@@ -1,5 +1,6 @@
 """Native glyph metrics and actual wgpu pixels for proportional input text."""
 
+import ctypes
 import sys
 
 import pytest
@@ -85,13 +86,34 @@ def test_real_wgpu_input_caret_sits_beside_text_and_selection_uses_font_width():
                     red.append(x)
         assert white and red
         assert -1 <= min(red) - max(white) <= 4 * window.scale
-        field.select(0, 4)
+        layout = window._text_shaper.shape_line("iiiiWW", 24, "Segoe UI", window.scale)
+        user32 = app.platform_backend._user32
+        send = user32.SendMessageW
+        send.argtypes = [ctypes.c_void_p, ctypes.c_uint, ctypes.c_size_t, ctypes.c_ssize_t]
+        send.restype = ctypes.c_ssize_t
+        hwnd = window.native_handle.value
+
+        def mouse(message, flags, caret):
+            x = round((30 + layout.carets[caret]) * window.scale)
+            y = round(44 * window.scale)
+            send(hwnd, message, flags, (y << 16) | x)
+            app.process_events()
+
+        mouse(0x0201, 1, 0)  # Left button down at the first glyph
+        assert user32.GetCapture() == hwnd
+        mouse(0x0200, 1, 4)  # Drag across the four narrow letters
+        assert field.selected_text == "iiii"
+        mouse(0x0202, 0, 4)
+        assert window.pointer_capture_component is None and not user32.GetCapture()
         width, _height, rgba = pixels()
         # Below glyph ink, the blue selection ends at the fourth narrow letter.
         y = round(59 * window.scale)
         blue = [x for x in range(width) if rgba[(y * width + x) * 4 + 2] > 180]
-        layout = window._text_shaper.shape_line("iiiiWW", 24, "Segoe UI", window.scale)
         assert blue
         assert max(blue) == pytest.approx((30 + layout.carets[4]) * window.scale, abs=2)
+        # A Shift+click delivered by Win32 keeps the original end of the selection anchored.
+        mouse(0x0201, 0x0005, 6)
+        mouse(0x0202, 0x0004, 6)
+        assert field.selected_text == "iiiiWW"
     finally:
         app.stop()
