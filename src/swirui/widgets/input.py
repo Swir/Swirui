@@ -652,18 +652,16 @@ class _TextInputBase(Widget):
         elif key == _VK_END:
             self._move_caret(len(self._value) if ctrl else self._line_boundary(start=False),
                              extend=platform_event.shift)
+        elif key in (_VK_BACK, _VK_DELETE):
+            if not self._read_only:
+                self._delete_horizontal(-1 if key == _VK_BACK else 1, by_word=ctrl,
+                                        input_event=event)
         elif ctrl:
             return
         elif self._multiline and key == _VK_UP:
             self._move_vertical(-1, extend=platform_event.shift)
         elif self._multiline and key == _VK_DOWN:
             self._move_vertical(1, extend=platform_event.shift)
-        elif key == _VK_BACK:
-            if not self._read_only:
-                self._delete_backward(event)
-        elif key == _VK_DELETE:
-            if not self._read_only:
-                self._delete_forward(event)
         elif key == _VK_RETURN and not self._multiline:
             self.emit("submitted", value=self._value, input_event=event)
         else:
@@ -676,7 +674,8 @@ class _TextInputBase(Widget):
         platform_event = self._platform_event(event, PlatformEventKind.TEXT_INPUT)
         if platform_event is None or platform_event.text is None:
             return
-        text = self._normalize_inserted_text(platform_event.text)
+        # Win32 can translate Ctrl+Backspace into a DEL character after key_down.
+        text = self._normalize_inserted_text(platform_event.text.replace("\x7f", ""))
         if not text:
             return
         self._replace_selection(text, input_event=event)
@@ -725,9 +724,10 @@ class _TextInputBase(Widget):
             self.invalidate(reason="focus_lost")
 
     def _replace_selection(self, text: str, *, input_event: Event) -> None:
+        self._replace_range(self.selection_start, self.selection_end, text, input_event=input_event)
+
+    def _replace_range(self, start: int, end: int, text: str, *, input_event: Event) -> None:
         self._preferred_caret_x = None
-        start = self.selection_start
-        end = self.selection_end
         available = None
         if self._max_length is not None:
             retained_length = len(self._value) - (end - start)
@@ -748,34 +748,28 @@ class _TextInputBase(Widget):
                 input_event=input_event,
             )
 
-    def _delete_backward(self, input_event: Event) -> None:
-        if self.selection_start != self.selection_end:
-            self._replace_selection("", input_event=input_event)
-            return
-        if self._caret <= 0:
-            return
-        self.select(self._caret - 1, self._caret)
-        self._replace_selection("", input_event=input_event)
+    def _horizontal_target(self, delta: int, *, by_word: bool) -> int:
+        if by_word and self._mask_character is not None:
+            return 0 if delta < 0 else len(self._value)
+        target = max(0, min(len(self._value), self._caret + delta))
+        if by_word:
+            while 0 < target < len(self._value) and not _starts_word_run(self._value, target):
+                target += delta
+        return target
 
-    def _delete_forward(self, input_event: Event) -> None:
-        if self.selection_start != self.selection_end:
-            self._replace_selection("", input_event=input_event)
-            return
-        if self._caret >= len(self._value):
-            return
-        self.select(self._caret, self._caret + 1)
-        self._replace_selection("", input_event=input_event)
+    def _delete_horizontal(self, delta: int, *, by_word: bool, input_event: Event) -> None:
+        start, end = self.selection_start, self.selection_end
+        if start == end:
+            target = self._horizontal_target(delta, by_word=by_word)
+            start, end = min(start, target), max(end, target)
+        if start < end:
+            self._replace_range(start, end, "", input_event=input_event)
 
     def _move_horizontal(self, delta: int, *, extend: bool, by_word: bool = False) -> None:
         if not extend and self.selection_start != self.selection_end:
             target = self.selection_start if delta < 0 else self.selection_end
-        elif by_word and self._mask_character is not None:
-            target = 0 if delta < 0 else len(self._value)
         else:
-            target = self._caret + delta
-            if by_word:
-                while 0 < target < len(self._value) and not _starts_word_run(self._value, target):
-                    target += delta
+            target = self._horizontal_target(delta, by_word=by_word)
         self._move_caret(target, extend=extend)
 
     def _move_vertical(self, delta: int, *, extend: bool) -> None:

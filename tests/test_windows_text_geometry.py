@@ -13,7 +13,7 @@ from swirui.rendering.text_layout import NativeTextShaper
 pytestmark = pytest.mark.skipif(sys.platform != "win32", reason="Windows native fonts and wgpu")
 
 
-def test_win32_word_shortcut_selects_the_shaped_glyphs(record_property):
+def test_win32_word_shortcuts_select_and_delete_the_shaped_glyphs(record_property):
     renderer = WgpuRenderer(background=Color(0, 0, 0))
     app = App(platform_backend=Win32PlatformBackend(), renderer=renderer)
     window = app.add_window(Window(width=340, height=160))
@@ -30,18 +30,24 @@ def test_win32_word_shortcut_selects_the_shaped_glyphs(record_property):
         send = user32.SendMessageW
         send.argtypes = [ctypes.c_void_p, ctypes.c_uint, ctypes.c_size_t, ctypes.c_ssize_t]
         send.restype = ctypes.c_ssize_t
-        # Set modifier state on this test's window thread for the two messages.
         state = (ctypes.c_ubyte * 256)()
         assert user32.GetKeyboardState(state)
-        held = type(state).from_buffer_copy(state)
-        held[0x10] = held[0x11] = 0x80  # Shift and Ctrl
-        try:
-            assert user32.SetKeyboardState(held)
-            send(hwnd, 0x0100, 0x25, 1)  # WM_KEYDOWN, VK_LEFT
-            send(hwnd, 0x0101, 0x25, 0xC0000001)
-        finally:
-            assert user32.SetKeyboardState(state)
-        app.process_events()
+
+        def ctrl_key(key, *, shift=False):
+            held = type(state).from_buffer_copy(state)
+            held[0x11] = 0x80
+            held[0x10] = 0x80 if shift else 0
+            try:
+                assert user32.SetKeyboardState(held)
+                send(hwnd, 0x0100, key, 1)
+                if key == 0x08:
+                    send(hwnd, 0x0102, 0x7F, 1)  # Translated Ctrl+Backspace WM_CHAR.
+                send(hwnd, 0x0101, key, 0xC0000001)
+            finally:
+                assert user32.SetKeyboardState(state)
+            app.process_events()
+
+        ctrl_key(0x25, shift=True)
         assert field.selected_text == "WWW" and field.caret_index == 4
         app.render_pending(app._frame_schedulers[window].stats.last_frame_time + 1)
         width, _, rgba = renderer._contexts[hwnd].read_scene_rgba()
@@ -54,6 +60,21 @@ def test_win32_word_shortcut_selects_the_shaped_glyphs(record_property):
                                           abs=3 * window.scale)
         assert max(blue) == pytest.approx((30 + layout.carets[7]) * window.scale,
                                           abs=3 * window.scale)
+        field.select(7, 7)
+        ctrl_key(0x08)
+        assert field.value == "iii " and field.caret_index == 4 and not field.selected_text
+        app.render_pending(app._frame_schedulers[window].stats.last_frame_time + 1)
+        _, _, after = renderer._contexts[hwnd].read_scene_rgba()
+        caret = [x for x in range(width) if after[(width * y + x) * 4] > 180
+                 and after[(width * y + x) * 4 + 1] < 30]
+        assert caret and min(caret) == pytest.approx(min(blue), abs=3 * window.scale)
+        for row in range(round(31 * window.scale), round(60 * window.scale)):
+            for x in range(max(caret) + 2, max(blue)):
+                offset = (row * width + x) * 4
+                assert max(after[offset:offset + 3]) < 10
+        field.select(0, 0)
+        ctrl_key(0x2E)
+        assert field.value == "" and field.caret_index == 0
         record_property("adapter", renderer.adapter_name)
         record_property("backend", renderer.graphics_backend)
     finally:

@@ -40,7 +40,9 @@ Its highlight and shaded reverse follow your accent when you switch themes.
 Text fields in the preview and in your own apps support mouse drag selection.
 On Windows, Shift+click extends the selection from its original anchor.
 Use Ctrl+Left or Ctrl+Right to move by word in a text field. Hold Shift to
-select the same range, including across lines in a `TextArea`.
+select the same range, including across lines in a `TextArea`. Ctrl+Backspace
+and Ctrl+Delete erase to the previous or next word boundary. In `CodeEditor`,
+one Undo restores the edit and the original caret or selection.
 In your own app, use `Button("Save", bounds=bounds, text_align="center")` to
 center an action label. `IconButton` centers its glyph by default.
 Tabbing through checkboxes, radio buttons and switches outlines the focused

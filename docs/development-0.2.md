@@ -167,4 +167,11 @@ Letters, digits and underscores stay together in names such as `theme_02`.
 In a `TextArea` or `CodeEditor`, Ctrl+Home and Ctrl+End jump to the start
 and end of the document. Hold Shift with either shortcut to extend a selection.
 
+To remove a word, use Ctrl+Backspace or Ctrl+Delete. Try Ctrl+Delete at the
+start of **Field notes** to remove **Field** and its following space. From the
+end of the same name, Ctrl+Backspace removes **notes**. With text selected,
+either shortcut deletes just the selection. In a multiline field the deleted
+range can include a line break and indentation. In a `CodeEditor`, Ctrl+Z
+restores the text and caret or selection in one step.
+
 ![The word notes selected in the paper variant beside the ink variant, captured without a cursor on Windows using AMD Radeon graphics and DX12](screenshots/saved-theme-preview.png)

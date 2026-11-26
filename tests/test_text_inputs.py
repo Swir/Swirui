@@ -258,6 +258,49 @@ def test_word_shortcut_replaces_only_the_selection_and_leaves_other_modifiers_av
     assert field.value == "Field guide" and len(changed) == 1
 
 
+@pytest.mark.parametrize(("control", "gap"), [(Input, "  "), (TextArea, "\n  "),
+                                               (CodeEditor, "\n  ")])
+def test_delete_word_uses_navigation_stops_and_retains_editor_history(control, gap):
+    window = Window()
+    first = "cafe\u0301_2"
+    field = control(first + "::" + gap + "next", bounds=Rect(0, 0, 220, 72))
+    mount(window, field)
+    window.focus_component(field)
+    field.select(len(first), len(first))
+    changes = []
+    field.on("changed", changes.append)
+    _send(window, PlatformEventKind.KEY_DOWN, key_code=0x2E, ctrl=True)
+    assert field.value == first + "next" and field.caret_index == len(first)
+    if isinstance(field, CodeEditor):
+        assert field.undo() and field.value == first + "::" + gap + "next"
+        assert not field.selected_text and field.caret_index == len(first)
+        assert field.redo() and field.value == first + "next"
+    changes.clear()
+    _send(window, PlatformEventKind.KEY_DOWN, key_code=0x08, ctrl=True)
+    _send(window, PlatformEventKind.TEXT_INPUT, text="\x7f")
+    assert field.value == "next" and field.caret_index == 0 and len(changes) == 1
+    _send(window, PlatformEventKind.KEY_DOWN, key_code=0x08, ctrl=True)
+    assert len(changes) == 1
+    field.select(3, 1)
+    _send(window, PlatformEventKind.KEY_DOWN, key_code=0x2E, ctrl=True)
+    assert field.value == "nt" and not field.selected_text and field.caret_index == 1
+    assert len(changes) == 2
+
+
+def test_word_deletion_respects_read_only_fields_and_masked_boundaries():
+    window = Window()
+    field = PasswordInput("one:two three", bounds=Rect(0, 0, 200, 40))
+    mount(window, field)
+    window.focus_component(field)
+    field.select(4, 4)
+    _send(window, PlatformEventKind.KEY_DOWN, key_code=0x2E, ctrl=True)
+    assert field.value == "one:"
+    field.read_only = True
+    field.select(3, 1)
+    _send(window, PlatformEventKind.KEY_DOWN, key_code=0x08, ctrl=True)
+    assert field.value == "one:" and field.selected_text == "ne"
+
+
 def test_text_input_validation_and_programmatic_normalization() -> None:
     field = Input("a\nb", bounds=Rect(0.0, 0.0, 120.0, 36.0), max_length=2)
     assert field.value == "ab"
