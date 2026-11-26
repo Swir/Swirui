@@ -27,7 +27,10 @@ def _exercise_save_dialog(target):
     user32.GetWindowTextW.argtypes = [hwnd, text_buffer, ctypes.c_int]
     user32.GetClassNameW.argtypes = [hwnd, text_buffer, ctypes.c_int]
     user32.EnumChildWindows.argtypes = [hwnd, enum_proc, ctypes.c_ssize_t]
-    user32.SendMessageW.argtypes = [hwnd, uint, ctypes.c_size_t, text_buffer]
+    user32.IsWindowVisible.argtypes = [hwnd]
+    user32.IsWindowEnabled.argtypes = [hwnd]
+    user32.GetDlgItem.argtypes, user32.GetDlgItem.restype = [hwnd, ctypes.c_int], hwnd
+    user32.SendMessageW.argtypes = [hwnd, uint, ctypes.c_size_t, ctypes.c_void_p]
     user32.PostMessageW.argtypes = [hwnd, uint, ctypes.c_size_t, ctypes.c_ssize_t]
     title = "SwirUI theme export test"
     suggested = "studio-theme.json"
@@ -35,7 +38,7 @@ def _exercise_save_dialog(target):
     window = app.add_window(Window(width=320, height=200))
 
     def answer(owner, accept):
-        filename_set = False
+        edit = None
 
         def read(function, handle):
             buf = ctypes.create_unicode_buffer(1024)
@@ -43,30 +46,35 @@ def _exercise_save_dialog(target):
             return buf.value
 
         @enum_proc
-        def set_filename(child, _):
-            nonlocal filename_set
+        def find_filename(child, _):
+            nonlocal edit
             if (read(user32.GetClassNameW, child) == "Edit"
                     and read(user32.GetWindowTextW, child) in (suggested, "studio-theme")):
-                # Type the full destination without an extension to exercise the JSON filter.
-                typed = str(target.with_suffix(""))
-                user32.SendMessageW(child, 0x000C, 0, typed)  # WM_SETTEXT
-                if read(user32.GetWindowTextW, child) == typed:
-                    filename_set = True
-                    return 0
+                edit = child
+                return 0
             return 1
 
         deadline = time.monotonic() + 12
         while time.monotonic() < deadline:
             dialog = user32.GetLastActivePopup(owner)
             if (dialog and dialog != owner and user32.GetWindow(dialog, 4) == owner
+                    and user32.IsWindowVisible(dialog)
                     and read(user32.GetWindowTextW, dialog) == title):
                 if not accept:
                     user32.PostMessageW(dialog, 0x0010, 0, 0)  # WM_CLOSE
                     return
-                user32.EnumChildWindows(dialog, set_filename, 0)
-                if filename_set:
-                    user32.PostMessageW(dialog, 0x0111, 1, 0)  # WM_COMMAND, IDOK
-                    return
+                ok = user32.GetDlgItem(dialog, 1)
+                if ok and user32.IsWindowEnabled(ok):
+                    if edit is None:
+                        user32.EnumChildWindows(dialog, find_filename, 0)
+                    if edit:
+                        # EM_SETSEL + EM_REPLACESEL trigger the same edit notifications as typing.
+                        typed = str(target.with_suffix(""))
+                        if read(user32.GetWindowTextW, edit) == typed:
+                            user32.PostMessageW(dialog, 0x0111, 1, ok)  # BN_CLICKED, IDOK
+                            return
+                        user32.SendMessageW(edit, 0x00B1, 0, -1)
+                        user32.SendMessageW(edit, 0x00C2, 1, ctypes.create_unicode_buffer(typed))
             time.sleep(0.05)
 
     try:
@@ -77,7 +85,12 @@ def _exercise_save_dialog(target):
             thread.start()
             result = window.choose_save_file(suggested, title=title)
             thread.join(2)
-            assert result == (target if accept else None)
+            if accept:
+                assert result is not None, "Accepting the destination returned Cancel"
+                assert result.name == target.name, (result, target)
+                assert result.parent.samefile(target.parent), (result, target)
+            else:
+                assert result is None, f"Cancel returned {result!r}"
             assert not target.exists()
     finally:
         app.stop()
