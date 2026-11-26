@@ -134,6 +134,11 @@ def test_saved_theme_cli_renders_both_authored_accents_in_requested_order(tmp_pa
         for w, h in ((960, 460), (320, 390), (720, 420)):
             window.resize(w, h)
             app.process_events()
+            # Resizing can leave the native pointer over a newly positioned button.
+            # Sample the resting accent in each layout at the same pointer position.
+            window._apply_platform_event(PlatformEvent(
+                PlatformEventKind.POINTER_MOVE, window.native_handle, x=2, y=2,
+            ))
             app.render_pending(app._frame_schedulers[window].stats.last_frame_time + 1)
             assert window.width == w and window.height == h
             assert app.renderer._contexts[window.native_handle.value] is context
@@ -144,6 +149,7 @@ def test_saved_theme_cli_renders_both_authored_accents_in_requested_order(tmp_pa
                 assert first.bounds.right == second.bounds.x
             width, _, pixels = context.read_scene_rgba()
             for pane, color in ((first, (227, 128, 68)), (second, (127, 224, 191))):
+                assert not pane.apply.hovered
                 button = pane.apply.bounds
                 offset = 4 * (round((button.bottom - 6) * window.scale) * width
                               + round((button.x + button.width / 2) * window.scale))
