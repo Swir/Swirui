@@ -132,6 +132,33 @@ Press Space to activate the focused control, then Tab to move on.
 To reproduce this cursor-free native capture, run
 `python tools/capture_studio.py --pane preview --width 1440 --height 900 --accent "#7FE0BF" --corner-radius 24 --focus-motion --output studio-corners.png`.
 
+### Tilt a material with the pointer
+
+In Studio, choose **Glass**, set **Depth layers** to 6 in the Inspector and
+leave **Enable motion** on. Move the pointer from the top left to the bottom
+right of the card. Watch the layers below the bottom edge and along the right
+side. The diagonal highlight follows the rounded face. You can keep typing in
+the project field as the layers move.
+
+![Six mint glass layers tilt as the pointer crosses the Studio form, with the project field focused](screenshots/studio-pointer-tilt.png)
+
+These 24 cursor-free frames show a crop of the native Studio preview on
+Windows with AMD Radeon graphics and DX12. In your own app, bind the effect
+after mounting a card whose material has depth layers.
+
+```python
+from swirui import AnimationController, SurfaceInteraction
+
+animations = AnimationController(app, window)
+interaction = SurfaceInteraction(animations, card, tilt_degrees=14)
+```
+
+`tilt_degrees` accepts 0 to 35 and defaults to 0. The center of the card uses
+the angles in its `SurfaceStyle`. Moving toward an edge adds tilt along that
+axis, up to a total of 35 degrees in either direction. Leaving the card brings
+the layers back to their authored angles. Keyboard focus still highlights
+the card, and a theme with `reduced_motion=True` keeps the layers at rest.
+
 ## Edit a range with the keyboard
 
 Run `python examples/range_progress_demo.py` and press Tab to focus the

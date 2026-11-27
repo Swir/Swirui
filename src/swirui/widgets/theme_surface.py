@@ -3,7 +3,7 @@
 from dataclasses import replace
 
 from swirui.core import AccessibilityRole
-from swirui.rendering import Color, LinearGradient, Point, Rect, SceneNode
+from swirui.rendering import Color, CornerRadius, LinearGradient, Point, Rect, SceneNode
 from swirui.surface_style import SurfaceStyle
 from swirui.theme import FUTURE_DARK, Theme
 
@@ -28,6 +28,7 @@ class ThemeSurface(Widget):
         self._style = style
         self._interaction_enabled = False
         self._interaction_progress = 0.0
+        self._interaction_tilt = (0.0, 0.0)
         super().__init__(bounds=bounds, key=key, opacity=opacity, z_index=z_index,
                          accessibility_role=AccessibilityRole.GROUP,
                          accessible_name=accessible_name)
@@ -59,11 +60,14 @@ class ThemeSurface(Widget):
         style = self.effective_style
         progress = self._interaction_progress
         if progress:
+            tilt_x, tilt_y = self._interaction_tilt
             style = replace(
                 style, elevation=min(64, style.elevation + 8 * progress),
                 glow_radius=max(style.glow_radius, 24 * progress),
                 glow_opacity=max(style.glow_opacity, .12 * progress),
                 border_opacity=min(1, style.border_opacity + .3 * progress),
+                tilt_x=max(-35, min(35, style.tilt_x + tilt_x)),
+                tilt_y=max(-35, min(35, style.tilt_y + tilt_y)),
             )
         node = style.to_scene_node(self.key, self.bounds, theme)
         # Only the opt-in container receives input; decorative planes never do.
@@ -71,16 +75,17 @@ class ThemeSurface(Widget):
         if node.hit_testable:
             node.fill = Color(0, 0, 0, 0)
         if progress and self.bounds.width > 8 and self.bounds.height > 8:
-            inset = min(theme.control_radius, self.bounds.width / 4, self.bounds.height / 4)
+            inset = min(style.border_width, self.bounds.width / 4, self.bounds.height / 4)
             sheen = LinearGradient.two_color(
-                theme.surface_color("accent").with_alpha(.045 * progress),
+                theme.surface_color("accent").with_alpha(.045),
                 theme.surface_color("accent").with_alpha(0),
                 start=Point(0, 0), end=Point(1, 1),
             ).to_scene_node(
                 f"{self.key}:sheen",
                 Rect(self.bounds.x + inset, self.bounds.y + inset,
                      self.bounds.width - 2 * inset, self.bounds.height - 2 * inset),
-                steps=32,
+                steps=32, opacity=progress,
+                corner_radius=CornerRadius.uniform(max(0, theme.control_radius - inset)),
             )
             for decoration in sheen.walk():
                 decoration.hit_testable = False

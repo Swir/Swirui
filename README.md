@@ -144,6 +144,12 @@ Use `SurfaceInteraction` with your own `ThemeSurface` containers and authored
 themes. The [material guide](https://github.com/Swir/Swirui/blob/v0.1.0b6/docs/custom-material-themes.md)
 shows how to control glass, acrylic, depth and motion from Python.
 
+In the 0.2 Studio preview, move the pointer across a card with depth layers.
+The layers tilt toward the pointer while the field and button stay in place.
+To give a card in your own app the same response, use
+`SurfaceInteraction(animations, card, tilt_degrees=14)` after mounting it.
+[See the native preview and Python example](https://github.com/Swir/Swirui/blob/development/0.2/docs/development-0.2.md#tilt-a-material-with-the-pointer).
+
 In the 0.2 checkout, run `python examples/appearance_gallery.py`, leave the
 window idle, then switch between **Dark** and **Light**. The mint glass card
 turns lilac. Its shadow deepens and its four backplates tilt and spread apart

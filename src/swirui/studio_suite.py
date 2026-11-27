@@ -157,7 +157,7 @@ class StudioSuite(Studio):
 
     def bind_interactions(self, controller: AnimationController) -> tuple[SurfaceInteraction, ...]:
         """Attach optional material feedback after mounting this Studio."""
-        return tuple(SurfaceInteraction(controller, surface) for surface in (
+        return tuple(SurfaceInteraction(controller, surface, tilt_degrees=14) for surface in (
             *self.dashboard.metric_cards, self.preview.surface,
         ))
 

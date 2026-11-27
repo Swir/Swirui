@@ -19,8 +19,9 @@ from __future__ import annotations
 import math
 from collections.abc import Callable
 from dataclasses import dataclass
+from functools import lru_cache
 
-from .geometry import Color, Path2D, Point, Rect
+from .geometry import Color, CornerRadius, Path2D, Point, Rect, rounded_rectangle_outline
 from .scene import SceneNode, SceneNodeKind
 
 _EPSILON = 1.0e-9
@@ -100,6 +101,7 @@ class LinearGradient:
         steps: int = _DEFAULT_STEPS,
         opacity: float = 1.0,
         z_index: int = 0,
+        corner_radius: CornerRadius | None = None,
     ) -> SceneNode:
         """Build a retained scene subtree rendered by the native GPU path batch.
 
@@ -107,72 +109,59 @@ class LinearGradient:
         retain ``key`` so SceneGraph hit-testing still resolves to the owning
         component's stable key instead of exposing implementation-only band ids.
         The parent clips all bands to the requested bounds and carries opacity and
-        z-order as one logical visual.
+        z-order as one logical visual. Optional corner radii shape the band edges.
         """
 
         _validate_visual_arguments(key, bounds, opacity)
         if not 2 <= steps <= _MAX_STEPS:
             raise ValueError(f"Linear gradient steps must be between 2 and {_MAX_STEPS}.")
 
-        coverage_start, coverage_end = self._coverage_range()
-        boundaries = {
-            coverage_start + (coverage_end - coverage_start) * index / steps
-            for index in range(steps + 1)
-        }
-        boundaries.update(
-            stop.offset
-            for stop in self.stops
-            if coverage_start < stop.offset < coverage_end
-        )
-        ordered = sorted(boundaries)
-
         group = _gradient_group(key, bounds, opacity, z_index)
-        for lower, upper in zip(ordered, ordered[1:], strict=False):
-            if upper - lower <= _EPSILON:
-                continue
-            polygon = self._band_polygon(lower, upper)
-            if len(polygon) < 3 or abs(_polygon_area(polygon)) <= _EPSILON:
-                continue
-            local_points = tuple(
-                Point(point.x * bounds.width, point.y * bounds.height) for point in polygon
-            )
-            group.add(
-                SceneNode(
-                    key=key,
-                    kind=SceneNodeKind.PATH,
-                    bounds=bounds,
-                    fill=self.color_at((lower + upper) * 0.5),
-                    path=Path2D(local_points),
-                )
-            )
-        if not group.children:
-            raise RuntimeError("Linear gradient tessellation produced no drawable bands.")
+        offsets = tuple(stop.offset for stop in self.stops)
+        for offset, path in _linear_bands(self.start, self.end, offsets, bounds.width,
+                                          bounds.height, steps, corner_radius):
+            group.add(SceneNode(key=key, kind=SceneNodeKind.PATH, bounds=bounds,
+                                fill=self.color_at(offset), path=path))
         return group
 
-    def _parameter(self, point: Point) -> float:
-        dx = self.end.x - self.start.x
-        dy = self.end.y - self.start.y
-        denominator = dx * dx + dy * dy
-        return ((point.x - self.start.x) * dx + (point.y - self.start.y) * dy) / denominator
 
-    def _coverage_range(self) -> tuple[float, float]:
-        parameters = [self._parameter(point) for point in _UNIT_RECTANGLE]
-        return min(parameters), max(parameters)
+@lru_cache(maxsize=24)
+def _linear_bands(
+    start: Point, end: Point, stops: tuple[float, ...], width: float, height: float,
+    steps: int, corner_radius: CornerRadius | None,
+) -> tuple[tuple[float, Path2D], ...]:
+    """Reuse immutable paths as an interactive surface moves or changes color and opacity."""
+    dx, dy = end.x - start.x, end.y - start.y
+    denominator = dx * dx + dy * dy
 
-    def _band_polygon(self, lower: float, upper: float) -> tuple[Point, ...]:
-        polygon = _clip_projection_half_plane(
-            _UNIT_RECTANGLE,
-            self._parameter,
-            lower,
-            keep_greater=True,
-        )
-        polygon = _clip_projection_half_plane(
-            polygon,
-            self._parameter,
-            upper,
-            keep_greater=False,
-        )
-        return _deduplicate_polygon(polygon)
+    def parameter(point: Point) -> float:
+        return ((point.x - start.x) * dx + (point.y - start.y) * dy) / denominator
+
+    coverage = tuple(map(parameter, _UNIT_RECTANGLE))
+    low, high = min(coverage), max(coverage)
+    boundaries = {low + (high - low) * index / steps for index in range(steps + 1)}
+    boundaries.update(stop for stop in stops if low < stop < high)
+    ordered = sorted(boundaries)
+    outline: tuple[Point, ...] = _UNIT_RECTANGLE
+    if corner_radius is not None:
+        contour = rounded_rectangle_outline(Rect(0, 0, width, height), corner_radius)
+        outline = tuple(Point(p.x / width, p.y / height) for p in contour)
+
+    bands = []
+    for lower, upper in zip(ordered, ordered[1:], strict=False):
+        if upper - lower <= _EPSILON:
+            continue
+        polygon = _clip_projection_half_plane(outline, parameter, lower, keep_greater=True)
+        polygon = _clip_projection_half_plane(polygon, parameter, upper, keep_greater=False)
+        polygon = _deduplicate_polygon(polygon)
+        if len(polygon) < 3 or abs(_polygon_area(polygon)) <= _EPSILON:
+            continue
+        points = tuple(Point(p.x * width, p.y * height) for p in polygon)
+        path = Path2D(points) if corner_radius is None else Path2D._from_convex_outline(points)
+        bands.append(((lower + upper) * .5, path))
+    if not bands:
+        raise RuntimeError("Linear gradient tessellation produced no drawable bands.")
+    return tuple(bands)
 
 
 @dataclass(frozen=True, slots=True)
