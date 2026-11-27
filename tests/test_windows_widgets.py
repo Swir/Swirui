@@ -450,6 +450,52 @@ def test_retained_ranges_and_progress_render_in_persistent_wgpu_context() -> Non
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="retained widget smoke requires Windows")
+def test_slider_color_scale_stays_in_place_as_either_handle_moves() -> None:
+    renderer = WgpuRenderer()
+    app = App(platform_backend=_isolated_backend(), renderer=renderer)
+    window = app.add_window(Window(width=360, height=180))
+    scale = LinearGradient.two_color(Color.from_hex("#FF3050"), Color.from_hex("#2050FF"))
+    single = Slider(bounds=Rect(20, 25, 218, 40), value=100, fill_gradient=scale)
+    interval = RangeSlider(bounds=Rect(20, 85, 218, 40), lower_value=0, upper_value=100,
+                           fill_gradient=scale)
+    root = Component()
+    root.add(single, interval)
+    mount(window, root)
+    try:
+        app.start()
+        context = renderer._contexts[window.native_handle.value]
+
+        def samples():
+            app.render_pending(app._frame_schedulers[window].stats.last_frame_time + 1)
+            width, _, rgba = context.read_scene_rgba()
+            rows = []
+            for y in (45, 105):
+                row = round(y * window.scale) * width
+                offsets = [4 * (row + round(x * window.scale)) for x in (69, 129, 189)]
+                rows.append(tuple(bytes(rgba[i:i + 3]) for i in offsets))
+            return rows
+
+        full, both = samples()
+        assert full == both and len(set(full)) == 3
+        assert full[0][0] > full[0][2] and full[2][2] > full[2][0]
+        single.value = 0
+        interval.lower_value = 100
+        empty, collapsed = samples()
+        assert empty == collapsed and len(set(empty)) == 1
+        single.value = 65
+        interval.lower_value = 35
+        interval.upper_value = 65
+        prefix, middle = samples()
+        assert prefix == (full[0], full[1], empty[2])
+        assert middle == (empty[0], full[1], empty[2])
+        interval.upper_value = 100
+        assert samples()[1] == (empty[0], full[1], full[2])
+        assert renderer._contexts[window.native_handle.value] is context
+    finally:
+        app.stop()
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="retained widget smoke requires Windows")
 def test_fractional_ring_leaves_visible_space_until_completion() -> None:
     renderer = WgpuRenderer()
     app = App(platform_backend=_isolated_backend(), renderer=renderer)

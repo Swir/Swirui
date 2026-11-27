@@ -230,6 +230,29 @@ handle, the two meet again. Release to choose a new direction.
 
 These 33 frames come from the same 700 × 420 Windows/wgpu demo window.
 
+### Color a selected range
+
+Use one `LinearGradient` for a slider, a range selector and a progress bar
+when the same color should mean the same percentage across controls.
+The two handles reveal the colors between their values. In the recording,
+the selection narrows from 20–80% to 40–60%. The midpoint keeps its blue.
+
+![The progress slider moves from 42% to 72%, then the two handles narrow the colored interval](screenshots/range-color-scale.png)
+
+```python
+from swirui import RangeSlider
+from swirui.rendering import Color, LinearGradient, Rect
+
+scale = LinearGradient.two_color(Color.from_hex("#9234ED"), Color.from_hex("#14D789"))
+exposure = RangeSlider(bounds=Rect(24, 60, 360, 44), lower_value=20, upper_value=80,
+                       fill_gradient=scale, accessible_name="Exposure range")
+```
+
+Assign a new gradient to `exposure.fill_gradient` to update it live, or assign
+`None` to use the current theme accent. Disabled controls use the theme's
+disabled color. To reproduce the four frames in the Windows demo, press Tab,
+Page Up three times, Tab, Right four times, Tab, then Left four times.
+
 ## Give a progress bar a color scale
 
 In `python examples/core_gallery.py`, focus the slider beneath **Progress,

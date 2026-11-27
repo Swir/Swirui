@@ -17,7 +17,7 @@ from swirui import (
     Window,
     mount,
 )
-from swirui.rendering import Rect
+from swirui.rendering import Color, GradientStop, LinearGradient, Point, Rect
 
 app = App("SwirUI range and progress controls")
 window = app.add_window(Window(title="SwirUI — Range and progress", width=700, height=420,
@@ -26,18 +26,26 @@ theme = replace(NEON_BLUE.with_accent("#83E6C2"), control_radius=16,
                 surface_style=SurfaceStyle(kind="glass", tint_opacity=.83, elevation=6))
 root = Panel(bounds=Rect(0, 0, 700, 420), theme=theme)
 card = ThemeSurface(bounds=Rect(30, 88, 640, 250))
+scale = LinearGradient(
+    Point(0, .5), Point(1, .5),
+    (GradientStop(0, Color.from_hex("#9234ED")),
+     GradientStop(.48, Color.from_hex("#187BD8")),
+     GradientStop(1, Color.from_hex("#14D789"))),
+)
 
 volume = Slider(
     key="volume",
     bounds=Rect(54, 148, 398, 40),
     value=42.0,
     step=1.0,
+    fill_gradient=scale,
     accessible_name="Demo progress",
 )
 progress = ProgressBar(
     key="progress",
     bounds=Rect(54, 198, 398, 6),
     value=volume.value,
+    fill_gradient=scale,
     accessible_name="Demo progress bar",
 )
 ring = ProgressRing(
@@ -54,6 +62,7 @@ allowed = RangeSlider(
     lower_value=20.0,
     upper_value=80.0,
     step=5.0,
+    fill_gradient=scale,
     accessible_name="Allowed range",
 )
 progress_value = Label("", bounds=Rect(545, 145, 63, 34), font_size=20)

@@ -15,10 +15,11 @@ from swirui.core import (
 )
 from swirui.platforms import PlatformEvent, PlatformEventKind, PointerButton
 from swirui.rendering.geometry import Color, CornerRadius, Path2D, Point, Rect
+from swirui.rendering.gradients import LinearGradient
 from swirui.rendering.scene import SceneNode, SceneNodeKind
 from swirui.theme import Theme
 
-from .base import ThemeStyle, Widget
+from .base import ThemeStyle, Widget, _gradient_track_fill
 
 if TYPE_CHECKING:
     from swirui.window import Window
@@ -99,6 +100,23 @@ class _SliderBase(Widget):
     _focused: bool
     _dragging: bool
     _focus: Color
+    _track: Color
+    _accent: Color
+    _track_disabled: Color
+    _fill_gradient: LinearGradient | None = None
+
+    @property
+    def fill_gradient(self) -> LinearGradient | None:
+        """Full-track color scale revealed between the selected limits."""
+        return self._fill_gradient
+
+    @fill_gradient.setter
+    def fill_gradient(self, value: LinearGradient | None) -> None:
+        if value is not None and not isinstance(value, LinearGradient):
+            raise TypeError("fill_gradient must be a LinearGradient or None.")
+        if value != self._fill_gradient:
+            self._fill_gradient = value
+            self.invalidate(reason="fill_gradient")
 
     def _bind_drag(self) -> None:
         self.on("pointer_enter", self._on_pointer_enter)
@@ -199,6 +217,32 @@ class _SliderBase(Widget):
             self.bounds.y + self.bounds.height / 2.0,
         )
 
+    def _add_track(self, root: SceneNode, lower: float, upper: float) -> None:
+        left, right, center_y = self._track_geometry()
+        track = Rect(left, center_y - self.track_height / 2, max(0.0, right - left),
+                     self.track_height)
+        radius = CornerRadius.uniform(self.track_height / 2)
+        root.add(SceneNode(
+            f"{self.key}:track", SceneNodeKind.RECTANGLE, track,
+            fill=self._track if self.enabled else self._track_disabled,
+            corner_radius=radius, hit_testable=False,
+        ))
+        start = track.x + track.width * self._ratio(lower)
+        end = track.x + track.width * self._ratio(upper)
+        if end <= start or track.height <= 0:
+            return
+        filled = Rect(start, track.y, end - start, track.height)
+        key = f"{self.key}:fill"
+        if self.enabled and self.fill_gradient is not None:
+            fill = _gradient_track_fill(self.fill_gradient, key, track, filled, radius)
+        else:
+            fill = SceneNode(
+                key, SceneNodeKind.RECTANGLE, filled, z_index=1,
+                fill=self._accent if self.enabled else self._track_disabled,
+                corner_radius=radius, hit_testable=False,
+            )
+        root.add(fill)
+
     def _thumb_bounds(self, value: float) -> Rect:
         left, right, center_y = self._track_geometry()
         center_x = left + (right - left) * self._ratio(value)
@@ -253,6 +297,7 @@ class Slider(_SliderBase):
         minimum: float = 0.0,
         maximum: float = 100.0,
         step: float = 1.0,
+        fill_gradient: LinearGradient | None = None,
         key: str | None = None,
         theme: Theme | None = None,
         opacity: float = 1.0,
@@ -283,6 +328,7 @@ class Slider(_SliderBase):
             accessible_description=accessible_description,
         )
         self._bind_theme(theme, _slider_theme_styles())
+        self.fill_gradient = fill_gradient
         self._sync_accessibility()
         self._bind_drag()
         self.on("key_down", self._on_key_down)
@@ -317,33 +363,7 @@ class Slider(_SliderBase):
             fill=Color(0.0, 0.0, 0.0, 0.0),
             hit_testable=self.enabled,
         )
-        left, right, center_y = self._track_geometry()
-        width = max(0.0, right - left)
-        track = Rect(left, center_y - self.track_height / 2.0, width, self.track_height)
-        root.add(
-            SceneNode(
-                key=f"{self.key}:track",
-                kind=SceneNodeKind.RECTANGLE,
-                bounds=track,
-                fill=self._track if self.enabled else self._track_disabled,
-                corner_radius=CornerRadius.uniform(self.track_height / 2.0),
-                hit_testable=False,
-            )
-        )
-        ratio = self._ratio(self._value)
-        fill_width = width * ratio
-        if fill_width > 0.0:
-            root.add(
-                SceneNode(
-                    key=f"{self.key}:fill",
-                    kind=SceneNodeKind.RECTANGLE,
-                    bounds=Rect(left, track.y, fill_width, track.height),
-                    z_index=1,
-                    fill=self._accent if self.enabled else self._track_disabled,
-                    corner_radius=CornerRadius.uniform(self.track_height / 2.0),
-                    hit_testable=False,
-                )
-            )
+        self._add_track(root, self.minimum, self.value)
         self._add_thumb(root, self.key, self._value, self._thumb_color(), active=True)
         return root
 
@@ -411,6 +431,7 @@ class RangeSlider(_SliderBase):
         minimum: float = 0.0,
         maximum: float = 100.0,
         step: float = 1.0,
+        fill_gradient: LinearGradient | None = None,
         key: str | None = None,
         theme: Theme | None = None,
         opacity: float = 1.0,
@@ -449,6 +470,7 @@ class RangeSlider(_SliderBase):
             accessible_description=accessible_description,
         )
         self._bind_theme(theme, _slider_theme_styles())
+        self.fill_gradient = fill_gradient
         self._sync_accessibility()
         self._bind_drag()
         self.on("key_down", self._on_key_down)
@@ -526,33 +548,7 @@ class RangeSlider(_SliderBase):
             fill=Color(0.0, 0.0, 0.0, 0.0),
             hit_testable=self.enabled,
         )
-        left, right, center_y = self._track_geometry()
-        width = max(0.0, right - left)
-        track = Rect(left, center_y - self.track_height / 2.0, width, self.track_height)
-        root.add(
-            SceneNode(
-                key=f"{self.key}:track",
-                kind=SceneNodeKind.RECTANGLE,
-                bounds=track,
-                fill=self._track if self.enabled else self._track_disabled,
-                corner_radius=CornerRadius.uniform(self.track_height / 2.0),
-                hit_testable=False,
-            )
-        )
-        lower_x = left + width * self._ratio(self._lower_value)
-        upper_x = left + width * self._ratio(self._upper_value)
-        if upper_x > lower_x:
-            root.add(
-                SceneNode(
-                    key=f"{self.key}:fill",
-                    kind=SceneNodeKind.RECTANGLE,
-                    bounds=Rect(lower_x, track.y, upper_x - lower_x, track.height),
-                    z_index=1,
-                    fill=self._accent if self.enabled else self._track_disabled,
-                    corner_radius=CornerRadius.uniform(self.track_height / 2.0),
-                    hit_testable=False,
-                )
-            )
+        self._add_track(root, self.lower_value, self.upper_value)
         for name, value in (("lower", self._lower_value), ("upper", self._upper_value)):
             self._add_thumb(root, f"{self.key}:{name}", value, self._thumb_color(name),
                             active=name == self._active_thumb, direction=self._active_thumb)

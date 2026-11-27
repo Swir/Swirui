@@ -12,7 +12,7 @@ from swirui.rendering.gradients import LinearGradient
 from swirui.rendering.scene import SceneNode, SceneNodeKind
 from swirui.theme import Theme
 
-from .base import Widget
+from .base import Widget, _gradient_track_fill
 
 _TRACK = Color.from_hex("#263946")
 _FILL = Color.from_hex("#0A98F0")
@@ -182,13 +182,9 @@ class ProgressBar(_ProgressWidget):
         key = f"{self.key}:fill"
         filled = Rect(self.bounds.x, self.bounds.y, fill_width, self.bounds.height)
         if self.enabled and self.fill_gradient is not None:
-            paint = self.fill_gradient.to_scene_node(
-                key, self.bounds, steps=64, corner_radius=root.corner_radius, z_index=1
+            paint = _gradient_track_fill(
+                self.fill_gradient, key, self.bounds, filled, root.corner_radius
             )
-            # The group clips the reveal; its child paths stay in full-track coordinates.
-            paint.bounds = filled
-            for node in paint.walk():
-                node.hit_testable = False
         else:
             paint = SceneNode(
                 key, SceneNodeKind.RECTANGLE, filled, z_index=1,

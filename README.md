@@ -66,6 +66,10 @@ focus ring identifies the limit even where the handles meet. When both
 handles meet, drag left to lower the minimum or right to raise the maximum.
 [Try the range controls](https://github.com/Swir/Swirui/blob/development/0.2/docs/development-0.2.md#edit-a-range-with-the-keyboard).
 
+Give a `Slider` or `RangeSlider` a color scale with `fill_gradient`. When
+someone narrows a selection from 20–80% to 40–60%, the color at 50% stays
+the same. [See the running Python example](https://github.com/Swir/Swirui/blob/development/0.2/docs/development-0.2.md#color-a-selected-range).
+
 On the 0.2 branch, pass a `LinearGradient` to `ProgressBar(fill_gradient=...)`
 to give the bar a fixed color scale. As the value rises, it reveals the
 next color while each previous stop stays in place.

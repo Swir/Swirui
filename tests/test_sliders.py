@@ -17,7 +17,7 @@ from swirui.platforms import (
     PlatformEventKind,
     PointerButton,
 )
-from swirui.rendering import Point, Rect, Scene, SceneNode
+from swirui.rendering import Color, LinearGradient, Point, Rect, Scene, SceneNode
 from swirui.widgets import compile_component_scene
 
 
@@ -243,6 +243,57 @@ def test_sole_range_wraps_to_the_other_end_and_skips_disabled_controls():
                               (False, "lower"), (False, "upper")):
         assert window.focus_next(reverse=reverse) is slider
         assert slider.active_thumb == expected
+
+
+@pytest.mark.parametrize("range_control", [False, True])
+def test_gradient_fill_stays_anchored_and_transparent_to_input(range_control):
+    gradient = LinearGradient.two_color(Color.from_hex("#B997FF"), Color.from_hex("#8FF1BE"))
+    bounds = Rect(10, 20, 218, 40)
+    slider = (RangeSlider(bounds=bounds, lower_value=20, upper_value=80, fill_gradient=gradient)
+              if range_control else Slider(bounds=bounds, value=80, fill_gradient=gradient))
+    window = Window(width=260, height=90)
+    mount(window, slider)
+    track = Rect(19, 37, 200, 6)
+    fill_key = f"{slider.key}:fill"
+    fill = _node(window.scene, fill_key)
+    expected = Rect(59, 37, 120, 6) if range_control else Rect(19, 37, 160, 6)
+    assert fill.clip_to_bounds and fill.bounds == expected
+    assert all(band.bounds == track for band in fill.children)
+    assert not any(node.hit_testable for node in fill.walk())
+    assert window.scene.hit_test(Point(119, 40)).key == slider.key
+
+    if range_control:
+        slider.lower_value = 35
+        slider.upper_value = 65
+    else:
+        slider.value = 65
+    narrower = _node(window.scene, fill_key)
+    assert narrower.bounds == (Rect(89, 37, 60, 6) if range_control else Rect(19, 37, 130, 6))
+    assert narrower.children[0].path is fill.children[0].path
+    assert [b.fill for b in narrower.children] == [b.fill for b in fill.children]
+    slider.fill_gradient = LinearGradient.two_color(
+        Color.from_hex("#F00B64"), Color.from_hex("#FFDA45")
+    )
+    alternate = _node(window.scene, fill_key)
+    assert alternate.bounds == narrower.bounds
+    assert alternate.children[0].fill != fill.children[0].fill
+    slider.enabled = False
+    assert _node(window.scene, fill_key).fill == _node(window.scene, f"{slider.key}:track").fill
+    slider.enabled = True
+    slider.fill_gradient = None
+    assert not _node(window.scene, fill_key).children
+    with pytest.raises(TypeError, match="fill_gradient"):
+        slider.fill_gradient = "mint"
+    slider.fill_gradient = gradient
+    slider.bounds = Rect(10, 20, 8, 40)
+    assert all(node.key != fill_key for node in window.scene.walk())
+    slider.bounds = bounds
+    assert _node(window.scene, fill_key).bounds == narrower.bounds
+    if range_control:
+        slider.lower_value = slider.upper_value
+    else:
+        slider.value = slider.minimum
+    assert all(node.key != fill_key for node in window.scene.walk())
 
 
 def test_slider_validates_range_and_finite_values() -> None:
