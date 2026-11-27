@@ -150,6 +150,10 @@ To give a card in your own app the same response, use
 `SurfaceInteraction(animations, card, tilt_degrees=14)` after mounting it.
 [See the native preview and Python example](https://github.com/Swir/Swirui/blob/development/0.2/docs/development-0.2.md#tilt-a-material-with-the-pointer).
 
+On Windows, moving the pointer onto the title bar lets the card settle and
+dismisses hover-only tooltips. You can keep typing in the focused field.
+[See the native gallery capture](https://github.com/Swir/Swirui/blob/development/0.2/docs/development-0.2.md#leave-the-window-with-the-keyboard-selection-intact).
+
 In the 0.2 checkout, run `python examples/appearance_gallery.py`, leave the
 window idle, then switch between **Dark** and **Light**. The mint glass card
 turns lilac. Its shadow deepens and its four backplates tilt and spread apart

@@ -443,6 +443,11 @@ class Window(EventEmitter):
                 self.emit("focus_changed", focused=focused)
             return
 
+        if event.kind is PlatformEventKind.POINTER_EXIT:
+            self._clear_hover(event)
+            self.emit(event.kind.value, event=event)
+            return
+
         if event.kind in _POINTER_EVENTS:
             self._apply_pointer_event(self._logical_pointer_event(event))
             return
@@ -518,7 +523,8 @@ class Window(EventEmitter):
 
     def _apply_pointer_event(self, event: PlatformEvent) -> None:
         scene_path: tuple[SceneNode, ...] = ()
-        if self.scene is not None and event.x is not None and event.y is not None:
+        if (self.scene is not None and event.x is not None and event.y is not None
+                and 0 <= event.x < self.width and 0 <= event.y < self.height):
             scene_path = self.scene.hit_path_xy(event.x, event.y)
         scene_target = scene_path[-1] if scene_path else None
         hit_component_path = self._component_path_for_scene_target(scene_target)
@@ -596,11 +602,11 @@ class Window(EventEmitter):
         if event.kind is PlatformEventKind.POINTER_UP:
             self.release_pointer_capture()
 
-    def _clear_hover(self) -> None:
+    def _clear_hover(self, event: PlatformEvent | None = None) -> None:
         target, previous = self.hovered_scene_node, self._hover_input
         self.hovered_scene_node = self._hover_input = None
         if target is not None and previous is not None:
-            self._send_hover_leave(previous[0], target, previous[1])
+            self._send_hover_leave(event or previous[0], target, previous[1])
 
     def _send_hover_leave(self, event: PlatformEvent, target: SceneNode,
                           path: tuple[Component, ...]) -> None:

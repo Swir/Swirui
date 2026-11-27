@@ -159,6 +159,21 @@ axis, up to a total of 35 degrees in either direction. Leaving the card brings
 the layers back to their authored angles. Keyboard focus still highlights
 the card, and a theme with `reduced_motion=True` keeps the layers at rest.
 
+### Leave the window with the keyboard selection intact
+
+Run `python examples/core_gallery.py` on Windows. Select a word in the text
+field, then hover over **Focus for help**. When “Your work stays right here.”
+appears, move the pointer straight onto the title bar. The tooltip closes and
+the word stays selected. Move back onto the button to show the tip again.
+
+![Two native gallery frames show the tooltip opening and closing while the same word stays selected](screenshots/gallery-pointer-exit.png)
+
+The two frames come from the Windows DX12 renderer and contain no cursor.
+In your own window, the hovered control receives `pointer_leave`. Use
+`window.on("pointer_exit", callback)` to react when the pointer leaves the
+client area. The exit event carries no coordinates. A control with pointer
+capture continues receiving drag events through button release.
+
 ## Edit a range with the keyboard
 
 Run `python examples/range_progress_demo.py` and press Tab to focus the

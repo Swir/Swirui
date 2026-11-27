@@ -50,6 +50,7 @@ class SurfaceInteraction:
             window.on("pointer_move", self._pointer),
             window.on("pointer_down", self._pointer),
             window.on("pointer_up", self._pointer),
+            window.on("pointer_exit", self._exit),
             window.on("component_focus_changed", self._focus),
             window.on("focus_changed", self._window_focus),
             window.on("closed", self._detach),
@@ -107,6 +108,12 @@ class SurfaceInteraction:
         if event.type == "pointer_down" and button == PointerButton.LEFT:
             self._pressed = self._hovered
         elif event.type == "pointer_up" and button == PointerButton.LEFT:
+            self._pressed = False
+        self._transition()
+
+    def _exit(self, _event: Event) -> None:
+        self._hovered = False
+        if self.controller.window.pointer_capture_component is None:
             self._pressed = False
         self._transition()
 

@@ -59,6 +59,13 @@ def _send_click(user32: Any, hwnd: int, x: int, y: int) -> None:
     user32.SendMessageW(ctypes.c_void_p(hwnd), 0x0202, 0, point)
 
 
+def _dispatch_sent_messages(app):
+    # A synchronous test input need not coincide with the physical desktop cursor.
+    events = app.platform_backend._events
+    while events:
+        app._dispatch_platform_event(events.popleft())
+
+
 @pytest.mark.skipif(sys.platform != "win32", reason="Win32 capture and wgpu readback required")
 def test_tab_distinguishes_coincident_range_handles_on_the_gpu() -> None:
     app = App(platform_backend=_isolated_backend(), renderer=WgpuRenderer())
@@ -128,11 +135,7 @@ def test_slider_drag_updates_gpu_track_outside_the_client_and_releases_capture()
         def mouse(message, flags, x, y):
             point = _lparam(round(x * window.scale), round(y * window.scale))
             user32.SendMessageW(hwnd, message, flags, point)
-            # Deliver this HWND message and its capture notifications. Pumping the
-            # entire desktop here can mix physical mouse movement into the gesture.
-            events = app.platform_backend._events
-            while events:
-                app._dispatch_platform_event(events.popleft())
+            _dispatch_sent_messages(app)
 
         def track_pixels(y):
             app.render_pending(app._frame_schedulers[window].stats.last_frame_time + 1)
@@ -474,8 +477,11 @@ def test_retained_content_surfaces_and_tooltip_reuse_real_wgpu_context() -> None
         x = max(1, round(90.0 * window.scale))
         y = max(1, round(116.0 * window.scale))
         user32.SendMessageW(ctypes.c_void_p(hwnd), 0x0200, 0, _lparam(x, y))
-        app.process_events()
+        _dispatch_sent_messages(app)
         assert tooltip.is_open is True
+        user32.SendMessageW(ctypes.c_void_p(hwnd), 0x02A3, 0, 0)
+        _dispatch_sent_messages(app)
+        assert not tooltip.is_open
 
         _send_click(user32, hwnd, x, y)
         app.process_events()

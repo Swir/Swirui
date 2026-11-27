@@ -174,6 +174,31 @@ def test_binding_requires_correct_mount_and_rejects_duplicate_owner():
         app.stop()
 
 
+def test_client_exit_resets_material_tilt_and_keeps_keyboard_focus():
+    app, window, _, surface, button, driver, effect = setup_surface(tilt_degrees=20)
+    surface.style = SurfaceStyle(kind="glass", depth_layers=3)
+    try:
+        pointer(window, x=88, y=100)
+        pointer(window, PlatformEventKind.POINTER_DOWN, x=88, y=100)
+        driver.tick(1)
+        assert window.focused_component is button and effect.progress == .35
+        assert surface._interaction_tilt != (0, 0)
+        window._apply_platform_event(PlatformEvent(PlatformEventKind.POINTER_EXIT,
+                                                  window.native_handle))
+        driver.tick(.04)
+        assert .35 < effect.progress < .65
+        driver.tick(1)
+        assert effect.progress == .65 and surface._interaction_tilt == (0, 0)
+        assert window.focused_component is button and not button.hovered and not button.pressed
+        pointer(window, x=88, y=100)
+        driver.tick(1)
+        assert effect.progress == 1 and surface._interaction_tilt != (0, 0)
+    finally:
+        effect.dispose()
+        driver.dispose()
+        app.stop()
+
+
 def test_dialog_tilt_uses_local_coordinates_and_clamps_the_authored_angles():
     app = App(platform_backend=NullPlatformBackend(), renderer=NullRenderer())
     window = app.add_window(Window(width=580, height=400))

@@ -181,6 +181,29 @@ def test_real_win32_pointer_animates_retained_button_in_persistent_wgpu_context(
         previous_frames = renderer.frames_rendered
         _render_after_invalidation(app, renderer, previous_frames)
         assert renderer.persistent_context_count == initial_contexts
+        # Cross straight to the title bar: Windows sends no final client mouse move.
+        leaves = []
+        button.on("pointer_leave", leaves.append)
+        context = renderer._contexts[hwnd]
+
+        def color():
+            controller.tick(1)
+            app.render_pending(app._frame_schedulers[window].stats.last_frame_time + 1)
+            width, _, frame = context.read_scene_rgba()
+            offset = 4 * (round(94 * window.scale) * width + round(160 * window.scale))
+            return bytes(frame[offset:offset + 3])
+
+        hovered_color = color()
+        for count in (1, 2):
+            _place_cursor_in_client(user32, hwnd, x, -8)
+            _pump_until(app, lambda count=count: len(leaves) == count)
+            assert window.hovered_scene_node is None and not button.hovered
+            assert window.focused_component is button and renderer._contexts[hwnd] is context
+            assert color() != hovered_color
+            _place_cursor_in_client(user32, hwnd, x, y)
+            _pump_until(app, lambda: button.hovered)
+            assert color() == hovered_color
+        assert len(leaves) == 2
     finally:
         animator.dispose()
         controller.dispose()
