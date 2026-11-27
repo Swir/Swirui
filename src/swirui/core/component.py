@@ -164,6 +164,10 @@ class Component(EventEmitter):
 
         del window
 
+    def _step_keyboard_focus(self, *, reverse: bool, entering: bool) -> bool:
+        """Choose an internal Tab stop. Return true when focus moved within this component."""
+        return False
+
     def _map_descendant_pointer_event(self, event: PlatformEvent) -> PlatformEvent:
         """Map pointer coordinates into the coordinate space used by descendants.
 

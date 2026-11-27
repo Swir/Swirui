@@ -6,9 +6,15 @@ import math
 from abc import abstractmethod
 from typing import TYPE_CHECKING, Literal
 
-from swirui.core import AccessibilityRole, Event
+from swirui.core import (
+    AccessibilityNode,
+    AccessibilityRole,
+    Component,
+    Event,
+    build_accessibility_tree,
+)
 from swirui.platforms import PlatformEvent, PlatformEventKind, PointerButton
-from swirui.rendering.geometry import Color, CornerRadius, Rect
+from swirui.rendering.geometry import Color, CornerRadius, Path2D, Point, Rect
 from swirui.rendering.scene import SceneNode, SceneNodeKind
 from swirui.theme import Theme
 
@@ -35,6 +41,10 @@ _ACCENT_HOVER = Color.from_hex("#28B2FF")
 _THUMB = Color.from_hex("#F4FAFF")
 _THUMB_DISABLED = Color.from_hex("#7A8992")
 _FOCUS = Color.from_hex("#62E5FF")
+_THUMB_MARKS = {
+    "lower": Path2D.polygon(Point(0, 3), Point(5, 0), Point(5, 6)),
+    "upper": Path2D.polygon(Point(0, 0), Point(5, 3), Point(0, 6)),
+}
 
 
 def _slider_theme_styles() -> dict[str, ThemeStyle]:
@@ -88,6 +98,7 @@ class _SliderBase(Widget):
     _hovered: bool
     _focused: bool
     _dragging: bool
+    _focus: Color
 
     def _bind_drag(self) -> None:
         self.on("pointer_enter", self._on_pointer_enter)
@@ -196,6 +207,30 @@ class _SliderBase(Widget):
 
     def _ratio(self, value: float) -> float:
         return (value - self._minimum) / (self._maximum - self._minimum)
+
+    def _add_thumb(self, root: SceneNode, key: str, value: float, fill: Color,
+                   *, active: bool, direction: ThumbName | None = None) -> None:
+        bounds = self._thumb_bounds(value)
+        z = 3 if active else 2
+        if active and self._focused and self.enabled and bounds.width > 0:
+            gap = self._theme.surface_color("canvas") if self._theme else _TRACK
+            unit = min(1.0, bounds.width / 8)
+            rings = (("focus", self._focus, 2 * unit), ("focus-gap", gap, unit))
+            for suffix, color, inset in rings:
+                root.add(SceneNode(f"{key}:{suffix}", SceneNodeKind.RECTANGLE, bounds,
+                                   fill=color, corner_radius=CornerRadius.uniform(bounds.width / 2),
+                                   z_index=z, hit_testable=False))
+                bounds = Rect(bounds.x + inset, bounds.y + inset,
+                              bounds.width - 2 * inset, bounds.height - 2 * inset)
+            if direction is not None and bounds.width >= 8:
+                mark = Rect(bounds.x + (bounds.width - 5) / 2, bounds.y + (bounds.height - 6) / 2,
+                            5, 6)
+                root.add(SceneNode(f"{key}:direction", SceneNodeKind.PATH, mark,
+                                   path=_THUMB_MARKS[direction], fill=gap, z_index=z + 1,
+                                   hit_testable=False))
+        root.add(SceneNode(f"{key}:thumb", SceneNodeKind.RECTANGLE, bounds, fill=fill,
+                           corner_radius=CornerRadius.uniform(bounds.width / 2),
+                           z_index=z, hit_testable=False))
 
     def _value_from_x(self, x: float) -> float:
         left, right, _ = self._track_geometry()
@@ -309,36 +344,7 @@ class Slider(_SliderBase):
                     hit_testable=False,
                 )
             )
-        thumb = self._thumb_bounds(self._value)
-        if self._focused and self.enabled:
-            halo = 4.0
-            root.add(
-                SceneNode(
-                    key=f"{self.key}:focus",
-                    kind=SceneNodeKind.RECTANGLE,
-                    bounds=Rect(
-                        thumb.x - halo,
-                        thumb.y - halo,
-                        thumb.width + 2.0 * halo,
-                        thumb.height + 2.0 * halo,
-                    ),
-                    z_index=2,
-                    fill=self._focus.with_alpha(0.22),
-                    corner_radius=CornerRadius.uniform((thumb.width + 2.0 * halo) / 2.0),
-                    hit_testable=False,
-                )
-            )
-        root.add(
-            SceneNode(
-                key=f"{self.key}:thumb",
-                kind=SceneNodeKind.RECTANGLE,
-                bounds=thumb,
-                z_index=3,
-                fill=self._thumb_color(),
-                corner_radius=CornerRadius.uniform(thumb.width / 2.0),
-                hit_testable=False,
-            )
-        )
+        self._add_thumb(root, self.key, self._value, self._thumb_color(), active=True)
         return root
 
     def _set_value(
@@ -476,6 +482,37 @@ class RangeSlider(_SliderBase):
     def active_thumb(self) -> ThumbName:
         return self._active_thumb
 
+    def accessibility_snapshot(self, *, focused: Component | None = None) -> AccessibilityNode:
+        limits = (("lower", self.lower_value, self.minimum, self.upper_value),
+                  ("upper", self.upper_value, self.lower_value, self.maximum))
+        thumbs = tuple(AccessibilityNode(
+            key=f"{self.key}:a11y:{name}", role=AccessibilityRole.SLIDER,
+            name=f"{name.title()} limit", description=None, enabled=self.enabled,
+            focusable=self.focusable, focused=focused is self and name == self.active_thumb,
+            active=name == self.active_thumb, value=value, min_value=low, max_value=high,
+            value_text=_format_value(value),
+        ) for name, value, low, high in limits)
+        children = tuple(node for child in self.children
+                         if (node := build_accessibility_tree(child, focused=focused)) is not None)
+        return AccessibilityNode(
+            key=self.key, role=self.accessibility_role, name=self.accessible_name or self.name,
+            description=self.accessible_description, enabled=self.enabled, focusable=self.focusable,
+            focused=focused is self, checked=self.accessible_checked, value=self.accessible_value,
+            min_value=self.accessible_min_value, max_value=self.accessible_max_value,
+            value_text=self.accessible_value_text, children=thumbs + children,
+        )
+
+    def _step_keyboard_focus(self, *, reverse: bool, entering: bool) -> bool:
+        if self._dragging:
+            return False
+        order: tuple[ThumbName, ThumbName] = ("upper", "lower") if reverse else ("lower", "upper")
+        thumb = order[0] if entering else order[1]
+        if thumb == self._active_thumb:
+            return False
+        self._active_thumb = thumb
+        self.invalidate(reason="active_thumb")
+        return True
+
     def build_scene_node(self) -> SceneNode:
         root = SceneNode(
             key=self.key,
@@ -514,36 +551,8 @@ class RangeSlider(_SliderBase):
                 )
             )
         for name, value in (("lower", self._lower_value), ("upper", self._upper_value)):
-            thumb = self._thumb_bounds(value)
-            if self._focused and self.enabled and name == self._active_thumb:
-                halo = 4.0
-                root.add(
-                    SceneNode(
-                        key=f"{self.key}:{name}:focus",
-                        kind=SceneNodeKind.RECTANGLE,
-                        bounds=Rect(
-                            thumb.x - halo,
-                            thumb.y - halo,
-                            thumb.width + 2.0 * halo,
-                            thumb.height + 2.0 * halo,
-                        ),
-                        z_index=2,
-                        fill=self._focus.with_alpha(0.22),
-                        corner_radius=CornerRadius.uniform((thumb.width + 2.0 * halo) / 2.0),
-                        hit_testable=False,
-                    )
-                )
-            root.add(
-                SceneNode(
-                    key=f"{self.key}:{name}:thumb",
-                    kind=SceneNodeKind.RECTANGLE,
-                    bounds=thumb,
-                    z_index=3 if name == self._active_thumb else 2,
-                    fill=self._thumb_color(name),
-                    corner_radius=CornerRadius.uniform(thumb.width / 2.0),
-                    hit_testable=False,
-                )
-            )
+            self._add_thumb(root, f"{self.key}:{name}", value, self._thumb_color(name),
+                            active=name == self._active_thumb, direction=self._active_thumb)
         return root
 
     def _nearest_thumb(self, value: float) -> ThumbName:
@@ -568,12 +577,15 @@ class RangeSlider(_SliderBase):
         )
         old_lower = self._lower_value
         old_upper = self._upper_value
+        old_thumb = self._active_thumb
         self._active_thumb = thumb
         if thumb == "lower":
             self._lower_value = min(normalized, self._upper_value)
         else:
             self._upper_value = max(normalized, self._lower_value)
         if (old_lower, old_upper) == (self._lower_value, self._upper_value):
+            if old_thumb != thumb:
+                self.invalidate(reason="active_thumb")
             return
         self._sync_accessibility()
         self.invalidate(reason="value")

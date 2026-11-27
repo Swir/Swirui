@@ -6,6 +6,7 @@ from typing import Any
 import pytest
 
 from swirui import (
+    FUTURE_DARK,
     App,
     Badge,
     Checkbox,
@@ -56,6 +57,53 @@ def _send_click(user32: Any, hwnd: int, x: int, y: int) -> None:
     point = _lparam(x, y)
     user32.SendMessageW(ctypes.c_void_p(hwnd), 0x0201, 0, point)
     user32.SendMessageW(ctypes.c_void_p(hwnd), 0x0202, 0, point)
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Win32 capture and wgpu readback required")
+def test_tab_distinguishes_coincident_range_handles_on_the_gpu() -> None:
+    app = App(platform_backend=_isolated_backend(), renderer=WgpuRenderer())
+    window = app.add_window(Window(width=420, height=240))
+    slider = RangeSlider(bounds=Rect(30, 50, 300, 44), lower_value=50, upper_value=50,
+                         theme=FUTURE_DARK, step=10)
+    after = Slider(bounds=Rect(30, 140, 300, 44))
+    root = Component()
+    root.add(slider, after)
+    mount(window, root)
+    try:
+        app.start()
+        app.process_events()
+        hwnd = window.native_handle.value
+        context = app.renderer._contexts[hwnd]
+        user32 = _user32()
+
+        def press(key):
+            user32.SendMessageW(hwnd, 0x0100, key, 1)  # WM_KEYDOWN
+            user32.SendMessageW(hwnd, 0x0101, key, 1)  # WM_KEYUP
+            app.process_events()
+            app.render_pending(app._frame_schedulers[window].stats.last_frame_time + 1)
+
+        def center_pixels():
+            width, _, rgba = context.read_scene_rgba()
+            x1, x2 = round(176 * window.scale), round(184 * window.scale)
+            y1, y2 = round(68 * window.scale), round(76 * window.scale)
+            return b"".join(rgba[4 * (y * width + x1):4 * (y * width + x2)]
+                            for y in range(y1, y2))
+
+        press(0x09)
+        assert window.focused_component is slider and slider.active_thumb == "lower"
+        lower = center_pixels()
+        press(0x09)
+        assert window.focused_component is slider and slider.active_thumb == "upper"
+        upper = center_pixels()
+        assert (slider.lower_value, slider.upper_value) == (50, 50)
+        assert sum(abs(a - b) > 32 for a, b in zip(lower, upper, strict=True)) >= 6
+        press(0x27)  # Right
+        assert (slider.lower_value, slider.upper_value) == (50, 60)
+        press(0x09)
+        assert window.focused_component is after
+        assert app.renderer._contexts[hwnd] is context
+    finally:
+        app.stop()
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Win32 capture and wgpu readback required")

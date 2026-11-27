@@ -1,6 +1,15 @@
 import pytest
 
-from swirui import Component, RangeSlider, Slider, Window, build_accessibility_tree, mount
+from swirui import (
+    Button,
+    Component,
+    Modal,
+    RangeSlider,
+    Slider,
+    Window,
+    build_accessibility_tree,
+    mount,
+)
 from swirui.core import AccessibilityRole, Event
 from swirui.platforms import (
     NativeWindowHandle,
@@ -28,12 +37,13 @@ def _pointer(window: Window, kind: PlatformEventKind, *, x: float, y: float) -> 
     )
 
 
-def _key(window: Window, key_code: int) -> None:
+def _key(window: Window, key_code: int, *, shift: bool = False) -> None:
     window._apply_platform_event(
         PlatformEvent(
             PlatformEventKind.KEY_DOWN,
             NativeWindowHandle(1),
             key_code=key_code,
+            shift=shift,
         )
     )
 
@@ -139,6 +149,59 @@ def test_range_slider_selects_nearest_thumb_and_preserves_order() -> None:
     assert semantics.max_value == 100.0
     assert semantics.value_text == "85–90"
     assert semantics.focused is True
+
+
+@pytest.mark.parametrize("in_dialog", [False, True])
+def test_tab_visits_both_range_ends_in_each_direction(in_dialog):
+    window = Window(width=420, height=240)
+    controls = Component("controls")
+    before = Button("Before", bounds=Rect(16, 10, 100, 32))
+    slider = RangeSlider(bounds=Rect(16, 56, 280, 44), lower_value=40, upper_value=40)
+    after = Button("After", bounds=Rect(16, 120, 100, 32))
+    controls.add(before, slider, after)
+    root = (Modal(bounds=Rect(0, 0, 420, 240), dialog_bounds=Rect(12, 12, 380, 200),
+                  content=controls) if in_dialog else controls)
+    mount(window, root)
+    changes = []
+    slider.on("changed", changes.append)
+    window.focus_component(before)
+    _key(window, 0x09)
+    assert window.focused_component is slider and slider.active_thumb == "lower"
+    _key(window, 0x09)
+    assert window.focused_component is slider and slider.active_thumb == "upper"
+    assert (slider.lower_value, slider.upper_value) == (40, 40) and not changes
+    tree = build_accessibility_tree(slider, focused=slider)
+    lower, upper = tree.children
+    assert lower.name == "Lower limit" and upper.name == "Upper limit"
+    assert not lower.focused and upper.focused and upper.active
+    assert (lower.min_value, lower.value, lower.max_value) == (0, 40, 40)
+    assert (upper.min_value, upper.value, upper.max_value) == (40, 40, 100)
+    _key(window, 0x27)
+    assert (slider.lower_value, slider.upper_value) == (40, 41)
+    _key(window, 0x09)
+    assert window.focused_component is after
+    _key(window, 0x09, shift=True)
+    assert window.focused_component is slider and slider.active_thumb == "upper"
+    _key(window, 0x09, shift=True)
+    assert window.focused_component is slider and slider.active_thumb == "lower"
+    _key(window, 0x25)
+    assert (slider.lower_value, slider.upper_value) == (39, 41) and len(changes) == 2
+    _key(window, 0x09, shift=True)
+    assert window.focused_component is before
+
+
+def test_sole_range_wraps_to_the_other_end_and_skips_disabled_controls():
+    root = Component()
+    slider = RangeSlider(bounds=Rect(10, 10, 190, 35))
+    disabled = Slider(bounds=Rect(10, 70, 190, 35))
+    disabled.enabled = False
+    root.add(slider, disabled)
+    window = Window()
+    mount(window, root)
+    for reverse, expected in ((True, "upper"), (True, "lower"), (True, "upper"),
+                              (False, "lower"), (False, "upper")):
+        assert window.focus_next(reverse=reverse) is slider
+        assert slider.active_thumb == expected
 
 
 def test_slider_validates_range_and_finite_values() -> None:

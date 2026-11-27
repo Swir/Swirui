@@ -307,17 +307,24 @@ class Window(EventEmitter):
             for component in self.root.walk()
             if self._component_is_focus_candidate(component)
         ]
+        return self._advance_focus(candidates, reverse=reverse)
+
+    def _advance_focus(self, candidates: list[Component], *, reverse: bool,
+                       fallback: Component | None = None) -> Component | None:
         if not candidates:
-            self.focus_component(None)
-            return None
+            self.focus_component(fallback)
+            return fallback
 
         step = -1 if reverse else 1
         current = self.focused_component
         if current is None or current not in candidates:
             next_component = candidates[-1] if reverse else candidates[0]
         else:
+            if current._step_keyboard_focus(reverse=reverse, entering=False):
+                return current
             current_index = candidates.index(current)
             next_component = candidates[(current_index + step) % len(candidates)]
+        next_component._step_keyboard_focus(reverse=reverse, entering=True)
         self.focus_component(next_component)
         return next_component
 

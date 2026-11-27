@@ -301,15 +301,7 @@ class Modal(Widget):
                 for item in self.walk(include_self=False)
                 if window._component_is_focus_candidate(item)
             ]
-            current = window.focused_component
-            if not candidates:
-                target: Component = self
-            elif current not in candidates:
-                target = candidates[-1] if platform_event.shift else candidates[0]
-            else:
-                step = -1 if platform_event.shift else 1
-                target = candidates[(candidates.index(current) + step) % len(candidates)]
-            window.focus_component(target)
+            window._advance_focus(candidates, reverse=platform_event.shift, fallback=self)
             event.prevent_default()
             return
         if (

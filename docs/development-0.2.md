@@ -132,6 +132,22 @@ Press Space to activate the focused control, then Tab to move on.
 To reproduce this cursor-free native capture, run
 `python tools/capture_studio.py --pane preview --width 1440 --height 900 --accent "#7FE0BF" --corner-radius 24 --focus-motion --output studio-corners.png`.
 
+## Edit a range with the keyboard
+
+Run `python examples/range_progress_demo.py` and press Tab to focus the
+progress slider. Press Tab again for the lower limit of **Allowed range** and
+once more for the upper limit. Press Left to move the upper limit from 80%
+to 75%. Tab continues to the next control, and Shift+Tab retraces the stops.
+The same sequence works inside a modal dialog.
+
+![The range from 20 to 75 percent with keyboard focus on the upper handle](screenshots/range-keyboard.png)
+
+The arrow inside the focused handle points left for the lower limit and right
+for the upper limit, including when both have the same value. Changing focus
+preserves both numbers. The `changed` event fires when a value changes.
+In the accessibility tree, each limit exposes its current value, allowed bounds
+and focus state.
+
 ## Animate a theme switch
 
 To try an animated theme switch in a running app, launch

@@ -57,6 +57,11 @@ to keep the right edge in view as the card narrows. Try the live crop slider
 with `python examples/image_framing.py` from the 0.2 source checkout.
 [Try the development preview](https://github.com/Swir/Swirui/blob/development/0.2/docs/development-0.2.md).
 
+In your own apps, Tab visits both ends of a `RangeSlider`. Arrow keys edit
+the selected limit, and Shift+Tab goes back. A small arrow inside the
+focus ring identifies the limit even where the handles meet.
+[Try the range controls](https://github.com/Swir/Swirui/blob/development/0.2/docs/development-0.2.md#edit-a-range-with-the-keyboard).
+
 ![SwirUI Studio in dark appearance, captured without a cursor](https://raw.githubusercontent.com/Swir/Swirui/v0.1.0b6/docs/screenshots/studio-dark.png)
 
 ### Your signature, across the whole interface
