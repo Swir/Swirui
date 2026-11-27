@@ -1,7 +1,10 @@
 """Live application appearance choices with read-only Windows synchronization."""
 
+from dataclasses import replace
+
 from swirui import (
     FUTURE_DARK,
+    FUTURE_LIGHT,
     AnimationController,
     App,
     Button,
@@ -10,9 +13,12 @@ from swirui import (
     Input,
     Label,
     Panel,
+    SilkRibbon,
+    SurfaceStyle,
     Switch,
     ThemeController,
     ThemeMode,
+    ThemeSurface,
     Window,
     mount,
     state_transaction,
@@ -34,7 +40,8 @@ def main() -> int:
     }
     status = Label("", bounds=Rect(40, 252, 900, 28), font_size=16)
     draft = Input("Aurora workspace", bounds=Rect(64, 388, 512, 48), font_size=19)
-    preview = Card(bounds=Rect(40, 320, 560, 290), show_shadow=False)
+    ribbon = SilkRibbon(bounds=Rect(24, 194, 934, 354))
+    preview = ThemeSurface(bounds=Rect(40, 320, 560, 290))
     preview.add(
         Label("Your workspace", bounds=Rect(64, 340, 512, 36), font_size=24), draft,
         Switch("Keep notifications on", bounds=Rect(64, 462, 430, 44), checked=True),
@@ -48,17 +55,25 @@ def main() -> int:
               bounds=Rect(656, 466, 280, 70), font_size=16),
     )
     root.add(
+        ribbon,
         Label("swir / appearance", bounds=Rect(40, 30, 800, 36), font_size=20),
         Label("Make yourself at home.", bounds=Rect(40, 90, 900, 64), font_size=40),
         *choices.values(), status, preview, pinned,
         Label("Edit your workspace name. Switch looks. Your draft stays with you.",
-              bounds=Rect(40, 644, 920, 32), font_size=16),
+              bounds=Rect(40, 652, 920, 32), font_size=16),
     )
     app = App("SwirUI Appearance", renderer=WgpuRenderer())
     app.add_window(window)
     mount(window, root)
     animations = AnimationController(app, window)
-    controller = ThemeController(window, animations=animations)
+    glass = SurfaceStyle(kind="glass", blur_radius=12, tint_opacity=.82, elevation=6,
+                         glow_radius=8, depth_layers=4, depth_spacing=3, tilt_x=-8, tilt_y=6)
+    dark = replace(FUTURE_DARK.with_accent("#85DECB"), surface_style=glass)
+    light = replace(FUTURE_LIGHT, surface_style=replace(
+        glass, blur_radius=26, tint_opacity=.76, elevation=14, glow_radius=20,
+        depth_spacing=8, tilt_x=26, tilt_y=-28,
+    ))
+    controller = ThemeController(window, animations=animations, dark=dark, light=light)
 
     def update_labels(event: Event | None = None) -> None:
         with state_transaction():

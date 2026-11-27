@@ -8,6 +8,7 @@ from typing import cast
 
 from .animation import AnimationStatus, Easing, Tween, ease_in_out_cubic
 from .rendering.geometry import Color
+from .surface_style import SurfaceStyle
 from .theme import ColorRole, Palette, Theme
 
 _ROLES = tuple(cast(ColorRole, item.name) for item in fields(Palette))
@@ -49,10 +50,37 @@ def _contrast(first: Color, second: Color) -> float:
     return (max(a, b) + 0.05) / (min(a, b) + 0.05)
 
 
+def _mix_material(source: SurfaceStyle | None, target: SurfaceStyle | None,
+                  progress: float) -> SurfaceStyle | None:
+    if source is None or target is None or source.kind != target.kind or source == target:
+        return source
+
+    def blend(start: float, end: float) -> float:
+        # Work from the nearer endpoint so a tiny positive blur stays positive.
+        if progress <= .5:
+            return start + (end - start) * progress
+        return end + (start - end) * (1 - progress)
+
+    return replace(
+        source,
+        blur_radius=blend(source.blur_radius, target.blur_radius),
+        tint_opacity=blend(source.tint_opacity, target.tint_opacity),
+        border_width=blend(source.border_width, target.border_width),
+        border_opacity=blend(source.border_opacity, target.border_opacity),
+        elevation=blend(source.elevation, target.elevation),
+        glow_radius=blend(source.glow_radius, target.glow_radius),
+        glow_opacity=blend(source.glow_opacity, target.glow_opacity),
+        depth_spacing=blend(source.depth_spacing, target.depth_spacing),
+        tilt_x=blend(source.tilt_x, target.tilt_x),
+        tilt_y=blend(source.tilt_y, target.tilt_y),
+    )
+
+
 class ThemeTransition:
-    """Interpolate palette/radius; switch font families at completion.
+    """Interpolate colors, radius and the continuous settings of matching materials.
 
     RGB is blended in premultiplied linear light, then encoded to palette HEX.
+    Font families, material kinds and discrete layer/grain counts switch at completion.
     Endpoints are the exact authored Theme objects. Either endpoint requesting
     reduced motion makes the transition immediate. By default, opaque text
     roles with poor intermediate contrast use the best of endpoint/black/white
@@ -121,5 +149,7 @@ class ThemeTransition:
         palette = Palette(**{role: _swatch(color) for role, color in colors.items()})
         radius = ((1 - progress) * self.from_value.control_radius
                   + progress * self.to_value.control_radius)
+        style = _mix_material(self.from_value.surface_style, self.to_value.surface_style, progress)
         self.update(replace(self.from_value, palette=palette, control_radius=radius,
+                            surface_style=style,
                             motion_duration=self.to_value.motion_duration))

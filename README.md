@@ -133,8 +133,10 @@ themes. The [material guide](https://github.com/Swir/Swirui/blob/v0.1.0b6/docs/c
 shows how to control glass, acrylic, depth and motion from Python.
 
 In the 0.2 checkout, run `python examples/appearance_gallery.py`, leave the
-window idle, then switch between **Dark** and **Light**. The palette now fades
-from the current colors even after a long pause.
+window idle, then switch between **Dark** and **Light**. The mint glass card
+turns lilac. Its shadow deepens and its four backplates tilt and spread apart
+while the field and button stay in place. You can use the same transition
+between two glass styles in your own app.
 
 ### One workspace, two appearances
 

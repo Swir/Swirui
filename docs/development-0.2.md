@@ -137,10 +137,12 @@ To reproduce this cursor-free native capture, run
 To try an animated theme switch in a running app, launch
 `python examples/appearance_gallery.py`. Select **Dark**, pause for a few
 seconds, then select **Light**. Watch the background and buttons change
-together. The card on the right keeps its own dark theme. You can type a
+together. Look just below the workspace card as its four glass backplates
+tilt and spread apart and the shadow deepens. The field and button stay in
+place. The card on the right keeps its own dark theme. You can type a
 workspace name before switching and continue editing it afterward.
 
-![The gallery fades from dark to light while the card on the right stays dark](screenshots/gallery-theme-fade.png)
+![The mint glass workspace turns lilac and its layers fan out while the right card stays dark](screenshots/gallery-theme-fade.png)
 
 The animation shows nine cursor-free frames read from the Windows/wgpu
 renderer, sampled on a controlled clock and played at quarter speed.

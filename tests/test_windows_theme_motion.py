@@ -13,12 +13,63 @@ from swirui import (
     Button,
     Input,
     Panel,
+    SurfaceStyle,
     ThemeController,
+    ThemeSurface,
+    ThemeTransition,
     Window,
     mount,
 )
 from swirui.platforms.windows import Win32PlatformBackend
 from swirui.rendering import Rect, WgpuRenderer
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows/wgpu required")
+def test_material_transition_presents_the_authored_midpoint_without_moving_the_input():
+    renderer = WgpuRenderer()
+    app = App(renderer=renderer)
+    window = app.add_window(Window(width=400, height=300))
+    start = SurfaceStyle(kind="glass", depth_layers=4, depth_spacing=2, elevation=4,
+                         tilt_x=-16, tilt_y=20)
+    end = replace(start, depth_spacing=14, elevation=20, tilt_x=24, tilt_y=-28)
+    dark = replace(FUTURE_DARK, surface_style=start)
+    target = replace(dark, surface_style=end)
+    root = Panel(bounds=Rect(0, 0, 400, 300), theme=dark)
+    surface = ThemeSurface(bounds=Rect(40, 40, 280, 150))
+    field = Input("Keep this draft", bounds=Rect(68, 80, 210, 44))
+    surface.add(field)
+    root.add(surface)
+    mount(window, root)
+    try:
+        app.start()
+        window.focus_component(field)
+        field.select(5, 9)
+        bounds = field.bounds
+        context = renderer._contexts[window.native_handle.value]
+
+        def read_below_card():
+            app.invalidate(window)
+            clock = app._frame_schedulers[window]
+            assert app.render_pending(clock.stats.last_frame_time + .1) == 1
+            width, _, rgba = context.read_scene_rgba()
+            start_row = round(surface.bounds.bottom * window.scale)
+            return bytes(rgba[start_row * width * 4:])
+
+        initial = read_below_card()
+        transition = ThemeTransition(dark, target, 1, lambda theme: setattr(root, "theme", theme))
+        transition.start().advance(.5)
+        middle = read_below_card()
+        transition.advance(.5)
+        final = read_below_card()
+        assert len({initial, middle, final}) == 3
+        root.theme = replace(dark, surface_style=replace(
+            start, depth_spacing=8, elevation=12, tilt_x=4, tilt_y=-4,
+        ))
+        assert read_below_card() == middle
+        assert field.bounds == bounds and field.selected_text == "this"
+        assert window.focused_component is field
+    finally:
+        app.stop()
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Windows/wgpu required")

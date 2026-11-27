@@ -44,9 +44,15 @@ Geometry and sampling are bounded: at most eight planes, 96 grain samples,
 before rendering. Zero-size surfaces produce an empty group; tiny positive
 surfaces clamp border width. Decoration does not capture input.
 
-Theme transitions blend colors/radius as before. Surface policy switches at
-completion; blur, grain, depth and material kinds are not interpolated. Custom
-glass backgrounds require contrast checks against their actual backdrop.
+In the 0.2 development version, switching between two themes with an explicit
+style of the same kind animates blur, tint, border, elevation, glow, depth
+spacing and tilt alongside the palette. The number of layers and grain samples
+changes on the final frame. Switching material kinds, adding a style or
+removing one also applies the new style on the final frame. A reduced-motion
+theme applies all settings immediately. You can try both glass variants in
+`python examples/appearance_gallery.py`.
+
+Check text contrast on translucent glass against the backdrop your app will use.
 
 ## Animated material feedback
 

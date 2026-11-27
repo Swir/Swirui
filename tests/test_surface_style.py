@@ -112,3 +112,25 @@ def test_material_policy_switches_at_transition_endpoint():
     assert samples[-1].surface_style is source.surface_style
     animation.advance(.5)
     assert samples[-1] is target
+
+
+@pytest.mark.parametrize("kind", ["glass", "solid", "acrylic"])
+def test_matching_materials_blend_continuous_properties_and_keep_discrete_counts(kind):
+    first = SurfaceStyle(kind=kind, blur_radius=8, tint_opacity=.25, border_opacity=.25,
+                         border_width=0, elevation=4, glow_radius=0, glow_opacity=.25,
+                         depth_layers=2, depth_spacing=2, tilt_x=-30, tilt_y=24, grain_samples=8)
+    last = SurfaceStyle(kind=kind, blur_radius=32, tint_opacity=.75, border_opacity=.75,
+                        border_width=4, elevation=24, glow_radius=32, glow_opacity=.75,
+                        depth_layers=5, depth_spacing=18, tilt_x=30, tilt_y=-20, grain_samples=48)
+    source = replace(FUTURE_DARK, surface_style=first)
+    target = replace(FUTURE_DARK, surface_style=last)
+    snapshots = []
+    transition = ThemeTransition(source, target, 1, snapshots.append).start()
+    transition.advance(.5)
+    assert snapshots[-1].surface_style == SurfaceStyle(
+        kind=kind, blur_radius=20, tint_opacity=.5, border_opacity=.5,
+        border_width=2, elevation=14, glow_radius=16, glow_opacity=.5,
+        depth_layers=2, depth_spacing=10, tilt_x=0, tilt_y=2, grain_samples=8,
+    )
+    transition.advance(.5)
+    assert snapshots[-1] is target
