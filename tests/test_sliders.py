@@ -296,6 +296,69 @@ def test_gradient_fill_stays_anchored_and_transparent_to_input(range_control):
     assert all(node.key != fill_key for node in window.scene.walk())
 
 
+@pytest.mark.parametrize("control", ["single", "lower", "upper"])
+def test_step_keys_visit_the_short_final_interval_in_both_directions(control):
+    bounds = Rect(10, 15, 218, 44)
+    if control == "single":
+        slider = Slider(bounds=bounds, maximum=100, step=9, value=100)
+        attr = "value"
+    else:
+        slider = RangeSlider(bounds=bounds, maximum=100, step=9,
+                             lower_value=100 if control == "lower" else 0, upper_value=100)
+        attr = f"{control}_value"
+        setattr(slider, attr, 100)
+    window = Window()
+    mount(window, slider)
+    window.focus_component(slider)
+    changes = []
+    slider.on("changed", lambda _: changes.append(getattr(slider, attr)))
+    assert getattr(slider, attr) == 100
+    for key, expected in ((0x25, 99), (0x27, 100), (0x27, 100), (0x22, 18),
+                          (0x21, 100), (0x24, 0), (0x23, 100)):
+        _key(window, key)
+        assert getattr(slider, attr) == expected
+    assert changes == [99, 100, 18, 100, 0, 100]
+    setattr(slider, attr, 99.4)
+    assert getattr(slider, attr) == 99
+    setattr(slider, attr, 99.6)
+    assert getattr(slider, attr) == 100
+
+
+@pytest.mark.parametrize("minimum,maximum,step,stops", [
+    (-.25, .5, .3, [-.25, .05, .35, .5]),
+    (0, .07, .01, [0, .01, .02, .03, .04, .05, .06, .07]),
+    (0, 2.1, .7, [0, .7, 1.4, 2.1]),
+    (10, 12, 50, [10, 12]),
+])
+def test_decimal_and_oversized_steps_visit_each_stop_once(minimum, maximum, step, stops):
+    slider = Slider(bounds=Rect(10, 15, 218, 44), minimum=minimum, maximum=maximum,
+                    step=step, value=minimum)
+    window = Window()
+    mount(window, slider)
+    window.focus_component(slider)
+    for key, values in ((0x26, stops[1:]), (0x28, stops[-2::-1])):
+        for expected in values:
+            _key(window, key)
+            assert slider.value == slider.accessible_value == expected
+
+
+@pytest.mark.parametrize("range_control", [False, True])
+def test_pointer_uses_the_nearest_side_of_the_final_short_step(range_control):
+    bounds = Rect(10, 15, 218, 44)
+    slider = (RangeSlider(bounds=bounds, maximum=10, step=3, lower_value=0, upper_value=9)
+              if range_control else Slider(bounds=bounds, maximum=10, step=3, value=9))
+    window = Window()
+    mount(window, slider)
+    # Track x=19..219. The final half-step boundary (9.5) is at x=209.
+    _pointer(window, PlatformEventKind.POINTER_DOWN, x=199, y=37)
+    for x, expected in ((208, 9), (210, 10), (208, 9)):
+        _pointer(window, PlatformEventKind.POINTER_MOVE, x=x, y=37)
+        assert (slider.upper_value if range_control else slider.value) == expected
+    _pointer(window, PlatformEventKind.POINTER_UP, x=210, y=37)
+    assert (slider.upper_value if range_control else slider.value) == 10
+    assert window.pointer_capture_component is None
+
+
 def test_slider_validates_range_and_finite_values() -> None:
     for kwargs in (
         {"minimum": 10.0, "maximum": 10.0},

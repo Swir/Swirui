@@ -64,6 +64,8 @@ In your own apps, Tab visits both ends of a `RangeSlider`. Arrow keys edit
 the selected limit, and Shift+Tab goes back. A small arrow inside the
 focus ring identifies the limit even where the handles meet. When both
 handles meet, drag left to lower the minimum or right to raise the maximum.
+Both slider types include the exact maximum. With a 0–100 scale and a step
+of 9, Right goes from 99 to 100 and Left returns to 99.
 [Try the range controls](https://github.com/Swir/Swirui/blob/development/0.2/docs/development-0.2.md#edit-a-range-with-the-keyboard).
 
 Give a `Slider` or `RangeSlider` a color scale with `fill_gradient`. When

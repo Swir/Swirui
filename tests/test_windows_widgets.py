@@ -450,6 +450,52 @@ def test_retained_ranges_and_progress_render_in_persistent_wgpu_context() -> Non
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="retained widget smoke requires Windows")
+def test_arrow_keys_paint_the_short_last_step_and_restore_the_previous_thumb() -> None:
+    app = App(platform_backend=_isolated_backend(), renderer=WgpuRenderer())
+    window = app.add_window(Window(width=360, height=200))
+    single = Slider(bounds=Rect(20, 24, 218, 40), maximum=10, step=3, value=9)
+    interval = RangeSlider(bounds=Rect(20, 84, 218, 40), maximum=10, step=3,
+                           lower_value=3, upper_value=9)
+    root = Component()
+    root.add(single, interval)
+    mount(window, root)
+    try:
+        app.start()
+        app.process_events()
+        hwnd = window.native_handle.value
+        context = app.renderer._contexts[hwnd]
+        user32 = _user32()
+
+        def press(key):
+            user32.SendMessageW(hwnd, 0x0100, key, 1)
+            user32.SendMessageW(hwnd, 0x0101, key, 1)
+            app.process_events()
+
+        def end_pixel(y):
+            app.render_pending(app._frame_schedulers[window].stats.last_frame_time + 1)
+            width, _, rgba = context.read_scene_rgba()
+            offset = 4 * (round(y * window.scale) * width + round(229 * window.scale))
+            return rgba[offset:offset + 3]
+
+        for slider, y in ((single, 44), (interval, 104)):
+            press(0x09)
+            if slider is interval:
+                press(0x09)
+                assert interval.active_thumb == "upper"
+            assert window.focused_component is slider
+            before = end_pixel(y)
+            press(0x27)
+            assert (single.value if slider is single else interval.upper_value) == 10
+            assert end_pixel(y) != before
+            press(0x25)
+            assert (single.value if slider is single else interval.upper_value) == 9
+            assert end_pixel(y) == before
+        assert app.renderer._contexts[hwnd] is context
+    finally:
+        app.stop()
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="retained widget smoke requires Windows")
 def test_slider_color_scale_stays_in_place_as_either_handle_moves() -> None:
     renderer = WgpuRenderer()
     app = App(platform_backend=_isolated_backend(), renderer=renderer)

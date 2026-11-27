@@ -218,6 +218,20 @@ preserves both numbers. The `changed` event fires when a value changes.
 In the accessibility tree, each limit exposes its current value, allowed bounds
 and focus state.
 
+### Reach the last value on a stepped slider
+
+Run `python examples/range_progress_demo.py --step 9`. Press Tab to focus the
+progress slider, then End to reach 100%. Press Left twice to visit 99% and
+90%. Press Right twice to walk back to 100%. Page Up and Page Down move ten
+stops at a time, so Page Down from 100% lands on 18%.
+
+![Keyboard input moves the slider from 90% to 99%, then 100%, and back to 99%](screenshots/slider-last-step.png)
+
+`Slider` and both handles of `RangeSlider` include the minimum and maximum
+even when the final step is shorter. This works with fractional steps and
+negative minima. Dragging or assigning a value in Python selects the nearest
+stop. For this scale, 99.4 selects 99 and 99.6 selects 100.
+
 ### Reopen a collapsed range by dragging
 
 Drag either handle until the two values meet, then release. Grab the shared

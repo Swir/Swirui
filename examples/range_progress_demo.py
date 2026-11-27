@@ -1,5 +1,6 @@
 """Interactive retained slider and progress controls demo."""
 
+import argparse
 from dataclasses import replace
 
 from swirui import (
@@ -19,6 +20,10 @@ from swirui import (
 )
 from swirui.rendering import Color, GradientStop, LinearGradient, Point, Rect
 
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument("--step", type=float, default=1, help="Step size for the progress slider.")
+args = parser.parse_args()
+
 app = App("SwirUI range and progress controls")
 window = app.add_window(Window(title="SwirUI — Range and progress", width=700, height=420,
                                min_width=700, min_height=420))
@@ -37,7 +42,7 @@ volume = Slider(
     key="volume",
     bounds=Rect(54, 148, 398, 40),
     value=42.0,
-    step=1.0,
+    step=args.step,
     fill_gradient=scale,
     accessible_name="Demo progress",
 )

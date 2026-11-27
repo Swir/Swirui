@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 from abc import abstractmethod
+from fractions import Fraction
 from typing import TYPE_CHECKING, Literal
 
 from swirui.core import (
@@ -34,6 +35,10 @@ _VK_RIGHT = 0x27
 _VK_DOWN = 0x28
 _VK_PAGE_UP = 0x21
 _VK_PAGE_DOWN = 0x22
+_KEY_STEPS = {
+    _VK_LEFT: -1, _VK_DOWN: -1, _VK_RIGHT: 1, _VK_UP: 1,
+    _VK_PAGE_DOWN: -10, _VK_PAGE_UP: 10,
+}
 
 _TRACK = Color.from_hex("#263946")
 _TRACK_DISABLED = Color.from_hex("#303A40")
@@ -73,20 +78,6 @@ def _validate_range(minimum: float, maximum: float, step: float) -> tuple[float,
     return minimum, maximum, step
 
 
-def _clamp(value: float, minimum: float, maximum: float) -> float:
-    return max(minimum, min(maximum, value))
-
-
-def _snap(value: float, minimum: float, maximum: float, step: float) -> float:
-    value = float(value)
-    if not math.isfinite(value):
-        raise ValueError("value must be finite.")
-    value = _clamp(value, minimum, maximum)
-    steps = round((value - minimum) / step)
-    snapped = minimum + (steps * step)
-    return _clamp(snapped, minimum, maximum)
-
-
 def _format_value(value: float) -> str:
     return f"{value:g}"
 
@@ -100,6 +91,7 @@ class _SliderBase(Widget):
     _focused: bool
     _dragging: bool
     _focus: Color
+    _step: float
     _track: Color
     _accent: Color
     _track_disabled: Color
@@ -117,6 +109,48 @@ class _SliderBase(Widget):
         if value != self._fill_gradient:
             self._fill_gradient = value
             self.invalidate(reason="fill_gradient")
+
+    def _configure_steps(self, minimum: float, maximum: float, step: float) -> None:
+        self._minimum, self._maximum, self._step = _validate_range(minimum, maximum, step)
+        # Decimal scales such as 0..0.07 by 0.01 have exactly seven intervals.
+        self._origin = Fraction(str(self._minimum))
+        self._increment = Fraction(str(self._step))
+        end = self._tick_position(self._maximum)
+        self._last_tick = math.ceil(end)
+        self._last_midpoint = (self._last_tick - 1 + end) / 2
+
+    def _tick_position(self, value: float) -> Fraction:
+        return (Fraction(str(value)) - self._origin) / self._increment
+
+    def _value_at_tick(self, tick: int) -> float:
+        if tick <= 0:
+            return self._minimum
+        if tick >= self._last_tick:
+            return self._maximum
+        return float(self._origin + tick * self._increment)
+
+    def _snap(self, value: float) -> float:
+        value = float(value)
+        if not math.isfinite(value):
+            raise ValueError("value must be finite.")
+        if value <= self._minimum:
+            return self._minimum
+        if value >= self._maximum:
+            return self._maximum
+        position = self._tick_position(value)
+        if position > self._last_midpoint:
+            return self._maximum
+        return self._value_at_tick(round(position))
+
+    def _keyboard_value(self, current: float, key: int | None) -> float | None:
+        if key == _VK_HOME:
+            return self._minimum
+        if key == _VK_END:
+            return self._maximum
+        if key is None or key not in _KEY_STEPS:
+            return None
+        tick = self._last_tick if current == self._maximum else round(self._tick_position(current))
+        return self._value_at_tick(tick + _KEY_STEPS[key])
 
     def _bind_drag(self) -> None:
         self.on("pointer_enter", self._on_pointer_enter)
@@ -312,8 +346,8 @@ class Slider(_SliderBase):
         self._thumb = theme.surface_color("text") if theme else _THUMB
         self._thumb_disabled = theme.surface_color("disabled_text") if theme else _THUMB_DISABLED
         self._focus = theme.surface_color("focus") if theme else _FOCUS
-        self._minimum, self._maximum, self._step = _validate_range(minimum, maximum, step)
-        self._value = _snap(value, self._minimum, self._maximum, self._step)
+        self._configure_steps(minimum, maximum, step)
+        self._value = self._snap(value)
         self._hovered = False
         self._dragging = False
         self._focused = False
@@ -367,11 +401,8 @@ class Slider(_SliderBase):
         self._add_thumb(root, self.key, self._value, self._thumb_color(), active=True)
         return root
 
-    def _set_value(
-        self, value: float, *, input_event: Event | None, exact_endpoint: bool = False,
-    ) -> None:
-        normalized = value if exact_endpoint else _snap(value, self._minimum, self._maximum,
-                                                         self._step)
+    def _set_value(self, value: float, *, input_event: Event | None) -> None:
+        normalized = self._snap(value)
         if normalized == self._value:
             return
         old_value = self._value
@@ -395,27 +426,16 @@ class Slider(_SliderBase):
 
     def _update_drag(self, x: float, event: Event, *, initial: bool = False) -> None:
         value = self._value_from_x(x)
-        self._set_value(value, input_event=event, exact_endpoint=value == self.maximum)
+        self._set_value(value, input_event=event)
 
     def _on_key_down(self, event: Event) -> None:
         native = self._platform_event(event, PlatformEventKind.KEY_DOWN)
         if not self.enabled or native is None or native.ctrl or native.alt or native.meta:
             return
-        key = native.key_code
-        if key in (_VK_LEFT, _VK_DOWN):
-            self._set_value(self._value - self._step, input_event=event)
-        elif key in (_VK_RIGHT, _VK_UP):
-            self._set_value(self._value + self._step, input_event=event)
-        elif key == _VK_PAGE_DOWN:
-            self._set_value(self._value - self._step * 10.0, input_event=event)
-        elif key == _VK_PAGE_UP:
-            self._set_value(self._value + self._step * 10.0, input_event=event)
-        elif key == _VK_HOME:
-            self._set_value(self.minimum, input_event=event, exact_endpoint=True)
-        elif key == _VK_END:
-            self._set_value(self.maximum, input_event=event, exact_endpoint=True)
-        else:
+        target = self._keyboard_value(self._value, native.key_code)
+        if target is None:
             return
+        self._set_value(target, input_event=event)
         event.prevent_default()
 
 
@@ -446,9 +466,9 @@ class RangeSlider(_SliderBase):
         self._thumb = theme.surface_color("text") if theme else _THUMB
         self._thumb_disabled = theme.surface_color("disabled_text") if theme else _THUMB_DISABLED
         self._focus = theme.surface_color("focus") if theme else _FOCUS
-        self._minimum, self._maximum, self._step = _validate_range(minimum, maximum, step)
-        lower = _snap(lower_value, self._minimum, self._maximum, self._step)
-        upper = _snap(upper_value, self._minimum, self._maximum, self._step)
+        self._configure_steps(minimum, maximum, step)
+        lower = self._snap(lower_value)
+        upper = self._snap(upper_value)
         if lower > upper:
             raise ValueError("lower_value cannot be greater than upper_value.")
         self._lower_value = lower
@@ -567,13 +587,8 @@ class RangeSlider(_SliderBase):
         value: float,
         *,
         input_event: Event | None,
-        exact_endpoint: bool = False,
     ) -> None:
-        normalized = (
-            _clamp(value, self._minimum, self._maximum)
-            if exact_endpoint
-            else _snap(value, self._minimum, self._maximum, self._step)
-        )
+        normalized = self._snap(value)
         self._apply_thumb_value(thumb, normalized, input_event)
 
     def _apply_thumb_value(self, thumb: ThumbName, value: float, input_event: Event | None) -> None:
@@ -626,7 +641,7 @@ class RangeSlider(_SliderBase):
                     self._grab_offset_x = x - (shared.x + shared.width / 2)
 
         raw = self._value_from_x(x - self._grab_offset_x)
-        value = raw if raw == self.maximum else _snap(raw, self.minimum, self.maximum, self.step)
+        value = self._snap(raw)
         if self._drag_thumb is None:
             if self._lower_value != self._upper_value:
                 self._drag_thumb = self._nearest_thumb(raw)
@@ -641,28 +656,8 @@ class RangeSlider(_SliderBase):
         if not self.enabled or native is None or native.ctrl or native.alt or native.meta:
             return
         current = self._lower_value if self._active_thumb == "lower" else self._upper_value
-        key = native.key_code
-        exact = False
-        if key in (_VK_LEFT, _VK_DOWN):
-            target = current - self._step
-        elif key in (_VK_RIGHT, _VK_UP):
-            target = current + self._step
-        elif key == _VK_PAGE_DOWN:
-            target = current - self._step * 10.0
-        elif key == _VK_PAGE_UP:
-            target = current + self._step * 10.0
-        elif key == _VK_HOME:
-            target = self._minimum
-            exact = True
-        elif key == _VK_END:
-            target = self._maximum
-            exact = True
-        else:
+        target = self._keyboard_value(current, native.key_code)
+        if target is None:
             return
-        self._set_thumb_value(
-            self._active_thumb,
-            target,
-            input_event=event,
-            exact_endpoint=exact,
-        )
+        self._apply_thumb_value(self._active_thumb, target, event)
         event.prevent_default()
