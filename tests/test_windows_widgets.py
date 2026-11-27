@@ -27,7 +27,7 @@ from swirui import (
     mount,
 )
 from swirui.platforms.windows import Win32PlatformBackend
-from swirui.rendering import Rect, SceneNodeKind, WgpuRenderer
+from swirui.rendering import Color, LinearGradient, Rect, SceneNodeKind, WgpuRenderer
 
 
 def _isolated_backend() -> Win32PlatformBackend:
@@ -422,6 +422,29 @@ def test_retained_ranges_and_progress_render_in_persistent_wgpu_context() -> Non
         ]
         assert len(ring_segments) == 24
         assert all(node.kind is SceneNodeKind.PATH for node in ring_segments)
+
+        context = renderer._contexts[hwnd]
+        progress.fill_gradient = LinearGradient.two_color(
+            Color.from_hex("#FF2050"), Color.from_hex("#2060FF")
+        )
+
+        def sample_bar(value):
+            progress.value = value
+            app.render_pending(app._frame_schedulers[window].stats.last_frame_time + 1)
+            width, _, rgba = context.read_scene_rgba()
+            samples = []
+            for logical_x in (58, 150, 267):
+                offset = 4 * (round(193 * window.scale) * width + round(logical_x * window.scale))
+                samples.append(tuple(rgba[offset:offset + 3]))
+            return samples
+
+        track = sample_bar(0)
+        half = sample_bar(50)
+        full = sample_bar(100)
+        assert half[:2] == full[:2] and half[2] == track[2] != full[2]
+        assert half[0][0] > half[0][2] and full[2][2] > full[2][0]
+        assert len(set(full)) == 3 and sample_bar(50) == half
+        assert renderer._contexts[hwnd] is context
     finally:
         app.stop()
 

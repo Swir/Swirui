@@ -120,8 +120,8 @@ class LinearGradient:
         offsets = tuple(stop.offset for stop in self.stops)
         for offset, path in _linear_bands(self.start, self.end, offsets, bounds.width,
                                           bounds.height, steps, corner_radius):
-            group.add(SceneNode(key=key, kind=SceneNodeKind.PATH, bounds=bounds,
-                                fill=self.color_at(offset), path=path))
+            group.children.append(SceneNode(key=key, kind=SceneNodeKind.PATH, bounds=bounds,
+                                            fill=self.color_at(offset), path=path))
         return group
 
 
@@ -157,10 +157,15 @@ def _linear_bands(
         if len(polygon) < 3 or abs(_polygon_area(polygon)) <= _EPSILON:
             continue
         points = tuple(Point(p.x * width, p.y * height) for p in polygon)
+        if abs(_polygon_area(points)) <= _EPSILON:
+            continue
         path = Path2D(points) if corner_radius is None else Path2D._from_convex_outline(points)
         bands.append(((lower + upper) * .5, path))
     if not bands:
-        raise RuntimeError("Linear gradient tessellation produced no drawable bands.")
+        # A shrinking track can be drawable even when its individual bands are too small.
+        points = tuple(Point(p.x * width, p.y * height) for p in outline)
+        if abs(_polygon_area(points)) > _EPSILON:
+            bands.append(((low + high) * .5, Path2D._from_convex_outline(points)))
     return tuple(bands)
 
 

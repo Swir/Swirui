@@ -1,6 +1,8 @@
-from swirui import Component, ProgressBar, ProgressRing, build_accessibility_tree
+import pytest
+
+from swirui import FUTURE_LIGHT, Component, ProgressBar, ProgressRing, build_accessibility_tree
 from swirui.core import AccessibilityRole, Event
-from swirui.rendering import Rect, SceneNodeKind
+from swirui.rendering import Color, LinearGradient, Point, Rect, SceneNodeKind
 from swirui.widgets import compile_component_scene
 
 
@@ -38,6 +40,47 @@ def test_progress_bar_compiles_fill_and_numeric_semantics() -> None:
     assert len(changes) == 1
     assert changes[0].data["old_value"] == 40.0
     assert changes[0].data["value"] == 100.0
+
+
+def test_gradient_bar_clips_a_fixed_scale_and_remains_pointer_transparent() -> None:
+    bounds = Rect(10, 20, 240, 16)
+    gradient = LinearGradient.two_color(Color.from_hex("#A38BFF"), Color.from_hex("#82E7B8"),
+                                        start=Point(0, 0), end=Point(1, 1))
+    bar = ProgressBar(bounds=bounds, minimum=20, maximum=60, value=30, fill_gradient=gradient)
+    root = Component(theme=FUTURE_LIGHT)
+    root.add(bar)
+    changes = []
+    bar.on("changed", changes.append)
+    paint = bar.build_scene_node().children[0]
+    assert paint.clip_to_bounds and paint.bounds == Rect(10, 20, 60, 16)
+    assert all(node.bounds == bounds for node in paint.children)
+    assert len({node.fill for node in paint.children}) > 2
+    assert not any(node.hit_testable for node in paint.walk())
+    scene = compile_component_scene(root, width=320, height=100)
+    assert scene is not None and scene.hit_test(Point(50, 28)) is None
+    assert bar.accessible_value == 30 and bar.accessible_value_text == "25%"
+
+    bar.enabled = False
+    assert bar.build_scene_node().children[0].fill == FUTURE_LIGHT.surface_color("disabled")
+    bar.enabled = True
+    assert bar.build_scene_node().children[0].children[0].path is paint.children[0].path
+    bar.fill_gradient = None
+    assert bar.build_scene_node().children[0].fill == FUTURE_LIGHT.surface_color("accent")
+    with pytest.raises(TypeError, match="fill_gradient"):
+        bar.fill_gradient = "mint"
+    assert bar.fill_gradient is None and not changes
+    bar.fill_gradient = gradient
+    bar.value = 20
+    assert not bar.build_scene_node().children
+    bar.value = 60
+    assert bar.build_scene_node().children[0].bounds == bounds
+    bar.bounds = Rect(10, 20, 240, 0)
+    assert not bar.build_scene_node().children
+    for size in (.0001, .00001):
+        bar.bounds = Rect(10, 20, size, size)
+        assert bar.build_scene_node().children[0].bounds == bar.bounds
+    bar.bounds = bounds
+    assert bar.build_scene_node().children[0].children[0].path is paint.children[0].path
 
 
 def test_progress_ring_uses_deterministic_retained_path_segments() -> None:

@@ -202,6 +202,36 @@ handle, the two meet again. Release to choose a new direction.
 
 These 33 frames come from the same 700 × 420 Windows/wgpu demo window.
 
+## Give a progress bar a color scale
+
+In `python examples/core_gallery.py`, focus the slider beneath **Progress,
+with purpose**. Press Home, then Page Up to advance ten percentage points
+at a time. The bar reveals lilac first, then blue and mint. At 80%, the
+first half still has the colors you saw at 50%.
+
+![The Windows gallery shows the same color scale at 20, 50, 80 and 100 percent](screenshots/gallery-progress-gradient.png)
+
+These four cursor-free frames come from the Windows DX12 renderer. To give
+your own bar a two-color scale, pass a `LinearGradient` when you create it.
+
+```python
+from swirui import ProgressBar
+from swirui.rendering import Color, LinearGradient, Rect
+
+progress = ProgressBar(
+    bounds=Rect(24, 60, 300, 16),
+    value=50,
+    fill_gradient=LinearGradient.two_color(
+        Color.from_hex("#A38BFF"), Color.from_hex("#82E7B8")
+    ),
+)
+```
+
+Stops are positioned across the full track, from `minimum` to `maximum`.
+Use a multi-stop `LinearGradient` for intermediate colors, or assign a new
+one to `progress.fill_gradient` while the app is running. Assign `None` to
+use the current theme accent again. A disabled bar uses the theme's disabled color.
+
 ## Animate a theme switch
 
 To try an animated theme switch in a running app, launch

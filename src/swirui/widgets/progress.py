@@ -6,6 +6,7 @@ import math
 
 from swirui.core import AccessibilityRole
 from swirui.rendering.geometry import Color, CornerRadius, Path2D, Point, Rect
+from swirui.rendering.gradients import LinearGradient
 from swirui.rendering.scene import SceneNode, SceneNodeKind
 from swirui.theme import Theme
 
@@ -116,7 +117,7 @@ class _ProgressWidget(Widget):
 
 
 class ProgressBar(_ProgressWidget):
-    """Horizontal determinate progress bar rendered by retained rectangles."""
+    """Determinate bar with an optional gradient anchored to the entire track."""
 
     def __init__(
         self,
@@ -125,6 +126,7 @@ class ProgressBar(_ProgressWidget):
         value: float = 0.0,
         minimum: float = 0.0,
         maximum: float = 100.0,
+        fill_gradient: LinearGradient | None = None,
         key: str | None = None,
         theme: Theme | None = None,
         opacity: float = 1.0,
@@ -144,6 +146,21 @@ class ProgressBar(_ProgressWidget):
             accessible_name=accessible_name,
             accessible_description=accessible_description,
         )
+        self._fill_gradient: LinearGradient | None = None
+        self.fill_gradient = fill_gradient
+
+    @property
+    def fill_gradient(self) -> LinearGradient | None:
+        """The track-wide color scale. None uses the current theme accent."""
+        return self._fill_gradient
+
+    @fill_gradient.setter
+    def fill_gradient(self, value: LinearGradient | None) -> None:
+        if value is not None and not isinstance(value, LinearGradient):
+            raise TypeError("fill_gradient must be a LinearGradient or None.")
+        if value != self._fill_gradient:
+            self._fill_gradient = value
+            self.invalidate(reason="fill_gradient")
 
     def build_scene_node(self) -> SceneNode:
         radius = min(self.bounds.height / 2.0, self.bounds.width / 2.0)
@@ -158,23 +175,26 @@ class ProgressBar(_ProgressWidget):
             hit_testable=False,
         )
         fill_width = self.bounds.width * self.progress
-        if fill_width > 0.0:
-            root.add(
-                SceneNode(
-                    key=f"{self.key}:fill",
-                    kind=SceneNodeKind.RECTANGLE,
-                    bounds=Rect(
-                        self.bounds.x,
-                        self.bounds.y,
-                        fill_width,
-                        self.bounds.height,
-                    ),
-                    z_index=1,
-                    fill=self._fill if self.enabled else self._disabled,
-                    corner_radius=CornerRadius.uniform(min(radius, fill_width / 2.0)),
-                    hit_testable=False,
-                )
+        if fill_width <= 0.0 or self.bounds.height <= 0.0:
+            return root
+        key = f"{self.key}:fill"
+        filled = Rect(self.bounds.x, self.bounds.y, fill_width, self.bounds.height)
+        if self.enabled and self.fill_gradient is not None:
+            paint = self.fill_gradient.to_scene_node(
+                key, self.bounds, steps=64, corner_radius=root.corner_radius, z_index=1
             )
+            # The group clips the reveal; its child paths stay in full-track coordinates.
+            paint.bounds = filled
+            for node in paint.walk():
+                node.hit_testable = False
+        else:
+            paint = SceneNode(
+                key, SceneNodeKind.RECTANGLE, filled, z_index=1,
+                fill=self._fill if self.enabled else self._disabled,
+                corner_radius=CornerRadius.uniform(min(radius, fill_width / 2.0)),
+                hit_testable=False,
+            )
+        root.add(paint)
         return root
 
 

@@ -66,6 +66,11 @@ focus ring identifies the limit even where the handles meet. When both
 handles meet, drag left to lower the minimum or right to raise the maximum.
 [Try the range controls](https://github.com/Swir/Swirui/blob/development/0.2/docs/development-0.2.md#edit-a-range-with-the-keyboard).
 
+On the 0.2 branch, pass a `LinearGradient` to `ProgressBar(fill_gradient=...)`
+to give the bar a fixed color scale. As the value rises, it reveals the
+next color while each previous stop stays in place.
+[See the gallery recording and Python example](https://github.com/Swir/Swirui/blob/development/0.2/docs/development-0.2.md#give-a-progress-bar-a-color-scale).
+
 ![SwirUI Studio in dark appearance, captured without a cursor](https://raw.githubusercontent.com/Swir/Swirui/v0.1.0b6/docs/screenshots/studio-dark.png)
 
 ### Your signature, across the whole interface
