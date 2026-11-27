@@ -1,7 +1,8 @@
-from swirui import FUTURE_LIGHT, NEON_BLUE, ThemePackage
+from swirui import FUTURE_LIGHT, NEON_BLUE, ThemePackage, Window, mount
 from swirui import __main__ as cli
 from swirui import studio_comparison as comparison_module
 from swirui import studio_suite as studio_module
+from swirui.platforms import NativeWindowHandle, PlatformEvent, PlatformEventKind
 from swirui.rendering import Rect
 from swirui.studio import Studio
 from swirui.widgets import compile_component_scene
@@ -195,3 +196,29 @@ def test_comparison_reflows_both_forms_at_the_minimum_width_and_restores_them():
                                      pane.apply.bounds.y + 18).key == pane.apply.key
         assert second.field.value == "Unsubmitted edit" and second.field.caret_index == 4
         assert second.field.selected_text == "bmitted "
+
+
+def test_variant_search_reaches_last_of_32_and_escape_restores_focus():
+    package = ThemePackage("Library", {f"finish-{i}": NEON_BLUE for i in range(32)}, "finish-0")
+    root = comparison_module.AppearanceComparison(package, "Settings", variants=("finish-0",))
+    window = Window(width=320, height=390)
+    mount(window, root)
+    pane, = root.panes
+    pane.mode_label.emit("click")
+    dialog = root._variant_dialog
+    assert dialog.search is window.focused_component
+    assert len(dialog.search.items) == 32
+    dialog.search.set_query("missing")
+    assert any(n.text == "No matching variants" for n in window.scene.walk())
+    window._apply_platform_event(PlatformEvent(PlatformEventKind.KEY_DOWN, NativeWindowHandle(1),
+                                              key_code=0x1B))
+    assert root._variant_dialog is None and pane.mode == "finish-0"
+    assert window.focused_component is pane.mode_label
+    pane.mode_label.emit("click")
+    palette = window.focused_component
+    assert palette.query == ""
+    palette.set_query("finish-31")
+    window._apply_platform_event(PlatformEvent(PlatformEventKind.KEY_DOWN, NativeWindowHandle(1),
+                                              key_code=0x0D))
+    assert pane.mode == "finish-31" and window.focused_component is pane.mode_label
+    assert pane.field.accessible_name == "Finish-31 preview project name"

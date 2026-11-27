@@ -179,6 +179,18 @@ first other variant in file order. A single variant fills the window. Try
 typing a new project name or tabbing between controls. Sample edits stay in
 the preview window.
 
+When a package has additional variants, the name above each form is a button.
+Select it to search the package. Type part of a variant key, then press Enter
+or click a result. The other pane keeps its appearance, and both fields keep
+their drafts and selections. Escape returns to the variant button. To try this
+with the bundled material library, run the following from the checkout.
+
+```sh
+python -m swirui preview-theme examples/themes/ocean-studio.swirui-theme.json --variant glass
+```
+
+![Glass, acrylic and solid variants in the native Ocean Studio search dialog](screenshots/saved-variant-search.png)
+
 The same command works with packages created in Python. This example pairs a
 light surface with a green glass variant and its own typeface.
 

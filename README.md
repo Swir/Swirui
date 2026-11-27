@@ -36,7 +36,10 @@ to turn the layers behind a card while its controls stay in place.
 Select **Save theme…** to write both appearances to one
 JSON file. To try them outside
 Studio, run `python -m swirui preview-theme studio-theme.json` from the
-folder where you saved it. **Copy theme JSON** also exports to the clipboard.
+folder where you saved it. If your package contains more variants than are
+on screen, select a variant name above a preview and type to find another.
+Your other preview and any draft text stay in place.
+**Copy theme JSON** also exports to the clipboard.
 The `SilkRibbon` behind each preview card now has a continuous satin fold.
 Its highlight and shaded reverse follow your accent when you switch themes.
 Text fields in the preview and in your own apps support mouse drag selection.

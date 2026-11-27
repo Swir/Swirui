@@ -166,6 +166,81 @@ def test_saved_theme_cli_renders_both_authored_accents_in_requested_order(tmp_pa
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Windows/wgpu required")
+def test_search_saved_variants_in_a_resized_preview(tmp_path, monkeypatch):
+    import ctypes
+
+    path = tmp_path / "Materials.json"
+    ink = NEON_BLUE.with_accent("#6CE2C5")
+    copper = FUTURE_LIGHT.with_accent("#CB784A")
+    ThemePackage("Field notes", {"ink": ink, "paper": FUTURE_LIGHT, "copper": copper},
+                 "ink").save(path)
+    original = path.read_bytes()
+
+    def inspect(app):
+        app.start()
+        app.process_events()
+        window, = app.windows
+        first, second = window.root.panes
+        context = app.renderer._contexts[window.native_handle.value]
+        first.field.value = "Keep my draft"
+        first.field.select(8, 13)
+        send = app.platform_backend._user32.SendMessageW
+        send.argtypes = [ctypes.c_void_p, ctypes.c_uint, ctypes.c_size_t, ctypes.c_ssize_t]
+        send.restype = ctypes.c_ssize_t
+        hwnd = window.native_handle.value
+        bounds = first.mode_label.bounds
+        point = (round((bounds.y + bounds.height / 2) * window.scale) << 16
+                 | round((bounds.x + bounds.width / 2) * window.scale))
+        send(hwnd, 0x0201, 1, point)
+        send(hwnd, 0x0202, 0, point)
+        app.process_events()
+        dialog = window.root._variant_dialog
+        assert window.focused_component is dialog.search
+        assert [item.key for item in dialog.search.items] == ["ink", "copper"]
+        window.resize(320, 390)
+        app.process_events()
+        assert 0 < dialog.dialog_bounds.x < dialog.dialog_bounds.right <= window.width
+        for char in "copp":
+            send(hwnd, 0x0102, ord(char), 1)
+        app.process_events()
+        assert [item.key for item in dialog.search.filtered_items] == ["copper"]
+        send(hwnd, 0x0100, 0x0D, 1)
+        app.process_events()
+        window._apply_platform_event(PlatformEvent(PlatformEventKind.POINTER_MOVE,
+                                                  window.native_handle, x=2, y=2))
+        app.render_pending(app._frame_schedulers[window].stats.last_frame_time + 1)
+        assert window.root._variant_dialog is None and window.focused_component is first.mode_label
+        assert (first.mode, second.mode) == ("copper", "paper")
+        assert first.field.value == "Keep my draft" and first.field.selected_text == "draft"
+        assert app.renderer._contexts[window.native_handle.value] is context
+        width, _, rgba = context.read_scene_rgba()
+        for pane, theme in ((first, copper), (second, FUTURE_LIGHT)):
+            b = pane.apply.bounds
+            offset = 4 * (round((b.bottom - 6) * window.scale) * width
+                          + round((b.x + b.width / 2) * window.scale))
+            color = theme.text_color("accent")
+            expected = tuple(round(c * 255) for c in (color.r, color.g, color.b))
+            assert tuple(rgba[offset:offset + 3]) == pytest.approx(expected, abs=1)
+        second.mode_label.emit("click")
+        dialog = window.root._variant_dialog
+        assert [item.key for item in dialog.search.items] == ["paper", "ink"]
+        row = dialog.search.row_bounds(1)
+        x = dialog.dialog_bounds.x + row.x + row.width / 2
+        y = dialog.dialog_bounds.y + row.y + row.height / 2
+        point = round(y * window.scale) << 16 | round(x * window.scale)
+        send(hwnd, 0x0201, 1, point)
+        send(hwnd, 0x0202, 0, point)
+        app.process_events()
+        assert (first.mode, second.mode) == ("copper", "ink")
+        assert window.root._variant_dialog is None and window.focused_component is second.mode_label
+        return 0
+
+    monkeypatch.setattr(App, "run", inspect)
+    assert cli.main(["preview-theme", str(path)]) == 0
+    assert path.read_bytes() == original
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows/wgpu required")
 def test_integrated_studio_keeps_one_native_context_across_tools_and_theme(record_property):
     renderer = WgpuRenderer()
     app = App("SwirUI Studio native gate", renderer=renderer)

@@ -9,8 +9,12 @@ from . import (
     App,
     Badge,
     Button,
+    ButtonVariant,
+    CommandItem,
+    CommandPalette,
     Input,
     Label,
+    Modal,
     Panel,
     SilkRibbon,
     ThemePackage,
@@ -34,25 +38,38 @@ _MIN_PANE_WIDTH = 320
 
 
 class _AppearancePane(Panel):
-    def __init__(self, mode: str) -> None:
+    def __init__(self, mode: str, *, selectable: bool) -> None:
         empty = Rect(0, 0, 0, 0)
         super().__init__(bounds=empty, clip_to_bounds=True)
-        self.mode = mode
-        self._short_label = mode.title() if mode in ("dark", "light") else mode
-        self._full_label = f"{self._short_label} appearance" if mode in ("dark", "light") else mode
-        self.mode_label = Badge(self._full_label, bounds=empty, accessible_name=self._full_label)
-        self._badge_width = max(150, measure_text_block(self._full_label, font_size=13).width + 16)
-        short_text_width = measure_text_block(self._short_label, font_size=13).width
-        self._short_badge_width = max(60, short_text_width + 16)
+        self.mode_label: Badge | Button = (
+            Button("", bounds=empty, variant=ButtonVariant.SECONDARY, text_align="center",
+                   padding=5, font_size=13, accessible_name="Choose variant")
+            if selectable else Badge("", bounds=empty, accessible_name="Appearance")
+        )
         self.title = Label("", bounds=empty, font_size=31, clip_to_bounds=True)
         self.ribbon = SilkRibbon(bounds=empty)
         self.card = ThemeSurface(bounds=empty)
         self.headline = Label("", bounds=empty, font_size=23, clip_to_bounds=True)
         self.caption = Label("Project name", bounds=empty, font_size=13)
-        self.field = Input("", bounds=empty, accessible_name=f"{mode.title()} preview project name")
+        self.field = Input("", bounds=empty)
         self.apply = Button("Apply name", bounds=empty, text_align="center")
         self.card.add(self.headline, self.caption, self.field, self.apply)
         self.add(self.ribbon, self.mode_label, self.title, self.card)
+        self.set_mode(mode)
+
+    def set_mode(self, mode: str) -> None:
+        self.mode = mode
+        short = mode.title() if mode in ("dark", "light") else mode
+        full = f"{short} appearance" if mode in ("dark", "light") else mode
+        selectable = isinstance(self.mode_label, Button)
+        self._short_label = f"{short}  ▾" if selectable else short
+        self._full_label = f"{full}  ▾" if selectable else full
+        self.mode_label.text = self._full_label
+        self.mode_label.accessible_name = f"Choose variant, current {mode}" if selectable else full
+        self.field.accessible_name = f"{mode.title()} preview project name"
+        self._badge_width = max(150, measure_text_block(self._full_label, font_size=13).width + 16)
+        self._short_badge_width = max(60, measure_text_block(
+            self._short_label, font_size=13).width + 16)
 
     def prepare_layout(self, viewport: Rect) -> None:
         self._set_layout_bounds(viewport)
@@ -98,6 +115,32 @@ class _AppearancePane(Panel):
         self.apply._set_layout_bounds(Rect(content_x + content_w - button, card_y + 64, button, 38))
 
 
+class _VariantDialog(Modal):
+    def __init__(self, pane: _AppearancePane, items: list[CommandItem]) -> None:
+        unit = Rect(0, 0, 1, 1)
+        header, row, rows = 46, 36, min(6, len(items))
+        self._natural_height = header + row * rows
+        self.search = CommandPalette(items, bounds=unit, header_height=header, row_height=row,
+                                     max_visible_rows=rows, empty_message="No matching variants",
+                                     accessible_name="Search theme variants")
+        self.search.placeholder = "Search variants…"
+        super().__init__(bounds=unit, dialog_bounds=unit, content=self.search,
+                         theme=pane.theme, accessible_name="Choose a theme variant")
+        self.search.on("dismissed", self._search_dismissed)
+
+    def _search_dismissed(self, _event: Event) -> None:
+        self.dismiss()
+
+    def prepare_layout(self, viewport: Rect) -> None:
+        if not viewport.width or not viewport.height:
+            return
+        width = min(400, max(1, viewport.width - 32))
+        height = min(self._natural_height, max(1, viewport.height - 32))
+        self.dialog_bounds = Rect(viewport.x + (viewport.width - width) / 2,
+                                  viewport.y + (viewport.height - height) / 2, width, height)
+        self.search._set_layout_bounds(Rect(0, 0, width, height))
+
+
 class AppearanceComparison(Panel):
     """One or two interactive instances of the same form using authored themes."""
 
@@ -109,9 +152,13 @@ class AppearanceComparison(Panel):
             if key not in package.themes:
                 raise ValueError(f"Unknown variant {key!r}. Available: {', '.join(package.themes)}")
         super().__init__(bounds=Rect(0, 0, 960, 460))
-        self.panes = tuple(_AppearancePane(key) for key in variants)
+        selectable = len(package.themes) > len(variants)
+        self.panes = tuple(_AppearancePane(key, selectable=selectable) for key in variants)
+        self._variant_dialog: _VariantDialog | None = None
         self.add(*self.panes)
         for pane in self.panes:
+            if selectable:
+                pane.mode_label.on("click", self._choose_variant)
             pane.field.on("submitted", self._rename)
             pane.apply.on("click", self._rename)
         self.set_design(package, headline)
@@ -124,9 +171,40 @@ class AppearanceComparison(Panel):
 
     def set_appearance(self, themes: Mapping[str, Theme], headline: str) -> None:
         with state_transaction():
+            self._themes = themes
             for pane in self.panes:
                 pane.theme = themes[pane.mode]
                 pane.headline.text = headline
+
+    def _choose_variant(self, event: Event) -> None:
+        if self._variant_dialog is not None:
+            return
+        pane = next(p for p in self.panes if p.mode_label is event.source)
+        other_modes = {p.mode for p in self.panes if p is not pane}
+        items = [CommandItem(pane.mode, pane.mode, shortcut="Current")]
+        items.extend(CommandItem(key, key) for key in self._themes
+                     if key != pane.mode and key not in other_modes)
+        dialog = _VariantDialog(pane, items)
+
+        def select(event: Event) -> None:
+            key = str(event.data["key"])
+            with state_transaction():
+                pane.set_mode(key)
+                pane.theme = self._themes[key]
+
+        def closed(event: Event) -> None:
+            if event.source is dialog:
+                self._variant_dialog = None
+                self.remove(dialog)
+                if self.mounted_window:
+                    self.mounted_window.focus_component(pane.mode_label)
+
+        dialog.search.on("command_invoked", select)
+        dialog.on("dismissed", closed)
+        self._variant_dialog = dialog
+        self.add(dialog)
+        if self.mounted_window:
+            self.mounted_window.focus_component(dialog.search)
 
     def _rename(self, event: Event) -> None:
         source = next(p for p in self.panes if event.source in (p.field, p.apply))
@@ -140,6 +218,8 @@ class AppearanceComparison(Panel):
 
     def prepare_layout(self, viewport: Rect) -> None:
         self._set_layout_bounds(viewport)
+        if self._variant_dialog is not None:
+            self._variant_dialog._set_layout_bounds(viewport)
         count = len(self.panes)
         if count == 2 and viewport.width < 2 * _MIN_PANE_WIDTH:
             height = viewport.height / count
