@@ -72,6 +72,10 @@ Give a `Slider` or `RangeSlider` a color scale with `fill_gradient`. When
 someone narrows a selection from 20–80% to 40–60%, the color at 50% stays
 the same. [See the running Python example](https://github.com/Swir/Swirui/blob/development/0.2/docs/development-0.2.md#color-a-selected-range).
 
+A magnetic button follows the pointer with a spring. Repeated mouse messages
+at the same position let the motion finish smoothly. Try the glass preview
+and switch its accent with a click. [Magnetic hover example](https://github.com/Swir/Swirui/blob/development/0.2/docs/development-0.2.md#add-magnetic-hover-to-a-button).
+
 On the 0.2 branch, pass a `LinearGradient` to `ProgressBar(fill_gradient=...)`
 to give the bar a fixed color scale. As the value rises, it reveals the
 next color while each previous stop stays in place.

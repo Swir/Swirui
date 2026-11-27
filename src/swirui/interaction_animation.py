@@ -254,9 +254,10 @@ class MagneticInteraction:
     widget's visual-only offset, so layout measurement and arrangement do not
     drift while the compiled subtree, clip bounds and hit testing move together.
 
-    Every retarget starts from the currently presented offset. Leaving or disabling
-    the widget springs back to the authored idle offset, and ``dispose()`` detaches
-    all listeners while optionally restoring that offset immediately.
+    A new target starts from the currently presented offset. Repeated pointer
+    moves at the same target let the running spring finish. Leaving or disabling
+    the widget springs back to the authored idle offset. ``dispose()`` detaches
+    its listeners and optionally restores that offset immediately.
     """
 
     def __init__(
@@ -343,7 +344,7 @@ class MagneticInteraction:
             self._retarget(self._idle_offset)
 
     def _retarget(self, target: Point) -> None:
-        if self._disposed:
+        if self._disposed or (target == self._target_offset and self.active):
             return
         current = self.widget.visual_offset
         if _points_close(current, target):
@@ -378,8 +379,8 @@ class MagneticInteraction:
 
     def _cancel_current(self) -> None:
         animation = self._animation
-        if animation is not None and animation.status is AnimationStatus.RUNNING:
-            animation.cancel()
+        if animation is not None:
+            self.controller.cancel(animation)
         self._animation = None
 
 

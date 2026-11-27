@@ -56,6 +56,34 @@ Set `save.text_align` to `"left"`, `"center"` or `"right"` to position the
 caption inside the button's padding. The default `"auto"` on regular buttons
 uses the renderer's paragraph alignment. Icon buttons default to `"center"`.
 
+## Add magnetic hover to a button
+
+Run `python examples/magnetic_interaction_demo.py`. Move along the edges of
+the button and watch it follow your pointer. Click **Use mint** to change
+the accent on the button, glass and ribbon together. Moving onto the glass
+lets the button spring back into place.
+
+![An iris button follows the pointer to the right, switches to mint, follows left and returns to center](screenshots/magnetic-hover.png)
+
+Attach the effect to a mounted button in your own window.
+
+```python
+from swirui import AnimationController, MagneticInteraction, MagneticInteractionSpec
+
+motion = AnimationController(app, window)
+hover = MagneticInteraction(motion, button, spec=MagneticInteractionSpec(max_offset=14))
+try:
+    app.run()
+finally:
+    hover.dispose()
+    motion.dispose()
+```
+
+`max_offset` sets the pull in logical pixels. The button keeps its layout
+space while its visible face and hit area travel together. Repeated mouse
+events at the same spot follow the same motion as a single event. Moving to
+a new spot starts the next spring at the button’s current position.
+
 ## Frame images in your own app
 
 Run `python examples/image_framing.py` from the checkout. The left pane shows

@@ -2,6 +2,7 @@ import ctypes
 import sys
 import time
 from collections.abc import Callable
+from ctypes.wintypes import RECT
 from typing import Any
 
 import pytest
@@ -37,6 +38,14 @@ def _user32() -> Any:
     user32.ClientToScreen.restype = ctypes.c_bool
     user32.SetCursorPos.argtypes = [ctypes.c_int, ctypes.c_int]
     user32.SetCursorPos.restype = ctypes.c_bool
+    user32.SetWindowPos.argtypes = [
+        ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int, ctypes.c_int,
+        ctypes.c_int, ctypes.c_int, ctypes.c_uint,
+    ]
+    user32.SetWindowPos.restype = ctypes.c_int
+    user32.WindowFromPoint.argtypes = [_Point]
+    user32.WindowFromPoint.restype = ctypes.c_void_p
+    user32.GetWindowRect.argtypes = [ctypes.c_void_p, ctypes.POINTER(RECT)]
     return user32
 
 
@@ -51,12 +60,40 @@ def _cursor_position(user32: Any) -> tuple[int, int]:
     return (int(point.x), int(point.y))
 
 
-def _place_cursor_in_client(user32: Any, hwnd: int, x: int, y: int) -> None:
-    """Keep real cursor motion consistent with synthetic Win32 pointer messages."""
-
+def _screen_point(user32: Any, hwnd: int, x: int, y: int) -> _Point:
     point = _Point(x, y)
     if not user32.ClientToScreen(ctypes.c_void_p(hwnd), ctypes.byref(point)):
         pytest.fail("ClientToScreen failed for Win32 magnetic input injection.")
+    return point
+
+
+def _expose_test_window(
+    user32: Any, window: Window, points: tuple[tuple[int, int], ...],
+) -> None:
+    """Keep both ends of the real mouse gesture visible under desktop overlays."""
+    assert window.native_handle is not None
+    hwnd = window.native_handle.value
+    display = window.display
+    assert display is not None
+    assert display.work_width is not None and display.work_height is not None
+    rect = RECT()
+    assert user32.GetWindowRect(hwnd, ctypes.byref(rect))
+    left, top = display.work_x, display.work_y
+    right = left + max(0, display.work_width - (rect.right - rect.left))
+    bottom = top + max(0, display.work_height - (rect.bottom - rect.top))
+    positions = ((rect.left, rect.top), (left, top), (right, top), (left, bottom), (right, bottom))
+    for x, y in positions:
+        # HWND_TOPMOST, SWP_NOSIZE | SWP_NOACTIVATE. Only move our temporary window.
+        assert user32.SetWindowPos(hwnd, -1, x, y, 0, 0, 0x0011)
+        if all(user32.WindowFromPoint(_screen_point(user32, hwnd, *p)) == hwnd for p in points):
+            return
+    pytest.fail("No visible position for the two magnetic hover test points.")
+
+
+def _place_cursor_in_client(user32: Any, hwnd: int, x: int, y: int) -> None:
+    """Move the system pointer onto a visible point in the test window."""
+    point = _screen_point(user32, hwnd, x, y)
+    assert user32.WindowFromPoint(point) == hwnd, "The magnetic test window is covered."
     if not user32.SetCursorPos(int(point.x), int(point.y)):
         pytest.fail("SetCursorPos failed for Win32 magnetic input injection.")
 
@@ -137,8 +174,21 @@ def test_real_win32_pointer_moves_retained_subtree_in_persistent_wgpu_context() 
         original_cursor = _cursor_position(user32)
         inside_x = max(1, round(330.0 * window.scale))
         inside_y = max(1, round(112.0 * window.scale))
-
+        outside_x = max(1, round(470.0 * window.scale))
+        _expose_test_window(user32, window, ((inside_x, inside_y), (outside_x, inside_y)))
+        _place_cursor_in_client(user32, hwnd, outside_x, inside_y)
         _drain_native_events(app)
+        controller.tick(magnetic.spec.max_duration)
+        assert button.visual_offset == Point() and not magnetic.active
+        context = renderer._contexts[hwnd]
+
+        def edge_pixel():
+            app.render_pending(app._frame_schedulers[window].stats.last_frame_time + 1)
+            width, _, rgba = context.read_scene_rgba()
+            offset = 4 * (round(112 * window.scale) * width + round(124 * window.scale))
+            return rgba[offset:offset + 3]
+
+        idle_edge = edge_pixel()
         assert window.scene is not None
         logical_x = window.physical_to_logical(float(inside_x))
         logical_y = window.physical_to_logical(float(inside_y))
@@ -147,8 +197,11 @@ def test_real_win32_pointer_moves_retained_subtree_in_persistent_wgpu_context() 
         assert target.key == "magnetic-button"
 
         _place_cursor_in_client(user32, hwnd, inside_x, inside_y)
-        user32.SendMessageW(ctypes.c_void_p(hwnd), 0x0200, 0, _lparam(inside_x, inside_y))
-        _pump_until(app, lambda: magnetic.active)
+        _pump_until(app, lambda: magnetic.active and magnetic.target_offset.x > 0)
+        for _ in range(16):
+            user32.SendMessageW(hwnd, 0x0200, 0, _lparam(inside_x, inside_y))
+        app.process_events()
+        assert controller.active_count == 1
         generation_before_move = runtime.generation
         controller.tick(magnetic.spec.max_duration)
         assert button.visual_offset.x > 0.0
@@ -164,22 +217,14 @@ def test_real_win32_pointer_moves_retained_subtree_in_persistent_wgpu_context() 
         previous_frames = renderer.frames_rendered
         _render_after_invalidation(app, renderer, previous_frames)
         assert renderer.persistent_context_count == initial_contexts
+        assert edge_pixel() != idle_edge
 
-        outside_x = max(1, round(470.0 * window.scale))
-        outside_y = inside_y
-        offset_before_restore = button.visual_offset
         generation_before_restore = runtime.generation
-        _place_cursor_in_client(user32, hwnd, outside_x, outside_y)
-        user32.SendMessageW(ctypes.c_void_p(hwnd), 0x0200, 0, _lparam(outside_x, outside_y))
+        _place_cursor_in_client(user32, hwnd, outside_x, inside_y)
         _pump_until(app, lambda: magnetic.target_offset == Point())
         controller.tick(magnetic.spec.max_duration)
         assert button.visual_offset == Point()
-        # A real runner cursor can emit a pointer-leave while the preceding GPU
-        # frame is pumped. If that already restored the widget, this second
-        # outside move is intentionally a no-op and must not invent a rebuild.
-        # When the widget was still displaced, the explicit restore must rebuild.
-        if offset_before_restore != Point():
-            assert runtime.generation > generation_before_restore
+        assert runtime.generation > generation_before_restore
         assert window.scene is not None
         restored = next(node for node in window.scene.walk() if node.key == "magnetic-button")
         assert restored.bounds == Rect(120.0, 86.0, 220.0, 52.0)
@@ -187,9 +232,12 @@ def test_real_win32_pointer_moves_retained_subtree_in_persistent_wgpu_context() 
         previous_frames = renderer.frames_rendered
         _render_after_invalidation(app, renderer, previous_frames)
         assert renderer.persistent_context_count == initial_contexts
+        assert edge_pixel() == idle_edge and renderer._contexts[hwnd] is context
     finally:
         magnetic.dispose()
         controller.dispose()
-        app.stop()
-        if user32 is not None and original_cursor is not None:
-            user32.SetCursorPos(*original_cursor)
+        try:
+            app.stop()
+        finally:
+            if user32 is not None and original_cursor is not None:
+                user32.SetCursorPos(*original_cursor)
