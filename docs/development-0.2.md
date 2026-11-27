@@ -187,6 +187,21 @@ In your app, use an `Input`, a button or another `Expander` as section
 content. Space activates a focused button. When the header itself has focus,
 Space or Enter toggles the section, Left collapses it, and Right opens it.
 
+## Edit text in a split pane
+
+Run `python examples/core_split_view_demo.py`. In the right pane, drag
+across `main` in `main.py` and type `draft`. Left and Right now move the
+caret within `draft.py`. Click the divider, press Right three times to widen
+the project pane, then select `draft` at its new position.
+
+![The filename changes from main.py to draft.py, then the divider moves and the new filename stem is selected](screenshots/split-pane-editor.png)
+
+Place controls relative to the top-left corner of their pane. A nested
+`SplitView` uses the same convention. A control that captures the pointer
+continues to receive positions relative to its own pane when the pointer
+crosses the divider. In a routed handler, `event.data["window_event"]`
+still gives you the original logical window coordinates.
+
 ## Edit a range with the keyboard
 
 Run `python examples/range_progress_demo.py` and press Tab to focus the

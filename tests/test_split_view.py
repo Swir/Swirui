@@ -3,6 +3,7 @@ import pytest
 from swirui import (
     Button,
     Component,
+    Input,
     SplitView,
     Window,
     build_accessibility_tree,
@@ -164,6 +165,52 @@ def test_split_view_keyboard_and_accessibility_semantics() -> None:
     assert semantic.min_value == pytest.approx(20.0)
     assert semantic.max_value == pytest.approx(80.0)
     assert semantic.value_text == "80% first pane"
+
+
+def test_nested_split_panes_route_input_using_the_target_pane_even_during_capture() -> None:
+    window = Window(width=640, height=400)
+    left = Button("Files", bounds=Rect(6, 10, 80, 32))
+    editor = Input("document", bounds=Rect(4, 8, 120, 32))
+    inner = SplitView(bounds=Rect(10, 12, 190, 160), first=Component(), second=editor,
+                      orientation="vertical", divider_size=8)
+    split = SplitView(bounds=Rect(30, 20, 420, 230), first=left, second=inner, divider_size=8)
+    mount(window, split)
+    handle = NativeWindowHandle(1)
+    received = []
+    for widget in (split, inner, editor):
+        widget.on("pointer_down", lambda e, w=widget: received.append(
+            (w, e.data["event"].x, e.data["event"].y, e.data["window_event"].x)))
+    moves = []
+    editor.on("pointer_move", lambda e: moves.append(e.data["event"]))
+    for ratio in (.5, .65):
+        split.split_ratio = ratio
+        x, y = split.second_pane_bounds.x, split.second_pane_bounds.y
+        ix, iy = inner.second_pane_bounds.x, inner.second_pane_bounds.y
+        px, py = x + ix + 5, y + iy + 16
+        received.clear()
+        window._apply_platform_event(PlatformEvent(PlatformEventKind.POINTER_DOWN, handle,
+                                                  x=px, y=py, button=PointerButton.LEFT))
+        assert received == [(editor, 5, 16, px), (inner, ix + 5, iy + 16, px),
+                            (split, px, py, px)]
+        assert window.pointer_capture_component is editor and editor.caret_index == 0
+        window._apply_platform_event(PlatformEvent(PlatformEventKind.POINTER_MOVE, handle,
+                                                  x=40, y=40))
+        assert (moves[-1].x, moves[-1].y) == (40 - x - ix, 40 - y - iy)
+        window._apply_platform_event(PlatformEvent(PlatformEventKind.POINTER_UP, handle,
+                                                  x=40, y=40, button=PointerButton.LEFT))
+        assert window.pointer_capture_component is None
+        for key in (0x23, 0x25, 0x28):
+            window._apply_platform_event(PlatformEvent(PlatformEventKind.KEY_DOWN, handle,
+                                                      key_code=key))
+        assert (split.split_ratio, inner.split_ratio) == (ratio, .5)
+    window.focus_component(inner)
+    window._apply_platform_event(PlatformEvent(PlatformEventKind.KEY_DOWN, handle, key_code=0x24))
+    assert inner.split_ratio == inner.min_ratio and split.split_ratio == .65
+    clicks = []
+    left.on("pointer_down", lambda e: clicks.append(e.data["event"]))
+    window._apply_platform_event(PlatformEvent(PlatformEventKind.POINTER_DOWN, handle,
+                                              x=45, y=40, button=PointerButton.LEFT))
+    assert (clicks[0].x, clicks[0].y) == (15, 20)
 
 
 def test_split_view_clamps_programmatic_ratio_and_rejects_invalid_configuration() -> None:

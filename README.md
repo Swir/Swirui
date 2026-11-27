@@ -167,6 +167,11 @@ On the 0.2 branch, you can click and type in a field inside an `Expander`.
 Arrow keys move the caret, and clicking the header folds the section.
 [Try the editable section in the gallery](https://github.com/Swir/Swirui/blob/development/0.2/docs/development-0.2.md#edit-a-field-inside-an-expander).
 
+Fields in a `SplitView` follow the pointer as you resize the panes. Select
+part of a filename and use the arrow keys to edit it. Focus the divider to
+resize with the keyboard.
+[Try the split-pane editor](https://github.com/Swir/Swirui/blob/development/0.2/docs/development-0.2.md#edit-text-in-a-split-pane).
+
 In the 0.2 checkout, run `python examples/appearance_gallery.py`, leave the
 window idle, then switch between **Dark** and **Light**. The mint glass card
 turns lilac. Its shadow deepens and its four backplates tilt and spread apart

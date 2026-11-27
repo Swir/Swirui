@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from itertools import pairwise
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -796,10 +797,12 @@ class Window(EventEmitter):
     def _pointer_events_for_path(
         event: PlatformEvent, component_path: tuple[Component, ...]
     ) -> tuple[PlatformEvent, ...]:
-        events = []
-        for component in component_path:
+        if not component_path:
+            return ()
+        events = [event]
+        for parent, child in pairwise(component_path):
+            event = parent._map_child_pointer_event(child, event)
             events.append(event)
-            event = component._map_descendant_pointer_event(event)
         return tuple(events)
 
     def _dispatch_direct_component_pointer_event(
