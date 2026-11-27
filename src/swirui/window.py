@@ -71,6 +71,7 @@ class Window(EventEmitter):
         self.root: Component | None = None
         self.scene: Scene | None = None
         self.hovered_scene_node: SceneNode | None = None
+        self._hover_input: tuple[PlatformEvent, tuple[Component, ...]] | None = None
         self.focused_component: Component | None = None
         self.pointer_capture_component: Component | None = None
         self.visible = False
@@ -181,13 +182,24 @@ class Window(EventEmitter):
         self.emit("root_changed", old_root=old_root, root=component)
         return self
 
-    def set_scene(self, scene: Scene | None) -> Window:
-        """Attach a prepared render scene and invalidate the next frame."""
+    def set_scene(self, scene: Scene | None, *, retain_hover: bool = False) -> Window:
+        """Attach a scene. Retained rebuilds can preserve the hovered control by key."""
 
         old_scene = self.scene
         self.scene = scene
-        self.hovered_scene_node = None
-        self.emit("scene_changed", old_scene=old_scene, scene=scene)
+        previous = self.hovered_scene_node
+        if previous is not None:
+            replacement = None
+            if retain_hover and scene is not None:
+                replacement = next((node for node in scene.walk()
+                                    if node.hit_testable and node.key == previous.key), None)
+            if (replacement is not None and self._hover_input is not None
+                    and self._component_path_for_scene_target(replacement) == self._hover_input[1]):
+                self.hovered_scene_node = replacement
+            else:
+                self._clear_hover()
+        if self.scene is scene:  # A leave handler can cause another rebuild.
+            self.emit("scene_changed", old_scene=old_scene, scene=scene)
         return self
 
     def focus_component(self, component: Component | None) -> None:
@@ -351,7 +363,7 @@ class Window(EventEmitter):
             if self._platform_backend is not None and self.native_handle is not None:
                 self._platform_backend.hide_window(self.native_handle)
             self.visible = False
-            self.hovered_scene_node = None
+            self._clear_hover()
             self.emit("hidden")
 
     def close(self) -> None:
@@ -528,27 +540,12 @@ class Window(EventEmitter):
         )
         if pointer_target_changed:
             previous_scene_target = self.hovered_scene_node
-            previous_component_path = self._component_path_for_scene_target(previous_scene_target)
-            previous_component_target = (
-                previous_component_path[-1] if previous_component_path else None
-            )
+            previous_input = self._hover_input
             self.hovered_scene_node = scene_target
+            self._hover_input = (event, hit_component_path) if scene_target is not None else None
 
-            if previous_scene_target is not None:
-                routed_leave = self._dispatch_direct_component_pointer_event(
-                    "pointer_leave",
-                    event,
-                    previous_scene_target,
-                    previous_component_path,
-                )
-                self.emit(
-                    "pointer_leave",
-                    event=event,
-                    target=previous_scene_target,
-                    component_target=previous_component_target,
-                    component_path=previous_component_path,
-                    routed_event=routed_leave,
-                )
+            if previous_scene_target is not None and previous_input is not None:
+                self._send_hover_leave(event, previous_scene_target, previous_input[1])
 
             if scene_target is not None:
                 routed_enter = self._dispatch_direct_component_pointer_event(
@@ -566,6 +563,8 @@ class Window(EventEmitter):
                     component_path=hit_component_path,
                     routed_event=routed_enter,
                 )
+        elif event.kind is PlatformEventKind.POINTER_MOVE and scene_target is not None:
+            self._hover_input = (event, hit_component_path)
 
         routed_event = self._route_component_pointer_event(
             event.kind.value,
@@ -589,6 +588,18 @@ class Window(EventEmitter):
 
         if event.kind is PlatformEventKind.POINTER_UP:
             self.release_pointer_capture()
+
+    def _clear_hover(self) -> None:
+        target, previous = self.hovered_scene_node, self._hover_input
+        self.hovered_scene_node = self._hover_input = None
+        if target is not None and previous is not None:
+            self._send_hover_leave(previous[0], target, previous[1])
+
+    def _send_hover_leave(self, event: PlatformEvent, target: SceneNode,
+                          path: tuple[Component, ...]) -> None:
+        routed = self._dispatch_direct_component_pointer_event("pointer_leave", event, target, path)
+        self.emit("pointer_leave", event=event, target=target, component_path=path,
+                  component_target=path[-1] if path else None, routed_event=routed)
 
     def _apply_keyboard_event(self, event: PlatformEvent) -> None:
         focused = self.focused_component
@@ -810,8 +821,8 @@ class Window(EventEmitter):
         self.focus_component(None)
         self.visible = False
         self.focused = False
-        self.hovered_scene_node = None
         self.closed = True
+        self._clear_hover()
         self.emit("closed")
 
     def __repr__(self) -> str:
