@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from swirui import Accordion, Expander, Label, build_accessibility_tree
+from swirui import Accordion, Button, Expander, Label, Window, build_accessibility_tree, mount
 from swirui.core import Event
 from swirui.platforms import NativeWindowHandle, PlatformEvent, PlatformEventKind, PointerButton
 from swirui.rendering import Rect
@@ -123,6 +123,34 @@ def test_expander_arrow_keys_set_disclosure_state_without_toggling() -> None:
     )
     assert left.default_prevented is True
     assert expander.expanded is False
+
+
+def test_nested_header_and_button_handle_their_own_input() -> None:
+    button = Button("Apply", bounds=Rect(16, 106, 140, 32))
+    inner = Expander("Options", bounds=Rect(12, 62, 220, 36), content=button, expanded=True)
+    outer = Expander("Workspace", bounds=Rect(8, 12, 240, 40), content=inner, expanded=True)
+    window = Window(width=300, height=190)
+    mount(window, outer)
+    clicked = []
+    button.on("click", clicked.append)
+    window.focus_component(button)
+    for kind in (PlatformEventKind.KEY_DOWN, PlatformEventKind.KEY_UP):
+        window._apply_platform_event(_platform_event(kind, key_code=0x20))
+    assert len(clicked) == 1 and inner.expanded and outer.expanded
+    window._apply_platform_event(_platform_event(PlatformEventKind.KEY_DOWN, key_code=0x25))
+    assert inner.expanded and outer.expanded
+    window.focus_component(inner)
+    window._apply_platform_event(_platform_event(PlatformEventKind.KEY_DOWN, key_code=0x25))
+    assert outer.expanded and not inner.expanded
+    for kind in (PlatformEventKind.POINTER_DOWN, PlatformEventKind.POINTER_UP):
+        window._apply_platform_event(_platform_event(kind, x=30, y=75, button=PointerButton.LEFT))
+    assert outer.expanded and inner.expanded and window.focused_component is inner
+    window._apply_platform_event(_platform_event(PlatformEventKind.POINTER_DOWN, x=30, y=24,
+                                                 button=PointerButton.LEFT))
+    assert outer.pressed
+    window._apply_platform_event(_platform_event(PlatformEventKind.POINTER_UP, x=30, y=75,
+                                                 button=PointerButton.LEFT))
+    assert not outer.pressed and outer.expanded and inner.expanded
 
 
 def test_expander_rejects_multiple_managed_children() -> None:

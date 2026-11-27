@@ -174,6 +174,19 @@ In your own window, the hovered control receives `pointer_leave`. Use
 client area. The exit event carries no coordinates. A control with pointer
 capture continues receiving drag events through button release.
 
+## Edit a field inside an expander
+
+Run `python examples/core_gallery.py` and click the text field under
+**Workspace details**. Press End and type ` and drafts`, including the space.
+Left and Right move the caret while the section stays open. Click the header
+to collapse it, then press Right on that header to see your edited text again.
+
+![A focused field is edited, collapsed and reopened with its text intact on Windows](screenshots/gallery-expander-input.png)
+
+In your app, use an `Input`, a button or another `Expander` as section
+content. Space activates a focused button. When the header itself has focus,
+Space or Enter toggles the section, Left collapses it, and Right opens it.
+
 ## Edit a range with the keyboard
 
 Run `python examples/range_progress_demo.py` and press Tab to focus the
