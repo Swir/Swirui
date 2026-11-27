@@ -148,7 +148,8 @@ def test_preview_theme_shows_default_first_and_respects_a_single_variant(tmp_pat
     monkeypatch.setattr(cli, "installation_report", lambda: {"ready": True})
     roots = []
 
-    def capture(root, *, smoke_test):
+    def capture(root, *, smoke_test, source, pane_limit):
+        assert source == path and pane_limit in (1, 2)
         roots.append(root)
         return 0
 
@@ -165,6 +166,64 @@ def test_preview_theme_shows_default_first_and_respects_a_single_variant(tmp_pat
     ThemePackage("Solo", {"solo": NEON_BLUE}, "solo").save(path)
     assert cli.main(command) == 0
     assert [pane.mode for pane in roots[-1].panes] == ["solo"]
+
+
+def test_reload_saved_package_keeps_surviving_drafts_and_rebuilds_variant_choices(tmp_path):
+    path = tmp_path / "motyw.json"
+    first = ThemePackage("Initial", {"night": NEON_BLUE, "day": FUTURE_LIGHT}, "night")
+    first.save(path)
+    root = comparison_module.AppearanceComparison(first, "Project settings",
+                                                  variants=("night", "day"))
+    window = Window()
+    mount(window, root)
+    comparison_module.bind_package_reload(window, root, path, pane_limit=2)
+    night, day = root.panes
+    day.field.value = "Draft project"
+    day.field.select(8, 1)
+    window.focus_component(day.field)
+
+    def reload():
+        window._apply_platform_event(PlatformEvent(PlatformEventKind.KEY_DOWN,
+                                                  NativeWindowHandle(1), key_code=0x74))
+
+    path.write_text("{", encoding="utf-8")
+    reload()
+    assert "F5 to retry" in window.title and root.panes == (night, day)
+    assert window.focused_component is day.field and day.field.caret_index == 1
+    copper = FUTURE_LIGHT.with_accent("#D16C42")
+    ThemePackage("Copper", {"day": copper}, "day").save(path)
+    reload()
+    assert root.panes == (day,) and day.theme == copper and "Copper" in window.title
+    assert day.field.value == "Draft project" and day.field.selected_text == "raft pr"
+    assert window.focused_component is day.field and day.field.caret_index == 1
+    ThemePackage("Three", {"sand": FUTURE_LIGHT, "day": copper, "ink": NEON_BLUE}, "ink").save(path)
+    reload()
+    assert root.panes[0] is day and [p.mode for p in root.panes] == ["day", "ink"]
+    day.mode_label.emit("click")
+    assert [item.key for item in root._variant_dialog.search.items] == ["day", "sand"]
+    ThemePackage("Two", {"sand": FUTURE_LIGHT, "ink": NEON_BLUE}, "ink").save(path)
+    reload()
+    assert root._variant_dialog is None and [p.mode for p in root.panes] == ["sand", "ink"]
+    assert window.focused_component is day.field and day.field.caret_index == 1
+
+
+def test_reload_uses_the_backend_f5_without_intercepting_typing_or_modified_shortcuts(tmp_path):
+    path = tmp_path / "Atelier.json"
+    original = ThemePackage("Before", {"ink": NEON_BLUE}, "ink")
+    ThemePackage("After", {"ink": FUTURE_LIGHT}, "ink").save(path)
+    for backend, f5, other in (("win32", 0x74, 0x54), ("x11", 0xFFC2, ord("t")),
+                               ("cocoa", 0x60, 0x74)):
+        root = comparison_module.AppearanceComparison(original, "Settings", variants=("ink",))
+        window = Window()
+        mount(window, root)
+        comparison_module.bind_package_reload(window, root, path, pane_limit=1,
+                                              backend_name=backend)
+        for key, ctrl in ((other, False), (f5, True), (f5, False)):
+            window._apply_platform_event(PlatformEvent(PlatformEventKind.KEY_DOWN,
+                                                      NativeWindowHandle(1), key_code=key,
+                                                      ctrl=ctrl))
+            assert root.panes[0].theme == (FUTURE_LIGHT if key == f5 and not ctrl else NEON_BLUE)
+        assert window.focused_component is None
 
 
 def test_comparison_reflows_both_forms_at_the_minimum_width_and_restores_them():

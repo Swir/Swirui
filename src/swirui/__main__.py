@@ -7,6 +7,7 @@ import json
 import sys
 from collections.abc import Sequence
 from functools import partial
+from pathlib import Path
 
 from . import __version__
 from .diagnostics import installation_report
@@ -34,7 +35,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="Render, verify and close the integrated Studio",
     )
     preview = commands.add_parser("preview-theme", help="Try a saved theme package in a window")
-    preview.add_argument("file", help="Path to a SwirUI theme JSON file")
+    preview.add_argument("file", help="Path to a SwirUI theme JSON file. Press F5 to reload it.")
     display = preview.add_mutually_exclusive_group()
     display.add_argument("--variant", action="append", metavar="KEY",
                          help="Show this variant. Repeat once to compare two in the given order.")
@@ -74,7 +75,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         except (OSError, ValueError) as error:
             print(f"Could not preview {args.file!r}: {error}", file=sys.stderr)
             return 1
-        start = partial(run_package_preview, root, smoke_test=args.smoke_test)
+        start = partial(run_package_preview, root, smoke_test=args.smoke_test,
+                        source=Path(args.file).absolute(),
+                        pane_limit=len(args.variant) if args.variant else 2)
     elif args.command == "demo":
         from .demo import run
         start = partial(run, smoke_test=args.smoke_test)

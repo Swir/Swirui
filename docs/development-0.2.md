@@ -260,3 +260,25 @@ range can include a line break and indentation. In a `CodeEditor`, Ctrl+Z
 restores the text and caret or selection in one step.
 
 ![The word notes selected in the paper variant beside the ink variant, captured without a cursor on Windows using AMD Radeon graphics and DX12](screenshots/saved-theme-preview.png)
+
+### Reload your theme while editing
+
+Keep the preview window open. Save another version of the same JSON file
+from Studio, your editor or `ThemePackage.save()`, then press **F5** in the
+preview. Both panes pick up their saved colors, fonts, corners and materials.
+The form you are editing keeps its draft, keyboard focus and text selection.
+
+![The same selected word in a dark and light comparison before and after reloading two glass variants](screenshots/theme-reload.png)
+
+The two frames show the same Windows/wgpu window. The refreshed package
+changes the accents to mint and terracotta and adds five tilted glass layers.
+The word **workbench** stays selected.
+
+The preview keeps each visible variant that still exists. If one is removed,
+its pane uses the package default or the next available variant. A package
+with a single variant fills the window. A preview opened with one explicit
+`--variant` stays in one pane even if the file gains more variants.
+
+If a save is incomplete or the file is missing, the last valid preview stays
+on screen. The title shows **F5 to retry** and the terminal shows the reason.
+Save the corrected file and press **F5** again.

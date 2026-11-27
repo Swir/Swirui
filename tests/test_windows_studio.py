@@ -166,6 +166,68 @@ def test_saved_theme_cli_renders_both_authored_accents_in_requested_order(tmp_pa
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Windows/wgpu required")
+def test_f5_reloads_saved_material_in_the_open_native_window(tmp_path, monkeypatch):
+    import ctypes
+    from dataclasses import replace
+
+    from swirui import SurfaceStyle
+
+    path = tmp_path / "Motyw szkła.json"
+    initial = NEON_BLUE.with_accent("#D493FF")
+    styled = replace(initial.with_accent("#79E5BC"), control_radius=18, surface_style=SurfaceStyle(
+        kind="glass", depth_layers=5, tilt_x=24, tilt_y=-28))
+    ThemePackage("Atlas", {"ink": initial}, "ink").save(path)
+
+    def inspect(app):
+        app.start()
+        app.process_events()
+        window, = app.windows
+        pane, = window.root.panes
+        hwnd = window.native_handle.value
+        context = app.renderer._contexts[hwnd]
+        send = app.platform_backend._user32.SendMessageW
+        send.argtypes = [ctypes.c_void_p, ctypes.c_uint, ctypes.c_size_t, ctypes.c_ssize_t]
+        send.restype = ctypes.c_ssize_t
+
+        def refresh():
+            send(hwnd, 0x0100, 0x74, 1)
+            send(hwnd, 0x0101, 0x74, 1)
+            app.process_events()
+
+        def accent():
+            # Measure the resting button near its center, clear of its caption.
+            window._apply_platform_event(PlatformEvent(PlatformEventKind.POINTER_MOVE,
+                                                      window.native_handle, x=2, y=2))
+            app.render_pending(app._frame_schedulers[window].stats.last_frame_time + 1)
+            width, _, pixels = context.read_scene_rgba()
+            b = pane.apply.bounds
+            offset = 4 * (round((b.bottom - 6) * window.scale) * width
+                          + round((b.x + b.width / 2) * window.scale))
+            return tuple(pixels[offset:offset + 3])
+
+        pane.field.value = "Atlas workbench"
+        pane.field.select(15, 6)
+        window.focus_component(pane.field)
+        assert accent() == pytest.approx((212, 147, 255), abs=1)
+        path.write_text("{", encoding="utf-8")
+        refresh()
+        assert "F5 to retry" in window.title and accent() == pytest.approx((212, 147, 255), abs=1)
+        ThemePackage("Atlas glass", {"ink": styled, "paper": FUTURE_LIGHT}, "paper").save(path)
+        saved = path.read_bytes()
+        refresh()
+        assert window.root.panes == (pane,) and window.focused_component is pane.field
+        assert pane.field.selected_text == "workbench" and pane.field.caret_index == 6
+        assert pane.card.effective_style == styled.surface_style
+        assert accent() == pytest.approx((121, 229, 188), abs=1)
+        assert window.native_handle.value == hwnd and app.renderer._contexts[hwnd] is context
+        assert path.read_bytes() == saved
+        return 0
+
+    monkeypatch.setattr(App, "run", inspect)
+    assert cli.main(["preview-theme", str(path), "--variant", "ink"]) == 0
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows/wgpu required")
 def test_search_saved_variants_in_a_resized_preview(tmp_path, monkeypatch):
     import ctypes
 

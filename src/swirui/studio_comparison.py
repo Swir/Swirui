@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import sys
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from . import (
@@ -23,6 +25,7 @@ from . import (
 )
 from .core import Event, state_transaction
 from .core.state import schedule_reactive_update
+from .platforms import PlatformEvent
 from .rendering import Rect, WgpuRenderer
 from .widgets import mount
 from .widgets.measurement import measure_text_block
@@ -35,17 +38,18 @@ if TYPE_CHECKING:
 
 
 _MIN_PANE_WIDTH = 320
+# The native backends report Win32 virtual keys, X11 keysyms and Cocoa key codes.
+_F5 = {"win32": 0x74, "x11": 0xFFC2, "cocoa": 0x60}
 
 
 class _AppearancePane(Panel):
     def __init__(self, mode: str, *, selectable: bool) -> None:
         empty = Rect(0, 0, 0, 0)
         super().__init__(bounds=empty, clip_to_bounds=True)
-        self.mode_label: Badge | Button = (
-            Button("", bounds=empty, variant=ButtonVariant.SECONDARY, text_align="center",
-                   padding=5, font_size=13, accessible_name="Choose variant")
-            if selectable else Badge("", bounds=empty, accessible_name="Appearance")
-        )
+        self.badge = Badge("", bounds=empty, accessible_name="Appearance")
+        self.variant_button = Button("", bounds=empty, variant=ButtonVariant.SECONDARY,
+                                     text_align="center", padding=5, font_size=13,
+                                     accessible_name="Choose variant")
         self.title = Label("", bounds=empty, font_size=31, clip_to_bounds=True)
         self.ribbon = SilkRibbon(bounds=empty)
         self.card = ThemeSurface(bounds=empty)
@@ -54,14 +58,19 @@ class _AppearancePane(Panel):
         self.field = Input("", bounds=empty)
         self.apply = Button("Apply name", bounds=empty, text_align="center")
         self.card.add(self.headline, self.caption, self.field, self.apply)
-        self.add(self.ribbon, self.mode_label, self.title, self.card)
-        self.set_mode(mode)
+        self.add(self.ribbon, self.badge, self.variant_button, self.title, self.card)
+        self.set_mode(mode, selectable=selectable)
 
-    def set_mode(self, mode: str) -> None:
+    @property
+    def mode_label(self) -> Badge | Button:
+        return self.variant_button if self.variant_button.visible else self.badge
+
+    def set_mode(self, mode: str, *, selectable: bool) -> None:
+        self.variant_button.visible = selectable
+        self.badge.visible = not selectable
         self.mode = mode
         short = mode.title() if mode in ("dark", "light") else mode
         full = f"{short} appearance" if mode in ("dark", "light") else mode
-        selectable = isinstance(self.mode_label, Button)
         self._short_label = f"{short}  ▾" if selectable else short
         self._full_label = f"{full}  ▾" if selectable else full
         self.mode_label.text = self._full_label
@@ -153,15 +162,54 @@ class AppearanceComparison(Panel):
                 raise ValueError(f"Unknown variant {key!r}. Available: {', '.join(package.themes)}")
         super().__init__(bounds=Rect(0, 0, 960, 460))
         selectable = len(package.themes) > len(variants)
-        self.panes = tuple(_AppearancePane(key, selectable=selectable) for key in variants)
+        self.panes = tuple(self._make_pane(key, selectable=selectable) for key in variants)
         self._variant_dialog: _VariantDialog | None = None
         self.add(*self.panes)
-        for pane in self.panes:
-            if selectable:
-                pane.mode_label.on("click", self._choose_variant)
-            pane.field.on("submitted", self._rename)
-            pane.apply.on("click", self._rename)
         self.set_design(package, headline)
+
+    def _make_pane(self, mode: str, *, selectable: bool) -> _AppearancePane:
+        pane = _AppearancePane(mode, selectable=selectable)
+        pane.variant_button.on("click", self._choose_variant)
+        pane.field.on("submitted", self._rename)
+        pane.apply.on("click", self._rename)
+        return pane
+
+    def _reload_package(self, package: ThemePackage, *, pane_limit: int) -> None:
+        """Keep the visible forms and their edits when replacing a saved package."""
+        count = min(pane_limit, len(package.themes))
+        panes = list(self.panes)
+        if len(panes) > count:
+            # Prefer the surviving variant even when it occupied the second pane.
+            panes = sorted(panes, key=lambda p: p.mode not in package.themes)[:count]
+        preferred = dict.fromkeys((package.default_theme, *package.themes))
+        retained_keys = {p.mode for p in panes}
+        available = iter(key for key in preferred if key not in retained_keys)
+        selectable = len(package.themes) > count
+        window = self.mounted_window
+        with state_transaction():
+            if self._variant_dialog is not None:
+                self._variant_dialog.dismiss()
+            focused = window.focused_component if window else None
+            restore = None
+            for pane in self.panes:
+                if pane not in panes:
+                    if focused in (pane.field, pane.apply, pane.variant_button):
+                        restore = panes[0].field
+                    self.remove(pane)
+            for pane in panes:
+                if focused is pane.variant_button and not selectable:
+                    restore = pane.field
+                mode = pane.mode if pane.mode in package.themes else next(available)
+                pane.set_mode(mode, selectable=selectable)
+            if len(panes) < count:
+                pane = self._make_pane(next(available), selectable=selectable)
+                pane.title.text = pane.field.value = panes[0].title.text
+                panes.append(pane)
+                self.add(pane)
+            self.panes = tuple(panes)
+            self.set_appearance(package.themes, panes[0].headline.text)
+            if window and restore is not None:
+                window.focus_component(restore)
 
     def set_design(self, package: ThemePackage, headline: str) -> None:
         with state_transaction():
@@ -189,7 +237,7 @@ class AppearanceComparison(Panel):
         def select(event: Event) -> None:
             key = str(event.data["key"])
             with state_transaction():
-                pane.set_mode(key)
+                pane.set_mode(key, selectable=True)
                 pane.theme = self._themes[key]
 
         def closed(event: Event) -> None:
@@ -233,7 +281,33 @@ class AppearanceComparison(Panel):
                                          viewport.height))
 
 
-def run_package_preview(root: AppearanceComparison, *, smoke_test: bool = False) -> int:
+def bind_package_reload(window: Window, root: AppearanceComparison, source: Path,
+                        *, pane_limit: int, backend_name: str = "win32") -> None:
+    """Reload a file-backed preview on F5, including when no control has focus."""
+    if pane_limit not in (1, 2):
+        raise ValueError("Choose one or two preview panes.")
+    window.set_title(f"{root.panes[0].title.text} · Theme preview · F5 to reload")
+    f5 = _F5.get(backend_name, 0x74)
+
+    def reload(event: Event) -> None:
+        key = event.data.get("event")
+        if (not isinstance(key, PlatformEvent) or key.key_code != f5 or key.ctrl
+                or key.alt or key.shift or key.meta):
+            return
+        try:
+            package = ThemePackage.load(source)
+        except (OSError, ValueError) as error:
+            window.set_title(f"Could not reload {source.name} · F5 to retry")
+            print(f"Could not reload {source}: {error}", file=sys.stderr)
+            return
+        root._reload_package(package, pane_limit=pane_limit)
+        window.set_title(f"{package.name} · Theme reloaded · F5 to reload")
+
+    window.on("key_down", reload)
+
+
+def run_package_preview(root: AppearanceComparison, *, smoke_test: bool = False,
+                        source: Path | None = None, pane_limit: int = 2) -> int:
     """Display an interactive sample without modifying the source package."""
     count = len(root.panes)
     renderer = WgpuRenderer()
@@ -242,6 +316,9 @@ def run_package_preview(root: AppearanceComparison, *, smoke_test: bool = False)
                                    width=480 * count, height=460,
                                    min_width=_MIN_PANE_WIDTH, min_height=390))
     mount(window, root)
+    if source is not None:
+        bind_package_reload(window, root, source, pane_limit=pane_limit,
+                            backend_name=app.platform_backend.name)
     try:
         if not smoke_test:
             return app.run()
