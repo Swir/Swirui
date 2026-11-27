@@ -138,13 +138,13 @@ class _SliderBase(Widget):
         if window is not None:
             window.capture_pointer(self)
         if self._dragging:
-            self._update_drag(self._value_from_x(native.x), event, initial=True)
+            self._update_drag(native.x, event, initial=True)
             self.invalidate(reason="pointer_down")
 
     def _on_pointer_move(self, event: Event) -> None:
         native = self._platform_event(event, PlatformEventKind.POINTER_MOVE)
         if self._dragging and self.enabled and native is not None and native.x is not None:
-            self._update_drag(self._value_from_x(native.x), event)
+            self._update_drag(native.x, event)
 
     def _on_pointer_up(self, event: Event) -> None:
         native = self._platform_event(event, PlatformEventKind.POINTER_UP)
@@ -152,12 +152,12 @@ class _SliderBase(Widget):
             return
         self._dragging = False
         if self.enabled and native.x is not None:
-            self._update_drag(self._value_from_x(native.x), event)
+            self._update_drag(native.x, event)
         self.invalidate(reason="pointer_up")
 
     @abstractmethod
-    def _update_drag(self, value: float, event: Event, *, initial: bool = False) -> None:
-        """Apply a pointer position, choosing the range thumb only at press time."""
+    def _update_drag(self, x: float, event: Event, *, initial: bool = False) -> None:
+        """Apply a horizontal pointer position during a captured drag."""
 
     def _on_capture_lost(self, _event: Event) -> None:
         if self._dragging:
@@ -373,7 +373,8 @@ class Slider(_SliderBase):
             return self._accent_hover
         return self._thumb
 
-    def _update_drag(self, value: float, event: Event, *, initial: bool = False) -> None:
+    def _update_drag(self, x: float, event: Event, *, initial: bool = False) -> None:
+        value = self._value_from_x(x)
         self._set_value(value, input_event=event, exact_endpoint=value == self.maximum)
 
     def _on_key_down(self, event: Event) -> None:
@@ -432,6 +433,8 @@ class RangeSlider(_SliderBase):
         self._lower_value = lower
         self._upper_value = upper
         self._active_thumb: ThumbName = "lower"
+        self._drag_thumb: ThumbName | None = None
+        self._grab_offset_x = 0.0
         self._hovered = False
         self._dragging = False
         self._focused = False
@@ -575,14 +578,17 @@ class RangeSlider(_SliderBase):
             if exact_endpoint
             else _snap(value, self._minimum, self._maximum, self._step)
         )
+        self._apply_thumb_value(thumb, normalized, input_event)
+
+    def _apply_thumb_value(self, thumb: ThumbName, value: float, input_event: Event | None) -> None:
         old_lower = self._lower_value
         old_upper = self._upper_value
         old_thumb = self._active_thumb
         self._active_thumb = thumb
         if thumb == "lower":
-            self._lower_value = min(normalized, self._upper_value)
+            self._lower_value = min(value, self._upper_value)
         else:
-            self._upper_value = max(normalized, self._lower_value)
+            self._upper_value = max(value, self._lower_value)
         if (old_lower, old_upper) == (self._lower_value, self._upper_value):
             if old_thumb != thumb:
                 self.invalidate(reason="active_thumb")
@@ -614,11 +620,25 @@ class RangeSlider(_SliderBase):
             return self._accent_hover
         return self._thumb
 
-    def _update_drag(self, value: float, event: Event, *, initial: bool = False) -> None:
+    def _update_drag(self, x: float, event: Event, *, initial: bool = False) -> None:
         if initial:
-            self._active_thumb = self._nearest_thumb(value)
-        self._set_thumb_value(self._active_thumb, value, input_event=event,
-                             exact_endpoint=value == self.maximum)
+            self._drag_thumb = None
+            self._grab_offset_x = 0.0
+            if self._lower_value == self._upper_value:
+                shared = self._thumb_bounds(self._lower_value)
+                if shared.x <= x <= shared.right:
+                    self._grab_offset_x = x - (shared.x + shared.width / 2)
+
+        raw = self._value_from_x(x - self._grab_offset_x)
+        value = raw if raw == self.maximum else _snap(raw, self.minimum, self.maximum, self.step)
+        if self._drag_thumb is None:
+            if self._lower_value != self._upper_value:
+                self._drag_thumb = self._nearest_thumb(raw)
+            elif value == self._lower_value:
+                return
+            else:
+                self._drag_thumb = "lower" if value < self._lower_value else "upper"
+        self._apply_thumb_value(self._drag_thumb, value, event)
 
     def _on_key_down(self, event: Event) -> None:
         native = self._platform_event(event, PlatformEventKind.KEY_DOWN)

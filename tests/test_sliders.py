@@ -151,6 +151,47 @@ def test_range_slider_selects_nearest_thumb_and_preserves_order() -> None:
     assert semantics.focused is True
 
 
+@pytest.mark.parametrize("direction", [-1, 1])
+def test_drag_reopens_coincident_handles_without_jumping_or_switching_ends(direction):
+    window = Window(width=360, height=120)
+    slider = RangeSlider(bounds=Rect(20, 20, 218, 40), lower_value=50, upper_value=50, step=5)
+    mount(window, slider)
+    # Start with the handle that cannot move in the requested direction.
+    if direction < 0:
+        slider.upper_value = 50
+    changes = []
+    slider.on("changed", lambda event: changes.append(event.data["active_thumb"]))
+    # The shared center is x=129. Grab the opposite edge of the painted handle.
+    grab = 129 - direction * 8
+    _pointer(window, PlatformEventKind.POINTER_DOWN, x=grab, y=40)
+    _pointer(window, PlatformEventKind.POINTER_MOVE, x=grab - direction * 2, y=40)
+    assert (slider.lower_value, slider.upper_value) == (50, 50) and not changes
+    _pointer(window, PlatformEventKind.POINTER_MOVE, x=grab + direction * 40, y=40)
+    thumb = "upper" if direction > 0 else "lower"
+    assert (slider.lower_value, slider.upper_value) == ((50, 70) if direction > 0 else (30, 50))
+    assert slider.active_thumb == thumb and changes == [thumb]
+    _pointer(window, PlatformEventKind.POINTER_MOVE, x=grab - direction * 80, y=40)
+    assert (slider.lower_value, slider.upper_value) == (50, 50)
+    _pointer(window, PlatformEventKind.POINTER_UP, x=grab - direction * 90, y=40)
+    assert changes == [thumb, thumb] and window.pointer_capture_component is None
+
+    # A fresh drag can open the other side, including with no intervening move event.
+    _pointer(window, PlatformEventKind.POINTER_DOWN, x=129, y=40)
+    _pointer(window, PlatformEventKind.POINTER_UP, x=129 - direction * 40, y=40)
+    assert (slider.lower_value, slider.upper_value) == ((30, 50) if direction > 0 else (50, 70))
+
+
+def test_track_click_opens_a_collapsed_range_to_the_exact_non_step_maximum():
+    window = Window(width=360, height=120)
+    slider = RangeSlider(bounds=Rect(20, 20, 218, 40), maximum=10, step=3,
+                         lower_value=6, upper_value=6)
+    mount(window, slider)
+    _pointer(window, PlatformEventKind.POINTER_DOWN, x=229, y=40)
+    _pointer(window, PlatformEventKind.POINTER_UP, x=229, y=40)
+    assert (slider.lower_value, slider.upper_value) == (6, 10)
+    assert slider.active_thumb == "upper"
+
+
 @pytest.mark.parametrize("in_dialog", [False, True])
 def test_tab_visits_both_range_ends_in_each_direction(in_dialog):
     window = Window(width=420, height=240)

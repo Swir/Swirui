@@ -148,6 +148,18 @@ preserves both numbers. The `changed` event fires when a value changes.
 In the accessibility tree, each limit exposes its current value, allowed bounds
 and focus state.
 
+### Reopen a collapsed range by dragging
+
+Drag either handle until the two values meet, then release. Grab the shared
+handle anywhere across its face. Drag left to lower the start of the range or
+right to raise the end. The first movement that changes the stepped value
+selects the handle for the rest of the drag. If you reverse past the other
+handle, the two meet again. Release to choose a new direction.
+
+![A range collapsed at 50 percent opens left to 20–50 and then right to 50–80](screenshots/range-drag.png)
+
+These 33 frames come from the same 700 × 420 Windows/wgpu demo window.
+
 ## Animate a theme switch
 
 To try an animated theme switch in a running app, launch

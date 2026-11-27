@@ -128,7 +128,11 @@ def test_slider_drag_updates_gpu_track_outside_the_client_and_releases_capture()
         def mouse(message, flags, x, y):
             point = _lparam(round(x * window.scale), round(y * window.scale))
             user32.SendMessageW(hwnd, message, flags, point)
-            app.process_events()
+            # Deliver this HWND message and its capture notifications. Pumping the
+            # entire desktop here can mix physical mouse movement into the gesture.
+            events = app.platform_backend._events
+            while events:
+                app._dispatch_platform_event(events.popleft())
 
         def track_pixels(y):
             app.render_pending(app._frame_schedulers[window].stats.last_frame_time + 1)
@@ -151,6 +155,25 @@ def test_slider_drag_updates_gpu_track_outside_the_client_and_releases_capture()
             assert (slider.value if slider is single else interval.upper_value) == 0
             assert track_pixels(y) == (empty, empty)
         assert interval.lower_value == 0 and interval.active_thumb == "upper"
+
+        # Reopen a shared handle in either direction through native pointer capture.
+        interval.upper_value = 6
+        interval.lower_value = 6
+        y = interval.bounds.y + interval.bounds.height / 2
+        assert track_pixels(y) == (empty, empty)
+        mouse(0x0201, 1, 163, y)
+        mouse(0x0200, 1, 350, y)
+        assert (interval.lower_value, interval.upper_value) == (6, 10)
+        assert track_pixels(y) == (empty, filled)
+        mouse(0x0202, 0, 25, y)
+        assert (interval.lower_value, interval.upper_value) == (6, 6)
+        assert not user32.GetCapture()
+        mouse(0x0201, 1, 173, y)
+        mouse(0x0200, 1, 20, y)
+        assert (interval.lower_value, interval.upper_value) == (0, 6)
+        assert track_pixels(y) == (filled, empty)
+        mouse(0x0202, 0, 20, y)
+        assert not user32.GetCapture() and renderer._contexts[hwnd] is context
     finally:
         app.stop()
 

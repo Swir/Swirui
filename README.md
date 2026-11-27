@@ -59,7 +59,8 @@ with `python examples/image_framing.py` from the 0.2 source checkout.
 
 In your own apps, Tab visits both ends of a `RangeSlider`. Arrow keys edit
 the selected limit, and Shift+Tab goes back. A small arrow inside the
-focus ring identifies the limit even where the handles meet.
+focus ring identifies the limit even where the handles meet. When both
+handles meet, drag left to lower the minimum or right to raise the maximum.
 [Try the range controls](https://github.com/Swir/Swirui/blob/development/0.2/docs/development-0.2.md#edit-a-range-with-the-keyboard).
 
 ![SwirUI Studio in dark appearance, captured without a cursor](https://raw.githubusercontent.com/Swir/Swirui/v0.1.0b6/docs/screenshots/studio-dark.png)
