@@ -1,3 +1,5 @@
+import math
+
 import pytest
 
 from swirui import FUTURE_LIGHT, Component, ProgressBar, ProgressRing, build_accessibility_tree
@@ -118,6 +120,42 @@ def test_full_thickness_progress_ring_uses_valid_center_triangles() -> None:
     assert len(node.children) == 8
     assert all(child.path is not None for child in node.children)
     assert all(child.path.triangle_count == 1 for child in node.children if child.path is not None)
+
+
+@pytest.mark.parametrize("thickness", [9, 100])
+def test_progress_ring_preserves_its_outline_at_fractional_values(thickness):
+    ring = ProgressRing(bounds=Rect(12, 10, 110, 80), minimum=50, maximum=150,
+                        value=50, segments=8, thickness=thickness, theme=FUTURE_LIGHT)
+    accent = FUTURE_LIGHT.surface_color("accent")
+    center = Point(55, 40)
+
+    def area(nodes):
+        return sum(abs((b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y)) / 2
+                   for node in nodes for a, b, c in node.path.triangulate())
+
+    track_area = area(ring.build_scene_node().children)
+    last_segment = ring.build_scene_node().children[-1].path
+    for percent in (1, 4, 53, 99):
+        ring.value = 50 + percent
+        nodes = ring.build_scene_node().children
+        active = [node for node in nodes if node.fill == accent]
+        assert len(nodes) == 9 and active
+        tip = active[-1].path.points[1]
+        angle = math.atan2(tip.x - center.x, center.y - tip.y) % math.tau
+        assert angle == pytest.approx(math.tau * percent / 100)
+        assert area(nodes) == pytest.approx(track_area)
+        if percent < 87.5:
+            assert nodes[-1].path is last_segment
+        assert all(not node.hit_testable for node in nodes)
+        assert ring.accessible_value_text == f"{percent}%"
+    for value in (50, math.nextafter(50.0, 150), math.nextafter(62.5, 50),
+                  62.5, math.nextafter(62.5, 150), math.nextafter(150.0, 50), 150):
+        ring.value = value
+        assert area(ring.build_scene_node().children) == pytest.approx(track_area)
+    ring.enabled = False
+    nodes = ring.build_scene_node().children
+    assert len(nodes) == 8 and all(node.fill == FUTURE_LIGHT.surface_color("disabled")
+                                   for node in nodes)
 
 
 def test_progress_widgets_validate_configuration() -> None:

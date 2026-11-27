@@ -232,6 +232,21 @@ Use a multi-stop `LinearGradient` for intermediate colors, or assign a new
 one to `progress.fill_gradient` while the app is running. Assign `None` to
 use the current theme accent again. A disabled bar uses the theme's disabled color.
 
+### Show the last percent on a ring
+
+In the same gallery, focus the slider and press End, then Left. At 99% a
+gap is still visible just before twelve o’clock. Press Right to close it.
+Press Home, then Right to see the first 1% appear on the other side.
+
+![Six native gallery frames showing the progress ring at 0%, 1%, 2%, 98%, 99% and 100%](screenshots/gallery-ring-sweep.png)
+
+In your own app, set `ProgressRing.value` directly. For example,
+`ProgressRing(bounds=Rect(24, 24, 120, 120), value=99, segments=8)`
+has a faceted outline and a one-percent gap. Choose more segments for a
+rounder outline. Values between vertices advance the arc in either case.
+Custom `minimum` and `maximum` values map onto the same full turn.
+The recording shows the default 48 segments on Windows/DX12.
+
 ## Animate a theme switch
 
 To try an animated theme switch in a running app, launch

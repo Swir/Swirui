@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import math
+from functools import lru_cache
+from itertools import pairwise
 
 from swirui.core import AccessibilityRole
-from swirui.rendering.geometry import Color, CornerRadius, Path2D, Point, Rect
+from swirui.rendering.geometry import Color, CornerRadius, Path2D, Point, Rect, Size, _signed_area
 from swirui.rendering.gradients import LinearGradient
 from swirui.rendering.scene import SceneNode, SceneNodeKind
 from swirui.theme import Theme
@@ -199,7 +201,7 @@ class ProgressBar(_ProgressWidget):
 
 
 class ProgressRing(_ProgressWidget):
-    """Determinate progress ring compiled to a bounded set of retained paths."""
+    """Determinate clockwise ring. Segments shape the outline, and value sets its sweep."""
 
     def __init__(
         self,
@@ -254,54 +256,59 @@ class ProgressRing(_ProgressWidget):
             z_index=self.z_index,
             hit_testable=False,
         )
-        outer_radius = max(0.0, min(self.bounds.width, self.bounds.height) / 2.0)
-        if outer_radius <= 0.0:
-            return root
-        inner_radius = max(0.0, outer_radius - min(self._thickness, outer_radius))
-        center_x = self.bounds.width / 2.0
-        center_y = self.bounds.height / 2.0
-        active_segments = round(self._segments * self.progress)
-        for index in range(self._segments):
-            start = -math.pi / 2.0 + (2.0 * math.pi * index / self._segments)
-            end = -math.pi / 2.0 + (2.0 * math.pi * (index + 1) / self._segments)
-            outer_a = Point(
-                center_x + math.cos(start) * outer_radius,
-                center_y + math.sin(start) * outer_radius,
-            )
-            outer_b = Point(
-                center_x + math.cos(end) * outer_radius,
-                center_y + math.sin(end) * outer_radius,
-            )
-            if inner_radius > 0.0:
-                inner_b = Point(
-                    center_x + math.cos(end) * inner_radius,
-                    center_y + math.sin(end) * inner_radius,
-                )
-                inner_a = Point(
-                    center_x + math.cos(start) * inner_radius,
-                    center_y + math.sin(start) * inner_radius,
-                )
-                path = Path2D.polygon(outer_a, outer_b, inner_b, inner_a)
+        sweep = self.progress * self.segments
+        step_angle = math.tau / self.segments
+
+        def paint(key: str, path: Path2D | None, color: Color) -> None:
+            if path is not None:
+                root.children.append(SceneNode(
+                    key, SceneNodeKind.PATH, self.bounds, fill=color, path=path,
+                    z_index=1, hit_testable=False,
+                ))
+
+        track = _ring_track(self.bounds.size, self.thickness, self.segments)
+        for index, segment in enumerate(track):
+            key = f"{self.key}:segment:{index}"
+            fraction = sweep - index
+            if segment is not None and self.enabled and 0 < fraction < 1:
+                # Intersect the progress ray with both polygon edges. Splitting the
+                # chords keeps the outline fixed even on deliberately faceted rings.
+                leading = math.sin(fraction * step_angle)
+                weight = leading / (leading + math.sin((1 - fraction) * step_angle))
+                outer_a, outer_b, inner_b = segment.points[:3]
+                inner_a = segment.points[-1]
+                outer_tip = Point(outer_a.x + weight * (outer_b.x - outer_a.x),
+                                  outer_a.y + weight * (outer_b.y - outer_a.y))
+                inner_tip = Point(inner_a.x + weight * (inner_b.x - inner_a.x),
+                                  inner_a.y + weight * (inner_b.y - inner_a.y))
+                paint(key, _ring_wedge(outer_a, outer_tip, inner_tip, inner_a), self._fill)
+                remaining = _ring_wedge(outer_tip, outer_b, inner_b, inner_tip)
+                paint(key + ":remaining", remaining, self._track)
             else:
-                path = Path2D.polygon(outer_a, outer_b, Point(center_x, center_y))
-            active = index < active_segments
-            color = self._fill if active and self.enabled else self._track
-            if not self.enabled:
-                color = self._disabled
-            root.add(
-                SceneNode(
-                    key=f"{self.key}:segment:{index}",
-                    kind=SceneNodeKind.PATH,
-                    bounds=Rect(
-                        self.bounds.x,
-                        self.bounds.y,
-                        self.bounds.width,
-                        self.bounds.height,
-                    ),
-                    z_index=1,
-                    fill=color,
-                    path=path,
-                    hit_testable=False,
-                )
-            )
+                color = self._fill if fraction >= 1 else self._track
+                paint(key, segment, color if self.enabled else self._disabled)
         return root
+
+
+def _ring_wedge(a: Point, b: Point, inner_b: Point, inner_a: Point) -> Path2D | None:
+    points = (a, b, inner_b, inner_a)
+    if abs(_signed_area(points)) <= 1e-9:
+        return None
+    return Path2D._from_convex_outline(points)
+
+
+@lru_cache(maxsize=32)
+def _ring_track(size: Size, thickness: float, segments: int) -> tuple[Path2D | None, ...]:
+    outer = min(size.width, size.height) / 2
+    if outer == 0:
+        return ()
+    inner = max(0.0, outer - thickness)
+    cx, cy = size.width / 2, size.height / 2
+    edges = []
+    for index in range(segments):
+        angle = math.tau * index / segments
+        x, y = math.sin(angle), -math.cos(angle)
+        edges.append((Point(cx + outer * x, cy + outer * y), Point(cx + inner * x, cy + inner * y)))
+    edges.append(edges[0])
+    return tuple(_ring_wedge(a, b, inner_b, inner_a)
+                 for (a, inner_a), (b, inner_b) in pairwise(edges))

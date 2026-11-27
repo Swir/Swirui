@@ -450,6 +450,35 @@ def test_retained_ranges_and_progress_render_in_persistent_wgpu_context() -> Non
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="retained widget smoke requires Windows")
+def test_fractional_ring_leaves_visible_space_until_completion() -> None:
+    renderer = WgpuRenderer()
+    app = App(platform_backend=_isolated_backend(), renderer=renderer)
+    window = app.add_window(Window(width=320, height=220))
+    ring = ProgressRing(bounds=Rect(40, 20, 200, 180), segments=8, thickness=16)
+    mount(window, ring)
+    try:
+        app.start()
+        context = renderer._contexts[window.native_handle.value]
+
+        def top_edge(value):
+            ring.value = value
+            app.render_pending(app._frame_schedulers[window].stats.last_frame_time + 1)
+            width, _, rgba = context.read_scene_rgba()
+            row = round(28 * window.scale) * width
+            offsets = [4 * (row + round(x * window.scale)) for x in (132, 138, 142, 148)]
+            return [bytes(rgba[offset:offset + 3]) for offset in offsets]
+
+        empty, first, last, full = [top_edge(value) for value in (0, 1, 99, 100)]
+        assert empty[0] != full[0]
+        assert first == [empty[0], empty[1], full[2], empty[3]]
+        assert last == [full[0], empty[1], full[2], full[3]]
+        assert top_edge(1) == first
+        assert renderer._contexts[window.native_handle.value] is context
+    finally:
+        app.stop()
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="retained widget smoke requires Windows")
 def test_retained_content_surfaces_and_tooltip_reuse_real_wgpu_context() -> None:
     renderer = WgpuRenderer()
     backend = _isolated_backend()
