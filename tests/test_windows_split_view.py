@@ -1,6 +1,7 @@
 import ctypes
 import sys
 import time
+from ctypes.wintypes import POINT
 from typing import Any
 
 import pytest
@@ -41,16 +42,24 @@ def test_pane_editor_caret_and_selection_follow_native_pointer_after_resize() ->
     field = Input("main.py", bounds=Rect(16, 20, 160, 42))
     split = SplitView(bounds=Rect(24, 24, 530, 180), first=Component(), second=field)
     mount(window, split)
+    user32 = _user32()
+    original = POINT()
+    assert user32.GetCursorPos(ctypes.byref(original))
     try:
         app.start()
         app.process_events()
         hwnd = window.native_handle.value
         context = renderer._contexts[hwnd]
-        user32 = _user32()
 
         def mouse(msg, flags, x, y):
-            point = _lparam(round(x * window.scale), round(y * window.scale))
-            user32.SendMessageW(hwnd, msg, flags, point)
+            px, py = round(x * window.scale), round(y * window.scale)
+            # A captured field also receives real desktop motion during the drag.
+            # SendMessageW alone leaves the system pointer at an unrelated position.
+            screen = POINT(px, py)
+            assert user32.ClientToScreen(ctypes.c_void_p(hwnd), ctypes.byref(screen))
+            assert user32.SetCursorPos(screen.x, screen.y)
+            app.process_events()
+            user32.SendMessageW(hwnd, msg, flags, _lparam(px, py))
             app.process_events()
 
         def pixels(x, y):
@@ -77,7 +86,10 @@ def test_pane_editor_caret_and_selection_follow_native_pointer_after_resize() ->
             assert field.caret_index == 0 and split.split_ratio == ratio
         assert renderer._contexts[hwnd] is context
     finally:
-        app.stop()
+        try:
+            app.stop()
+        finally:
+            user32.SetCursorPos(original.x, original.y)
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="SplitView native smoke requires Windows")
