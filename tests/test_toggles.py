@@ -286,6 +286,12 @@ def test_radio_arrow_respects_cancelled_keys_and_focus_redirects():
     _key(window, PlatformEventKind.KEY_DOWN, 0x28)
     assert window.focused_component is first and first.checked
     cancel()
+    lock = root.on("key_down", lambda _: root.set_enabled(False), capture=True)
+    _key(window, PlatformEventKind.KEY_DOWN, 0x28)
+    assert first.checked and not second.checked
+    lock()
+    root.enabled = True
+    window.focus_component(first)
     second.on("focus_gained", lambda _: window.focus_component(after))
     _key(window, PlatformEventKind.KEY_DOWN, 0x28)
     assert window.focused_component is after and first.checked and not second.checked

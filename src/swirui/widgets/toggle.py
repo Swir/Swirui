@@ -456,11 +456,11 @@ class RadioButton(_ToggleControl):
         backend = window._platform_backend
         steps = _RADIO_STEPS.get(backend.name if backend else "win32", _WINDOWS_RADIO_STEPS)
         step = steps.get(key.key_code)
-        if step is None:
+        if step is None or not window._component_is_focus_candidate(self):
             return
         choices = [member for member in self._group_members()
                    if member.visible and member.enabled and member.focusable]
-        if len(choices) < 2 or self not in choices:
+        if len(choices) < 2:
             return
         target = choices[(choices.index(self) + step) % len(choices)]
         parent = self.parent
