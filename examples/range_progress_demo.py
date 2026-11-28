@@ -76,15 +76,16 @@ allowed = RangeSlider(
 progress_value = Label("", bounds=Rect(545, 145, 63, 34), font_size=20)
 range_value = Label("", bounds=Rect(541, 239, 108, 32), font_size=18)
 disable_indicators = Checkbox("Disable indicators", bounds=Rect(475, 353, 200, 44))
+lock_sliders = Checkbox("Lock sliders", bounds=Rect(301, 353, 156, 44))
 card.add(Label("Preview progress", bounds=Rect(54, 112, 350, 34), font_size=21),
          volume, progress, ring, progress_value,
          Label("Allowed range", bounds=Rect(54, 237, 350, 34), font_size=21), range_value, allowed)
 root.add(SilkRibbon(bounds=Rect(298, 0, 383, 186)),
          Label("Range and progress", bounds=Rect(30, 22, 390, 52), font_size=32),
          card,
-         Label("Tab to a handle. Use the arrow keys to adjust it.",
-               bounds=Rect(32, 360, 436, 36), font_size=16),
-         disable_indicators)
+         Label("Tab to a handle. Adjust with arrows.",
+               bounds=Rect(32, 360, 263, 36), font_size=15),
+         lock_sliders, disable_indicators)
 mount(window, root)
 
 
@@ -100,7 +101,13 @@ def update_indicators(*_args: object) -> None:
         progress.enabled = ring.enabled = not disable_indicators.checked
 
 
+def update_sliders(*_args: object) -> None:
+    with state_transaction():
+        volume.enabled = allowed.enabled = not lock_sliders.checked
+
+
 disable_indicators.on("changed", update_indicators)
+lock_sliders.on("changed", update_sliders)
 volume.on("changed", update_progress)
 allowed.on("changed", update_progress)
 update_progress()

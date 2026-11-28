@@ -1,6 +1,8 @@
 import pytest
 
 from swirui import (
+    FUTURE_DARK,
+    FUTURE_LIGHT,
     Button,
     Component,
     Modal,
@@ -278,8 +280,20 @@ def test_gradient_fill_stays_anchored_and_transparent_to_input(range_control):
     assert alternate.bounds == narrower.bounds
     assert alternate.children[0].fill != fill.children[0].fill
     slider.enabled = False
-    assert _node(window.scene, fill_key).fill == _node(window.scene, f"{slider.key}:track").fill
+    muted = _node(window.scene, fill_key)
+    assert muted.fill != _node(window.scene, f"{slider.key}:track").fill
+    assert muted.bounds == alternate.bounds and not muted.hit_testable
+    assert not muted.children and not window.scene.hit_test(Point(119, 40))
+    for theme in (FUTURE_DARK, FUTURE_LIGHT):
+        slider.theme = theme
+        selected = _node(window.scene, fill_key)
+        assert selected.fill == theme.surface_color("disabled_text")
+        assert 0 < selected.opacity < 1
+        assert _node(window.scene, f"{slider.key}:track").fill == theme.surface_color("disabled")
     slider.enabled = True
+    assert [n.fill for n in _node(window.scene, fill_key).children] == [
+        n.fill for n in alternate.children
+    ]
     slider.fill_gradient = None
     assert not _node(window.scene, fill_key).children
     with pytest.raises(TypeError, match="fill_gradient"):

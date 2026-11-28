@@ -612,6 +612,17 @@ def test_slider_color_scale_stays_in_place_as_either_handle_moves() -> None:
         prefix, middle = samples()
         assert prefix == (full[0], full[1], empty[2])
         assert middle == (empty[0], full[1], empty[2])
+        single.enabled = interval.enabled = False
+        muted_prefix, muted_interval = samples()
+        filled, track = muted_prefix[0], muted_prefix[2]
+        assert filled != track
+        assert muted_prefix == (filled, filled, track)
+        assert muted_interval == (track, filled, track)
+        interval.lower_value = interval.upper_value
+        assert samples()[1] == (track, track, track)
+        interval.lower_value = 35
+        single.enabled = interval.enabled = True
+        assert samples() == [prefix, middle]
         interval.upper_value = 100
         assert samples()[1] == (empty[0], full[1], full[2])
         assert renderer._contexts[window.native_handle.value] is context
