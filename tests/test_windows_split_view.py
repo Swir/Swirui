@@ -1,11 +1,12 @@
 import ctypes
 import sys
 import time
+from ctypes.wintypes import POINT
 from typing import Any
 
 import pytest
 
-from swirui import App, Button, Component, SplitView, Window, mount
+from swirui import App, Button, Component, Input, SplitView, Window, mount
 from swirui.platforms.windows import Win32PlatformBackend
 from swirui.rendering import Rect, SceneNodeKind, WgpuRenderer
 
@@ -31,6 +32,64 @@ def _user32() -> Any:
 
 def _lparam(x: int, y: int) -> int:
     return ((y & 0xFFFF) << 16) | (x & 0xFFFF)
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="SplitView native smoke requires Windows")
+def test_pane_editor_caret_and_selection_follow_native_pointer_after_resize() -> None:
+    renderer = WgpuRenderer()
+    app = App(platform_backend=_isolated_backend(), renderer=renderer)
+    window = app.add_window(Window(width=600, height=280))
+    field = Input("main.py", bounds=Rect(16, 20, 160, 42))
+    split = SplitView(bounds=Rect(24, 24, 530, 180), first=Component(), second=field)
+    mount(window, split)
+    user32 = _user32()
+    original = POINT()
+    assert user32.GetCursorPos(ctypes.byref(original))
+    try:
+        app.start()
+        app.process_events()
+        hwnd = window.native_handle.value
+        context = renderer._contexts[hwnd]
+
+        def mouse(msg, flags, x, y):
+            px, py = round(x * window.scale), round(y * window.scale)
+            # A captured field also receives real desktop motion during the drag.
+            # SendMessageW alone leaves the system pointer at an unrelated position.
+            screen = POINT(px, py)
+            assert user32.ClientToScreen(ctypes.c_void_p(hwnd), ctypes.byref(screen))
+            assert user32.SetCursorPos(screen.x, screen.y)
+            app.process_events()
+            user32.SendMessageW(hwnd, msg, flags, _lparam(px, py))
+            app.process_events()
+
+        def pixels(x, y):
+            app.render_pending(app._frame_schedulers[window].stats.last_frame_time + 1)
+            width, _, rgba = context.read_scene_rgba()
+            x1, y1, x2, y2 = (round(v * window.scale) for v in (x, y, x + 84, y + 42))
+            return b"".join(rgba[4 * (row * width + x1):4 * (row * width + x2)]
+                            for row in range(y1, y2))
+
+        for ratio in (.32, .58):
+            split.split_ratio = ratio
+            x = split.second_pane_bounds.x + field.bounds.x
+            y = split.second_pane_bounds.y + field.bounds.y
+            mouse(0x0201, 1, x + 3, y + 19)
+            assert window.focused_component is field and field.caret_index == 0
+            start = pixels(x, y)
+            mouse(0x0200, 1, x + 110, y + 19)
+            mouse(0x0202, 0, x + 110, y + 19)
+            assert field.selected_text == "main.py" and window.pointer_capture_component is None
+            assert pixels(x, y) != start
+            user32.SendMessageW(hwnd, 0x0100, 0x25, 1)  # Left
+            user32.SendMessageW(hwnd, 0x0101, 0x25, 1)
+            app.process_events()
+            assert field.caret_index == 0 and split.split_ratio == ratio
+        assert renderer._contexts[hwnd] is context
+    finally:
+        try:
+            app.stop()
+        finally:
+            user32.SetCursorPos(original.x, original.y)
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="SplitView native smoke requires Windows")

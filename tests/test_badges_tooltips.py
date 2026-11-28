@@ -1,6 +1,19 @@
+from types import SimpleNamespace
+
 import pytest
 
-from swirui import Badge, Button, Chip, Component, Tooltip, Window, build_accessibility_tree, mount
+from swirui import (
+    Badge,
+    Button,
+    Chip,
+    Component,
+    Input,
+    Modal,
+    Tooltip,
+    Window,
+    build_accessibility_tree,
+    mount,
+)
 from swirui.core import AccessibilityRole, Event
 from swirui.platforms import NativeWindowHandle, PlatformEvent, PlatformEventKind, PointerButton
 from swirui.rendering import Color, Point, Rect, SceneNodeKind
@@ -158,6 +171,25 @@ def test_tooltip_follows_target_hover_and_focus_without_stealing_hits() -> None:
     assert runtime.generation >= 4
 
 
+@pytest.mark.parametrize("text", ["Pierwsza linia\r\nDruga linia",
+                                  "A long keyboard hint for the current workspace"])
+def test_tooltip_grants_wrapped_text_the_height_of_its_authored_box(text):
+    tip = Tooltip(text, bounds=Rect(8, 12, 160, 80), font_size=16, padding=10)
+    node = tip.build_scene_node().children[0]
+    assert node.bounds == Rect(18, 22, 140, 60)
+    assert node.text == tip.accessible_name == text
+    assert not node.hit_testable
+    tip.bounds = Rect(8, 12, 160, 43)
+    assert tip.build_scene_node().children[0].bounds == Rect(18, 13.5, 140, 40)
+    tip.bounds = Rect(8, 12, 160, 26)
+    assert tip.build_scene_node().children[0].bounds == Rect(18, 15, 140, 20)
+    tip.text = "Short hint"
+    tip.bounds = Rect(8, 12, 160, 80)
+    assert tip.build_scene_node().children[0].bounds == Rect(18, 42, 140, 20)
+    tip.bounds = Rect(8, 12, 12, 80)
+    assert not tip.build_scene_node().children
+
+
 def test_tooltip_closes_when_bound_target_becomes_unavailable() -> None:
     button = Button("Inspect", bounds=Rect(0.0, 0.0, 120.0, 40.0))
     tooltip = Tooltip(
@@ -176,6 +208,65 @@ def test_tooltip_closes_when_bound_target_becomes_unavailable() -> None:
     assert tooltip.is_open is True
     button.visible = False
     assert tooltip.is_open is False
+
+
+@pytest.mark.parametrize(("backend", "escape"), [("win32", 0x1B), ("x11", 0xFF1B), ("cocoa", 0x35)])
+def test_escape_dismisses_tooltip_before_modal_even_if_key_repeats(backend, escape):
+    window = Window(width=480, height=280)
+    window._platform_backend = SimpleNamespace(name=backend)
+    field = Input("Atlas workbench", bounds=Rect(12, 12, 240, 40))
+    tip = Tooltip("Edit name", target=field, bounds=Rect(12, 64, 240, 40))
+    content = Component().add(field, tip)
+    dialog = Modal(bounds=Rect(0, 0, 480, 280), dialog_bounds=Rect(40, 30, 400, 200),
+                   content=content, open=True)
+    mount(window, dialog)
+    window.focus_component(field)
+    field.select(6, 15)
+    assert tip.is_open
+    keys = []
+    window.on("key_down", lambda event: keys.append(event.data["event"].key_code))
+
+    def send(kind):
+        window._apply_platform_event(PlatformEvent(kind, NativeWindowHandle(1), key_code=escape))
+
+    send(PlatformEventKind.KEY_DOWN)
+    assert not tip.is_open and dialog.is_open and not keys
+    assert window.focused_component is field and field.selected_text == "workbench"
+    send(PlatformEventKind.KEY_DOWN)
+    assert dialog.is_open and not keys
+    send(PlatformEventKind.KEY_UP)
+    send(PlatformEventKind.KEY_DOWN)
+    assert not dialog.is_open and keys == [escape]
+
+
+def test_tooltip_escape_only_affects_visible_hints_in_its_own_window():
+    window, other = Window(), Window()
+    bounds = Rect(8, 8, 100, 32)
+    first, second, hidden, separate = [Tooltip("Help", bounds=bounds, initially_open=True)
+                                       for _ in range(4)]
+    parent = Component().add(hidden)
+    parent.visible = False
+    root = Component().add(first, second, parent)
+    mount(window, root)
+    mount(other, separate)
+    seen = []
+    window.on("key_down", lambda e: seen.append(e.data["event"].key_code))
+    handle = NativeWindowHandle(1)
+
+    def press(**modifiers):
+        window._apply_platform_event(PlatformEvent(PlatformEventKind.KEY_DOWN, handle,
+                                                   key_code=0x1B, **modifiers))
+
+    for modifier in ("ctrl", "alt", "shift", "meta"):
+        press(**{modifier: True})
+    assert first.is_open and second.is_open and seen == [0x1B] * 4
+    press()
+    assert not first.is_open and not second.is_open and hidden.is_open and separate.is_open
+    window._apply_platform_event(PlatformEvent(PlatformEventKind.FOCUS, handle, focused=False))
+    root.remove(first)
+    first.show()
+    press()
+    assert first.is_open and hidden.is_open and separate.is_open and seen == [0x1B] * 5
 
 
 def test_tooltip_semantics_are_visible_only_while_open() -> None:

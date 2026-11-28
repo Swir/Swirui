@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import time
 from collections.abc import Callable
 from enum import StrEnum
 from typing import TYPE_CHECKING, Protocol, TypeAlias
@@ -640,7 +641,8 @@ class AnimationController:
     def __init__(self, app: App, window: Window) -> None:
         self.app = app
         self.window = window
-        self._animations: list[AnimationPlayable] = []
+        # Playables may be unhashable. Keep the first-frame clock with its owner.
+        self._animations: dict[int, tuple[AnimationPlayable, float | None]] = {}
         self._unsubscribe = app.on("frame_rendered", self._on_frame_rendered)
         self._disposed = False
 
@@ -654,20 +656,19 @@ class AnimationController:
 
     def cancel(self, animation: AnimationPlayable) -> bool:
         """Cancel and release one owned animation without affecting others."""
-        if animation not in self._animations:
+        if self._animations.pop(id(animation), None) is None:
             return False
-        cancelled = animation.cancel()
-        self._animations.remove(animation)
-        return cancelled
+        return animation.cancel()
 
     def play(self, animation: AnimationPlayable) -> AnimationPlayable:
         """Start one animation and schedule its first presentation frame."""
 
         if self._disposed:
             raise RuntimeError("AnimationController is disposed.")
+        started_at = time.monotonic()
         animation.start()
-        if animation.status is AnimationStatus.RUNNING and animation not in self._animations:
-            self._animations.append(animation)
+        if animation.status is AnimationStatus.RUNNING:
+            self._animations[id(animation)] = (animation, started_at)
         self.app.invalidate(self.window)
         return animation
 
@@ -677,16 +678,28 @@ class AnimationController:
         delta = _finite_float("delta_seconds", delta_seconds)
         if delta < 0.0:
             raise ValueError("delta_seconds must be non-negative.")
+        return self._advance(delta, frame_time=None)
+
+    def _advance(self, delta: float, *, frame_time: float | None) -> int:
         if not self._animations:
             return 0
 
-        for animation in tuple(self._animations):
-            animation.advance(delta)
-        self._animations = [
-            animation
-            for animation in self._animations
-            if animation.status is AnimationStatus.RUNNING
-        ]
+        for key in tuple(self._animations):
+            entry = self._animations.get(key)
+            if entry is None:  # A completion callback may have cancelled this animation.
+                continue
+            animation, started_at = entry
+            elapsed = delta
+            if started_at is not None and frame_time is not None:
+                # A dormant window's last frame can predate play by seconds.
+                if frame_time < started_at:
+                    # A render callback started this animation after the frame was sampled.
+                    continue
+                elapsed = min(delta, frame_time - started_at)
+                self._animations[key] = (animation, None)
+            animation.advance(elapsed)
+            if animation.status is not AnimationStatus.RUNNING:
+                self._animations.pop(key, None)
         self.app.invalidate(self.window)
         return len(self._animations)
 
@@ -694,7 +707,7 @@ class AnimationController:
         """Cancel every active animation and return how many were cancelled."""
 
         cancelled = 0
-        for animation in tuple(self._animations):
+        for animation, _ in tuple(self._animations.values()):
             cancelled += int(animation.cancel())
         self._animations.clear()
         return cancelled
@@ -722,7 +735,10 @@ class AnimationController:
         delta = float(frame_delta)
         if not math.isfinite(delta) or delta < 0.0:
             return
-        self.tick(delta)
+        frame_time = event.data.get("frame_time")
+        if not isinstance(frame_time, (int, float)) or not math.isfinite(frame_time):
+            frame_time = None
+        self._advance(delta, frame_time=frame_time)
 
 
 def tween_state(

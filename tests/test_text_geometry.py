@@ -2,7 +2,17 @@
 
 import pytest
 
-from swirui import FUTURE_DARK, FUTURE_LIGHT, Input, PasswordInput, Window, mount
+from swirui import (
+    FUTURE_DARK,
+    FUTURE_LIGHT,
+    Button,
+    Input,
+    Label,
+    PasswordInput,
+    Tooltip,
+    Window,
+    mount,
+)
 from swirui.rendering import Rect
 from swirui.rendering.text_layout import NativeTextShaper, TextLineLayout
 
@@ -25,6 +35,78 @@ class ProportionalShaper:
 
 def node(field, suffix):
     return next(n for n in field.build_scene_node().walk() if n.key == field.key + suffix)
+
+
+def test_button_label_alignment_uses_shaped_width_and_keeps_the_hit_target():
+    window = Window()
+    button = Button("iiiiW", bounds=Rect(20, 30, 120, 40))
+    mount(window, button)
+    shaper = ProportionalShaper()
+    window._set_text_shaper(shaper)
+    assert node(button, ":content").bounds.width == 96  # automatic, full padded width
+    for align, x in (("center", 66), ("right", 100), ("left", 32)):
+        button.text_align = align
+        label = node(button, ":content")
+        assert (label.bounds.x, label.bounds.width) == (x, 28)
+        assert button.build_scene_node().bounds == Rect(20, 30, 120, 40)
+    assert len(shaper.calls) == 1
+    button.bounds = Rect(20, 30, 180, 40)
+    button.text_align = "center"
+    assert node(button, ":content").bounds.x == 96
+    assert len(shaper.calls) == 1
+    window._set_scale(1.5)
+    assert shaper.calls[-1][-1] == 1.5
+    button.bounds = Rect(20, 30, 120, 40)
+    button.text_align = "left"
+    button.text = "WWWWWWWWWW"
+    assert node(button, ":content").bounds.width == 96
+    button.text = "ii\nsecond line"
+    assert node(button, ":content").text == button.text
+    assert shaper.calls[-1][0] == "ii"
+    with pytest.raises(ValueError, match="text_align"):
+        button.text_align = "diagonal"
+    assert button.text_align == "left"
+
+
+def test_fitted_label_reuses_metrics_until_its_font_scale_or_shaper_changes():
+    window = Window()
+    shaper = ProportionalShaper()
+    label = Label("WWW", bounds=Rect(0, 0, 24, 48), font_size=26, min_font_size=14)
+    mount(window, label)
+    window._set_text_shaper(shaper)
+    assert label.build_scene_node().font_size == 14
+    calls = len(shaper.calls)
+    label.theme = FUTURE_LIGHT
+    label.build_scene_node()
+    assert len(shaper.calls) == calls
+    window._set_scale(1.5)
+    assert shaper.calls[-1][-1] == 1.5
+    label.font_family = "Consolas"
+    assert shaper.calls[-1][-2] == "Consolas"
+    replacement = ProportionalShaper()
+    window._set_text_shaper(replacement)
+    label.text = "iii"
+    assert label.build_scene_node().font_size == 26 and replacement.calls[-1][0] == "iii"
+
+
+def test_tooltip_reuses_shaped_line_width_across_resizes_and_refreshes_on_scale_change():
+    window = Window()
+    tip = Tooltip("iiiiW", bounds=Rect(0, 0, 60, 80), font_size=16, initially_open=True)
+    mount(window, tip)
+    shaper = ProportionalShaper()
+    window._set_text_shaper(shaper)
+    assert node(tip, ":text").bounds.height == 20
+    tip.bounds = Rect(0, 0, 45, 80)
+    assert node(tip, ":text").bounds.height == 60
+    tip.bounds = Rect(0, 0, 60, 80)
+    assert node(tip, ":text").bounds.height == 20 and len(shaper.calls) == 1
+    window._set_scale(1.5)
+    assert shaper.calls[-1][-1] == 1.5
+    tip.text = "WWWW"
+    assert node(tip, ":text").bounds.height == 60 and shaper.calls[-1][0] == "WWWW"
+    calls = len(shaper.calls)
+    tip.text = "i\ni"
+    assert node(tip, ":text").bounds.height == 60 and len(shaper.calls) == calls
 
 
 def test_proportional_caret_selection_and_click_use_the_same_advances():

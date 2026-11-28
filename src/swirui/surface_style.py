@@ -67,19 +67,21 @@ class SurfaceStyle:
         accent = theme.surface_color("accent")
         tint = theme.surface_color("surface")
         border = theme.surface_color("border")
-        for index in range(self.depth_layers):
-            distance = (self.depth_layers - index) * self.depth_spacing
+        if self.depth_layers:
             plane = PerspectivePlane(
                 rotation_x_degrees=self.tilt_x, rotation_y_degrees=self.tilt_y,
                 perspective=max(900, math.hypot(bounds.width, bounds.height) * 2),
             )
-            root.add(plane.to_scene_node(
-                f"{key}:depth:{index}",
-                Rect(bounds.x + distance * 0.45, bounds.y + distance,
-                     bounds.width, bounds.height),
-                fill=Color(accent.r, accent.g, accent.b, accent.a * 0.13),
-                z_index=-80 + index, hit_testable=False,
-            ))
+            projected, path = plane.projected_path(bounds, corner_radius=theme.control_radius)
+            layer_color = Color(accent.r, accent.g, accent.b, accent.a * 0.13)
+            for index in range(self.depth_layers):
+                distance = (self.depth_layers - index) * self.depth_spacing
+                root.add(SceneNode(
+                    f"{key}:depth:{index}", SceneNodeKind.PATH,
+                    Rect(projected.x + distance * 0.45, projected.y + distance,
+                         projected.width, projected.height),
+                    path=path, fill=layer_color, z_index=-80 + index, hit_testable=False,
+                ))
         if self.elevation:
             root.add(DropShadow(
                 color=Color(0, 0, 0, 0.32), offset=Point(0, self.elevation),

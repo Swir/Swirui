@@ -30,6 +30,11 @@ def test_ribbon_recolors_without_retessellation_or_pointer_targets():
     assert all(a.path is b.path for a, b in zip(initial.children, tinted.children, strict=True))
     assert initial.children[12].fill != tinted.children[12].fill
     assert all(not node.hit_testable for node in tinted.walk())
+    for first, second in zip(tinted.children[:-1], tinted.children[1:], strict=True):
+        # horizontal_band stores its lower edge in reverse winding order.
+        columns = len(first.path.points) // 2
+        assert first.path.points[columns:][::-1] == second.path.points[:columns]
+    assert sum(band.path.triangle_count for band in tinted.children) <= 1792
     ribbon.bounds = Rect(0, 0, 0, 104)
     assert not ribbon.build_scene_node().children
 

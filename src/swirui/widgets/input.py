@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import unicodedata
 from bisect import bisect_right
 from collections import OrderedDict
 from typing import TYPE_CHECKING, Any
@@ -42,6 +43,24 @@ _DEFAULT_FOREGROUND = Color.from_hex("#F4FAFF")
 _DEFAULT_PLACEHOLDER = Color.from_hex("#8DA8B8")
 _DEFAULT_SELECTION = Color.from_hex("#125D83")
 _DEFAULT_CARET = Color.from_hex("#62E5FF")
+
+
+def _starts_word_run(text: str, index: int) -> bool:
+    """Return whether this interior offset starts a word or a punctuation run."""
+    left, right = text[index - 1], text[index]
+    if right.isspace():
+        return False
+    if left.isspace():
+        return True
+    # Combining marks and variation selectors stay with their base. Keep
+    # joined emoji together even when their components have different classes.
+    if "\u200d" in (left, right) or unicodedata.category(right).startswith("M"):
+        return False
+    index -= 1
+    while index > 0 and unicodedata.category(left).startswith("M"):
+        index -= 1
+        left = text[index]
+    return (left.isalnum() or left == "_") != (right.isalnum() or right == "_")
 
 
 class _TextInputBase(Widget):
@@ -123,6 +142,7 @@ class _TextInputBase(Widget):
         self._padding = self._validate_non_negative(padding, "padding")
         self._caret = len(self._value)
         self._selection_anchor: int | None = None
+        self._selection_pointer: tuple[float, float] | None = None
         self._focused = False
         self._horizontal_offset = 0.0
         self._preferred_caret_x: float | None = None
@@ -144,6 +164,9 @@ class _TextInputBase(Widget):
             accessible_description=accessible_description,
         )
         self.on("pointer_down", self._on_pointer_down)
+        self.on("pointer_move", self._extend_pointer_selection)
+        self.on("pointer_up", self._extend_pointer_selection)
+        self.on("pointer_capture_lost", self._selection_capture_lost)
         self.on("key_down", self._on_key_down)
         self.on("text_input", self._on_text_input)
         self.on("focus_gained", self._on_focus_gained)
@@ -167,6 +190,8 @@ class _TextInputBase(Widget):
         )
 
     def on_unmount(self, window: Window) -> None:
+        if self._selection_pointer is not None:
+            window.release_pointer_capture(self)
         super().on_unmount(window)
         # Layout keys include their provider; release the font system when a
         # detached control outlives its window instead of retaining it in LRU keys.
@@ -382,7 +407,7 @@ class _TextInputBase(Widget):
                     kind=SceneNodeKind.TEXT,
                     bounds=Rect(content.x - offset, content.y, layout.width, line_height),
                     z_index=1,
-                    fill=self._placeholder_color if showing_placeholder else self._foreground,
+                    fill=self._current_text_color(placeholder=showing_placeholder),
                     text=text,
                     font_size=self._font_size,
                     font_family=self._font_family,
@@ -498,7 +523,7 @@ class _TextInputBase(Widget):
                         kind=SceneNodeKind.TEXT,
                         bounds=Rect(content.x - offset, y, layout.width, height),
                         text=text,
-                        fill=self._placeholder_color if placeholder else self._foreground,
+                        fill=self._current_text_color(placeholder=placeholder),
                         font_size=self._font_size,
                         font_family=self._font_family,
                         z_index=1,
@@ -549,6 +574,12 @@ class _TextInputBase(Widget):
         caret_line = self._line_index_for_position(self._caret, line_starts)
         return max(0, min(caret_line - visible_lines + 1, len(line_starts) - visible_lines))
 
+    def _current_text_color(self, *, placeholder: bool) -> Color:
+        attribute = "_placeholder_color" if placeholder else "_foreground"
+        if not self.enabled and self._theme is not None and attribute not in self._theme_overrides:
+            return self._theme.text_color("disabled_text")
+        return self._placeholder_color if placeholder else self._foreground
+
     def _current_background(self) -> Color:
         if not self.enabled:
             return self._disabled_background
@@ -571,6 +602,8 @@ class _TextInputBase(Widget):
         return self._mask_character * len(self._value)
 
     def _on_pointer_down(self, event: Event) -> None:
+        if event.source is not self or event.default_prevented:
+            return
         platform_event = self._platform_event(event, PlatformEventKind.POINTER_DOWN)
         if (
             not self.enabled
@@ -581,52 +614,60 @@ class _TextInputBase(Widget):
         ):
             return
         index = self._index_from_point(platform_event.x, platform_event.y)
+        window = self.mounted_window
+        if window is not None and window.focused_component is self:
+            self._selection_pointer = (platform_event.x, platform_event.y)
+            window.capture_pointer(self)
         self._move_caret(index, extend=platform_event.shift)
+
+    def _extend_pointer_selection(self, event: Event) -> None:
+        if self._selection_pointer is None or not self.enabled or event.source is not self:
+            return
+        pointer = event.data.get("event")
+        if not isinstance(pointer, PlatformEvent) or pointer.x is None or pointer.y is None:
+            return
+        if event.type == "pointer_up" and pointer.button is not PointerButton.LEFT:
+            return
+        # Releasing at the same point must not advance again after the caret scrolled into view.
+        point = (pointer.x, pointer.y)
+        if point != self._selection_pointer:
+            self._selection_pointer = point
+            self._move_caret(self._index_from_point(*point), extend=True)
+
+    def _selection_capture_lost(self, _event: Event) -> None:
+        self._selection_pointer = None
 
     def _on_key_down(self, event: Event) -> None:
         platform_event = self._platform_event(event, PlatformEventKind.KEY_DOWN)
         if not self.enabled or platform_event is None or platform_event.key_code is None:
             return
         key = platform_event.key_code
-        if (
-            platform_event.ctrl
-            and not platform_event.alt
-            and not platform_event.meta
-            and key in (_VK_C, _VK_X, _VK_V)
-        ):
+        if platform_event.alt or platform_event.meta:
+            return
+        ctrl = platform_event.ctrl
+        if ctrl and key in (_VK_C, _VK_X, _VK_V):
             self._clipboard_action(key, event)
-            event.prevent_default()
-            return
-        if (
-            platform_event.ctrl
-            and not platform_event.alt
-            and not platform_event.meta
-            and key == _VK_A
-        ):
+        elif ctrl and key == _VK_A:
             self.select_all()
-            event.prevent_default()
-            return
-        if platform_event.ctrl or platform_event.alt or platform_event.meta:
-            return
-
-        if key == _VK_LEFT:
-            self._move_horizontal(-1, extend=platform_event.shift)
-        elif key == _VK_RIGHT:
-            self._move_horizontal(1, extend=platform_event.shift)
+        elif key in (_VK_LEFT, _VK_RIGHT):
+            self._move_horizontal(-1 if key == _VK_LEFT else 1,
+                                  extend=platform_event.shift, by_word=ctrl)
         elif key == _VK_HOME:
-            self._move_caret(self._line_boundary(start=True), extend=platform_event.shift)
+            self._move_caret(0 if ctrl else self._line_boundary(start=True),
+                             extend=platform_event.shift)
         elif key == _VK_END:
-            self._move_caret(self._line_boundary(start=False), extend=platform_event.shift)
+            self._move_caret(len(self._value) if ctrl else self._line_boundary(start=False),
+                             extend=platform_event.shift)
+        elif key in (_VK_BACK, _VK_DELETE):
+            if not self._read_only:
+                self._delete_horizontal(-1 if key == _VK_BACK else 1, by_word=ctrl,
+                                        input_event=event)
+        elif ctrl:
+            return
         elif self._multiline and key == _VK_UP:
             self._move_vertical(-1, extend=platform_event.shift)
         elif self._multiline and key == _VK_DOWN:
             self._move_vertical(1, extend=platform_event.shift)
-        elif key == _VK_BACK:
-            if not self._read_only:
-                self._delete_backward(event)
-        elif key == _VK_DELETE:
-            if not self._read_only:
-                self._delete_forward(event)
         elif key == _VK_RETURN and not self._multiline:
             self.emit("submitted", value=self._value, input_event=event)
         else:
@@ -639,7 +680,8 @@ class _TextInputBase(Widget):
         platform_event = self._platform_event(event, PlatformEventKind.TEXT_INPUT)
         if platform_event is None or platform_event.text is None:
             return
-        text = self._normalize_inserted_text(platform_event.text)
+        # Win32 can translate Ctrl+Backspace into a DEL character after key_down.
+        text = self._normalize_inserted_text(platform_event.text.replace("\x7f", ""))
         if not text:
             return
         self._replace_selection(text, input_event=event)
@@ -680,15 +722,18 @@ class _TextInputBase(Widget):
             self.invalidate(reason="focus_gained")
 
     def _on_focus_lost(self, _event: Event) -> None:
+        if self._selection_pointer is not None and self.mounted_window is not None:
+            self.mounted_window.release_pointer_capture(self)
         if self._focused:
             self._focused = False
             self._selection_anchor = None
             self.invalidate(reason="focus_lost")
 
     def _replace_selection(self, text: str, *, input_event: Event) -> None:
+        self._replace_range(self.selection_start, self.selection_end, text, input_event=input_event)
+
+    def _replace_range(self, start: int, end: int, text: str, *, input_event: Event) -> None:
         self._preferred_caret_x = None
-        start = self.selection_start
-        end = self.selection_end
         available = None
         if self._max_length is not None:
             retained_length = len(self._value) - (end - start)
@@ -709,29 +754,28 @@ class _TextInputBase(Widget):
                 input_event=input_event,
             )
 
-    def _delete_backward(self, input_event: Event) -> None:
-        if self.selection_start != self.selection_end:
-            self._replace_selection("", input_event=input_event)
-            return
-        if self._caret <= 0:
-            return
-        self.select(self._caret - 1, self._caret)
-        self._replace_selection("", input_event=input_event)
+    def _horizontal_target(self, delta: int, *, by_word: bool) -> int:
+        if by_word and self._mask_character is not None:
+            return 0 if delta < 0 else len(self._value)
+        target = max(0, min(len(self._value), self._caret + delta))
+        if by_word:
+            while 0 < target < len(self._value) and not _starts_word_run(self._value, target):
+                target += delta
+        return target
 
-    def _delete_forward(self, input_event: Event) -> None:
-        if self.selection_start != self.selection_end:
-            self._replace_selection("", input_event=input_event)
-            return
-        if self._caret >= len(self._value):
-            return
-        self.select(self._caret, self._caret + 1)
-        self._replace_selection("", input_event=input_event)
+    def _delete_horizontal(self, delta: int, *, by_word: bool, input_event: Event) -> None:
+        start, end = self.selection_start, self.selection_end
+        if start == end:
+            target = self._horizontal_target(delta, by_word=by_word)
+            start, end = min(start, target), max(end, target)
+        if start < end:
+            self._replace_range(start, end, "", input_event=input_event)
 
-    def _move_horizontal(self, delta: int, *, extend: bool) -> None:
+    def _move_horizontal(self, delta: int, *, extend: bool, by_word: bool = False) -> None:
         if not extend and self.selection_start != self.selection_end:
             target = self.selection_start if delta < 0 else self.selection_end
         else:
-            target = self._caret + delta
+            target = self._horizontal_target(delta, by_word=by_word)
         self._move_caret(target, extend=extend)
 
     def _move_vertical(self, delta: int, *, extend: bool) -> None:

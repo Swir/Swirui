@@ -16,10 +16,12 @@ from swirui import (
     GlassCard,
     Input,
     Label,
+    PasswordInput,
     ProgressBar,
     ProgressRing,
     ScrollView,
     SplitView,
+    TextArea,
     Toast,
     Tooltip,
     Window,
@@ -33,6 +35,34 @@ BOUNDS = Rect(0, 0, 240, 44)
 
 def child(widget, suffix):
     return next(node for node in widget.build_scene_node().walk() if node.key.endswith(suffix))
+
+
+@pytest.mark.parametrize("control", [Input, PasswordInput, TextArea])
+def test_disabled_field_text_and_placeholder_follow_the_authored_theme(control):
+    root = Component(theme=FUTURE_DARK)
+    field = control("Draft", bounds=BOUNDS, placeholder="Name")
+    explicit = Color.from_hex("#8736AC")
+    custom_text = control("Draft", bounds=BOUNDS, placeholder="Name", foreground=explicit)
+    custom_hint = control("Draft", bounds=BOUNDS, placeholder="Name", placeholder_color=explicit)
+    root.add(field, custom_text, custom_hint)
+
+    def ink(widget):
+        return next(n.fill for n in widget.build_scene_node().walk()
+                    if n.kind is SceneNodeKind.TEXT and n.text)
+
+    for value in ("Draft", ""):
+        field.value = custom_text.value = custom_hint.value = value
+        field.enabled = True
+        normal = ink(field)
+        field.enabled = custom_text.enabled = custom_hint.enabled = False
+        for theme in (FUTURE_LIGHT, FUTURE_DARK):
+            root.theme = theme
+            disabled = theme.text_color("disabled_text")
+            assert ink(field) == disabled
+            assert ink(custom_text) == (explicit if value else disabled)
+            assert ink(custom_hint) == (disabled if value else explicit)
+        field.enabled = True
+        assert ink(field) == normal and field.value == value
 
 
 @pytest.mark.parametrize("factory", [ProgressBar, ProgressRing])

@@ -63,6 +63,37 @@ def test_button_intrinsic_width_includes_label_and_horizontal_padding() -> None:
     assert measured.width > button.preferred_size.width
 
 
+def test_label_fits_one_line_to_width_and_restores_the_authored_size():
+    text = "Archiwum Światła"
+    label = Label(text, bounds=Rect(0, 0, 1, 1), font_size=30.5, min_font_size=14.5)
+    width = measure_text_block(text, font_size=22, wrap=False).width + .1
+    assert label.measure(Size(width, 100)).height == pytest.approx(22 * 1.25)
+    for w, size in ((width, 22), (1, 14.5), (500, 30.5), (width, 22)):
+        label.bounds = Rect(0, 0, w, 80)
+        node = label.build_scene_node()
+        assert node.font_size == size and node.text == label.accessible_name == text
+    assert label.font_size == 30.5
+    label.min_font_size = None
+    assert label.build_scene_node().font_size == 30.5
+
+
+def test_label_fit_respects_manual_lines_floor_and_explicit_accessible_name():
+    label = Label("WWW", bounds=Rect(0, 0, 1, 40), font_size=16, min_font_size=12,
+                  accessible_name="Original name")
+    label.text = "WWW\nWWW"
+    assert label.build_scene_node().font_size == 16
+    label.text = "WWW"
+    label.font_size = 10
+    assert label.build_scene_node().font_size == 10
+    label.font_size = 28
+    label.min_font_size = 15
+    assert label.build_scene_node().font_size == 15 and label.accessible_name == "Original name"
+    for invalid in (0, -1, float("nan"), float("inf")):
+        with pytest.raises(ValueError):
+            label.min_font_size = invalid
+    assert label.min_font_size == 15
+
+
 def test_inputs_measure_visible_value_placeholder_and_masked_content() -> None:
     empty = Input(
         bounds=Rect(0.0, 0.0, 30.0, 18.0),

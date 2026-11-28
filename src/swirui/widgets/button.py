@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import math
-from typing import Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from swirui.core import AccessibilityRole, Event
 from swirui.platforms import PlatformEvent, PlatformEventKind, PointerButton
@@ -13,6 +13,11 @@ from swirui.theme import DEFAULT_THEME, ButtonVariant, Theme
 
 from .base import ThemeStyle, Widget
 from .measurement import measure_text_block
+
+if TYPE_CHECKING:
+    from swirui.window import Window
+
+ButtonTextAlign = Literal["auto", "left", "center", "right"]
 
 _VK_RETURN = 0x0D
 _VK_SPACE = 0x20
@@ -45,6 +50,7 @@ class Button(Widget):
         font_size: float = 16.0,
         font_family: str | None = None,
         padding: float = 12.0,
+        text_align: ButtonTextAlign = "auto",
         opacity: float = 1.0,
         z_index: int = 0,
         accessible_name: str | None = None,
@@ -82,6 +88,9 @@ class Button(Widget):
             foreground = foreground or theme.text_color("on_accent" if primary else "text")
         self._theme = theme
         self._text = str(text)
+        self._text_align = self._validate_text_align(text_align)
+        self._label_width_key: tuple[object, ...] | None = None
+        self._label_width = 0.0
         self._background = background or _DEFAULT_BACKGROUND
         self._hover_background = hover_background or _DEFAULT_HOVER_BACKGROUND
         self._pressed_background = pressed_background or _DEFAULT_PRESSED_BACKGROUND
@@ -182,9 +191,34 @@ class Button(Widget):
         if normalized == self._text:
             return
         self._text = normalized
+        self._label_width_key = None
         if self._auto_accessible_name:
             self.accessible_name = normalized
         self.invalidate(reason="text")
+
+    @property
+    def text_align(self) -> ButtonTextAlign:
+        """Physical alignment inside the padded face, or the renderer's default with auto."""
+        return self._text_align
+
+    @text_align.setter
+    def text_align(self, value: ButtonTextAlign) -> None:
+        align = self._validate_text_align(value)
+        if align != self._text_align:
+            self._text_align = align
+            if align == "auto":
+                self._label_width_key = None
+            self.invalidate(reason="text_align")
+
+    @staticmethod
+    def _validate_text_align(value: ButtonTextAlign) -> ButtonTextAlign:
+        if value not in ("auto", "left", "center", "right"):
+            raise ValueError("text_align must be auto, left, center or right.")
+        return value
+
+    def on_unmount(self, window: Window) -> None:
+        self._label_width_key = None
+        super().on_unmount(window)
 
     @property
     def hovered(self) -> bool:
@@ -271,10 +305,40 @@ class Button(Widget):
 
     def _content_bounds(self) -> Rect:
         width = max(0.0, self.bounds.width - (2.0 * self._padding))
+        x = self.bounds.x + self._padding
+        if self._text_align != "auto" and self.text and width:
+            label_width = min(width, self._natural_label_width())
+            if self._text_align == "center":
+                x += (width - label_width) / 2
+            elif self._text_align == "right":
+                x += width - label_width
+            width = label_width
         line_height = self._font_size * 1.25
         content_height = min(self.bounds.height, line_height)
         y = self.bounds.y + max(0.0, (self.bounds.height - content_height) * 0.5)
-        return Rect(self.bounds.x + self._padding, y, width, content_height)
+        return Rect(x, y, width, content_height)
+
+    def _natural_label_width(self) -> float:
+        window = self.mounted_window
+        shaper = window._text_shaper if window else None
+        scale = window.scale if window else 1.0
+        key = (self.text, self._font_family, self._font_size, scale, shaper)
+        if key != self._label_width_key:
+            # Button content is one line high. Keep the full authored string on
+            # the node so the renderer retains its wrapping and clipping rules.
+            first_line = self.text.splitlines()[0]
+            if shaper is None:
+                width = measure_text_block(first_line, font_size=self._font_size).width
+            else:
+                try:
+                    width = shaper.shape_line(first_line, self._font_size,
+                                              self._font_family, scale).width
+                except ValueError:
+                    # Labels outside the native measurer's limits retain the full content box.
+                    width = math.inf
+            self._label_width = max(1.0, width)
+            self._label_width_key = key
+        return self._label_width
 
     def _current_background(self) -> Color:
         if not self.enabled:
@@ -409,6 +473,7 @@ class IconButton(Button):
         key: str | None = None,
         font_size: float = 18.0,
         font_family: str = "Segoe UI Symbol",
+        text_align: ButtonTextAlign = "center",
         **kwargs: Any,
     ) -> None:
         normalized_icon = icon.strip()
@@ -425,6 +490,7 @@ class IconButton(Button):
             font_size=font_size,
             font_family=font_family,
             padding=0.0,
+            text_align=text_align,
             **kwargs,
         )
 

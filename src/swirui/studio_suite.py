@@ -26,6 +26,7 @@ from .core import Event
 from .platforms import PlatformEvent, PlatformEventKind
 from .rendering import Rect, WgpuRenderer
 from .studio import Studio
+from .studio_comparison import bind_comparison
 from .studio_operations import StudioDashboard, StudioSettings
 from .theme import FUTURE_LIGHT
 from .theme_presets import NEON_BLUE
@@ -34,11 +35,11 @@ from .theme_presets import NEON_BLUE
 class StudioSuite(Studio):
     """The complete Studio shell with dashboard, settings and notifications."""
 
-    def __init__(self) -> None:
+    def __init__(self, *, animations: AnimationController | None = None) -> None:
         super().__init__()
         empty = Rect(0, 0, 0, 0)
         self.dashboard = StudioDashboard()
-        self.settings = StudioSettings()
+        self.settings = StudioSettings(animations=animations)
         self.dashboard_button = Button("Overview", bounds=empty)
         self.settings_button = Button(
             "Settings",
@@ -156,7 +157,7 @@ class StudioSuite(Studio):
 
     def bind_interactions(self, controller: AnimationController) -> tuple[SurfaceInteraction, ...]:
         """Attach optional material feedback after mounting this Studio."""
-        return tuple(SurfaceInteraction(controller, surface) for surface in (
+        return tuple(SurfaceInteraction(controller, surface, tilt_degrees=14) for surface in (
             *self.dashboard.metric_cards, self.preview.surface,
         ))
 
@@ -361,11 +362,12 @@ def run(*, smoke_test: bool = False) -> int:
         min_width=1024,
         min_height=720,
     )
-    root = StudioSuite()
+    animations = AnimationController(app, window)
+    root = StudioSuite(animations=animations)
     window.on("resized", lambda _: root.resize_to(window.width, window.height))
     mount(window, root)
     app.add_window(window)
-    animations = AnimationController(app, window)
+    bind_comparison(app, window, root.preview)
     interactions = root.bind_interactions(animations)
     try:
         if not smoke_test:

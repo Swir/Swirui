@@ -1076,11 +1076,11 @@ class CodeEditor(TextArea):
         if previous_offset != self._scroll_offset:
             self.invalidate(reason="editor_scroll")
 
-    def _replace_selection(self, text: str, *, input_event: Event) -> None:
+    def _replace_range(self, start: int, end: int, text: str, *, input_event: Event) -> None:
         previous_offset = self._scroll_offset
         before = self._capture_snapshot()
         old_value = self._value
-        super()._replace_selection(text, input_event=input_event)
+        super()._replace_range(start, end, text, input_event=input_event)
         if self._value == old_value:
             return
         if not self._history_suspended:

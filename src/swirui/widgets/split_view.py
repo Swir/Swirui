@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from dataclasses import replace
 
 from swirui.core import AccessibilityRole, Component, Event
 from swirui.platforms import PlatformEvent, PlatformEventKind, PointerButton
@@ -366,6 +367,12 @@ class SplitView(Widget):
         )
         return first, divider, second
 
+    def _map_child_pointer_event(self, child: Component, event: PlatformEvent) -> PlatformEvent:
+        # A captured drag keeps its pane's origin even after crossing the divider.
+        pane = self.first_pane_bounds if child is self._first else self.second_pane_bounds
+        return replace(event, x=None if event.x is None else event.x - pane.x,
+                       y=None if event.y is None else event.y - pane.y)
+
     def _on_pointer_enter(self, event: Event) -> None:
         if self.enabled and self._event_targets_divider(event):
             self._set_interaction_state(hovered=True, reason="pointer_enter")
@@ -426,7 +433,7 @@ class SplitView(Widget):
         event.prevent_default()
 
     def _on_key_down(self, event: Event) -> None:
-        if not self.enabled:
+        if event.source is not self or event.default_prevented or not self.enabled:
             return
         platform_event = self._platform_event(event, PlatformEventKind.KEY_DOWN)
         if platform_event is None:

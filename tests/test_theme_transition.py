@@ -11,6 +11,7 @@ from swirui import (
     App,
     Input,
     Panel,
+    SurfaceStyle,
     ThemeController,
     ThemeTransition,
     Tween,
@@ -145,6 +146,24 @@ def test_close_cancels_only_appearance_animation(animated_window):
     driver.tick(1)
     assert root.theme is midpoint
     assert driver.cancel(other) and not driver.cancel(other)
+
+
+def test_reversing_glass_tilt_starts_from_the_displayed_angle(animated_window):
+    _, _, root, driver, controller = animated_window
+    flat = replace(FUTURE_DARK, surface_style=SurfaceStyle(kind="glass", tilt_y=0))
+    angled = replace(flat, surface_style=replace(flat.surface_style, tilt_y=32))
+    controller.set_themes(dark=flat, light=angled)
+    driver.tick(1)
+    controller.mode = "light"
+    driver.tick(angled.motion_duration / 2)
+    midpoint = root.theme
+    assert midpoint.surface_style.tilt_y == pytest.approx(16)
+    controller.mode = "dark"
+    assert root.theme is midpoint
+    driver.tick(flat.motion_duration / 2)
+    assert root.theme.surface_style.tilt_y == pytest.approx(8)
+    driver.tick(1)
+    assert root.theme is flat and driver.active_count == 0
 
 
 def test_hidden_window_finishes_and_disposed_driver_snaps(animated_window):

@@ -189,7 +189,7 @@ jobs:
         run: >-
           pytest tests/test_windows_widgets.py tests/test_windows_scroll_view.py
           tests/test_windows_data_grid_filtering.py tests/test_windows_list_tree_view.py
-          tests/test_windows_tabs.py -q
+          tests/test_windows_tabs.py tests/test_windows_core_themes.py -q
 
       - name: Verify interaction animation on retained GPU path
         run: pytest tests/test_windows_interaction_animation.py -q

@@ -3,6 +3,7 @@ name: SwirUI Studio Native Gate
 on:
   pull_request:
     paths:
+      - "src/swirui/platforms/windows_files.py"
       - "src/swirui/theme.py"
       - "tests/test_accent_authoring.py"
       - "src/swirui/surface_interaction.py"
@@ -14,6 +15,7 @@ on:
       - "src/swirui/studio.py"
       - "src/swirui/studio_operations.py"
       - "src/swirui/studio_suite.py"
+      - "src/swirui/studio_comparison.py"
       - "src/swirui/__main__.py"
       - "tests/test_studio.py"
       - "tests/test_studio_suite.py"
@@ -24,6 +26,7 @@ on:
     branches:
       - main
     paths:
+      - "src/swirui/platforms/windows_files.py"
       - "src/swirui/theme.py"
       - "tests/test_accent_authoring.py"
       - "src/swirui/surface_interaction.py"
@@ -35,6 +38,7 @@ on:
       - "src/swirui/studio.py"
       - "src/swirui/studio_operations.py"
       - "src/swirui/studio_suite.py"
+      - "src/swirui/studio_comparison.py"
       - "src/swirui/__main__.py"
       - "tests/test_studio.py"
       - "tests/test_studio_suite.py"
@@ -82,7 +86,8 @@ jobs:
       - name: Ruff
         run: >
           python -m ruff check src/swirui/studio.py src/swirui/studio_operations.py
-          src/swirui/studio_suite.py src/swirui/surface_interaction.py
+          src/swirui/studio_suite.py src/swirui/studio_comparison.py
+          src/swirui/surface_interaction.py
           src/swirui/widgets/theme_surface.py src/swirui/widgets/silk_ribbon.py
           src/swirui/widgets/streaming_charts.py
           tests/test_studio.py tests/test_studio_suite.py
@@ -91,7 +96,8 @@ jobs:
 
       - name: Strict mypy
         run: python -m mypy --strict src/swirui/studio.py src/swirui/studio_operations.py
-          src/swirui/studio_suite.py src/swirui/surface_interaction.py
+          src/swirui/studio_suite.py src/swirui/studio_comparison.py
+          src/swirui/surface_interaction.py
           src/swirui/widgets/theme_surface.py src/swirui/widgets/silk_ribbon.py
           src/swirui/widgets/streaming_charts.py
 
@@ -99,14 +105,16 @@ jobs:
         run: cargo check --manifest-path native/Cargo.toml --all-targets
 
       - name: Build PyO3 extension
-        working-directory: native
-        run: maturin build --release --interpreter python --out ../dist-native
+        run: maturin build --release --locked --manifest-path native/Cargo.toml --interpreter python --out dist-native
 
       - name: Install PyO3 extension
         shell: pwsh
         run: |
-          $wheel = (Get-ChildItem dist-native\*.whl | Select-Object -First 1).FullName
-          python -m pip install $wheel
+          $wheels = @(Get-ChildItem dist-native\*.whl)
+          if ($wheels.Count -ne 1) { throw "Expected one Windows SwirUI wheel." }
+          python -m pip install --force-reinstall --no-deps $wheels[0].FullName
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m swirui doctor --json
 
       - name: Verify integrated Studio
         run: >

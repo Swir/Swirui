@@ -352,6 +352,7 @@ class CommandPalette(Input):
         row_height: float = 40.0,
         max_visible_rows: int = 8,
         dismiss_on_invoke: bool = True,
+        empty_message: str = "No matching commands",
         opacity: float = 1.0,
         z_index: int = 110,
         accessible_name: str = "Command palette",
@@ -366,6 +367,7 @@ class CommandPalette(Input):
             raise ValueError("max_visible_rows must be positive.")
         self._dismiss_on_invoke = bool(dismiss_on_invoke)
         query = self._normalize_value(_normalize_query(query))
+        self._empty_message = empty_message
         self._filtered = _filter_items(self._items, query)
         self._active_index = _first_enabled(self._filtered)
         super().__init__(
@@ -569,7 +571,7 @@ class CommandPalette(Input):
                     kind=SceneNodeKind.TEXT,
                     bounds=Rect(header.x + 14, header.bottom + 12, max(0, header.width - 28), 24),
                     fill=self._muted,
-                    text="No matching commands",
+                    text=self._empty_message,
                     font_size=14,
                     font_family=self._font_family,
                     z_index=2,

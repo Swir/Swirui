@@ -9,6 +9,7 @@ from typing import Literal, cast
 
 from swirui.core import AccessibilityRole, Component, Event
 from swirui.rendering.geometry import CornerRadius, Point, Rect, Size
+from swirui.rendering.gradients import LinearGradient
 from swirui.rendering.scene import SceneNode, SceneNodeKind
 from swirui.theme import ColorRole, Theme
 
@@ -23,6 +24,7 @@ _LAYOUT_VISUAL_ONLY_INVALIDATIONS = frozenset(
         "focus_gained",
         "focus_lost",
         "focusable",
+        "fill_gradient",
         "key_down",
         "key_up",
         "opacity",
@@ -30,13 +32,26 @@ _LAYOUT_VISUAL_ONLY_INVALIDATIONS = frozenset(
         "pointer_enter",
         "pointer_leave",
         "pointer_up",
+        "switch_position",
         "text_editing_geometry",  # caret/selection shaping does not change intrinsic size
+        "text_align",
         "visual_offset",
         "visual_rotation",
         "visual_scale",
         "z_index",
     }
 )
+
+
+def _gradient_track_fill(
+    gradient: LinearGradient, key: str, track: Rect, visible: Rect, radius: CornerRadius,
+) -> SceneNode:
+    """Clip a fixed color scale to the selected part of a track."""
+    paint = gradient.to_scene_node(key, track, steps=64, corner_radius=radius, z_index=1)
+    paint.bounds = visible
+    for node in paint.walk():
+        node.hit_testable = False
+    return paint
 
 
 @dataclass(frozen=True, slots=True)

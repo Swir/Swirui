@@ -5,7 +5,7 @@ from typing import Any
 
 import pytest
 
-from swirui import Accordion, App, Expander, Label, Window, mount
+from swirui import Accordion, App, Expander, Input, Label, Window, mount
 from swirui.platforms.windows import Win32PlatformBackend
 from swirui.rendering import Rect, SceneNodeKind, WgpuRenderer
 
@@ -37,6 +37,56 @@ def _send_click(user32: Any, hwnd: int, x: int, y: int) -> None:
     point = _lparam(x, y)
     user32.SendMessageW(ctypes.c_void_p(hwnd), 0x0201, 0, point)
     user32.SendMessageW(ctypes.c_void_p(hwnd), 0x0202, 0, point)
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="expander smoke requires Windows")
+def test_editing_content_keeps_expander_open_in_native_window() -> None:
+    renderer = WgpuRenderer()
+    app = App(platform_backend=_isolated_backend(), renderer=renderer)
+    window = app.add_window(Window(width=440, height=220))
+    field = Input("AtlasUI", bounds=Rect(28, 86, 290, 42))
+    header = Expander("Workspace details", bounds=Rect(28, 28, 290, 42),
+                      content=field, expanded=True)
+    mount(window, header)
+    try:
+        app.start()
+        app.process_events()
+        hwnd = window.native_handle.value
+        context = renderer._contexts[hwnd]
+        user32 = _user32()
+
+        def key(code):
+            user32.SendMessageW(hwnd, 0x0100, code, 1)
+            user32.SendMessageW(hwnd, 0x0101, code, 1)
+            app.process_events()
+
+        def field_pixels():
+            app.render_pending(app._frame_schedulers[window].stats.last_frame_time + 1)
+            width, _, rgba = context.read_scene_rgba()
+            x1, y1, x2, y2 = (round(v * window.scale) for v in (28, 86, 318, 128))
+            return b"".join(rgba[4 * (y * width + x1):4 * (y * width + x2)] for y in range(y1, y2))
+
+        _send_click(user32, hwnd, round(100 * window.scale), round(105 * window.scale))
+        app.process_events()
+        assert header.expanded and window.focused_component is field
+        key(0x23)  # End
+        key(0x25)  # Left
+        key(0x25)
+        assert header.expanded and field.caret_index == 5
+        key(0x20)  # Space
+        user32.SendMessageW(hwnd, 0x0102, ord(" "), 1)
+        app.process_events()
+        assert field.value == "Atlas UI" and window.focused_component is field and header.expanded
+        edited = field_pixels()
+        _send_click(user32, hwnd, round(100 * window.scale), round(48 * window.scale))
+        app.process_events()
+        assert not header.expanded and window.focused_component is header
+        assert field_pixels() != edited
+        key(0x27)  # Right on the header reopens the section.
+        assert header.expanded and field.visible and field.value == "Atlas UI"
+        assert renderer._contexts[hwnd] is context
+    finally:
+        app.stop()
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="expander smoke requires Windows")

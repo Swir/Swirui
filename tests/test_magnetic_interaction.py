@@ -77,6 +77,40 @@ def test_magnetic_interaction_clamps_target_and_springs_to_pointer() -> None:
     assert interaction.active is False
 
 
+def test_repeated_pointer_positions_follow_the_same_spring_on_entry_and_return() -> None:
+    reference, first, first_effect = _runtime()
+    controller, button, effect = _runtime()
+    for widget in (first, button):
+        _move(widget, 300, 110)
+    for leaving in (False, True):
+        if leaving:
+            first.emit("pointer_leave")
+            button.emit("pointer_leave")
+        for _ in range(12):
+            if leaving:
+                button.emit("pointer_leave")
+            else:
+                _move(button, 300, 110)
+            reference.tick(1 / 60)
+            controller.tick(1 / 60)
+            assert button.visual_offset == first.visual_offset
+            assert effect.active == first_effect.active
+
+
+def test_pointer_burst_and_disposal_release_only_the_owned_spring() -> None:
+    controller, button, effect = _runtime()
+    other = Button("Other", bounds=button.bounds)
+    other_effect = MagneticInteraction(controller, other)
+    _move(other, 300, 110)
+    for i in range(120):
+        _move(button, 290 if i % 2 else 110, 110)
+    assert controller.active_count == 2
+    effect.dispose()
+    assert controller.active_count == 1 and other_effect.active
+    controller.tick(other_effect.spec.max_duration)
+    assert other.visual_offset == Point(12, 0) and controller.active_count == 0
+
+
 def test_magnetic_interaction_retargets_from_current_presented_offset() -> None:
     controller, button, interaction = _runtime()
 

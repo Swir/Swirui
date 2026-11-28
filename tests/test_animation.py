@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import time
 
 import pytest
 
@@ -168,3 +169,39 @@ def test_controller_rejects_play_after_dispose() -> None:
 
     with pytest.raises(RuntimeError, match="disposed"):
         controller.play(Tween(0.0, 1.0, 1.0, lambda _value: None))
+
+
+def test_first_presented_delta_excludes_time_before_each_play(monkeypatch):
+    now = 100.0
+    monkeypatch.setattr(time, "monotonic", lambda: now)
+    app = App(platform_backend=NullPlatformBackend(), renderer=NullRenderer())
+    window = app.add_window(Window())
+    driver = AnimationController(app, window)
+    old = Tween(0, 1, 20, lambda _: None)
+    new = Tween(0, 1, 1, lambda _: None)
+    try:
+        app.start()
+        driver.play(old)
+        now = 100.5
+        app.render_pending()
+        assert old.elapsed == pytest.approx(.5)
+        now = 105.0
+        driver.play(new)
+        now += .02
+        assert app.render_pending() == 1
+        assert new.elapsed == pytest.approx(.02)
+        assert old.elapsed == pytest.approx(5.02)
+        now += .1
+        app.render_pending()
+        assert new.elapsed == pytest.approx(.12)
+        now += 2
+        driver.play(new)
+        now += .04
+        app.render_pending()
+        assert new.elapsed == pytest.approx(.04)
+        assert driver.active_count == 2
+        driver.tick(1)
+        assert new.status is AnimationStatus.COMPLETED
+    finally:
+        driver.dispose()
+        app.stop()

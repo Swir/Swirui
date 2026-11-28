@@ -11,6 +11,7 @@ surface while preserving the existing event, monitor and DPI implementation.
 from __future__ import annotations
 
 import ctypes
+from pathlib import Path
 from typing import Any
 
 from ._windows_legacy import (
@@ -21,10 +22,12 @@ from ._windows_legacy import (
     _WM_DPICHANGED,
     _WM_KEYDOWN,
     _WM_KEYUP,
+    _WM_MOUSEMOVE,
     _WM_SIZE,
     _WS_OVERLAPPEDWINDOW,
     _Point,
     _Rect,
+    _signed_word,
 )
 from ._windows_legacy import (
     Win32PlatformBackend as _LegacyWin32PlatformBackend,
@@ -33,17 +36,25 @@ from .base import NativeWindowSpec
 from .events import ColorScheme, NativeWindowHandle, PlatformEvent, PlatformEventKind
 from .windows_appearance import read_app_color_scheme
 from .windows_clipboard import Win32TextClipboard
+from .windows_files import choose_save_file
 
 _WM_GETMINMAXINFO = 0x0024
 _WM_SETTINGCHANGE = 0x001A
 _WM_THEMECHANGED = 0x031A
 _WM_SYSKEYDOWN = 0x0104
 _WM_SYSKEYUP = 0x0105
+_WM_MOUSELEAVE = 0x02A3
+_TME_LEAVE = 0x00000002
 _VK_SHIFT = 0x10
 _VK_CONTROL = 0x11
 _VK_MENU = 0x12
 _VK_LWIN = 0x5B
 _VK_RWIN = 0x5C
+
+
+class _TrackMouseEvent(ctypes.Structure):
+    _fields_ = [("cbSize", ctypes.c_uint32), ("dwFlags", ctypes.c_uint32),
+                ("hwndTrack", ctypes.c_void_p), ("dwHoverTime", ctypes.c_uint32)]
 
 
 class _MinMaxInfo(ctypes.Structure):
@@ -72,12 +83,17 @@ class Win32PlatformBackend(_LegacyWin32PlatformBackend):
         self._logical_client_sizes: dict[NativeWindowHandle, tuple[float, float]] = {}
         self._logical_min_client_sizes: dict[NativeWindowHandle, tuple[float, float]] = {}
         self._dpi_resizing: set[NativeWindowHandle] = set()
+        self._tracking_leave: set[NativeWindowHandle] = set()
         self._configure_client_area_signatures()
         self._clipboard = Win32TextClipboard(self._user32, self._kernel32)
 
     def get_clipboard_text(self, handle: NativeWindowHandle) -> str | None:
         self._require_window(handle)
         return self._clipboard.read_text(handle.value)
+
+    def choose_save_file(self, handle: NativeWindowHandle, name: str, title: str) -> Path | None:
+        self._require_window(handle)
+        return choose_save_file(handle.value, name, title)
 
     def get_system_color_scheme(self) -> ColorScheme | None:
         """Read the Windows app preference without changing system settings."""
@@ -90,6 +106,8 @@ class Win32PlatformBackend(_LegacyWin32PlatformBackend):
     def _configure_client_area_signatures(self) -> None:
         self._user32.GetClientRect.argtypes = [ctypes.c_void_p, ctypes.POINTER(_Rect)]
         self._user32.GetClientRect.restype = ctypes.c_bool
+        self._user32.TrackMouseEvent.argtypes = [ctypes.POINTER(_TrackMouseEvent)]
+        self._user32.TrackMouseEvent.restype = ctypes.c_int
         self._user32.AdjustWindowRectEx.argtypes = [
             ctypes.POINTER(_Rect),
             ctypes.c_ulong,
@@ -206,6 +224,7 @@ class Win32PlatformBackend(_LegacyWin32PlatformBackend):
         self._logical_client_sizes.pop(handle, None)
         self._logical_min_client_sizes.pop(handle, None)
         self._dpi_resizing.discard(handle)
+        self._tracking_leave.discard(handle)
         super().destroy_window(handle)
 
     def shutdown(self) -> None:
@@ -217,6 +236,7 @@ class Win32PlatformBackend(_LegacyWin32PlatformBackend):
         self._logical_client_sizes.clear()
         self._logical_min_client_sizes.clear()
         self._dpi_resizing.clear()
+        self._tracking_leave.clear()
         super().shutdown()
 
     def _system_dpi_value(self) -> int:
@@ -343,8 +363,28 @@ class Win32PlatformBackend(_LegacyWin32PlatformBackend):
             meta=self._key_is_down(_VK_LWIN) or self._key_is_down(_VK_RWIN),
         )
 
+    def _track_client_leave(self, handle: NativeWindowHandle, lparam: int) -> None:
+        if handle in self._tracking_leave:
+            return
+        # Captured drags can send coordinates beyond the client. Arm once per visit.
+        x, y = _signed_word(lparam), _signed_word(lparam >> 16)
+        rect = _Rect()
+        if (x >= 0 and y >= 0 and self._user32.GetClientRect(handle.value, ctypes.byref(rect))
+                and x < rect.right and y < rect.bottom):
+            track = _TrackMouseEvent(ctypes.sizeof(_TrackMouseEvent), _TME_LEAVE, handle.value, 0)
+            if self._user32.TrackMouseEvent(ctypes.byref(track)):
+                self._tracking_leave.add(handle)
+
     def _wndproc(self, hwnd: int | None, message: int, wparam: int, lparam: int) -> int:
         handle = NativeWindowHandle(int(hwnd)) if hwnd else None
+
+        if handle in self._windows and message == _WM_MOUSELEAVE:
+            self._tracking_leave.discard(handle)
+            self._events.append(PlatformEvent(PlatformEventKind.POINTER_EXIT, handle))
+            return 0
+
+        if handle in self._windows and message == _WM_MOUSEMOVE:
+            self._track_client_leave(handle, lparam)
 
         if handle in self._windows and message in (_WM_SETTINGCHANGE, _WM_THEMECHANGED):
             # Defer the read to the application event loop. No lParam string

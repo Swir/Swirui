@@ -5,10 +5,10 @@ from __future__ import annotations
 from math import isfinite
 
 from swirui.media import ImageResourceRegistrar
-from swirui.rendering.geometry import Rect
+from swirui.rendering.geometry import Point, Rect
 from swirui.video import VideoClip
 
-from .image import Image, ImageFit
+from .image import _CENTER, Image, ImageFit
 
 
 class VideoPlayer(Image):
@@ -28,6 +28,7 @@ class VideoPlayer(Image):
         *,
         bounds: Rect,
         fit: ImageFit = ImageFit.CONTAIN,
+        image_position: Point = _CENTER,
         loop: bool = False,
         autoplay: bool = True,
         playback_rate: float = 1.0,
@@ -38,6 +39,7 @@ class VideoPlayer(Image):
         accessible_name: str | None = None,
         accessible_description: str | None = None,
     ) -> None:
+        self._validate_image_position(image_position)
         self._clip = clip
         self._renderer = renderer
         self._loop = bool(loop)
@@ -51,6 +53,7 @@ class VideoPlayer(Image):
             pixel_height=frame.height,
             bounds=bounds,
             fit=fit,
+            image_position=image_position,
             key=key,
             opacity=opacity,
             z_index=z_index,

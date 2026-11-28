@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import pytest
 
 from swirui.media import ImageAsset, ImageFrame, MediaFormat, decode_image
-from swirui.rendering import Rect
+from swirui.rendering import Point, Rect
 from swirui.widgets.image import Image, ImageFit
 
 
@@ -40,6 +40,39 @@ def test_image_cover_clips_overflow() -> None:
 
     assert node.children[0].bounds == Rect(10.0, -30.0, 200.0, 200.0)
     assert node.clip_to_bounds is True
+
+
+@pytest.mark.parametrize(("fit", "expected"), [
+    (ImageFit.COVER, Rect(-65, 20, 200, 100)),
+    (ImageFit.CONTAIN, Rect(10, 32.5, 100, 50)),
+    (ImageFit.NONE, Rect(-215, -5, 400, 200)),
+    (ImageFit.FILL, Rect(10, 20, 100, 100)),
+])
+def test_image_position_aligns_the_fitted_resource_within_its_bounds(
+    fit: ImageFit, expected: Rect
+) -> None:
+    image = Image("photo", pixel_width=400, pixel_height=200, bounds=Rect(10, 20, 100, 100),
+                  fit=fit, image_position=Point(.75, .25))
+    assert image.build_scene_node().children[0].bounds == expected
+    assert image.bounds == Rect(10, 20, 100, 100)
+
+
+def test_image_position_is_live_and_keeps_the_last_valid_crop() -> None:
+    image = Image("portrait", pixel_width=80, pixel_height=160, bounds=Rect(5, 15, 80, 80),
+                  fit=ImageFit.COVER)
+    assert image.image_position == Point(.5, .5)
+    changes = []
+    image.on("invalidated", lambda e: changes.append(e.data["reason"]))
+    image.image_position = Point(0, 1)
+    image.image_position = Point(0, 1)
+    for invalid in (Point(-.01, .5), Point(1, 1.1), Point(float("nan"), 0), Point(0, float("inf"))):
+        with pytest.raises(ValueError):
+            image.image_position = invalid
+    with pytest.raises(TypeError):
+        image.image_position = (0, 1)
+    assert changes == ["image_position"]
+    assert image.image_position == Point(0, 1)
+    assert image.build_scene_node().children[0].bounds == Rect(5, -65, 80, 160)
 
 
 def test_animated_asset_obeys_gif_loop_timing() -> None:

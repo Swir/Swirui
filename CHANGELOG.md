@@ -4,6 +4,19 @@ All notable changes to SwirUI will be documented in this file.
 
 The project uses semantic versioning where practical during development. Breaking API changes may occur before 1.0.
 
+## 0.2.0b1 — 2026-11-28
+
+- Design a material in Studio and compare the dark and light versions in a
+  live preview. Adjust corners, tint, glow and tilt, then save both appearances
+  to a theme package. Reopen it with `python -m swirui preview-theme` and
+  press F5 to reload edits while preserving your sample text and selection.
+- Give sliders, progress bars and rings a shared color scale. Align a cropped
+  image to a chosen edge or fit a project heading to a narrow pane.
+- Animate switch thumbs with the window’s animation controller. Switches
+  respect reduced motion and reverse from their current position.
+- Edit both range slider handles with the keyboard, extend text selections
+  with Shift+click on Windows, and dismiss multiline hints with Escape.
+
 ## 0.1.0b6 — 2026-11-25
 
 - Studio previews now expose live tint and edge-glow controls. Wide previews

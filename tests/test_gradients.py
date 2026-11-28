@@ -5,6 +5,7 @@ import pytest
 from swirui import Window
 from swirui.rendering import (
     Color,
+    CornerRadius,
     GradientStop,
     LinearGradient,
     Point,
@@ -74,6 +75,20 @@ def test_horizontal_gradient_builds_retained_path_bands() -> None:
     last = node.children[-1].fill
     assert first is not None and last is not None
     assert first.b < last.b or first.r < last.r
+
+
+def test_rounded_gradient_paints_to_its_edges_and_reuses_paths_after_recoloring() -> None:
+    radius = CornerRadius(28, 0, 28, 0)
+    first = LinearGradient.two_color(Color.from_hex("#AD5BEA"), Color.from_hex("#303456"))
+    second = LinearGradient.two_color(Color.from_hex("#6EDFC5"), Color.from_hex("#18556A"))
+    node = first.to_scene_node("sheen", Rect(40, 30, 240, 100), corner_radius=radius)
+    moved = second.to_scene_node("other", Rect(60, 80, 240, 100), corner_radius=radius)
+    assert all(a.path is b.path for a, b in zip(node.children, moved.children, strict=True))
+    assert node.children[0].fill != moved.children[0].fill
+    assert node.hit_test(Point(41, 31)) is None
+    assert node.hit_test(Point(279, 129)) is None
+    for x, y in ((72, 31), (279, 31), (41, 129), (260, 80)):
+        assert node.hit_test(Point(x, y)).key == "sheen"
 
 
 def test_diagonal_gradient_clips_every_band_to_bounds() -> None:

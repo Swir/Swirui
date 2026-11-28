@@ -164,6 +164,10 @@ class Component(EventEmitter):
 
         del window
 
+    def _step_keyboard_focus(self, *, reverse: bool, entering: bool) -> bool:
+        """Choose an internal Tab stop. Return true when focus moved within this component."""
+        return False
+
     def _map_descendant_pointer_event(self, event: PlatformEvent) -> PlatformEvent:
         """Map pointer coordinates into the coordinate space used by descendants.
 
@@ -172,6 +176,10 @@ class Component(EventEmitter):
         The container's own handlers still receive its parent's coordinates.
         """
         return event
+
+    def _map_child_pointer_event(self, child: Component, event: PlatformEvent) -> PlatformEvent:
+        """Map input across one parent-child edge along the routed path."""
+        return self._map_descendant_pointer_event(event)
 
     def on_update(self, *, reason: str, source: Component) -> None:
         """Lifecycle hook called for invalidation affecting this mounted component.

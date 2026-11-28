@@ -261,17 +261,7 @@ class WidgetRuntime:
             height=float(self.window.height),
             generation=self.generation,
         )
-        hovered_key = (
-            self.window.hovered_scene_node.key
-            if self.window.hovered_scene_node is not None
-            else None
-        )
-        self.window.set_scene(scene)
-        if scene is not None and hovered_key is not None:
-            self.window.hovered_scene_node = next(
-                (node for node in scene.walk() if node.key == hovered_key),
-                None,
-            )
+        self.window.set_scene(scene, retain_hover=True)
         return scene
 
     def unmount(self) -> None:

@@ -11,7 +11,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass, field
 
-from .geometry import Color, Path2D, Point, Rect
+from .geometry import Color, CornerRadius, Path2D, Point, Rect, rounded_rectangle_outline
 from .scene import SceneNode, SceneNodeKind
 
 _MAX_ROTATION_DEGREES = 80.0
@@ -25,7 +25,7 @@ def _validate_finite(name: str, *values: float) -> None:
 
 @dataclass(frozen=True, slots=True)
 class PerspectivePlane:
-    """Project a logical rectangle into a retained perspective quadrilateral.
+    """Project a logical rectangle into a retained perspective path.
 
     ``rotation_x_degrees`` tilts the top/bottom edges toward or away from the
     viewer. ``rotation_y_degrees`` tilts the left/right edges. ``depth`` translates
@@ -71,6 +71,10 @@ class PerspectivePlane:
     def projected_corners(self, bounds: Rect) -> tuple[Point, Point, Point, Point]:
         """Return projected corners in absolute logical-DIP coordinates."""
 
+        a, b, c, d = self._project_outline(bounds)
+        return a, b, c, d
+
+    def _project_outline(self, bounds: Rect, corner_radius: float = 0.0) -> tuple[Point, ...]:
         if bounds.width <= 0.0 or bounds.height <= 0.0:
             raise ValueError("Perspective-plane bounds must have positive dimensions.")
 
@@ -83,13 +87,14 @@ class PerspectivePlane:
         cos_y = math.cos(rotation_y)
         sin_y = math.sin(rotation_y)
 
-        result: list[Point] = []
-        for point in (
+        corners = (
             Point(bounds.x, bounds.y),
             Point(bounds.right, bounds.y),
             Point(bounds.right, bounds.bottom),
             Point(bounds.x, bounds.bottom),
-        ):
+        )
+
+        def project(point: Point) -> Point:
             local_x = point.x - pivot_x
             local_y = point.y - pivot_y
 
@@ -106,27 +111,30 @@ class PerspectivePlane:
                     "perspective or reduce depth/rotation."
                 )
             scale = self.perspective / denominator
-            result.append(
-                Point(
-                    pivot_x + rotated_x * scale,
-                    pivot_y + rotated_y * scale,
-                )
-            )
+            return Point(pivot_x + rotated_x * scale, pivot_y + rotated_y * scale)
 
-        return result[0], result[1], result[2], result[3]
+        # Keep the entire plane in front of the camera, even for rounded corners.
+        quad = tuple(project(point) for point in corners)
+        if not corner_radius:
+            return quad
+        outline = rounded_rectangle_outline(bounds, CornerRadius.uniform(corner_radius))
+        return tuple(project(point) for point in outline)
 
-    def projected_path(self, bounds: Rect) -> tuple[Rect, Path2D]:
-        """Return the projected bounding box plus local retained polygon geometry."""
+    def projected_path(self, bounds: Rect, *, corner_radius: float = 0) -> tuple[Rect, Path2D]:
+        """Round corners in logical pixels before tilting the plane toward the camera."""
 
-        corners = self.projected_corners(bounds)
-        left = min(point.x for point in corners)
-        top = min(point.y for point in corners)
-        right = max(point.x for point in corners)
-        bottom = max(point.y for point in corners)
+        _validate_finite("corner_radius", corner_radius)
+        if corner_radius < 0:
+            raise ValueError("corner_radius cannot be negative.")
+        outline = self._project_outline(bounds, corner_radius)
+        left = min(point.x for point in outline)
+        top = min(point.y for point in outline)
+        right = max(point.x for point in outline)
+        bottom = max(point.y for point in outline)
         projected_bounds = Rect(left, top, right - left, bottom - top)
-        path = Path2D.polygon(
-            *(Point(point.x - left, point.y - top) for point in corners)
-        )
+        points = tuple(Point(p.x - left, p.y - top) for p in outline)
+        # A perspective projection in front of the camera preserves convexity.
+        path = Path2D._from_convex_outline(points) if corner_radius else Path2D.polygon(*points)
         return projected_bounds, path
 
     def to_scene_node(
@@ -135,6 +143,7 @@ class PerspectivePlane:
         bounds: Rect,
         *,
         fill: Color,
+        corner_radius: float = 0,
         opacity: float = 1.0,
         z_index: int = 0,
         hit_testable: bool = True,
@@ -145,7 +154,7 @@ class PerspectivePlane:
             raise ValueError("Perspective-plane scene keys cannot be empty.")
         if not 0.0 <= opacity <= 1.0:
             raise ValueError("Perspective-plane opacity must be between 0.0 and 1.0.")
-        projected_bounds, path = self.projected_path(bounds)
+        projected_bounds, path = self.projected_path(bounds, corner_radius=corner_radius)
         return SceneNode(
             key=key,
             kind=SceneNodeKind.PATH,

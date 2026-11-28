@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from itertools import pairwise
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from .clipboard import ClipboardError, TextClipboard
@@ -33,6 +35,7 @@ _KEYBOARD_EVENTS = {
     PlatformEventKind.TEXT_INPUT,
 }
 _VK_TAB = 0x09
+_ESCAPE_KEY_CODES = {"win32": 0x1B, "x11": 0xFF1B, "cocoa": 0x35}
 
 
 class Window(EventEmitter):
@@ -70,6 +73,8 @@ class Window(EventEmitter):
         self.root: Component | None = None
         self.scene: Scene | None = None
         self.hovered_scene_node: SceneNode | None = None
+        self._hover_input: tuple[PlatformEvent, tuple[Component, ...]] | None = None
+        self._tooltip_escape_held = False
         self.focused_component: Component | None = None
         self.pointer_capture_component: Component | None = None
         self.visible = False
@@ -102,6 +107,21 @@ class Window(EventEmitter):
         self._text_shaper = shaper
         if self.root is not None:
             self.root.invalidate(reason="text_editing_geometry")
+
+    def choose_save_file(self, suggested_name: str, *, title: str = "Save As") -> Path | None:
+        """Choose a destination in the owned Windows dialog. Cancel returns None.
+
+        The filename's suffix supplies the initial filter and default extension.
+        The caller writes the selected file. A backend without a native dialog
+        raises NotImplementedError.
+        """
+        if not suggested_name or "\0" in suggested_name or "\0" in title:
+            raise ValueError("Supply a filename and dialog text without NUL characters.")
+        choose = getattr(self._platform_backend, "choose_save_file", None)
+        if self.native_handle is None or choose is None:
+            raise NotImplementedError("This window has no native Save As dialog.")
+        destination: Path | None = choose(self.native_handle, suggested_name, title)
+        return destination
 
     def get_clipboard_text(self) -> str | None:
         """Read plain Unicode text using the native or explicitly supplied clipboard."""
@@ -165,13 +185,24 @@ class Window(EventEmitter):
         self.emit("root_changed", old_root=old_root, root=component)
         return self
 
-    def set_scene(self, scene: Scene | None) -> Window:
-        """Attach a prepared render scene and invalidate the next frame."""
+    def set_scene(self, scene: Scene | None, *, retain_hover: bool = False) -> Window:
+        """Attach a scene. Retained rebuilds can preserve the hovered control by key."""
 
         old_scene = self.scene
         self.scene = scene
-        self.hovered_scene_node = None
-        self.emit("scene_changed", old_scene=old_scene, scene=scene)
+        previous = self.hovered_scene_node
+        if previous is not None:
+            replacement = None
+            if retain_hover and scene is not None:
+                replacement = next((node for node in scene.walk()
+                                    if node.hit_testable and node.key == previous.key), None)
+            if (replacement is not None and self._hover_input is not None
+                    and self._component_path_for_scene_target(replacement) == self._hover_input[1]):
+                self.hovered_scene_node = replacement
+            else:
+                self._clear_hover()
+        if self.scene is scene:  # A leave handler can cause another rebuild.
+            self.emit("scene_changed", old_scene=old_scene, scene=scene)
         return self
 
     def focus_component(self, component: Component | None) -> None:
@@ -279,17 +310,24 @@ class Window(EventEmitter):
             for component in self.root.walk()
             if self._component_is_focus_candidate(component)
         ]
+        return self._advance_focus(candidates, reverse=reverse)
+
+    def _advance_focus(self, candidates: list[Component], *, reverse: bool,
+                       fallback: Component | None = None) -> Component | None:
         if not candidates:
-            self.focus_component(None)
-            return None
+            self.focus_component(fallback)
+            return fallback
 
         step = -1 if reverse else 1
         current = self.focused_component
         if current is None or current not in candidates:
             next_component = candidates[-1] if reverse else candidates[0]
         else:
+            if current._step_keyboard_focus(reverse=reverse, entering=False):
+                return current
             current_index = candidates.index(current)
             next_component = candidates[(current_index + step) % len(candidates)]
+        next_component._step_keyboard_focus(reverse=reverse, entering=True)
         self.focus_component(next_component)
         return next_component
 
@@ -331,11 +369,12 @@ class Window(EventEmitter):
 
     def hide(self) -> None:
         if self.visible:
+            self._tooltip_escape_held = False
             self.release_pointer_capture()
             if self._platform_backend is not None and self.native_handle is not None:
                 self._platform_backend.hide_window(self.native_handle)
             self.visible = False
-            self.hovered_scene_node = None
+            self._clear_hover()
             self.emit("hidden")
 
     def close(self) -> None:
@@ -359,6 +398,7 @@ class Window(EventEmitter):
         self.emit("native_bound", handle=handle, scale=self.scale, display=self.display)
 
     def _unbind_native(self) -> None:
+        self._tooltip_escape_held = False
         if self.pointer_capture_component is not None:
             self.release_pointer_capture()
         if self.native_handle is None:
@@ -402,10 +442,16 @@ class Window(EventEmitter):
         if event.kind is PlatformEventKind.FOCUS:
             focused = bool(event.focused)
             if not focused:
+                self._tooltip_escape_held = False
                 self.release_pointer_capture()
             if focused != self.focused:
                 self.focused = focused
                 self.emit("focus_changed", focused=focused)
+            return
+
+        if event.kind is PlatformEventKind.POINTER_EXIT:
+            self._clear_hover(event)
+            self.emit(event.kind.value, event=event)
             return
 
         if event.kind in _POINTER_EVENTS:
@@ -423,6 +469,10 @@ class Window(EventEmitter):
             return
         old_scale = self.scale
         self.scale = scale
+        # Shaped advances are measured at the monitor's physical scale. Refresh
+        # retained text positions while keeping layout dimensions in logical pixels.
+        if self._text_shaper is not None and self.root is not None:
+            self.root.invalidate(reason="text_editing_geometry")
         self.emit(
             "scale_changed",
             old_scale=old_scale,
@@ -479,7 +529,8 @@ class Window(EventEmitter):
 
     def _apply_pointer_event(self, event: PlatformEvent) -> None:
         scene_path: tuple[SceneNode, ...] = ()
-        if self.scene is not None and event.x is not None and event.y is not None:
+        if (self.scene is not None and event.x is not None and event.y is not None
+                and 0 <= event.x < self.width and 0 <= event.y < self.height):
             scene_path = self.scene.hit_path_xy(event.x, event.y)
         scene_target = scene_path[-1] if scene_path else None
         hit_component_path = self._component_path_for_scene_target(scene_target)
@@ -508,27 +559,12 @@ class Window(EventEmitter):
         )
         if pointer_target_changed:
             previous_scene_target = self.hovered_scene_node
-            previous_component_path = self._component_path_for_scene_target(previous_scene_target)
-            previous_component_target = (
-                previous_component_path[-1] if previous_component_path else None
-            )
+            previous_input = self._hover_input
             self.hovered_scene_node = scene_target
+            self._hover_input = (event, hit_component_path) if scene_target is not None else None
 
-            if previous_scene_target is not None:
-                routed_leave = self._dispatch_direct_component_pointer_event(
-                    "pointer_leave",
-                    event,
-                    previous_scene_target,
-                    previous_component_path,
-                )
-                self.emit(
-                    "pointer_leave",
-                    event=event,
-                    target=previous_scene_target,
-                    component_target=previous_component_target,
-                    component_path=previous_component_path,
-                    routed_event=routed_leave,
-                )
+            if previous_scene_target is not None and previous_input is not None:
+                self._send_hover_leave(event, previous_scene_target, previous_input[1])
 
             if scene_target is not None:
                 routed_enter = self._dispatch_direct_component_pointer_event(
@@ -546,6 +582,8 @@ class Window(EventEmitter):
                     component_path=hit_component_path,
                     routed_event=routed_enter,
                 )
+        elif event.kind is PlatformEventKind.POINTER_MOVE and scene_target is not None:
+            self._hover_input = (event, hit_component_path)
 
         routed_event = self._route_component_pointer_event(
             event.kind.value,
@@ -570,10 +608,44 @@ class Window(EventEmitter):
         if event.kind is PlatformEventKind.POINTER_UP:
             self.release_pointer_capture()
 
+    def _clear_hover(self, event: PlatformEvent | None = None) -> None:
+        target, previous = self.hovered_scene_node, self._hover_input
+        self.hovered_scene_node = self._hover_input = None
+        if target is not None and previous is not None:
+            self._send_hover_leave(event or previous[0], target, previous[1])
+
+    def _send_hover_leave(self, event: PlatformEvent, target: SceneNode,
+                          path: tuple[Component, ...]) -> None:
+        routed = self._dispatch_direct_component_pointer_event("pointer_leave", event, target, path)
+        self.emit("pointer_leave", event=event, target=target, component_path=path,
+                  component_target=path[-1] if path else None, routed_event=routed)
+
+    @property
+    def _escape_key_code(self) -> int:
+        backend = self._platform_backend
+        return _ESCAPE_KEY_CODES.get(backend.name, 0x1B) if backend else 0x1B
+
+    def _dismiss_tooltips_on_escape(self, event: PlatformEvent) -> bool:
+        if event.kind is PlatformEventKind.TEXT_INPUT:
+            return self._tooltip_escape_held and event.text == "\x1b"
+        if event.key_code != self._escape_key_code:
+            return False
+        if self._tooltip_escape_held:
+            if event.kind is PlatformEventKind.KEY_UP:
+                self._tooltip_escape_held = False
+            return True
+        if (event.kind is PlatformEventKind.KEY_DOWN
+                and not (event.alt or event.ctrl or event.meta or event.shift)):
+            # Offer Escape to visible hints before a focused editor or modal sees it.
+            self._tooltip_escape_held = self.emit("_dismiss_tooltips").default_prevented
+        return self._tooltip_escape_held
+
     def _apply_keyboard_event(self, event: PlatformEvent) -> None:
         focused = self.focused_component
         if focused is not None and not self._component_is_focus_candidate(focused):
             self.focus_component(None)
+        if self._dismiss_tooltips_on_escape(event):
+            return
 
         component_path = self._component_path_for_component(self.focused_component)
         component_target = component_path[-1] if component_path else None
@@ -752,10 +824,12 @@ class Window(EventEmitter):
     def _pointer_events_for_path(
         event: PlatformEvent, component_path: tuple[Component, ...]
     ) -> tuple[PlatformEvent, ...]:
-        events = []
-        for component in component_path:
+        if not component_path:
+            return ()
+        events = [event]
+        for parent, child in pairwise(component_path):
+            event = parent._map_child_pointer_event(child, event)
             events.append(event)
-            event = component._map_descendant_pointer_event(event)
         return tuple(events)
 
     def _dispatch_direct_component_pointer_event(
@@ -790,8 +864,8 @@ class Window(EventEmitter):
         self.focus_component(None)
         self.visible = False
         self.focused = False
-        self.hovered_scene_node = None
         self.closed = True
+        self._clear_hover()
         self.emit("closed")
 
     def __repr__(self) -> str:

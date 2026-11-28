@@ -1,4 +1,6 @@
+import ctypes
 import sys
+from dataclasses import replace
 
 import pytest
 
@@ -9,6 +11,7 @@ from swirui import (
     App,
     Button,
     Panel,
+    SilkRibbon,
     SurfaceInteraction,
     SurfaceStyle,
     ThemeSurface,
@@ -17,6 +20,44 @@ from swirui import (
 )
 from swirui.platforms import PlatformEvent, PlatformEventKind
 from swirui.rendering import Rect, WgpuRenderer
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows/wgpu required")
+def test_satin_fold_is_continuous_across_dark_and_light_gpu_frames():
+    renderer = WgpuRenderer()
+    app = App(renderer=renderer)
+    window = app.add_window(Window(width=640, height=320))
+    root = Panel(bounds=Rect(0, 0, 640, 320), theme=FUTURE_DARK)
+    ribbon = SilkRibbon(bounds=Rect(18.25, 22.5, 554.75, 240))
+    root.add(ribbon)
+    mount(window, root)
+    try:
+        app.start()
+        app.process_events()
+        context = renderer._contexts[window.native_handle.value]
+        for theme, accent in ((FUTURE_DARK, "#28DEB0"), (FUTURE_LIGHT, "#E67434")):
+            root.theme = theme.with_accent(accent)
+            app.render_pending(app._frame_schedulers[window].stats.last_frame_time + 1)
+            width, _, pixels = context.read_scene_rgba()
+            top = round(ribbon.bounds.y * window.scale)
+            bottom = round(ribbon.bounds.bottom * window.scale)
+            for fraction in (.23, .51, .74):
+                x = round((ribbon.bounds.x + fraction * ribbon.bounds.width) * window.scale)
+                column = [tuple(pixels[(y * width + x) * 4:(y * width + x) * 4 + 3])
+                          for y in range(top, bottom)]
+                background = column[0]
+                assert column[-1] == background
+                painted = [y for y, rgb in enumerate(column) if rgb != background]
+                assert len(painted) > 20
+                assert painted[-1] - painted[0] + 1 == len(painted)
+                colors = {column[y] for y in painted}
+                assert len(colors) >= 10
+                if theme is FUTURE_DARK:
+                    assert any(g - r > 60 for r, g, _ in colors)
+                else:
+                    assert any(r - g > 40 for r, g, _ in colors)
+    finally:
+        app.stop()
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Windows/wgpu required")
@@ -67,6 +108,69 @@ def test_surface_feedback_presents_distinct_gpu_frames_in_both_themes(record_pro
         record_property("adapter", renderer.adapter_name)
         record_property("backend", renderer.graphics_backend)
         record_property("material_motion_frames", "idle/intermediate/hover in dark and light")
+    finally:
+        effect.dispose()
+        driver.dispose()
+        app.stop()
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Win32 pointer and wgpu readback required")
+def test_pointer_tilt_matches_authored_gpu_poses_and_keeps_the_front_fixed():
+    app = App(renderer=WgpuRenderer())
+    window = app.add_window(Window(width=640, height=400))
+    root = Panel(bounds=Rect(0, 0, 640, 400), theme=FUTURE_DARK.with_accent("#80EAC2"))
+    style = SurfaceStyle(kind="glass", depth_layers=5, depth_spacing=7, tilt_x=4, tilt_y=-6)
+    bounds = Rect(90, 60, 400, 200)
+    card = ThemeSurface(bounds=bounds, style=style)
+    button = Button("Open workspace", bounds=Rect(135, 109, 190, 40))
+    card.add(button)
+    root.add(card)
+    mount(window, root)
+    driver = AnimationController(app, window)
+    effect = SurfaceInteraction(driver, card, tilt_degrees=24)
+    try:
+        app.start()
+        app.process_events()
+        hwnd = window.native_handle.value
+        context = app.renderer._contexts[hwnd]
+        send = app.platform_backend._user32.SendMessageW
+        send.argtypes = [ctypes.c_void_p, ctypes.c_uint, ctypes.c_size_t, ctypes.c_ssize_t]
+        send.restype = ctypes.c_ssize_t
+        window.focus_component(button)
+
+        def sample(x, y):
+            point = round(y * window.scale) << 16 | round(x * window.scale)
+            send(hwnd, 0x0200, 0, point)
+            # Dispatch the synchronous HWND event independently of physical desktop input.
+            pending = app.platform_backend._events
+            while pending:
+                app._dispatch_platform_event(pending.popleft())
+            driver.tick(1)
+            app.render_pending(app._frame_schedulers[window].stats.last_frame_time + 1)
+            width, _, pixels = context.read_scene_rgba()
+            top, bottom = round(bounds.bottom * window.scale), round(330 * window.scale)
+            return bytes(pixels[top * width * 4:bottom * width * 4])
+
+        frames = []
+        for x, y in ((190, 110), (390, 210)):
+            effect.dispose()
+            card.style = style
+            effect = SurfaceInteraction(driver, card, tilt_degrees=24)
+            live = sample(x, y)
+            effect.dispose()
+            # Compare against the same physical pixel after Win32 DPI rounding.
+            dx = round(x * window.scale) / window.scale - (bounds.x + bounds.width / 2)
+            dy = round(y * window.scale) / window.scale - (bounds.y + bounds.height / 2)
+            card.style = replace(style, tilt_x=4 - 24 * dy / (bounds.height / 2),
+                                 tilt_y=-6 + 24 * dx / (bounds.width / 2))
+            effect = SurfaceInteraction(driver, card)
+            reference = sample(x, y)
+            assert live == reference
+            frames.append(live)
+        assert sum(abs(a - b) > 6 for a, b in zip(*frames, strict=True)) > 100
+        assert window.focused_component is button
+        assert window.scene.hit_test_xy(190, 130).key == button.key
+        assert button.bounds == Rect(135, 109, 190, 40) and app.renderer._contexts[hwnd] is context
     finally:
         effect.dispose()
         driver.dispose()

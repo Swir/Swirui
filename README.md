@@ -2,7 +2,7 @@
 
 <div align="center">
 
-<img src="https://raw.githubusercontent.com/Swir/Swirui/v0.1.0b6/assets/readme/hero.svg" width="100%" alt="SwirUI — native reactive GPU-first Python desktop UI framework">
+<img src="https://raw.githubusercontent.com/Swir/Swirui/v0.2.0b1/assets/readme/hero.svg" width="100%" alt="SwirUI — native reactive GPU-first Python desktop UI framework">
 
 # ⚡ SwirUI
 
@@ -24,7 +24,95 @@
 
 ## 📸 Native Studio
 
-![SwirUI Studio in dark appearance, captured without a cursor](https://raw.githubusercontent.com/Swir/Swirui/v0.1.0b6/docs/screenshots/studio-dark.png)
+Install the Windows desktop beta with `python -m pip install --upgrade swirui==0.2.0b1`
+and launch it with `python -m swirui studio`.
+
+![Dark and light material previews in Studio](https://raw.githubusercontent.com/Swir/Swirui/v0.2.0b1/docs/screenshots/studio-comparison.png)
+
+In Studio 0.2, drag **Corners** to shape the buttons, fields
+and material cards in your design. The tilted layers behind each card follow
+the same corner radius. While dragging, you can move above or below the
+slider and still fine-tune it horizontally. Select **Launch preview** to try the
+dark and light versions side by side. Narrow the comparison window and the
+two forms stack vertically, keeping the current field and selection. Both
+versions follow changes to the material, accent and corners while the
+comparison is open. Select **Disable form** in either pane to compare its
+disabled field and button with the other appearance. Your draft stays in the
+field when you turn editing back on. [Try the disabled palette](https://github.com/Swir/Swirui/blob/v0.2.0b1/docs/development-0.2.md#compare-disabled-form-colors).
+
+Project names and card headings now adjust their type size to the width of
+each appearance pane. Use `Label(..., font_size=31, min_font_size=16)` for
+the same behavior in your own app. [See a narrow preview with long names](https://github.com/Swir/Swirui/blob/v0.2.0b1/docs/development-0.2.md#fit-a-heading-to-its-panel).
+
+In the Inspector, edit **Tilt X (°)** and **Tilt Y (°)**
+to turn the layers behind a card while its controls stay in place.
+Select **Save theme…** to write both appearances to one
+JSON file. To try them outside
+Studio, run `python -m swirui preview-theme studio-theme.json` from the
+folder where you saved it. If your package contains more variants than are
+on screen, select a variant name above a preview and type to find another.
+Your other preview and any draft text stay in place. After saving a new
+color, font or material to the same JSON file, press **F5** in the preview
+to see the change with your draft and text selection still in place.
+[See a theme reload in the running preview](https://github.com/Swir/Swirui/blob/v0.2.0b1/docs/development-0.2.md#reload-your-theme-while-editing).
+**Copy theme JSON** also exports to the clipboard.
+The `SilkRibbon` behind each preview card now has a continuous satin fold.
+Its highlight and shaded reverse follow your accent when you switch themes.
+Text fields in the preview and in your own apps support mouse drag selection.
+On Windows, Shift+click extends the selection from its original anchor.
+Use Ctrl+Left or Ctrl+Right to move by word in a text field. Hold Shift to
+select the same range, including across lines in a `TextArea`. Ctrl+Backspace
+and Ctrl+Delete erase to the previous or next word boundary. In `CodeEditor`,
+one Undo restores the edit and the original caret or selection.
+In your own app, use `Button("Save", bounds=bounds, text_align="center")` to
+center an action label. `IconButton` centers its glyph by default.
+Tabbing through checkboxes, radio buttons and switches outlines the focused
+control, even when its checked color matches the theme's focus color.
+In Studio **Settings**, press Space on a switch to see its thumb slide.
+Press it again mid-travel to reverse direction. Your own
+`Switch(..., animations=clock)` follows the theme’s motion duration and
+reduced-motion setting. [Watch the native switch and try it in Python](https://github.com/Swir/Swirui/blob/v0.2.0b1/docs/development-0.2.md#animate-a-switch-thumb).
+
+Tooltips display keyboard shortcuts on a second line and wrap longer hints
+when their box has room. Hover over **Focus for help** in the component
+gallery or Tab to it. Press Escape to hide the hint while keeping keyboard
+focus and text selection. [See the tooltip and Python example](https://github.com/Swir/Swirui/blob/v0.2.0b1/docs/development-0.2.md#show-more-than-one-line-in-a-tooltip).
+For image cards, set `image_position=Point(1, 0.5)` with `ImageFit.COVER`
+to keep the right edge in view as the card narrows. Try the live crop slider
+with `python examples/image_framing.py` from the 0.2 source checkout.
+[Try the 0.2 Studio preview](https://github.com/Swir/Swirui/blob/v0.2.0b1/docs/development-0.2.md).
+
+In your own apps, Tab visits both ends of a `RangeSlider`. Arrow keys edit
+the selected limit, and Shift+Tab goes back. A small arrow inside the
+focus ring identifies the limit even where the handles meet. When both
+handles meet, drag left to lower the minimum or right to raise the maximum.
+Both slider types include the exact maximum. With a 0–100 scale and a step
+of 9, Right goes from 99 to 100 and Left returns to 99.
+[Try the range controls](https://github.com/Swir/Swirui/blob/v0.2.0b1/docs/development-0.2.md#edit-a-range-with-the-keyboard).
+
+Give a `Slider` or `RangeSlider` a color scale with `fill_gradient`. When
+someone narrows a selection from 20–80% to 40–60%, the color at 50% stays
+the same. [See the running Python example](https://github.com/Swir/Swirui/blob/v0.2.0b1/docs/development-0.2.md#color-a-selected-range).
+
+A magnetic button follows the pointer with a spring. Repeated mouse messages
+at the same position let the motion finish smoothly. Try the glass preview
+and switch its accent with a click. [Magnetic hover example](https://github.com/Swir/Swirui/blob/v0.2.0b1/docs/development-0.2.md#add-magnetic-hover-to-a-button).
+
+Pass a `LinearGradient` to `ProgressBar(fill_gradient=...)`
+to give the bar a fixed color scale. As the value rises, it reveals the
+next color while each previous stop stays in place.
+[See the gallery recording and Python example](https://github.com/Swir/Swirui/blob/v0.2.0b1/docs/development-0.2.md#give-a-progress-bar-a-color-scale).
+
+`ProgressRing` also shows partial segments. At 99% you can still see a gap,
+even on an eight-sided ring. The gap closes when the value reaches its maximum.
+[See the native ring at 1% and 99%](https://github.com/Swir/Swirui/blob/v0.2.0b1/docs/development-0.2.md#show-the-last-percent-on-a-ring).
+
+Use `ProgressRing(sweep_stops=scale.stops, ...)` to carry a slider or bar's
+color scale clockwise around the ring. Dragging the slider reveals the same
+violet, blue and mint in all three controls.
+[Watch the example on Windows](https://github.com/Swir/Swirui/blob/v0.2.0b1/docs/development-0.2.md#share-a-color-scale-with-a-progress-ring).
+
+![SwirUI Studio in dark appearance, captured without a cursor](https://raw.githubusercontent.com/Swir/Swirui/v0.2.0b1/docs/screenshots/studio-dark.png)
 
 ### Your signature, across the whole interface
 
@@ -33,7 +121,7 @@ own hex color. Accent, button states, focus and selection update together while
 editing state and material choices stay intact. Compact settings scroll and
 reveal keyboard-focused controls automatically.
 
-![Studio live accent authoring, without a cursor](https://raw.githubusercontent.com/Swir/Swirui/v0.1.0b6/docs/screenshots/studio-appearance.png)
+![Studio live accent authoring, without a cursor](https://raw.githubusercontent.com/Swir/Swirui/v0.2.0b1/docs/screenshots/studio-appearance.png)
 
 Use the same authoring API in your own applications:
 
@@ -50,7 +138,7 @@ brand = replace(
 ThemePackage("My signature", {"night": brand}, "night").save("signature.json")
 ```
 
-[Accent authoring](https://github.com/Swir/Swirui/blob/v0.1.0b6/docs/accent-authoring.md)
+[Accent authoring](https://github.com/Swir/Swirui/blob/v0.2.0b1/docs/accent-authoring.md)
 describes the generated roles and contrast boundaries. Studio keeps these settings
 for the current session; use `ThemePackage` in your own code to save/share a theme.
 
@@ -77,7 +165,7 @@ chart.append("load", ChartPoint(1, "Next", 41))
 The compact console leaves more room for your canvas. A centered material
 preview keeps useful proportions at desktop and compact window sizes.
 
-![SwirUI Studio material preview, captured without a cursor](https://raw.githubusercontent.com/Swir/Swirui/v0.1.0b6/docs/screenshots/studio-preview.png)
+![SwirUI Studio material preview, captured without a cursor](https://raw.githubusercontent.com/Swir/Swirui/v0.2.0b1/docs/screenshots/studio-preview.png)
 
 Adjust **Tint** and **Edge glow** in the preview to see the finish on the
 current surface. Solid surfaces keep their opaque fill. On wide canvases the
@@ -99,12 +187,37 @@ root.theme = package.default  # root is your application's panel
 Cards respond to hover, press and keyboard focus with animated shadow, accent
 glow and a soft diagonal sheen; reduced-motion settings apply immediately.
 Use `SurfaceInteraction` with your own `ThemeSurface` containers and authored
-themes. The [material guide](https://github.com/Swir/Swirui/blob/v0.1.0b6/docs/custom-material-themes.md)
+themes. The [material guide](https://github.com/Swir/Swirui/blob/v0.2.0b1/docs/custom-material-themes.md)
 shows how to control glass, acrylic, depth and motion from Python.
+
+In the 0.2 Studio preview, move the pointer across a card with depth layers.
+The layers tilt toward the pointer while the field and button stay in place.
+To give a card in your own app the same response, use
+`SurfaceInteraction(animations, card, tilt_degrees=14)` after mounting it.
+[See the native preview and Python example](https://github.com/Swir/Swirui/blob/v0.2.0b1/docs/development-0.2.md#tilt-a-material-with-the-pointer).
+
+On Windows, moving the pointer onto the title bar lets the card settle and
+dismisses hover-only tooltips. You can keep typing in the focused field.
+[See the native gallery capture](https://github.com/Swir/Swirui/blob/v0.2.0b1/docs/development-0.2.md#leave-the-window-with-the-keyboard-selection-intact).
+
+You can click and type in a field inside an `Expander`.
+Arrow keys move the caret, and clicking the header folds the section.
+[Try the editable section in the gallery](https://github.com/Swir/Swirui/blob/v0.2.0b1/docs/development-0.2.md#edit-a-field-inside-an-expander).
+
+Fields in a `SplitView` follow the pointer as you resize the panes. Select
+part of a filename and use the arrow keys to edit it. Focus the divider to
+resize with the keyboard.
+[Try the split-pane editor](https://github.com/Swir/Swirui/blob/v0.2.0b1/docs/development-0.2.md#edit-text-in-a-split-pane).
+
+In the 0.2 checkout, run `python examples/appearance_gallery.py`, leave the
+window idle, then switch between **Dark** and **Light**. The mint glass card
+turns lilac. Its shadow deepens and its four backplates tilt and spread apart
+while the field and button stay in place. You can use the same transition
+between two glass styles in your own app.
 
 ### One workspace, two appearances
 
-![SwirUI Studio in light appearance, captured without a cursor](https://raw.githubusercontent.com/Swir/Swirui/v0.1.0b6/docs/screenshots/studio-light.png)
+![SwirUI Studio in light appearance, captured without a cursor](https://raw.githubusercontent.com/Swir/Swirui/v0.2.0b1/docs/screenshots/studio-light.png)
 
 Charts, mini histories and decorative layers follow the active palette.
 Switching themes retains chart selection, zoom and editing state; explicit
@@ -113,7 +226,7 @@ demo data**, not device telemetry or a measured frame-rate claim.
 
 These are actual Windows/wgpu client frames captured on AMD Radeon graphics,
 without the OS cursor or window chrome. See the
-[capture procedure](https://github.com/Swir/Swirui/blob/v0.1.0b6/docs/screenshots/README.md).
+[capture procedure](https://github.com/Swir/Swirui/blob/v0.2.0b1/docs/screenshots/README.md).
 
 <img width="100%" src="https://raw.githubusercontent.com/Swir/Swir/main/assets/power-divider-v4.svg" alt="SWIR electric divider" />
 
@@ -128,7 +241,7 @@ Scope       12 / 12 layout groups verified
 
 > PyPI-safe text progress is the portable status view. The SVG below is an optional GitHub visual.
 
-<img width="100%" src="https://raw.githubusercontent.com/Swir/Swirui/v0.1.0b6/assets/readme/progress-card.svg" alt="SwirUI project progress: 68.0% — 0.5 Alpha Layout Engine complete; 12 of 12 layout groups verified">
+<img width="100%" src="https://raw.githubusercontent.com/Swir/Swirui/v0.2.0b1/assets/readme/progress-card.svg" alt="SwirUI project progress: 68.0% — 0.5 Alpha Layout Engine complete; 12 of 12 layout groups verified">
 
 **68% authoritative weighted project progress — 0.8 Beta Professional Widgets is complete at 13 / 13 groups; Media Engine is complete at 8 / 8 groups verified.**
 
@@ -144,9 +257,9 @@ Scope       12 / 12 layout groups verified
 
 The published 68% value preserves the verified weighting documented in `ROADMAP.md` through completed 0.5. Completed later milestone functionality is tracked by its canonical checklist until an explicit project-weighting extension is documented; later work is never double-counted or used to invent project progress.
 
-**0.1.0b6 is the Windows desktop beta**, for building your own Python programs
+**0.2.0b1 is the Windows desktop beta**, for building your own Python programs
 with SwirUI controls, materials and custom themes. See the
-[release page](https://github.com/Swir/Swirui/releases/tag/v0.1.0b6) for publication
+[release page](https://github.com/Swir/Swirui/releases/tag/v0.2.0b1) for publication
 status and qualification evidence.
 Beta scope and release readiness are separate from full roadmap completion;
 public APIs may still change before 1.0.
@@ -185,7 +298,7 @@ The completed 0.5 layout layer provides content-aware intrinsic measurement, min
 
 ## Quick Start
 
-### Windows desktop beta — 0.1.0b6
+### Windows desktop beta — 0.2.0b1
 
 This beta targets **Windows x64 with 64-bit CPython 3.11–3.14**. Its native wheel
 includes the Rust/wgpu core, so users do not need Rust or a repository checkout.
@@ -193,7 +306,7 @@ Install the pinned beta from PyPI in a fresh environment:
 
 ```powershell
 py -3.13 -m venv .venv
-.venv\Scripts\python -m pip install --only-binary=:all: swirui==0.1.0b6
+.venv\Scripts\python -m pip install --only-binary=:all: swirui==0.2.0b1
 .venv\Scripts\python -m swirui doctor
 .venv\Scripts\python -m swirui demo
 .venv\Scripts\python -m swirui studio
@@ -209,7 +322,7 @@ pip selects the native ABI3 wheel automatically. A compatible graphics driver
 is still required; `doctor` checks installation and `demo --smoke-test` checks rendering.
 The portable wheel supports Python models and tooling; it does not provide
 equivalent GPU desktop rendering on Linux/macOS. See the
-[beta scope and limitations](https://github.com/Swir/Swirui/blob/v0.1.0b6/docs/beta.md) before adopting this prerelease.
+[beta scope and limitations](https://github.com/Swir/Swirui/blob/v0.2.0b1/docs/beta.md) before adopting this prerelease.
 
 ### Your first program
 
@@ -240,7 +353,7 @@ finally:
 
 Choose another built-in preset, replace palette/font tokens, or distribute your
 own JSON theme package. For glass, acrylic and decorative depth, see
-[custom material themes](https://github.com/Swir/Swirui/blob/v0.1.0b6/docs/custom-material-themes.md).
+[custom material themes](https://github.com/Swir/Swirui/blob/v0.2.0b1/docs/custom-material-themes.md).
 These perspective layers are visual decoration, not a general-purpose 3D viewport.
 
 ### Customize the visual system
@@ -285,18 +398,18 @@ call `super().on_theme_changed(...)` to retain built-in style bindings.
 Custom appearances can be shared as versioned JSON `ThemePackage` files with
 multiple variants, complete palettes and tokens. Load with `ThemePackage.load(path)`
 and assign `root.theme = package.default` or `package.themes["day"]`. The
-[theme-package guide](https://github.com/Swir/Swirui/blob/v0.1.0b6/docs/theme-packages.md) covers authoring, validation and
+[theme-package guide](https://github.com/Swir/Swirui/blob/v0.2.0b1/docs/theme-packages.md) covers authoring, validation and
 atomic saves. Try Aurora with
 `python examples/workbench_gallery.py --theme-package examples/themes/aurora.swirui-theme.json`.
 `ThemeController(window)` follows the Windows application color preference and
 supports explicit system/light/dark choices, custom theme pairs and an explicit
 fallback on unsupported backends. It preserves local scopes and editing state;
-see [system appearance](https://github.com/Swir/Swirui/blob/v0.1.0b6/docs/system-appearance.md) and run
+see [system appearance](https://github.com/Swir/Swirui/blob/v0.2.0b1/docs/system-appearance.md) and run
 `python examples/appearance_gallery.py` for a native preview.
 Connect an `AnimationController` to opt into appearance transitions. Nine built-in
 presets include Neon Blue, Neon Green, Matrix, Cyberpunk, OLED, Minimal and
 Professional alongside Future Dark/Light. Try `python examples/theme_gallery.py`;
-see [presets and motion](https://github.com/Swir/Swirui/blob/v0.1.0b6/docs/theme-presets.md) for reduced motion and interpolation
+see [presets and motion](https://github.com/Swir/Swirui/blob/v0.2.0b1/docs/theme-presets.md) for reduced motion and interpolation
 behavior. Linux/macOS synchronization remains unimplemented. Direct theme assignment
 continues to apply immediately.
 
@@ -324,18 +437,18 @@ ThemePackage("My appearance", {"main": my_theme}, "main").save("my-theme.json")
 ```
 
 Try `python examples/custom_theme_gallery.py` or load
-[Ocean Studio](examples/themes/ocean-studio.swirui-theme.json).
-The [custom-material guide](https://github.com/Swir/Swirui/blob/v0.1.0b6/docs/custom-material-themes.md) covers local overrides,
+[Ocean Studio](https://github.com/Swir/Swirui/blob/v0.2.0b1/examples/themes/ocean-studio.swirui-theme.json).
+The [custom-material guide](https://github.com/Swir/Swirui/blob/v0.2.0b1/docs/custom-material-themes.md) covers local overrides,
 portable sharing and rendering limits. Perspective layers provide a dimensional
 UI treatment; a full 3D model viewport remains on the roadmap.
 
 ### Release preparation
 
-The [release workflow](.github/workflows/publish-pypi.yml) qualifies candidate
+The [release workflow](https://github.com/Swir/Swirui/blob/v0.2.0b1/.github/workflows/publish-pypi.yml) qualifies candidate
 packages and publishes only for a matching GitHub Release after its checks pass.
 It validates versions, tests the installed Windows native wheel, checks identical
 Python sources across distributions and uses PyPI Trusted Publishing.
-See [release instructions](https://github.com/Swir/Swirui/blob/v0.1.0b6/docs/releasing.md). The matching release page records actual qualification and publication
+See [release instructions](https://github.com/Swir/Swirui/blob/v0.2.0b1/docs/releasing.md). The matching release page records actual qualification and publication
 results. A passing candidate check alone is not a publication.
 
 Notification colors use `accent`, `success`, `warning` and `error` palette roles.
@@ -758,18 +871,18 @@ SwirUI does not claim performance superiority over other frameworks without repr
 
 ## Roadmap
 
-The authoritative plan and its single roadmap progress graphic are in **[ROADMAP.md](https://github.com/Swir/Swirui/blob/v0.1.0b6/ROADMAP.md)**.
+The authoritative plan and its single roadmap progress graphic are in **[ROADMAP.md](https://github.com/Swir/Swirui/blob/v0.2.0b1/ROADMAP.md)**.
 
-**0.8 Beta — Professional Widgets is complete at 13 / 13 groups, and Media Engine is complete at 8 / 8 groups verified.** The Media Engine credit includes the merged Image/SVG/GIF, Lottie, VideoPlayer, AudioPlayer, CameraView, Microphone input, Waveform and Spectrum visualizer qualification chains. The project-wide weighted percentage intentionally remains 68% until the documented weighting model is explicitly extended. The named 0.8 roadmap milestone and the separately scoped `0.1.0b6` Windows desktop beta do not imply completion of the full roadmap. Markdown closeout remains tracked separately in PR #189.
+**0.8 Beta — Professional Widgets is complete at 13 / 13 groups, and Media Engine is complete at 8 / 8 groups verified.** The Media Engine credit includes the merged Image/SVG/GIF, Lottie, VideoPlayer, AudioPlayer, CameraView, Microphone input, Waveform and Spectrum visualizer qualification chains. The project-wide weighted percentage intentionally remains 68% until the documented weighting model is explicitly extended. The named 0.8 roadmap milestone and the separately scoped `0.2.0b1` Windows desktop beta do not imply completion of the full roadmap. Markdown closeout remains tracked separately in PR #189.
 
 ## Releases
 
-**SwirUI v0.1.0b6** is the Windows desktop beta. Each release is built and tested by GitHub Actions before PyPI Trusted Publishing. The payload contains a Windows x64 ABI3 native wheel, a portable Python wheel and a source archive. The release notes record actual qualification and publication results.
+**SwirUI v0.2.0b1** is the Windows desktop beta. Each release is built and tested by GitHub Actions before PyPI Trusted Publishing. The payload contains a Windows x64 ABI3 native wheel, a portable Python wheel and a source archive. The release notes record actual qualification and publication results.
 
-- PyPI: **[swirui 0.1.0b6](https://pypi.org/project/swirui/0.1.0b6/)**
-- GitHub prerelease: **[v0.1.0b6](https://github.com/Swir/Swirui/releases/tag/v0.1.0b6)**
-- Development history: **[CHANGELOG.md](https://github.com/Swir/Swirui/blob/v0.1.0b6/CHANGELOG.md)**
-- Full roadmap: **[ROADMAP.md](https://github.com/Swir/Swirui/blob/v0.1.0b6/ROADMAP.md)**
+- PyPI: **[swirui 0.2.0b1](https://pypi.org/project/swirui/0.2.0b1/)**
+- GitHub prerelease: **[v0.2.0b1](https://github.com/Swir/Swirui/releases/tag/v0.2.0b1)**
+- Development history: **[CHANGELOG.md](https://github.com/Swir/Swirui/blob/v0.2.0b1/CHANGELOG.md)**
+- Full roadmap: **[ROADMAP.md](https://github.com/Swir/Swirui/blob/v0.2.0b1/ROADMAP.md)**
 - CI status: **[GitHub Actions](https://github.com/Swir/Swirui/actions)**
 
 ## Repository Structure
@@ -799,7 +912,7 @@ Swirui/
 
 <div align="center">
 
-<img src="https://raw.githubusercontent.com/Swir/Swirui/v0.1.0b6/assets/swirui-icon.svg" width="76" alt="SwirUI icon">
+<img src="https://raw.githubusercontent.com/Swir/Swirui/v0.2.0b1/assets/swirui-icon.svg" width="76" alt="SwirUI icon">
 
 ### `BUILD • TEST • RENDER • EVOLVE`
 

@@ -314,6 +314,42 @@ def test_explicit_pointer_capture_routes_move_and_up_outside_hit_target() -> Non
     app.stop()
 
 
+def test_client_exit_clears_hover_once_and_preserves_captured_drag() -> None:
+    backend = NullPlatformBackend()
+    app = App(platform_backend=backend, renderer=NullRenderer())
+    window = app.add_window(Window(width=640, height=400))
+    scene, back_node, _ = _scene()
+    # A partially clipped control can extend beyond the client during a drag.
+    back_node.bounds = Rect(-40, 20, 260, 160)
+    root, _, front = _components()
+    window.set_root(root)
+    window.set_scene(scene)
+    leaves, moves, releases = [], [], []
+    front.on("pointer_leave", leaves.append)
+    front.on("pointer_move", moves.append)
+    front.on("pointer_up", releases.append)
+    try:
+        app.start()
+        handle = window.native_handle
+        window._apply_platform_event(PlatformEvent(PlatformEventKind.POINTER_MOVE, handle,
+                                                  x=100, y=100))
+        window.capture_pointer(front)
+        for _ in range(2):
+            window._apply_platform_event(PlatformEvent(PlatformEventKind.POINTER_EXIT, handle))
+        assert len(leaves) == 1 and len(moves) == 1 and not releases
+        assert leaves[0].data["event"].x is None
+        assert window.hovered_scene_node is None and window.pointer_capture_component is front
+        assert scene.hit_test_xy(-10, 80).key == back_node.key
+        window._apply_platform_event(PlatformEvent(PlatformEventKind.POINTER_MOVE, handle,
+                                                  x=-10, y=80))
+        assert window.hovered_scene_node is None and moves[-1].data["event"].x == -10
+        window._apply_platform_event(PlatformEvent(PlatformEventKind.POINTER_UP, handle,
+                                                  x=-10, y=80, button=PointerButton.LEFT))
+        assert window.pointer_capture_component is None and len(releases) == 1
+    finally:
+        app.stop()
+
+
 def test_focus_loss_releases_pointer_capture() -> None:
     backend = NullPlatformBackend()
     app = App(platform_backend=backend, renderer=NullRenderer())

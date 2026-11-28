@@ -3,7 +3,7 @@ import time
 import pytest
 
 from swirui import App, Button, Component, IconButton, Label, Text, Window, mount
-from swirui.core import AccessibilityRole, Event
+from swirui.core import AccessibilityRole, Event, state_transaction
 from swirui.platforms import (
     NativeWindowHandle,
     NullPlatformBackend,
@@ -216,6 +216,49 @@ def test_hover_identity_survives_scene_rebuilds() -> None:
     assert window.hovered_scene_node.key == button.key
 
 
+@pytest.mark.parametrize("change", ["hide", "remove"])
+def test_hover_leaves_the_original_button_when_its_panel_disappears(change):
+    window = Window(width=400, height=240)
+    root, panel = Component("root"), Component("panel")
+    button = Button("Preview", bounds=Rect(30, 30, 140, 48))
+    panel.add(button)
+    root.add(panel)
+    mount(window, root)
+    leaves = []
+    button.on("pointer_leave", leaves.append)
+    move = PlatformEvent(PlatformEventKind.POINTER_MOVE, NativeWindowHandle(1), x=50, y=50)
+    window._apply_platform_event(move)
+    assert button.hovered
+    if change == "hide":
+        panel.visible = False
+        panel.visible = True
+    else:
+        root.remove(panel)
+        root.add(panel)
+    assert not button.hovered
+    assert len(leaves) == 1 and leaves[0].data["component_target"] is button
+    window._apply_platform_event(move)
+    assert button.hovered
+
+
+def test_replacing_a_hovered_control_with_the_same_key_requires_a_new_enter():
+    window = Window()
+    root = Component("root")
+    bounds = Rect(30, 30, 140, 48)
+    old = Button("Old", key="action", bounds=bounds)
+    new = Button("New", key="action", bounds=bounds)
+    root.add(old)
+    mount(window, root)
+    move = PlatformEvent(PlatformEventKind.POINTER_MOVE, NativeWindowHandle(1), x=50, y=50)
+    window._apply_platform_event(move)
+    with state_transaction():
+        root.remove(old)
+        root.add(new)
+    assert not old.hovered and not new.hovered
+    window._apply_platform_event(move)
+    assert new.hovered
+
+
 def test_icon_button_requires_semantic_name_and_uses_button_role() -> None:
     with pytest.raises(ValueError, match="accessible_name"):
         IconButton("★", bounds=Rect(0.0, 0.0, 44.0, 44.0), accessible_name="")
@@ -231,6 +274,9 @@ def test_icon_button_requires_semantic_name_and_uses_button_role() -> None:
     assert icon.accessible_name == "Favorite"
     assert icon.accessibility_role is AccessibilityRole.BUTTON
     assert icon.build_scene_node().kind is SceneNodeKind.RECTANGLE
+    glyph = icon.build_scene_node().children[0]
+    assert glyph.bounds.x > 0
+    assert glyph.bounds.x + glyph.bounds.width / 2 == pytest.approx(22)
 
 
 def test_widget_runtime_scene_changes_schedule_real_app_frame() -> None:

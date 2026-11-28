@@ -46,7 +46,8 @@ def test_stale_native_extension_is_not_reported_ready(monkeypatch):
 
 
 def test_unsupported_platform_never_opens_demo(monkeypatch, capsys):
-    monkeypatch.setattr(diagnostics.sys, "platform", "linux")
+    # Simulate the reported platform without polluting Python's process-wide uname cache.
+    monkeypatch.setattr(diagnostics, "sys", SimpleNamespace(platform="linux"))
     assert cli.main(["doctor", "--json"]) == 1
     report = json.loads(capsys.readouterr().out)
     assert not report["supported_beta_platform"]

@@ -359,7 +359,8 @@ class Expander(Widget):
     def _on_pointer_down(self, event: Event) -> None:
         platform_event = self._platform_event(event, PlatformEventKind.POINTER_DOWN)
         if (
-            not self.enabled
+            event.source is not self
+            or not self.enabled
             or platform_event is None
             or platform_event.button is not PointerButton.LEFT
         ):
@@ -370,7 +371,8 @@ class Expander(Widget):
         platform_event = self._platform_event(event, PlatformEventKind.POINTER_UP)
         if platform_event is None or platform_event.button is not PointerButton.LEFT:
             return
-        activate = self.enabled and self._pressed
+        # A release over the content can end a header press without activating it.
+        activate = event.source is self and self.enabled and self._pressed
         self._set_interaction_state(pressed=False, reason="pointer_up")
         if activate:
             self.toggle()
@@ -378,7 +380,7 @@ class Expander(Widget):
 
     def _on_key_down(self, event: Event) -> None:
         platform_event = self._platform_event(event, PlatformEventKind.KEY_DOWN)
-        if not self.enabled or platform_event is None:
+        if event.source is not self or not self.enabled or platform_event is None:
             return
         if platform_event.ctrl or platform_event.alt or platform_event.meta:
             return
@@ -394,6 +396,8 @@ class Expander(Widget):
             event.prevent_default()
 
     def _on_key_up(self, event: Event) -> None:
+        if event.source is not self:
+            return
         platform_event = self._platform_event(event, PlatformEventKind.KEY_UP)
         if platform_event is None or platform_event.key_code not in (_VK_RETURN, _VK_SPACE):
             return

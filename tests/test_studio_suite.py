@@ -1,7 +1,66 @@
-from swirui import FUTURE_LIGHT, ClipboardError, MemoryClipboard, ThemePackage, Window, mount
+from swirui import (
+    FUTURE_LIGHT,
+    AnimationController,
+    App,
+    ClipboardError,
+    MemoryClipboard,
+    ThemePackage,
+    Window,
+    mount,
+    state_transaction,
+)
+from swirui.platforms import NullPlatformBackend
 from swirui.rendering import Rect
+from swirui.studio_comparison import bind_comparison
 from swirui.studio_operations import StudioDashboard
 from swirui.studio_suite import StudioSuite
+
+
+def test_open_comparison_follows_edits_and_detaches_on_close():
+    app = App(platform_backend=NullPlatformBackend())
+    owner = app.add_window(Window())
+    studio = StudioSuite()
+    mount(owner, studio)
+    preview = studio.preview
+    bind_comparison(app, owner, preview)
+    try:
+        app.start()
+        studio.settings.set_accent("#7FE0BF")
+        assert app.windows == [owner]
+        preview.create.emit("click")
+        child = app.windows[-1]
+        dark, light = child.root.panes
+        seen = []
+        dark.on("theme_changed", lambda event: seen.append(event.data["theme"]))
+        with state_transaction():
+            studio.settings.set_accent("#FF9DAF")
+            preview.tint.value = 43
+            preview.glow.value = 18
+            studio.inspector.set_value("depth", 6)
+            studio.inspector.set_value("tilt_x", -20)
+            studio.inspector.set_value("tilt_y", 31)
+            studio.settings.reduced_motion.checked = True
+        exported = preview.theme_package()
+        assert seen == [exported.themes["dark"]]
+        assert light.theme == exported.themes["light"]
+        assert (light.theme.surface_style.tilt_x, dark.theme.surface_style.tilt_y) == (-20, 31)
+        assert light.theme.palette.accent == "#FF9DAF" and light.theme.reduced_motion
+        with state_transaction():
+            preview.corners.value = 0
+            child.close()
+        assert app.windows == [owner] and dark.theme == exported.themes["dark"]
+        preview.create.emit("click")
+        next_dark, _ = app.windows[-1].root.panes
+        assert next_dark.theme.control_radius == 0
+        studio.execute_command("reset")
+        assert next_dark.theme == preview.theme_package().themes["dark"]
+        style = next_dark.theme.surface_style
+        assert (style.tilt_x, style.tilt_y) == (8, -11)
+        assert [item.value for item in studio.inspector.items
+                if item.key in ("tilt_x", "tilt_y")] == [8, -11]
+        assert dark.theme == exported.themes["dark"]
+    finally:
+        app.stop()
 
 
 def test_preview_copies_both_authored_finishes_and_preserves_input(tmp_path):
@@ -16,17 +75,24 @@ def test_preview_copies_both_authored_finishes_and_preserves_input(tmp_path):
         studio.settings.set_accent("#DB237C")
         studio.inspector.set_value("material", "acrylic")
         studio.inspector.set_value("depth", 5)
+        studio.inspector.begin_edit("tilt_x").set_edit_buffer("-50").commit_edit()
+        studio.inspector.begin_edit("tilt_y").set_edit_buffer("42").commit_edit()
+        assert [item.value for item in studio.inspector.items
+                if item.key in ("tilt_x", "tilt_y")] == [-35, 35]
         studio.settings.reduced_motion.checked = True
         preview.tint.value = 32
         preview.glow.value = 18
+        preview.corners.value = 24
         preview.copy_theme.emit("click")
         package = ThemePackage.loads(clipboard.read_text())
         package.save(tmp_path / "finish.json")
         assert ThemePackage.load(tmp_path / "finish.json").default == preview.theme
         assert package.default_theme == "light" and package.name == "Szkło"
         for variant in package.themes.values():
+            assert variant.control_radius == 24
             assert variant.surface_style == preview.theme.surface_style
             assert variant.surface_style.tint_opacity == .32
+            assert (variant.surface_style.tilt_x, variant.surface_style.tilt_y) == (-35, 35)
             assert variant.surface_style.glow_opacity == .18
             assert variant.palette.accent == "#DB237C" and variant.reduced_motion
         assert package.themes["dark"].palette.canvas != package.default.palette.canvas
@@ -41,6 +107,7 @@ def test_preview_copies_both_authored_finishes_and_preserves_input(tmp_path):
         assert preview.tint.enabled and preview.tint.value == 32
         studio.execute_command("reset")
         assert (preview.tint.value, preview.glow.value) == (74, 5.5)
+        assert preview.corners.value == 12 and preview.theme.control_radius == 12
     finally:
         runtime.unmount()
 
@@ -62,6 +129,59 @@ def test_export_reports_unavailable_clipboard_and_retries(monkeypatch):
         assert ThemePackage.loads(clipboard.read_text()).default == studio.preview.theme
     finally:
         runtime.unmount()
+
+
+def test_save_theme_preserves_authored_variants_and_recovers_from_cancel_or_io_error(
+    tmp_path, monkeypatch,
+):
+    clipboard = MemoryClipboard("previous text")
+    window = Window(clipboard=clipboard)
+    studio = StudioSuite()
+    runtime = mount(window, studio)
+    try:
+        preview = studio.preview
+        studio.toggle_theme()
+        studio.settings.set_accent("#DB237C")
+        preview.set_material("acrylic")
+        preview.corners.value = 19
+        preview.project.value = "Szkło"
+        preview.project.select(1, 3)
+        expected = preview.theme_package()
+        target = tmp_path / "moje szkło.json"
+        target.write_text("previous file", encoding="utf-8")
+        destinations = iter([None, tmp_path / "missing" / "theme.json", target])
+
+        def choose(name, *, title):
+            assert name == "studio-theme.json" and title == "Save SwirUI theme"
+            return next(destinations)
+
+        monkeypatch.setattr(window, "choose_save_file", choose)
+        preview.save_theme.emit("click")
+        assert preview.result.text == "Save cancelled."
+        assert target.read_text(encoding="utf-8") == "previous file"
+        preview.save_theme.emit("click")
+        assert "Could not save" in preview.result.text
+        preview.save_theme.emit("click")
+        assert ThemePackage.load(target) == expected
+        assert preview.result.text == f"Saved {target.name}."
+        assert clipboard.read_text() == "previous text" and preview.project.selected_text == "zk"
+        preview.project.value = "x" * 121
+        preview.save_theme.emit("click")
+        assert "project name" in preview.result.text and ThemePackage.load(target) == expected
+    finally:
+        runtime.unmount()
+
+
+def test_save_and_copy_buttons_fit_beside_the_material_badge():
+    preview = StudioSuite().preview
+    for width in (320, 400, 460, 900):
+        bounds = Rect(44, 25, width, 500)
+        preview.prepare_layout(bounds)
+        assert bounds.x <= preview.status.bounds.x
+        assert preview.status.bounds.right <= preview.copy_theme.bounds.x
+        assert preview.status.visible == (width == 900)
+        assert preview.copy_theme.bounds.right < preview.save_theme.bounds.x
+        assert preview.save_theme.bounds.right <= bounds.right
 
 
 def test_studio_accent_survives_theme_material_and_motion_changes():
@@ -189,6 +309,9 @@ def test_preview_controls_fit_the_material_card_at_supported_sizes() -> None:
         assert preview.result.bounds.bottom <= surface.bottom
         assert preview.create.bounds.bottom < preview.result.bounds.y
         assert preview.project.bounds.bottom < preview.motion.bounds.y
+        assert preview.tint.bounds.right < preview.glow.bounds.x
+        assert preview.glow.bounds.right < preview.corners.bounds.x
+        assert preview.corners.bounds.right <= preview.footer.bounds.right
 
 
 def test_studio_suite_adds_dashboard_settings_and_notification_center() -> None:
@@ -247,7 +370,11 @@ def test_dashboard_records_bounded_samples_and_updates_accessibility() -> None:
 
 
 def test_settings_are_retained_and_drive_notifications_and_reduced_motion() -> None:
-    studio = StudioSuite()
+    window = Window(width=1280, height=800)
+    clock = AnimationController(App(platform_backend=NullPlatformBackend()), window)
+    studio = StudioSuite(animations=clock)
+    studio.activate("settings")
+    mount(window, studio)
     assert studio.show_notification("Build ready", kind="success")
     assert studio.toast.visible
     assert studio.toast.message == "Build ready"
@@ -257,10 +384,12 @@ def test_settings_are_retained_and_drive_notifications_and_reduced_motion() -> N
 
     studio.toast.dismiss()
     studio.settings.notifications.checked = False
+    assert clock.tick(.04) == 1
     assert not studio.show_notification("Hidden")
     assert not studio.toast.visible
 
     studio.settings.reduced_motion.checked = True
+    assert clock.active_count == 0
     assert studio.theme is not None and studio.theme.reduced_motion
     assert studio.preview.theme is not None and studio.preview.theme.reduced_motion
 
@@ -272,6 +401,7 @@ def test_settings_are_retained_and_drive_notifications_and_reduced_motion() -> N
     assert after["hierarchy"] > before["hierarchy"]
     assert after["inspector"] > before["inspector"]
     assert after["console"] > before["console"]
+    clock.dispose()
 
 
 def test_studio_suite_commands_drive_dashboard_settings_theme_and_metrics() -> None:

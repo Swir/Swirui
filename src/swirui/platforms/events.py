@@ -23,6 +23,7 @@ class PlatformEventKind(StrEnum):
     SYSTEM_APPEARANCE_CHANGED = "system_appearance_changed"
     FOCUS = "focus"
     POINTER_MOVE = "pointer_move"
+    POINTER_EXIT = "pointer_exit"
     POINTER_DOWN = "pointer_down"
     POINTER_UP = "pointer_up"
     POINTER_SCROLL = "pointer_scroll"

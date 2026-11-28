@@ -30,7 +30,7 @@ from .affine_wgpu_renderer import (
 from .affine_wgpu_renderer import (
     WgpuRenderer as _BaseAffineWgpuRenderer,
 )
-from .geometry import Color, Point, Rect
+from .geometry import Color, Point, Rect, rounded_rectangle_outline
 from .scene import ClipRegion, Scene, SceneNodeKind
 from .wgpu_renderer import ImageInstance, RectangleInstance, TextInstance
 
@@ -98,7 +98,7 @@ class WgpuRenderer(_BaseAffineWgpuRenderer):
                         )
                     )
                 elif convex_clips:
-                    outline = self._rounded_rectangle_outline(node.bounds, radius)
+                    outline = rounded_rectangle_outline(node.bounds, radius)
                     self._append_exact_clipped_fan(
                         paths,
                         outline,

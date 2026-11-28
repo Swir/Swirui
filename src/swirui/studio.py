@@ -44,9 +44,11 @@ from . import (
 from .core import Event
 from .platforms import PlatformEvent, PlatformEventKind
 from .rendering import Rect, WgpuRenderer
+from .studio_comparison import bind_comparison
 from .theme import ColorRole
 
 MaterialKind = Literal["solid", "glass", "acrylic"]
+_DEFAULT_TILT = (8, -11)
 
 
 class StudioPreview(Panel):
@@ -57,13 +59,16 @@ class StudioPreview(Panel):
         empty = Rect(0, 0, 0, 0)
         self.material: MaterialKind = "glass"
         self.depth = 3
+        self.tilt_x, self.tilt_y = _DEFAULT_TILT
         self.light = False
         self.reduced_motion = False
         self.accent: str | None = None
         self.status = Badge("Glass", bounds=empty)
-        self.copy_theme = Button("Copy theme JSON", bounds=empty, font_size=14,
+        self.copy_theme = Button("Copy theme JSON", bounds=empty, font_size=14, text_align="center",
                                  variant=ButtonVariant.SECONDARY)
         self.copy_theme.on("click", self._copy_theme)
+        self.save_theme = Button("Save theme…", bounds=empty, font_size=14, text_align="center")
+        self.save_theme.on("click", self._save_theme)
         self.backdrop = SilkRibbon(bounds=empty)
         self.surface = ThemeSurface(bounds=empty)
         self.heading = Label("Build beyond ordinary.", bounds=empty, font_size=30)
@@ -74,7 +79,7 @@ class StudioPreview(Panel):
         )
         self.project = Input("Neon workspace", bounds=empty, font_size=16)
         self.motion = Switch("Enable motion", bounds=empty, checked=True)
-        self.create = Button("Launch preview", bounds=empty)
+        self.create = Button("Launch preview", bounds=empty, text_align="center")
         self.result = Label("Ready for your next idea.", bounds=empty, font_size=14)
         self.palette_label = Label("Accent states", bounds=empty, font_size=15)
         self.swatch_chips = tuple(Panel(bounds=empty, corner_radius=9) for _ in range(3))
@@ -95,24 +100,38 @@ class StudioPreview(Panel):
         self.tint = Slider(bounds=empty, value=74, accessible_name="Material tint opacity")
         self.glow = Slider(bounds=empty, value=5.5, maximum=50, step=.5,
                            accessible_name="Edge glow opacity")
+        self.corners = Slider(bounds=empty, value=NEON_BLUE.control_radius, maximum=24,
+                              accessible_name="Control corner radius")
         self.tint_label = Label("", bounds=empty, font_size=14)
         self.glow_label = Label("", bounds=empty, font_size=14)
-        self.footer.add(self.tint_label, self.tint, self.glow_label, self.glow)
-        self.tint.on("changed", lambda _: self.apply_theme())
-        self.glow.on("changed", lambda _: self.apply_theme())
+        self.corners_label = Label("", bounds=empty, font_size=14)
+        self._finish_controls = ((self.tint_label, self.tint), (self.glow_label, self.glow),
+                                 (self.corners_label, self.corners))
+        for label, slider in self._finish_controls:
+            self.footer.add(label, slider)
+            slider.on("changed", lambda _: self.apply_theme())
         self.create.on("click", lambda _: self._launch())
         self.motion.on("changed", lambda _: self.apply_theme())
-        self.add(self.backdrop, self.status, self.copy_theme, self.surface, self.footer)
+        self.add(self.backdrop, self.status, self.copy_theme, self.save_theme, self.surface,
+                 self.footer)
         self.apply_theme()
 
     def prepare_layout(self, viewport: Rect) -> None:
         self._set_layout_bounds(viewport)
         width, height = viewport.width, viewport.height
         pad = 24.0
-        self.status._set_layout_bounds(Rect(viewport.x + pad, viewport.y + 16, 164, 32))
+        toolbar_width = max(0, width - 2 * pad)
+        gap = min(8.0, toolbar_width)
+        half = (toolbar_width - gap) / 2
+        save_width, copy_width = min(130.0, half), min(150.0, half)
+        save_x = viewport.right - pad - save_width
+        copy_x = save_x - gap - copy_width
+        status_width = min(164, max(0, copy_x - gap - viewport.x - pad))
+        self.status.visible = status_width >= 144
+        self.status._set_layout_bounds(Rect(viewport.x + pad, viewport.y + 16, status_width, 32))
+        self.copy_theme._set_layout_bounds(Rect(copy_x, viewport.y + 14, copy_width, 34))
+        self.save_theme._set_layout_bounds(Rect(save_x, viewport.y + 14, save_width, 34))
         surface_width = min(680.0, max(0.0, width - 2 * pad))
-        self.copy_theme._set_layout_bounds(Rect(viewport.right - pad - 162, viewport.y + 14,
-                                               162, 34))
         available_height = max(0.0, height - 138)
         surface_height = min(380.0, available_height)
         surface = Rect(
@@ -157,10 +176,11 @@ class StudioPreview(Panel):
         )
         tray = Rect(viewport.x + pad, viewport.bottom - 72, max(0, width - 2 * pad), 62)
         self.footer._set_layout_bounds(tray)
-        lane = max(0, (tray.width - 48) / 2)
-        for column, (label, slider) in enumerate(((self.tint_label, self.tint),
-                                                   (self.glow_label, self.glow))):
-            left = tray.x + 12 + column * (lane + 24)
+        gap = 12 if tray.width < 480 else 24
+        count = len(self._finish_controls)
+        lane = max(0, (tray.width - 24 - (count - 1) * gap) / count)
+        for column, (label, slider) in enumerate(self._finish_controls):
+            left = tray.x + 12 + column * (lane + gap)
             label._set_layout_bounds(Rect(left, tray.y + 3, lane, 21))
             slider._set_layout_bounds(Rect(left, tray.y + 25, lane, 32))
 
@@ -170,6 +190,7 @@ class StudioPreview(Panel):
             base = base.with_accent(self.accent)
         return replace(
             base,
+            control_radius=self.corners.value,
             reduced_motion=self.reduced_motion or not self.motion.checked,
             surface_style=SurfaceStyle(
                 kind=self.material,
@@ -179,8 +200,8 @@ class StudioPreview(Panel):
                 glow_opacity=self.glow.value / 100,
                 depth_layers=self.depth,
                 depth_spacing=7,
-                tilt_x=8,
-                tilt_y=-11,
+                tilt_x=self.tilt_x,
+                tilt_y=self.tilt_y,
             ),
         )
 
@@ -193,15 +214,20 @@ class StudioPreview(Panel):
         tint = f"{self.tint.value:g}%" if self.tint.enabled else "opaque"
         self.tint_label.text = f"Tint · {tint}"
         self.glow_label.text = f"Edge glow · {self.glow.value:g}%"
+        self.corners_label.text = f"Corners · {self.corners.value:g}"
         roles: tuple[ColorRole, ...] = ("accent", "accent_hover", "accent_pressed")
         for chip, label, role in zip(self.swatch_chips, self.swatch_hex, roles, strict=True):
             chip.background = theme.surface_color(role)
             label.text = getattr(theme.palette, role)
+        self.emit("design_changed")
+
+    def appearance_themes(self) -> dict[str, Theme]:
+        """Build both authored appearances independently of the project name."""
+        return {"dark": self._material_theme(False), "light": self._material_theme(True)}
 
     def theme_package(self) -> ThemePackage:
         """Snapshot the authored finish in both modes, defaulting to the visible mode."""
-        variants = {"dark": self._material_theme(False), "light": self._material_theme(True)}
-        return ThemePackage(self.project.value.strip() or "Studio theme", variants,
+        return ThemePackage(self.project.value.strip() or "Studio theme", self.appearance_themes(),
                             "light" if self.light else "dark")
 
     def _copy_theme(self, _event: Event) -> None:
@@ -217,9 +243,33 @@ class StudioPreview(Panel):
         else:
             self.result.text = "Copied dark and light theme JSON."
 
+    def _save_theme(self, _event: Event) -> None:
+        try:
+            package = self.theme_package()
+        except ValueError:
+            self.result.text = "Use a valid project name (up to 120 characters)."
+            return
+        window = self.mounted_window
+        if window is None:
+            return
+        try:
+            path = window.choose_save_file("studio-theme.json", title="Save SwirUI theme")
+            if path is None:
+                self.result.text = "Save cancelled."
+                return
+            package.save(path)
+        except NotImplementedError:
+            self.result.text = "File dialog unavailable. Use Copy theme JSON."
+        except OSError:
+            self.result.text = "Could not save. Check the destination and retry."
+        else:
+            self.result.text = f"Saved {path.name}."
+
     def set_title(self, value: str) -> None:
-        text = value.strip()
-        self.heading.text = text or "Build beyond ordinary."
+        text = value.strip() or "Build beyond ordinary."
+        if self.heading.text != text:
+            self.heading.text = text
+            self.emit("design_changed")
 
     def set_material(self, value: str) -> None:
         normalized = value.strip().lower()
@@ -240,11 +290,13 @@ class StudioPreview(Panel):
         with state_transaction():
             self.material = "glass"
             self.depth = 3
+            self.tilt_x, self.tilt_y = _DEFAULT_TILT
             self.light = False
             self.heading.text = "Build beyond ordinary."
             self.project.value = "Neon workspace"
             self.tint.value = 74
             self.glow.value = 5.5
+            self.corners.value = NEON_BLUE.control_radius
             self.motion.checked = True
             self.result.text = "Ready for your next idea."
             self.apply_theme()
@@ -254,6 +306,8 @@ class StudioPreview(Panel):
         self.result.text = (
             f"{name} is ready to render." if name else "Name the project before launch."
         )
+        if name:
+            self.emit("launch_requested")
 
 
 class Studio(Panel):
@@ -381,6 +435,10 @@ class Studio(Panel):
                 PropertyItem("title", "Headline", "Build beyond ordinary.", category="Content"),
                 PropertyItem("material", "Material", "glass", category="Appearance"),
                 PropertyItem("depth", "Depth layers", 3, category="Appearance"),
+                PropertyItem("tilt_x", "Tilt X (°)", self.preview.tilt_x, category="Appearance",
+                             description="Tilt the top and bottom edges, −35° to 35°."),
+                PropertyItem("tilt_y", "Tilt Y (°)", self.preview.tilt_y, category="Appearance",
+                             description="Tilt the sides of the depth layers, −35° to 35°."),
                 PropertyItem("light", "Light theme", False, category="Appearance"),
                 PropertyItem(
                     "renderer",
@@ -554,6 +612,8 @@ class Studio(Panel):
         self.inspector.set_value("title", self.preview.heading.text)
         self.inspector.set_value("material", self.preview.material)
         self.inspector.set_value("depth", self.preview.depth)
+        self.inspector.set_value("tilt_x", self.preview.tilt_x)
+        self.inspector.set_value("tilt_y", self.preview.tilt_y)
         self.inspector.set_value("light", self.preview.light)
 
     def _property_changed(self, event: Event) -> None:
@@ -576,6 +636,16 @@ class Studio(Panel):
             if depth != value:
                 self.inspector.set_value("depth", depth)
                 return
+        elif key in ("tilt_x", "tilt_y"):
+            angle = max(-35, min(35, int(value)))
+            if angle != value:
+                self.inspector.set_value(key, angle)
+                return
+            if key == "tilt_x":
+                self.preview.tilt_x = angle
+            else:
+                self.preview.tilt_y = angle
+            self.preview.apply_theme()
         elif key == "light":
             light = bool(value)
             if light != self.light:
@@ -634,6 +704,7 @@ def run(*, smoke_test: bool = False) -> int:
     window.on("resized", lambda _: root.resize_to(window.width, window.height))
     mount(window, root)
     app.add_window(window)
+    bind_comparison(app, window, root.preview)
     try:
         if not smoke_test:
             return app.run()

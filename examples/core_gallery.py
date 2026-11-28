@@ -26,7 +26,7 @@ from swirui import (
     mount,
     state_transaction,
 )
-from swirui.rendering import Rect, WgpuRenderer
+from swirui.rendering import Color, GradientStop, LinearGradient, Point, Rect, WgpuRenderer
 
 
 class Gallery(Panel):
@@ -51,7 +51,15 @@ class Gallery(Panel):
         for x, width in ((32, 352), (408, 352), (784, 384)):
             self.add(Card(bounds=Rect(x, 232, width, 536), show_shadow=False, border_width=1))
         self.add(Label("01 / SIGNAL", bounds=Rect(56, 256, 290, 28), font_size=13))
-        self.progress = ProgressBar(bounds=Rect(56, 330, 304, 12), value=64)
+        self.progress = ProgressBar(
+            bounds=Rect(56, 330, 304, 16), value=64,
+            fill_gradient=LinearGradient(
+                Point(0, .5), Point(1, .5),
+                (GradientStop(0, Color.from_hex("#A38BFF")),
+                 GradientStop(.52, Color.from_hex("#51B5EF")),
+                 GradientStop(1, Color.from_hex("#82E7B8"))),
+            ),
+        )
         self.ring = ProgressRing(bounds=Rect(56, 370, 88, 88), value=64, thickness=7)
         self.percent = Label("64%", bounds=Rect(168, 385, 180, 40), font_size=30)
         self.slider = Slider(bounds=Rect(56, 496, 304, 32), value=64)
@@ -110,7 +118,8 @@ class Gallery(Panel):
             "Focus for help", bounds=Rect(978, 428, 166, 40), variant=ButtonVariant.GHOST
         )
         self.tip = Tooltip(
-            "Your work stays right here.", bounds=Rect(808, 488, 336, 44), target=self.help
+            "Open dialog previews the current theme.\nPress Escape to hide this hint.",
+            bounds=Rect(808, 488, 336, 60), target=self.help,
         )
         self.open_dialog = Button("Open dialog", bounds=Rect(808, 566, 336, 44))
         self.open_dialog.on("click", lambda _: self.show_dialog())

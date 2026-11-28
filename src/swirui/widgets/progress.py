@@ -3,13 +3,22 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
+from functools import lru_cache
+from itertools import pairwise
 
 from swirui.core import AccessibilityRole
-from swirui.rendering.geometry import Color, CornerRadius, Path2D, Point, Rect
+from swirui.rendering.geometry import Color, CornerRadius, Path2D, Point, Rect, Size, _signed_area
+from swirui.rendering.gradients import (
+    GradientStop,
+    LinearGradient,
+    _color_at_stops,
+    _validate_stops,
+)
 from swirui.rendering.scene import SceneNode, SceneNodeKind
 from swirui.theme import Theme
 
-from .base import Widget
+from .base import Widget, _gradient_track_fill
 
 _TRACK = Color.from_hex("#263946")
 _FILL = Color.from_hex("#0A98F0")
@@ -116,7 +125,7 @@ class _ProgressWidget(Widget):
 
 
 class ProgressBar(_ProgressWidget):
-    """Horizontal determinate progress bar rendered by retained rectangles."""
+    """Determinate bar with an optional gradient anchored to the entire track."""
 
     def __init__(
         self,
@@ -125,6 +134,7 @@ class ProgressBar(_ProgressWidget):
         value: float = 0.0,
         minimum: float = 0.0,
         maximum: float = 100.0,
+        fill_gradient: LinearGradient | None = None,
         key: str | None = None,
         theme: Theme | None = None,
         opacity: float = 1.0,
@@ -144,6 +154,21 @@ class ProgressBar(_ProgressWidget):
             accessible_name=accessible_name,
             accessible_description=accessible_description,
         )
+        self._fill_gradient: LinearGradient | None = None
+        self.fill_gradient = fill_gradient
+
+    @property
+    def fill_gradient(self) -> LinearGradient | None:
+        """The track-wide color scale. None uses the current theme accent."""
+        return self._fill_gradient
+
+    @fill_gradient.setter
+    def fill_gradient(self, value: LinearGradient | None) -> None:
+        if value is not None and not isinstance(value, LinearGradient):
+            raise TypeError("fill_gradient must be a LinearGradient or None.")
+        if value != self._fill_gradient:
+            self._fill_gradient = value
+            self.invalidate(reason="fill_gradient")
 
     def build_scene_node(self) -> SceneNode:
         radius = min(self.bounds.height / 2.0, self.bounds.width / 2.0)
@@ -158,28 +183,27 @@ class ProgressBar(_ProgressWidget):
             hit_testable=False,
         )
         fill_width = self.bounds.width * self.progress
-        if fill_width > 0.0:
-            root.add(
-                SceneNode(
-                    key=f"{self.key}:fill",
-                    kind=SceneNodeKind.RECTANGLE,
-                    bounds=Rect(
-                        self.bounds.x,
-                        self.bounds.y,
-                        fill_width,
-                        self.bounds.height,
-                    ),
-                    z_index=1,
-                    fill=self._fill if self.enabled else self._disabled,
-                    corner_radius=CornerRadius.uniform(min(radius, fill_width / 2.0)),
-                    hit_testable=False,
-                )
+        if fill_width <= 0.0 or self.bounds.height <= 0.0:
+            return root
+        key = f"{self.key}:fill"
+        filled = Rect(self.bounds.x, self.bounds.y, fill_width, self.bounds.height)
+        if self.enabled and self.fill_gradient is not None:
+            paint = _gradient_track_fill(
+                self.fill_gradient, key, self.bounds, filled, root.corner_radius
             )
+        else:
+            paint = SceneNode(
+                key, SceneNodeKind.RECTANGLE, filled, z_index=1,
+                fill=self._fill if self.enabled else self._disabled,
+                corner_radius=CornerRadius.uniform(min(radius, fill_width / 2.0)),
+                hit_testable=False,
+            )
+        root.add(paint)
         return root
 
 
 class ProgressRing(_ProgressWidget):
-    """Determinate progress ring compiled to a bounded set of retained paths."""
+    """Clockwise progress ring with an optional fixed color scale starting at twelve o'clock."""
 
     def __init__(
         self,
@@ -190,6 +214,7 @@ class ProgressRing(_ProgressWidget):
         maximum: float = 100.0,
         thickness: float = 6.0,
         segments: int = 48,
+        sweep_stops: Sequence[GradientStop] | None = None,
         key: str | None = None,
         theme: Theme | None = None,
         opacity: float = 1.0,
@@ -204,6 +229,8 @@ class ProgressRing(_ProgressWidget):
             raise ValueError("segments must be between 8 and 128.")
         self._thickness = thickness
         self._segments = int(segments)
+        self._sweep_stops: tuple[GradientStop, ...] | None = None
+        self._sweep_colors: tuple[Color, ...] = ()
         super().__init__(
             bounds=bounds,
             theme=theme,
@@ -216,6 +243,7 @@ class ProgressRing(_ProgressWidget):
             accessible_name=accessible_name,
             accessible_description=accessible_description,
         )
+        self.sweep_stops = sweep_stops
 
     @property
     def thickness(self) -> float:
@@ -224,6 +252,27 @@ class ProgressRing(_ProgressWidget):
     @property
     def segments(self) -> int:
         return self._segments
+
+    @property
+    def sweep_stops(self) -> tuple[GradientStop, ...] | None:
+        """Colors along one full turn. None follows the current theme accent."""
+        return self._sweep_stops
+
+    @sweep_stops.setter
+    def sweep_stops(self, value: Sequence[GradientStop] | None) -> None:
+        stops = None if value is None else tuple(value)
+        if stops == self._sweep_stops:
+            return
+        colors: tuple[Color, ...] = ()
+        if stops is not None:
+            if not all(isinstance(stop, GradientStop) for stop in stops):
+                raise TypeError("sweep_stops must contain GradientStop values.")
+            _validate_stops(stops)
+            colors = tuple(_color_at_stops(stops, (index + .5) / self.segments)
+                           for index in range(self.segments))
+        self._sweep_stops = stops
+        self._sweep_colors = colors
+        self.invalidate(reason="sweep_stops")
 
     def build_scene_node(self) -> SceneNode:
         root = SceneNode(
@@ -234,54 +283,60 @@ class ProgressRing(_ProgressWidget):
             z_index=self.z_index,
             hit_testable=False,
         )
-        outer_radius = max(0.0, min(self.bounds.width, self.bounds.height) / 2.0)
-        if outer_radius <= 0.0:
-            return root
-        inner_radius = max(0.0, outer_radius - min(self._thickness, outer_radius))
-        center_x = self.bounds.width / 2.0
-        center_y = self.bounds.height / 2.0
-        active_segments = round(self._segments * self.progress)
-        for index in range(self._segments):
-            start = -math.pi / 2.0 + (2.0 * math.pi * index / self._segments)
-            end = -math.pi / 2.0 + (2.0 * math.pi * (index + 1) / self._segments)
-            outer_a = Point(
-                center_x + math.cos(start) * outer_radius,
-                center_y + math.sin(start) * outer_radius,
-            )
-            outer_b = Point(
-                center_x + math.cos(end) * outer_radius,
-                center_y + math.sin(end) * outer_radius,
-            )
-            if inner_radius > 0.0:
-                inner_b = Point(
-                    center_x + math.cos(end) * inner_radius,
-                    center_y + math.sin(end) * inner_radius,
-                )
-                inner_a = Point(
-                    center_x + math.cos(start) * inner_radius,
-                    center_y + math.sin(start) * inner_radius,
-                )
-                path = Path2D.polygon(outer_a, outer_b, inner_b, inner_a)
+        sweep = self.progress * self.segments
+        step_angle = math.tau / self.segments
+
+        def paint(key: str, path: Path2D | None, color: Color) -> None:
+            if path is not None:
+                root.children.append(SceneNode(
+                    key, SceneNodeKind.PATH, self.bounds, fill=color, path=path,
+                    z_index=1, hit_testable=False,
+                ))
+
+        track = _ring_track(self.bounds.size, self.thickness, self.segments)
+        for index, segment in enumerate(track):
+            key = f"{self.key}:segment:{index}"
+            fraction = sweep - index
+            fill = self._sweep_colors[index] if self._sweep_colors else self._fill
+            if segment is not None and self.enabled and 0 < fraction < 1:
+                # Intersect the progress ray with both polygon edges. Splitting the
+                # chords keeps the outline fixed even on deliberately faceted rings.
+                leading = math.sin(fraction * step_angle)
+                weight = leading / (leading + math.sin((1 - fraction) * step_angle))
+                outer_a, outer_b, inner_b = segment.points[:3]
+                inner_a = segment.points[-1]
+                outer_tip = Point(outer_a.x + weight * (outer_b.x - outer_a.x),
+                                  outer_a.y + weight * (outer_b.y - outer_a.y))
+                inner_tip = Point(inner_a.x + weight * (inner_b.x - inner_a.x),
+                                  inner_a.y + weight * (inner_b.y - inner_a.y))
+                paint(key, _ring_wedge(outer_a, outer_tip, inner_tip, inner_a), fill)
+                remaining = _ring_wedge(outer_tip, outer_b, inner_b, inner_tip)
+                paint(key + ":remaining", remaining, self._track)
             else:
-                path = Path2D.polygon(outer_a, outer_b, Point(center_x, center_y))
-            active = index < active_segments
-            color = self._fill if active and self.enabled else self._track
-            if not self.enabled:
-                color = self._disabled
-            root.add(
-                SceneNode(
-                    key=f"{self.key}:segment:{index}",
-                    kind=SceneNodeKind.PATH,
-                    bounds=Rect(
-                        self.bounds.x,
-                        self.bounds.y,
-                        self.bounds.width,
-                        self.bounds.height,
-                    ),
-                    z_index=1,
-                    fill=color,
-                    path=path,
-                    hit_testable=False,
-                )
-            )
+                color = fill if fraction >= 1 else self._track
+                paint(key, segment, color if self.enabled else self._disabled)
         return root
+
+
+def _ring_wedge(a: Point, b: Point, inner_b: Point, inner_a: Point) -> Path2D | None:
+    points = (a, b, inner_b, inner_a)
+    if abs(_signed_area(points)) <= 1e-9:
+        return None
+    return Path2D._from_convex_outline(points)
+
+
+@lru_cache(maxsize=32)
+def _ring_track(size: Size, thickness: float, segments: int) -> tuple[Path2D | None, ...]:
+    outer = min(size.width, size.height) / 2
+    if outer == 0:
+        return ()
+    inner = max(0.0, outer - thickness)
+    cx, cy = size.width / 2, size.height / 2
+    edges = []
+    for index in range(segments):
+        angle = math.tau * index / segments
+        x, y = math.sin(angle), -math.cos(angle)
+        edges.append((Point(cx + outer * x, cy + outer * y), Point(cx + inner * x, cy + inner * y)))
+    edges.append(edges[0])
+    return tuple(_ring_wedge(a, b, inner_b, inner_a)
+                 for (a, inner_a), (b, inner_b) in pairwise(edges))

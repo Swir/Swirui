@@ -1,6 +1,6 @@
-"""Interactive retained SplitView demo for SwirUI 0.4."""
+"""Resize two panes and edit a filename in the right pane."""
 
-from swirui import App, Button, Component, Label, Panel, SplitView, Window, mount
+from swirui import App, Button, Component, Input, Label, Panel, SplitView, Window, mount
 from swirui.rendering import Color, Rect
 
 
@@ -52,12 +52,11 @@ def main() -> int:
         border_width=0.0,
     )
     second.add(
-        Label(
+        Input(
             "main.py",
-            key="editor-title",
-            bounds=Rect(24.0, 20.0, 220.0, 30.0),
-            font_size=17.0,
-            color=Color.from_hex("#ECF9FF"),
+            key="filename",
+            bounds=Rect(24.0, 20.0, 220.0, 42.0),
+            accessible_name="Filename",
         ),
         Label(
             "from swirui import App, SplitView",

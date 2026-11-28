@@ -1,6 +1,10 @@
-from swirui import Component, ProgressBar, ProgressRing, build_accessibility_tree
+import math
+
+import pytest
+
+from swirui import FUTURE_LIGHT, Component, ProgressBar, ProgressRing, build_accessibility_tree
 from swirui.core import AccessibilityRole, Event
-from swirui.rendering import Rect, SceneNodeKind
+from swirui.rendering import Color, GradientStop, LinearGradient, Point, Rect, SceneNodeKind
 from swirui.widgets import compile_component_scene
 
 
@@ -40,6 +44,47 @@ def test_progress_bar_compiles_fill_and_numeric_semantics() -> None:
     assert changes[0].data["value"] == 100.0
 
 
+def test_gradient_bar_clips_a_fixed_scale_and_remains_pointer_transparent() -> None:
+    bounds = Rect(10, 20, 240, 16)
+    gradient = LinearGradient.two_color(Color.from_hex("#A38BFF"), Color.from_hex("#82E7B8"),
+                                        start=Point(0, 0), end=Point(1, 1))
+    bar = ProgressBar(bounds=bounds, minimum=20, maximum=60, value=30, fill_gradient=gradient)
+    root = Component(theme=FUTURE_LIGHT)
+    root.add(bar)
+    changes = []
+    bar.on("changed", changes.append)
+    paint = bar.build_scene_node().children[0]
+    assert paint.clip_to_bounds and paint.bounds == Rect(10, 20, 60, 16)
+    assert all(node.bounds == bounds for node in paint.children)
+    assert len({node.fill for node in paint.children}) > 2
+    assert not any(node.hit_testable for node in paint.walk())
+    scene = compile_component_scene(root, width=320, height=100)
+    assert scene is not None and scene.hit_test(Point(50, 28)) is None
+    assert bar.accessible_value == 30 and bar.accessible_value_text == "25%"
+
+    bar.enabled = False
+    assert bar.build_scene_node().children[0].fill == FUTURE_LIGHT.surface_color("disabled")
+    bar.enabled = True
+    assert bar.build_scene_node().children[0].children[0].path is paint.children[0].path
+    bar.fill_gradient = None
+    assert bar.build_scene_node().children[0].fill == FUTURE_LIGHT.surface_color("accent")
+    with pytest.raises(TypeError, match="fill_gradient"):
+        bar.fill_gradient = "mint"
+    assert bar.fill_gradient is None and not changes
+    bar.fill_gradient = gradient
+    bar.value = 20
+    assert not bar.build_scene_node().children
+    bar.value = 60
+    assert bar.build_scene_node().children[0].bounds == bounds
+    bar.bounds = Rect(10, 20, 240, 0)
+    assert not bar.build_scene_node().children
+    for size in (.0001, .00001):
+        bar.bounds = Rect(10, 20, size, size)
+        assert bar.build_scene_node().children[0].bounds == bar.bounds
+    bar.bounds = bounds
+    assert bar.build_scene_node().children[0].children[0].path is paint.children[0].path
+
+
 def test_progress_ring_uses_deterministic_retained_path_segments() -> None:
     root = Component("root")
     ring = ProgressRing(
@@ -75,6 +120,95 @@ def test_full_thickness_progress_ring_uses_valid_center_triangles() -> None:
     assert len(node.children) == 8
     assert all(child.path is not None for child in node.children)
     assert all(child.path.triangle_count == 1 for child in node.children if child.path is not None)
+
+
+@pytest.mark.parametrize("thickness", [9, 100])
+def test_progress_ring_preserves_its_outline_at_fractional_values(thickness):
+    ring = ProgressRing(bounds=Rect(12, 10, 110, 80), minimum=50, maximum=150,
+                        value=50, segments=8, thickness=thickness, theme=FUTURE_LIGHT)
+    accent = FUTURE_LIGHT.surface_color("accent")
+    center = Point(55, 40)
+
+    def area(nodes):
+        return sum(abs((b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y)) / 2
+                   for node in nodes for a, b, c in node.path.triangulate())
+
+    track_area = area(ring.build_scene_node().children)
+    last_segment = ring.build_scene_node().children[-1].path
+    for percent in (1, 4, 53, 99):
+        ring.value = 50 + percent
+        nodes = ring.build_scene_node().children
+        active = [node for node in nodes if node.fill == accent]
+        assert len(nodes) == 9 and active
+        tip = active[-1].path.points[1]
+        angle = math.atan2(tip.x - center.x, center.y - tip.y) % math.tau
+        assert angle == pytest.approx(math.tau * percent / 100)
+        assert area(nodes) == pytest.approx(track_area)
+        if percent < 87.5:
+            assert nodes[-1].path is last_segment
+        assert all(not node.hit_testable for node in nodes)
+        assert ring.accessible_value_text == f"{percent}%"
+    for value in (50, math.nextafter(50.0, 150), math.nextafter(62.5, 50),
+                  62.5, math.nextafter(62.5, 150), math.nextafter(150.0, 50), 150):
+        ring.value = value
+        assert area(ring.build_scene_node().children) == pytest.approx(track_area)
+    ring.enabled = False
+    nodes = ring.build_scene_node().children
+    assert len(nodes) == 8 and all(node.fill == FUTURE_LIGHT.surface_color("disabled")
+                                   for node in nodes)
+
+
+def test_ring_sweep_colors_stay_at_fixed_angles_as_progress_and_theme_change():
+    plum, gold = Color.from_hex("#8913DA"), Color.from_hex("#FFBC37")
+    stops = [GradientStop(.25, plum), GradientStop(.75, gold)]
+    ring = ProgressRing(bounds=Rect(10, 20, 120, 90), minimum=10, maximum=110,
+                        value=110, segments=8, sweep_stops=stops)
+    root = Component(theme=FUTURE_LIGHT)
+    root.add(ring)
+    changes = []
+    ring.on("changed", changes.append)
+    stops.reverse()
+    full = ring.build_scene_node().children
+    assert [node.fill for node in full[:2]] == [plum] * 2
+    assert [node.fill for node in full[-2:]] == [gold] * 2
+    assert len({node.fill for node in full}) == 6
+    ring.value = 52
+    part = ring.build_scene_node().children
+    assert [node.fill for node in part[:4]] == [node.fill for node in full[:4]]
+    track = FUTURE_LIGHT.surface_color("border")
+    assert all(node.fill == track for node in part[4:])
+    assert part[0].path is full[0].path and ring.accessible_value_text == "42%"
+    ring.value = 10
+    assert all(node.fill == track for node in ring.build_scene_node().children)
+    ring.value = 110
+    ring.enabled = False
+    disabled = FUTURE_LIGHT.surface_color("disabled")
+    assert all(node.fill == disabled for node in ring.build_scene_node().children)
+    ring.enabled = True
+    ring.sweep_stops = stops[::-1]
+    assert [n.fill for n in ring.build_scene_node().children] == [n.fill for n in full]
+    ring.sweep_stops = (GradientStop(.25, gold), GradientStop(.75, plum))
+    recolored = ring.build_scene_node().children
+    assert recolored[0].fill == gold and recolored[-1].fill == plum
+    assert all(n.path is original.path for n, original in zip(recolored, full, strict=True))
+    ring.sweep_stops = None
+    plain = ring.build_scene_node().children
+    assert all(n.fill == FUTURE_LIGHT.surface_color("accent") for n in plain)
+    assert all(n.path is original.path for n, original in zip(plain, full, strict=True))
+    assert len(changes) == 3
+
+
+def test_ring_rejects_invalid_sweep_without_losing_the_current_colors():
+    stops = (GradientStop(0, Color.from_hex("#112233")), GradientStop(1, Color.from_hex("#FFEECC")))
+    ring = ProgressRing(bounds=Rect(0, 0, 88, 88), value=100, sweep_stops=stops)
+    colors = [n.fill for n in ring.build_scene_node().children]
+    for invalid in ((), stops[:1], stops[::-1], (stops[0], stops[0])):
+        with pytest.raises(ValueError):
+            ring.sweep_stops = invalid
+    with pytest.raises(TypeError, match="GradientStop"):
+        ring.sweep_stops = ["coral", "mint"]
+    assert ring.sweep_stops == stops
+    assert [n.fill for n in ring.build_scene_node().children] == colors
 
 
 def test_progress_widgets_validate_configuration() -> None:

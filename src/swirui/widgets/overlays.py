@@ -292,8 +292,8 @@ class Modal(Widget):
             return
         if platform_event.ctrl or platform_event.alt or platform_event.meta:
             return
+        window = self.mounted_window
         if platform_event.key_code == _VK_TAB:
-            window = self.mounted_window
             if window is None:
                 return
             candidates = [
@@ -301,20 +301,12 @@ class Modal(Widget):
                 for item in self.walk(include_self=False)
                 if window._component_is_focus_candidate(item)
             ]
-            current = window.focused_component
-            if not candidates:
-                target: Component = self
-            elif current not in candidates:
-                target = candidates[-1] if platform_event.shift else candidates[0]
-            else:
-                step = -1 if platform_event.shift else 1
-                target = candidates[(candidates.index(current) + step) % len(candidates)]
-            window.focus_component(target)
+            window._advance_focus(candidates, reverse=platform_event.shift, fallback=self)
             event.prevent_default()
             return
         if (
             self._dismiss_on_escape
-            and platform_event.key_code == _VK_ESCAPE
+            and platform_event.key_code == (window._escape_key_code if window else _VK_ESCAPE)
             and self.dismiss(reason="escape")
         ):
             event.prevent_default()
