@@ -22,7 +22,8 @@ from .base import Widget, _gradient_track_fill
 
 _TRACK = Color.from_hex("#263946")
 _FILL = Color.from_hex("#0A98F0")
-_DISABLED = Color.from_hex("#46545D")
+_DISABLED_TRACK = Color.from_hex("#46545D")
+_DISABLED_FILL = Color.from_hex("#080F15")
 
 
 def _validate_range(minimum: float, maximum: float) -> tuple[float, float]:
@@ -51,7 +52,8 @@ class _ProgressWidget(Widget):
 
     _track: Color
     _fill: Color
-    _disabled: Color
+    _disabled_track: Color
+    _disabled_fill: Color
 
     def __init__(
         self,
@@ -84,7 +86,8 @@ class _ProgressWidget(Widget):
             {
                 "_track": ("surface", "border", _TRACK),
                 "_fill": ("surface", "accent", _FILL),
-                "_disabled": ("surface", "disabled", _DISABLED),
+                "_disabled_track": ("surface", "disabled", _DISABLED_TRACK),
+                "_disabled_fill": ("surface", "disabled_text", _DISABLED_FILL),
             },
             {},
         )
@@ -178,7 +181,7 @@ class ProgressBar(_ProgressWidget):
             bounds=self.bounds,
             opacity=self.opacity,
             z_index=self.z_index,
-            fill=self._track if self.enabled else self._disabled,
+            fill=self._track if self.enabled else self._disabled_track,
             corner_radius=CornerRadius.uniform(radius),
             hit_testable=False,
         )
@@ -194,7 +197,7 @@ class ProgressBar(_ProgressWidget):
         else:
             paint = SceneNode(
                 key, SceneNodeKind.RECTANGLE, filled, z_index=1,
-                fill=self._fill if self.enabled else self._disabled,
+                fill=self._fill if self.enabled else self._disabled_fill,
                 corner_radius=CornerRadius.uniform(min(radius, fill_width / 2.0)),
                 hit_testable=False,
             )
@@ -294,11 +297,14 @@ class ProgressRing(_ProgressWidget):
                 ))
 
         track = _ring_track(self.bounds.size, self.thickness, self.segments)
+        track_color = self._track if self.enabled else self._disabled_track
+        fill_color = self._fill if self.enabled else self._disabled_fill
+        sweep_colors = self._sweep_colors if self.enabled else ()
         for index, segment in enumerate(track):
             key = f"{self.key}:segment:{index}"
             fraction = sweep - index
-            fill = self._sweep_colors[index] if self._sweep_colors else self._fill
-            if segment is not None and self.enabled and 0 < fraction < 1:
+            fill = sweep_colors[index] if sweep_colors else fill_color
+            if segment is not None and 0 < fraction < 1:
                 # Intersect the progress ray with both polygon edges. Splitting the
                 # chords keeps the outline fixed even on deliberately faceted rings.
                 leading = math.sin(fraction * step_angle)
@@ -311,10 +317,9 @@ class ProgressRing(_ProgressWidget):
                                   inner_a.y + weight * (inner_b.y - inner_a.y))
                 paint(key, _ring_wedge(outer_a, outer_tip, inner_tip, inner_a), fill)
                 remaining = _ring_wedge(outer_tip, outer_b, inner_b, inner_tip)
-                paint(key + ":remaining", remaining, self._track)
+                paint(key + ":remaining", remaining, track_color)
             else:
-                color = fill if fraction >= 1 else self._track
-                paint(key, segment, color if self.enabled else self._disabled)
+                paint(key, segment, fill if fraction >= 1 else track_color)
         return root
 
 

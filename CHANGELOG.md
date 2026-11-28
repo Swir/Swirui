@@ -4,6 +4,14 @@ All notable changes to SwirUI will be documented in this file.
 
 The project uses semantic versioning where practical during development. Breaking API changes may occur before 1.0.
 
+## 0.2.0b2 — 2026-11-28
+
+- Disabled progress bars and rings now distinguish the completed portion from
+  the remaining track, including when the value changes while disabled.
+- Disabled sliders retain a visible selected track for a single value or range.
+  Re-enabling the controls restores their gradients at the current values.
+  Try both states independently in `examples/range_progress_demo.py`.
+
 ## 0.2.0b1 — 2026-11-28
 
 - Design a material in Studio and compare the dark and light versions in a

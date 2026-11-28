@@ -95,6 +95,7 @@ class _SliderBase(Widget):
     _track: Color
     _accent: Color
     _track_disabled: Color
+    _thumb_disabled: Color
     _fill_gradient: LinearGradient | None = None
 
     @property
@@ -272,7 +273,8 @@ class _SliderBase(Widget):
         else:
             fill = SceneNode(
                 key, SceneNodeKind.RECTANGLE, filled, z_index=1,
-                fill=self._accent if self.enabled else self._track_disabled,
+                fill=self._accent if self.enabled else self._thumb_disabled,
+                opacity=1.0 if self.enabled else 0.65,
                 corner_radius=radius, hit_testable=False,
             )
         root.add(fill)

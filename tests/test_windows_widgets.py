@@ -453,6 +453,12 @@ def test_retained_ranges_and_progress_render_in_persistent_wgpu_context() -> Non
         assert half[:2] == full[:2] and half[2] == track[2] != full[2]
         assert half[0][0] > half[0][2] and full[2][2] > full[2][0]
         assert len(set(full)) == 3 and sample_bar(50) == half
+        progress.enabled = False
+        empty, middle, complete = (sample_bar(value) for value in (0, 50, 100))
+        assert len(set(empty)) == len(set(complete)) == 1 and empty != complete
+        assert middle == [complete[0], complete[0], empty[0]]
+        progress.enabled = True
+        assert sample_bar(50) == half
         assert renderer._contexts[hwnd] is context
     finally:
         app.stop()
@@ -510,7 +516,9 @@ def test_ring_sweep_reveals_fixed_gpu_colors_and_restores_theme_accent():
         assert all(color == rgb(scale.stops[-1].color) for color in recolored[:2])
         assert recolored[2:] == track[2:]
         ring.enabled = False
-        assert all(color == rgb(FUTURE_DARK.surface_color("disabled")) for color in sample(100))
+        muted = sample(42)
+        assert all(color == rgb(FUTURE_DARK.surface_color("disabled_text")) for color in muted[:2])
+        assert all(color == rgb(FUTURE_DARK.surface_color("disabled")) for color in muted[2:])
         ring.enabled = True
         ring.sweep_stops = None
         assert all(color == rgb(FUTURE_DARK.surface_color("accent")) for color in sample(100))
@@ -604,6 +612,17 @@ def test_slider_color_scale_stays_in_place_as_either_handle_moves() -> None:
         prefix, middle = samples()
         assert prefix == (full[0], full[1], empty[2])
         assert middle == (empty[0], full[1], empty[2])
+        single.enabled = interval.enabled = False
+        muted_prefix, muted_interval = samples()
+        filled, track = muted_prefix[0], muted_prefix[2]
+        assert filled != track
+        assert muted_prefix == (filled, filled, track)
+        assert muted_interval == (track, filled, track)
+        interval.lower_value = interval.upper_value
+        assert samples()[1] == (track, track, track)
+        interval.lower_value = 35
+        single.enabled = interval.enabled = True
+        assert samples() == [prefix, middle]
         interval.upper_value = 100
         assert samples()[1] == (empty[0], full[1], full[2])
         assert renderer._contexts[window.native_handle.value] is context
@@ -612,11 +631,13 @@ def test_slider_color_scale_stays_in_place_as_either_handle_moves() -> None:
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="retained widget smoke requires Windows")
-def test_fractional_ring_leaves_visible_space_until_completion() -> None:
+@pytest.mark.parametrize("enabled", [True, False])
+def test_fractional_ring_leaves_visible_space_until_completion(enabled: bool) -> None:
     renderer = WgpuRenderer()
     app = App(platform_backend=_isolated_backend(), renderer=renderer)
     window = app.add_window(Window(width=320, height=220))
     ring = ProgressRing(bounds=Rect(40, 20, 200, 180), segments=8, thickness=16)
+    ring.enabled = enabled
     mount(window, ring)
     try:
         app.start()

@@ -1,8 +1,8 @@
 # Studio in SwirUI 0.2 beta
 
-Install the Windows beta with `python -m pip install --upgrade swirui==0.2.0b1`,
+Install the Windows beta with `python -m pip install --upgrade swirui==0.2.0b2`,
 then run `python -m swirui studio`. The standalone scripts under `examples/`
-are in the [matching source checkout](https://github.com/Swir/Swirui/tree/v0.2.0b1/examples).
+are in the [matching source checkout](https://github.com/Swir/Swirui/tree/v0.2.0b2/examples).
 In **Overview → Material library**, choose a
 material, then select **Launch preview**.
 
@@ -467,6 +467,25 @@ Each segment samples its midpoint on the full turn, even when only part of
 that segment is visible. Use up to 128 segments for a smoother sweep or
 choose fewer for distinct color bands. Assign new stops to recolor a mounted
 ring, or set `ring.sweep_stops = None` to follow the theme accent again.
+
+### Keep progress visible when an indicator is disabled
+
+Run `python examples/range_progress_demo.py` from the matching source
+checkout. Select **Disable indicators** and
+move the top slider. The bar and ring still show the current percentage.
+Clear the checkbox to restore their gradient at that value.
+
+Select **Lock sliders** to keep the single value and the allowed range visible
+while editing is disabled. Clear it to restore both gradients.
+
+![The bar and ring show 42% and 75% while disabled. The locked sliders retain their 75% value and 20–80% interval.](screenshots/disabled-progress.png)
+
+In your own app, set `bar.enabled = ring.enabled = False`. The completed
+portion uses the theme’s `disabled_text` color and the remaining track uses
+`disabled`. Updating `value` moves the boundary even within a single ring
+segment. Set `slider.enabled = interval.enabled = False` to lock the sliders.
+Their selected track uses a muted shade of the thumb color. The six frames
+above were captured directly from the running Windows/wgpu demo.
 
 ## Animate a switch thumb
 
