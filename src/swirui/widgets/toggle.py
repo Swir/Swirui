@@ -8,7 +8,15 @@ from typing import TYPE_CHECKING, Any
 from swirui.animation import AnimationController, Tween, ease_in_out_cubic
 from swirui.core import AccessibilityRole, Event, state_transaction
 from swirui.platforms import PlatformEvent, PlatformEventKind, PointerButton
-from swirui.rendering.geometry import Color, CornerRadius, Path2D, Point, Rect
+from swirui.rendering.geometry import (
+    Color,
+    CornerRadius,
+    Path2D,
+    Point,
+    Rect,
+    linear_contrast_ratio,
+    mix_linear_colors,
+)
 from swirui.rendering.scene import SceneNode, SceneNodeKind
 from swirui.theme import DEFAULT_THEME, Theme
 
@@ -216,7 +224,7 @@ class _ToggleControl(Widget):
 
     def _add_indicator_face(
         self, root: SceneNode, bounds: Rect, radius: float, suffix: str
-    ) -> Rect:
+    ) -> tuple[Rect, Color]:
         def layer(name: str, fill: Color) -> None:
             root.add(SceneNode(
                 key=f"{self.key}:{name}", kind=SceneNodeKind.RECTANGLE, bounds=bounds,
@@ -235,28 +243,27 @@ class _ToggleControl(Widget):
                 bounds = Rect(bounds.x + inset, bounds.y + inset,
                               bounds.width - 2 * inset, bounds.height - 2 * inset)
                 radius = max(0.0, radius - inset)
-        layer(suffix, self._surface_color())
-        return bounds
+        face, ink = self._indicator_paint()
+        layer(suffix, face)
+        return bounds, ink
 
-    def _mark_color(self) -> Color:
-        if not self.enabled:
-            return self._disabled_mark
-        return self._mark_surface if self.checked else self._knob_surface
+    def _indicator_paint(self) -> tuple[Color, Color]:
+        return self._state_paint(self.checked)
 
-    def _surface_color(self) -> Color:
+    def _state_paint(self, checked: bool) -> tuple[Color, Color]:
         if not self.enabled:
-            return self._surface_disabled
-        if self._checked:
+            return self._surface_disabled, self._disabled_mark
+        if checked:
             if self._pressed:
-                return self._accent_pressed
+                return self._accent_pressed, self._mark_surface
             if self._hovered:
-                return self._accent_hover
-            return self._accent
+                return self._accent_hover, self._mark_surface
+            return self._accent, self._mark_surface
         if self._pressed or self._focused:
-            return self._surface_focus
+            return self._surface_focus, self._knob_surface
         if self._hovered:
-            return self._surface_hover
-        return self._surface
+            return self._surface_hover, self._knob_surface
+        return self._surface, self._knob_surface
 
     def _activate(self, *, input_event: Event | None) -> None:
         self._set_checked(not self._checked, input_event=input_event)
@@ -390,7 +397,8 @@ class Checkbox(_ToggleControl):
         )
 
     def _build_indicator(self, root: SceneNode, bounds: Rect) -> None:
-        bounds = self._add_indicator_face(root, bounds, min(5.0, bounds.width * 0.24), "indicator")
+        radius = min(5.0, bounds.width * 0.24)
+        bounds, color = self._add_indicator_face(root, bounds, radius, "indicator")
         size = min(bounds.width, bounds.height)
         if not self.checked or size < 1:
             return
@@ -400,7 +408,7 @@ class Checkbox(_ToggleControl):
                     bounds.y + (bounds.height - ink.height) / 2, ink.width, ink.height)
         root.add(SceneNode(
             key=f"{self.key}:mark", kind=SceneNodeKind.PATH, bounds=mark, path=path,
-            fill=self._mark_color(),
+            fill=color,
             z_index=2, hit_testable=False,
         ))
 
@@ -481,7 +489,7 @@ class RadioButton(_ToggleControl):
 
     def _build_indicator(self, root: SceneNode, bounds: Rect) -> None:
         radius = min(bounds.width, bounds.height) * 0.5
-        bounds = self._add_indicator_face(root, bounds, radius, "indicator")
+        bounds, color = self._add_indicator_face(root, bounds, radius, "indicator")
         if not self.checked:
             return
         diameter = min(bounds.width, bounds.height) * 0.42
@@ -493,7 +501,7 @@ class RadioButton(_ToggleControl):
                 kind=SceneNodeKind.RECTANGLE,
                 bounds=Rect(x, y, diameter, diameter),
                 z_index=2,
-                fill=self._mark_color(),
+                fill=color,
                 corner_radius=CornerRadius.uniform(diameter * 0.5),
                 hit_testable=False,
             )
@@ -591,9 +599,22 @@ class Switch(_ToggleControl):
                 and not (self.enabled and self.visible)):
             self._cancel_slide()
 
+    def _indicator_paint(self) -> tuple[Color, Color]:
+        position = self._position
+        if not self.enabled or position in (0.0, 1.0):
+            return self._state_paint(position == 1.0)
+        off, off_ink = self._state_paint(False)
+        on, on_ink = self._state_paint(True)
+        track = mix_linear_colors(off, on, position)
+        if track.a == off_ink.a == on_ink.a == 1.0:
+            ink = max((off_ink, on_ink), key=lambda color: linear_contrast_ratio(color, track))
+        else:
+            ink = mix_linear_colors(off_ink, on_ink, position)
+        return track, ink
+
     def _build_indicator(self, root: SceneNode, bounds: Rect) -> None:
         original_size = min(bounds.width, bounds.height)
-        bounds = self._add_indicator_face(root, bounds, bounds.height * 0.5, "track")
+        bounds, ink = self._add_indicator_face(root, bounds, bounds.height * 0.5, "track")
         size = min(bounds.width, bounds.height)
         knob_size = max(0.0, original_size - 6.0) * (size / original_size)
         if knob_size <= 0.0:
@@ -609,7 +630,7 @@ class Switch(_ToggleControl):
                 kind=SceneNodeKind.RECTANGLE,
                 bounds=Rect(x, y, knob_size, knob_size),
                 z_index=2,
-                fill=self._mark_color(),
+                fill=ink,
                 corner_radius=CornerRadius.uniform(knob_size * 0.5),
                 hit_testable=False,
             )

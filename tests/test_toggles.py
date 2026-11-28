@@ -23,7 +23,7 @@ from swirui.platforms import (
     PlatformEventKind,
     PointerButton,
 )
-from swirui.rendering import Point, Rect, Scene, SceneNode, SceneNodeKind
+from swirui.rendering import Color, Point, Rect, Scene, SceneNode, SceneNodeKind
 from swirui.widgets import compile_component_scene
 
 
@@ -390,27 +390,67 @@ def test_switch_reverses_from_the_visible_position_and_commits_each_change_immed
     def x():
         return _node(window.scene, "sync:knob").bounds.x
 
+    def paint():
+        return (_node(window.scene, "sync:track").fill, _node(window.scene, "sync:knob").fill)
+
     start = x()
+    off = paint()
     label = _node(window.scene, "sync:label").bounds
     _key(window, PlatformEventKind.KEY_DOWN, 0x20)
     _key(window, PlatformEventKind.KEY_UP, 0x20)
     assert changes == [(True, True)] and x() == start
+    assert paint() == off
     assert clock.tick(.25) == 1
     first = x()
     clock.tick(.25)
     middle = x()
+    halfway = paint()
     assert start < first < middle
     switch.checked = False
     assert x() == middle and changes[-1] == (False, False)
+    assert paint() == halfway
     assert clock.tick(.25) == 1
     assert start < x() < middle
     assert clock.tick(.25) == 0 and x() == start
+    assert paint() == off
     switch.checked = True
     clock.tick(.5)
     assert x() == pytest.approx(middle)
+    assert paint() == halfway
     assert clock.tick(.5) == 0 and x() == pytest.approx(2 * middle - start)
+    on = paint()
+    assert on == (FUTURE_DARK.surface_color("accent"), FUTURE_DARK.surface_color("on_accent"))
+    assert min(off[0].b, on[0].b) < halfway[0].b < max(off[0].b, on[0].b)
     assert len(changes) == 3 and _node(window.scene, "sync:label").bounds == label
     assert window.focused_component is switch
+    clock.dispose()
+
+
+def test_switch_track_uses_current_theme_and_alpha_during_travel():
+    window = Window()
+    clock = AnimationController(App(), window)
+    palette = replace(FUTURE_DARK.palette, raised="#000000", accent="#FFFFFF",
+                      text="#FFFFFF", on_accent="#000000")
+    root = Component(theme=replace(FUTURE_DARK, palette=palette, motion_duration=1))
+    switch = Switch("Sync", bounds=Rect(0, 0, 120, 22), key="sync", animations=clock)
+    root.add(switch)
+    mount(window, root)
+    switch.checked = True
+    clock.tick(.25)
+    assert _node(window.scene, "sync:knob").fill == Color(1, 1, 1)
+    clock.tick(.25)
+    assert _node(window.scene, "sync:knob").fill == Color(0, 0, 0)
+    assert _node(window.scene, "sync:track").fill == Color(.5, .5, .5)
+    # Fully transparent red contributes no tint to a half-visible blue track.
+    palette = replace(palette, raised="#FF000000", accent="#0000FF",
+                      text="#FF000000", on_accent="#00FF00")
+    root.theme = replace(root.theme, palette=palette)
+    assert _node(window.scene, "sync:track").fill == Color(0, 0, 1, .5)
+    assert _node(window.scene, "sync:knob").fill == Color(0, 1, 0, .5)
+    root.theme = replace(root.theme, reduced_motion=True)
+    assert _node(window.scene, "sync:track").fill == Color(0, 0, 1)
+    assert _node(window.scene, "sync:knob").fill == Color(0, 1, 0)
+    assert clock.active_count == 0 and switch.checked
     clock.dispose()
 
 

@@ -538,7 +538,11 @@ opposite end of the track. Toggle again during travel and it goes back
 from its current position. **Reduce appearance motion** makes the switches
 snap into place, including one already moving.
 
-![The focused notifications switch slides off and on in the mint glass workspace](screenshots/appearance-switch-motion.png)
+In the development checkout after 0.2.0b2, the track fades with the moving
+thumb. Press Space halfway through a slide to reverse both the movement and
+the fade from the frame you see. The setting takes effect on the keypress.
+
+![The notifications switch slides off and on as its track fades between mint and slate](screenshots/appearance-switch-motion.png)
 
 The recording shows **Keep notifications on** in
 `python examples/appearance_gallery.py`. Each trip takes 160 ms with this
@@ -564,6 +568,11 @@ Share one controller among switches in the same window. Set
 seconds. A shorter return trip takes proportionally less time. The
 `changed` event and accessible checked state update once per toggle.
 Omit `animations` for immediate movement.
+
+The fade uses the theme’s track colors for the current focus, hover or
+pressed state. With opaque colors, the moving thumb uses whichever of
+`text` and `on_accent` has higher contrast against the track. With translucent
+colors, the thumb blends its two authored colors and their opacity.
 
 ## Animate a theme switch
 

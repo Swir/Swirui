@@ -81,6 +81,9 @@ Press it again mid-travel to reverse direction. Your own
 `Switch(..., animations=clock)` follows the theme’s motion duration and
 reduced-motion setting. [Watch the native switch and try it in Python](https://github.com/Swir/Swirui/blob/v0.2.0b2/docs/development-0.2.md#animate-a-switch-thumb).
 
+In the development checkout, the track fades as the thumb moves. Press Space
+mid-slide and both reverse smoothly. [Watch the Windows recording](docs/development-0.2.md#animate-a-switch-thumb).
+
 Tooltips display keyboard shortcuts on a second line and wrap longer hints
 when their box has room. Hover over **Focus for help** in the component
 gallery or Tab to it. Press Escape to hide the hint while keeping keyboard

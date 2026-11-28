@@ -10,6 +10,7 @@ import pytest
 from swirui import (
     FUTURE_DARK,
     FUTURE_LIGHT,
+    AnimationController,
     App,
     Badge,
     Checkbox,
@@ -361,6 +362,45 @@ def test_retained_toggles_route_real_win32_input_and_reuse_wgpu_context() -> Non
         assert abs(min(xs) + max(xs) - (left + right - 1)) <= 2 * scale
         assert abs(min(ys) + max(ys) - (top + bottom - 1)) <= 2 * scale
     finally:
+        app.stop()
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="retained widget smoke requires Windows")
+def test_switch_track_fades_with_the_thumb_on_the_gpu():
+    app = App(platform_backend=_isolated_backend(), renderer=WgpuRenderer())
+    window = app.add_window(Window(width=320, height=240))
+    clock = AnimationController(app, window)
+    theme = replace(FUTURE_DARK.with_accent("#A4ECCF"), motion_duration=1)
+    switch = Switch("Sync", bounds=Rect(24, 32, 140, 40), theme=theme, animations=clock)
+    mount(window, switch)
+    try:
+        app.start()
+        app.process_events()
+        ctx = app.renderer._contexts[window.native_handle.value]
+
+        def sample_track():
+            app.renderer.render(window, switch)
+            width, _, rgba = ctx.read_scene_rgba()
+            # Inside the horizontal track, above the thumb at every position.
+            i = 4 * (round(42 * window.scale) * width + round(44 * window.scale))
+            return rgba[i:i + 3]
+
+        off = sample_track()
+        switch.checked = True
+        assert switch.accessible_checked and sample_track() == off
+        clock.tick(.5)
+        halfway = sample_track()
+        switch.checked = False
+        assert not switch.accessible_checked and sample_track() == halfway
+        clock.tick(.5)
+        assert sample_track() == off
+        switch.checked = True
+        clock.tick(1)
+        on = sample_track()
+        channels = zip(off, halfway, on, strict=True)
+        assert all(start < middle < end for start, middle, end in channels)
+    finally:
+        clock.dispose()
         app.stop()
 
 
