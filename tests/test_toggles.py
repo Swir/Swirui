@@ -103,6 +103,31 @@ def test_checkmark_fits_face_and_follows_inherited_palette(size):
     assert not any(n.key == "choice:mark" for n in window.scene.walk())
 
 
+def test_locked_radio_dot_and_switch_thumb_follow_the_inherited_disabled_palette():
+    root = Component(theme=FUTURE_DARK)
+    radio = RadioButton("Balanced", key="quality", bounds=Rect(10, 10, 180, 36), checked=True)
+    switch = Switch("Refresh", key="refresh", bounds=Rect(10, 60, 180, 36))
+    root.add(radio, switch)
+    window = Window()
+    mount(window, root)
+    radio.enabled = switch.enabled = False
+    for theme in (FUTURE_LIGHT, FUTURE_DARK):
+        root.theme = theme
+        assert _node(window.scene, "quality:mark").fill == theme.surface_color("disabled_text")
+        for checked in (True, False):
+            switch.checked = checked
+            knob = _node(window.scene, "refresh:knob")
+            assert knob.fill == theme.surface_color("disabled_text")
+            assert switch.accessible_checked is checked
+            switch.enabled = True
+            enabled_knob = _node(window.scene, "refresh:knob")
+            assert enabled_knob.fill == theme.surface_color("on_accent" if checked else "text")
+            assert enabled_knob.bounds == knob.bounds
+            switch.enabled = False
+    radio.enabled = True
+    assert _node(window.scene, "quality:mark").fill == FUTURE_DARK.surface_color("on_accent")
+
+
 def test_checkbox_pointer_activation_emits_change_and_rebuilds_scene() -> None:
     window = Window(width=420, height=220)
     root = Component("root")

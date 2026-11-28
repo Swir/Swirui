@@ -232,6 +232,11 @@ class _ToggleControl(Widget):
         layer(suffix, self._surface_color())
         return bounds
 
+    def _mark_color(self) -> Color:
+        if not self.enabled:
+            return self._disabled_mark
+        return self._mark_surface if self.checked else self._knob_surface
+
     def _surface_color(self) -> Color:
         if not self.enabled:
             return self._surface_disabled
@@ -389,7 +394,7 @@ class Checkbox(_ToggleControl):
                     bounds.y + (bounds.height - ink.height) / 2, ink.width, ink.height)
         root.add(SceneNode(
             key=f"{self.key}:mark", kind=SceneNodeKind.PATH, bounds=mark, path=path,
-            fill=self._mark_surface if self.enabled else self._disabled_mark,
+            fill=self._mark_color(),
             z_index=2, hit_testable=False,
         ))
 
@@ -453,7 +458,7 @@ class RadioButton(_ToggleControl):
                 kind=SceneNodeKind.RECTANGLE,
                 bounds=Rect(x, y, diameter, diameter),
                 z_index=2,
-                fill=self._mark_surface,
+                fill=self._mark_color(),
                 corner_radius=CornerRadius.uniform(diameter * 0.5),
                 hit_testable=False,
             )
@@ -569,7 +574,7 @@ class Switch(_ToggleControl):
                 kind=SceneNodeKind.RECTANGLE,
                 bounds=Rect(x, y, knob_size, knob_size),
                 z_index=2,
-                fill=self._mark_surface if self.checked else self._knob_surface,
+                fill=self._mark_color(),
                 corner_radius=CornerRadius.uniform(knob_size * 0.5),
                 hit_testable=False,
             )

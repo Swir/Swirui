@@ -132,6 +132,22 @@ For a locked setting in your own app, set `checkbox.enabled = False`. Its
 checkmark then uses `disabled_text` on the `disabled` surface. You can read
 or update `checkbox.checked` while the control is locked.
 
+### Compare locked settings
+
+From the development checkout, run `python examples/core_toggles_demo.py`.
+Choose **Ultra**, enable **Renderer telemetry**, then select **Lock settings**.
+Switch to **Light appearance** while the settings are locked. The selected
+radio dot, checkbox tick and switch thumb follow the new palette. Unlock
+the controls to edit them again.
+
+![Rendering preferences in dark and light appearances, showing a locked Ultra selection and a locked Balanced selection with high refresh off](screenshots/locked-toggle-palettes.png)
+
+In your own app, set `radio.enabled = switch.enabled = False`. The radio dot
+and the switch thumb use the theme’s `disabled_text` against `disabled`.
+The thumb stays on the left for off and on the right for on. Updating
+`checked` in code also updates the indicator while locked. The five frames
+above come directly from the Windows/wgpu demo on AMD Radeon graphics.
+
 ## Add magnetic hover to a button
 
 Run `python examples/magnetic_interaction_demo.py`. Move along the edges of

@@ -2,12 +2,14 @@ import ctypes
 import math
 import sys
 import time
+from dataclasses import replace
 from typing import Any
 
 import pytest
 
 from swirui import (
     FUTURE_DARK,
+    FUTURE_LIGHT,
     App,
     Badge,
     Checkbox,
@@ -19,6 +21,7 @@ from swirui import (
     PasswordInput,
     ProgressBar,
     ProgressRing,
+    RadioButton,
     RangeSlider,
     Slider,
     Switch,
@@ -357,6 +360,43 @@ def test_retained_toggles_route_real_win32_input_and_reuse_wgpu_context() -> Non
         xs, ys = zip(*ink, strict=True)
         assert abs(min(xs) + max(xs) - (left + right - 1)) <= 2 * scale
         assert abs(min(ys) + max(ys) - (top + bottom - 1)) <= 2 * scale
+    finally:
+        app.stop()
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="retained widget smoke requires Windows")
+def test_locked_toggle_values_stay_distinct_on_authored_surfaces():
+    # This light theme uses its dark normal inks as the disabled surface.
+    palette = replace(FUTURE_LIGHT.palette, on_accent="#203141", text="#203141",
+                      disabled="#203141", disabled_text="#B7CEED")
+    root = Component(theme=replace(FUTURE_LIGHT, palette=palette))
+    radio = RadioButton("Balanced", bounds=Rect(20, 20, 160, 32))
+    switch = Switch("Refresh", bounds=Rect(20, 68, 160, 32))
+    radio.enabled = switch.enabled = False
+    root.add(radio, switch)
+    app = App(platform_backend=_isolated_backend(), renderer=WgpuRenderer())
+    window = app.add_window(Window(width=250, height=150))
+    mount(window, root)
+    try:
+        app.start()
+        app.process_events()
+        context = app.renderer._contexts[window.native_handle.value]
+
+        def indicator_pixels(checked):
+            radio.checked = switch.checked = checked
+            app.render_pending(app._frame_schedulers[window].stats.last_frame_time + 1)
+            width, _, rgba = context.read_scene_rgba()
+            pixels = []
+            for x, y in ((31, 36), (31, 84), (49, 84)):
+                i = 4 * (round(y * window.scale) * width + round(x * window.scale))
+                pixels.append(rgba[i:i + 3])
+            return pixels
+
+        on_dot, on_left, on_right = indicator_pixels(True)
+        off_dot, off_left, off_right = indicator_pixels(False)
+        assert on_dot != off_dot
+        assert on_right == off_left == on_dot
+        assert on_left == off_right == off_dot
     finally:
         app.stop()
 
