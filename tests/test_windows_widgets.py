@@ -327,14 +327,36 @@ def test_retained_toggles_route_real_win32_input_and_reuse_wgpu_context() -> Non
         assert app.render_pending(time.monotonic() + 1.0) == 1
         assert renderer.persistent_context_count == initial_contexts
         assert window.scene is not None
-        checkbox_mark = next(
-            node for node in window.scene.walk() if node.key == "native-checkbox:mark"
+        face = next(
+            node.bounds for node in window.scene.walk() if node.key == "native-checkbox:indicator"
         )
         switch_knob = next(
             node for node in window.scene.walk() if node.key == "native-switch:knob"
         )
-        assert checkbox_mark.kind is SceneNodeKind.TEXT
         assert switch_knob.kind is SceneNodeKind.RECTANGLE
+
+        # The disabled face stays the same color in both states. Pixel differences
+        # locate the ink itself, independent of the retained node's bounds.
+        checkbox.enabled = False
+        context = renderer._contexts[hwnd]
+        app.render_pending(app._frame_schedulers[window].stats.last_frame_time + 1)
+        width, _, checked = context.read_scene_rgba()
+        checkbox.checked = False
+        app.render_pending(app._frame_schedulers[window].stats.last_frame_time + 1)
+        _, _, unchecked = context.read_scene_rgba()
+        scale = window.scale
+        left, right = round(face.x * scale), round(face.right * scale)
+        top, bottom = round(face.y * scale), round(face.bottom * scale)
+        ink = []
+        for y in range(top, bottom):
+            for x in range(left, right):
+                i = 4 * (y * width + x)
+                if abs(checked[i] - unchecked[i]) > 24:
+                    ink.append((x, y))
+        assert ink
+        xs, ys = zip(*ink, strict=True)
+        assert abs(min(xs) + max(xs) - (left + right - 1)) <= 2 * scale
+        assert abs(min(ys) + max(ys) - (top + bottom - 1)) <= 2 * scale
     finally:
         app.stop()
 

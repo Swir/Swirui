@@ -40,6 +40,10 @@ comparison is open. Select **Disable form** in either pane to compare its
 disabled field and button with the other appearance. Your draft stays in the
 field when you turn editing back on. [Try the disabled palette](https://github.com/Swir/Swirui/blob/v0.2.0b2/docs/development-0.2.md#compare-disabled-form-colors).
 
+The development checkout adds a centered vector tick to checkboxes. It fits
+inside the keyboard focus ring and uses the disabled palette for a locked
+selection. [See both appearances](docs/development-0.2.md#check-a-box-in-both-appearances).
+
 Project names and card headings now adjust their type size to the width of
 each appearance pane. Use `Label(..., font_size=31, min_font_size=16)` for
 the same behavior in your own app. [See a narrow preview with long names](https://github.com/Swir/Swirui/blob/v0.2.0b2/docs/development-0.2.md#fit-a-heading-to-its-panel).

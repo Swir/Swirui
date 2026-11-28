@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+from functools import lru_cache
 from typing import TYPE_CHECKING, Any
 
 from swirui.animation import AnimationController, Tween, ease_in_out_cubic
 from swirui.core import AccessibilityRole, Event, state_transaction
 from swirui.platforms import PlatformEvent, PlatformEventKind, PointerButton
-from swirui.rendering.geometry import Color, CornerRadius, Rect
+from swirui.rendering.geometry import Color, CornerRadius, Path2D, Point, Rect
 from swirui.rendering.scene import SceneNode, SceneNodeKind
 from swirui.theme import DEFAULT_THEME, Theme
 
@@ -65,7 +66,9 @@ class _ToggleControl(Widget):
         self._foreground_disabled = (
             theme.text_color("disabled_text") if theme else _FOREGROUND_DISABLED
         )
-        self._mark_text = theme.text_color("on_accent") if theme else _MARK
+        self._disabled_mark = (
+            theme.surface_color("disabled_text") if theme else _FOREGROUND_DISABLED
+        )
         self._mark_surface = theme.surface_color("on_accent") if theme else _MARK
         self._knob_surface = theme.surface_color("text") if theme else _MARK
         self._text = str(text)
@@ -105,7 +108,7 @@ class _ToggleControl(Widget):
                 "_accent_pressed": ("surface", "accent_pressed", _ACCENT_PRESSED),
                 "_foreground": ("text", "text", _FOREGROUND),
                 "_foreground_disabled": ("text", "disabled_text", _FOREGROUND_DISABLED),
-                "_mark_text": ("text", "on_accent", _MARK),
+                "_disabled_mark": ("surface", "disabled_text", _FOREGROUND_DISABLED),
                 "_mark_surface": ("surface", "on_accent", _MARK),
                 "_knob_surface": ("surface", "text", _MARK),
                 "_font_family": ("token", "font_family", "Segoe UI"),
@@ -346,6 +349,14 @@ class _ToggleControl(Widget):
         return None
 
 
+@lru_cache(maxsize=32)
+def _checkmark_path(size: float) -> Path2D:
+    # Author the tick once for a 22-DIP face and reuse its triangles at each size.
+    scale = size / 22
+    outline = ((0, 5.5), (1.6, 3.9), (5, 7.3), (12.4, 0), (14, 1.6), (5, 10.5))
+    return Path2D.polygon(*(Point(x * scale, y * scale) for x, y in outline))
+
+
 class Checkbox(_ToggleControl):
     """Boolean checkbox with retained GPU visuals and checked semantics."""
 
@@ -369,20 +380,18 @@ class Checkbox(_ToggleControl):
 
     def _build_indicator(self, root: SceneNode, bounds: Rect) -> None:
         bounds = self._add_indicator_face(root, bounds, min(5.0, bounds.width * 0.24), "indicator")
-        if self.checked:
-            root.add(
-                SceneNode(
-                    key=f"{self.key}:mark",
-                    kind=SceneNodeKind.TEXT,
-                    bounds=bounds,
-                    z_index=2,
-                    fill=self._mark_text,
-                    text="✓",
-                    font_size=min(bounds.height / 1.25, max(10.0, bounds.height * 0.72)),
-                    font_family="Segoe UI Symbol",
-                    hit_testable=False,
-                )
-            )
+        size = min(bounds.width, bounds.height)
+        if not self.checked or size < 1:
+            return
+        path = _checkmark_path(size)
+        ink = path.bounds
+        mark = Rect(bounds.x + (bounds.width - ink.width) / 2,
+                    bounds.y + (bounds.height - ink.height) / 2, ink.width, ink.height)
+        root.add(SceneNode(
+            key=f"{self.key}:mark", kind=SceneNodeKind.PATH, bounds=mark, path=path,
+            fill=self._mark_surface if self.enabled else self._disabled_mark,
+            z_index=2, hit_testable=False,
+        ))
 
 
 class RadioButton(_ToggleControl):

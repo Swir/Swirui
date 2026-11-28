@@ -22,7 +22,7 @@ from swirui.platforms import (
     PlatformEventKind,
     PointerButton,
 )
-from swirui.rendering import Point, Rect, Scene, SceneNode
+from swirui.rendering import Point, Rect, Scene, SceneNode, SceneNodeKind
 from swirui.widgets import compile_component_scene
 
 
@@ -66,7 +66,7 @@ def test_checkbox_compiles_retained_visuals_and_checked_semantics() -> None:
     assert hit is not None
     assert hit.key == "effects"
     assert _node(scene, "effects:indicator").hit_testable is False
-    assert _node(scene, "effects:mark").text == "✓"
+    assert _node(scene, "effects:mark").kind is SceneNodeKind.PATH
     assert _node(scene, "effects:label").text == "Enable GPU effects"
     assert tree is not None
     semantics = tree.find("effects")
@@ -74,6 +74,33 @@ def test_checkbox_compiles_retained_visuals_and_checked_semantics() -> None:
     assert semantics.role is AccessibilityRole.CHECKBOX
     assert semantics.name == "Enable GPU effects"
     assert semantics.checked is True
+
+
+@pytest.mark.parametrize("size", [(22, 22), (22, 12), (12, 22)])
+def test_checkmark_fits_face_and_follows_inherited_palette(size):
+    w, h = size
+    window = Window()
+    root = Component(theme=FUTURE_DARK)
+    checkbox = Checkbox("", key="choice", checked=True, bounds=Rect(8, 10, w, h))
+    root.add(checkbox)
+    mount(window, root)
+    for theme in (FUTURE_DARK, FUTURE_LIGHT):
+        root.theme = theme
+        for enabled in (True, False):
+            checkbox.enabled = enabled
+            if enabled:
+                window.focus_component(checkbox)
+            mark = _node(window.scene, "choice:mark")
+            face = _node(window.scene, "choice:indicator").bounds
+            assert mark.fill == theme.surface_color("on_accent" if enabled else "disabled_text")
+            assert not mark.hit_testable
+            assert (face.x < mark.bounds.x < mark.bounds.right < face.right
+                    and face.y < mark.bounds.y < mark.bounds.bottom < face.bottom)
+            assert mark.bounds.x - face.x == pytest.approx(face.right - mark.bounds.right)
+            assert mark.bounds.y - face.y == pytest.approx(face.bottom - mark.bounds.bottom)
+            assert checkbox.accessible_checked
+    checkbox.checked = False
+    assert not any(n.key == "choice:mark" for n in window.scene.walk())
 
 
 def test_checkbox_pointer_activation_emits_change_and_rebuilds_scene() -> None:

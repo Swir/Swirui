@@ -119,6 +119,19 @@ Themed `Input`, `PasswordInput` and `TextArea` use `disabled_text` for both
 entered text and placeholders while disabled. An explicit `foreground` or
 `placeholder_color` on a field takes precedence for the text it controls.
 
+### Check a box in both appearances
+
+In the development checkout after 0.2.0b2, select **Disable form** in both
+panes. The tick stays centered in the accent square and scales down when the
+keyboard focus outline takes up part of the face. Press Space to clear it.
+
+![Two checked boxes in the Studio comparison, with the light appearance showing the focus outline](screenshots/checkbox-checkmarks.png)
+
+The marks use the theme’s `on_accent` color and are drawn as vector paths.
+For a locked setting in your own app, set `checkbox.enabled = False`. Its
+checkmark then uses `disabled_text` on the `disabled` surface. You can read
+or update `checkbox.checked` while the control is locked.
+
 ## Add magnetic hover to a button
 
 Run `python examples/magnetic_interaction_demo.py`. Move along the edges of
