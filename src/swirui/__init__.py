@@ -463,4 +463,4 @@ __all__ = [
     "tween_state",
     "waveform_envelope_pcm16",
 ]
-__version__ = "0.2.0b2"
+__version__ = "0.2.0b3"

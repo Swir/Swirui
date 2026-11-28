@@ -4,6 +4,16 @@ All notable changes to SwirUI will be documented in this file.
 
 The project uses semantic versioning where practical during development. Breaking API changes may occur before 1.0.
 
+## 0.2.0b3 — 2026-11-28
+
+- Switch tracks fade in step with their thumbs. Toggling again reverses both
+  from the current frame. Reduced motion applies the selected state immediately.
+- Arrow keys move focus and selection together within a radio group, wrap
+  at either end and skip unavailable options.
+- Checkbox ticks stay centered inside the focus ring. Disabled checkboxes,
+  radio buttons and switches keep their state visible in the theme’s disabled
+  colors, including after a theme change.
+
 ## 0.2.0b2 — 2026-11-28
 
 - Disabled progress bars and rings now distinguish the completed portion from

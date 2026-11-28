@@ -1,8 +1,8 @@
 # Studio in SwirUI 0.2 beta
 
-Install the Windows beta with `python -m pip install --upgrade swirui==0.2.0b2`,
+Install the Windows beta with `python -m pip install --upgrade swirui==0.2.0b3`,
 then run `python -m swirui studio`. The standalone scripts under `examples/`
-are in the [matching source checkout](https://github.com/Swir/Swirui/tree/v0.2.0b2/examples).
+are in the [matching source checkout](https://github.com/Swir/Swirui/tree/v0.2.0b3/examples).
 In **Overview → Material library**, choose a
 material, then select **Launch preview**.
 
@@ -121,7 +121,7 @@ entered text and placeholders while disabled. An explicit `foreground` or
 
 ### Check a box in both appearances
 
-In the development checkout after 0.2.0b2, select **Disable form** in both
+In beta 3, select **Disable form** in both
 panes. The tick stays centered in the accent square and scales down when the
 keyboard focus outline takes up part of the face. Press Space to clear it.
 
@@ -134,7 +134,7 @@ or update `checkbox.checked` while the control is locked.
 
 ### Compare locked settings
 
-From the development checkout, run `python examples/core_toggles_demo.py`.
+From the matching source checkout, run `python examples/core_toggles_demo.py`.
 Choose **Ultra**, enable **Renderer telemetry**, then select **Lock settings**.
 Switch to **Light appearance** while the settings are locked. The selected
 radio dot, checkbox tick and switch thumb follow the new palette. Unlock
@@ -538,7 +538,7 @@ opposite end of the track. Toggle again during travel and it goes back
 from its current position. **Reduce appearance motion** makes the switches
 snap into place, including one already moving.
 
-In the development checkout after 0.2.0b2, the track fades with the moving
+In beta 3, the track fades with the moving
 thumb. Press Space halfway through a slide to reverse both the movement and
 the fade from the frame you see. The setting takes effect on the keypress.
 
