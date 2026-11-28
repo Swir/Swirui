@@ -1,7 +1,9 @@
-# Studio in SwirUI 0.2 development
+# Studio in SwirUI 0.2 beta
 
-From a Windows checkout of `development/0.2` with the native renderer installed,
-run `python -m swirui studio`. In **Overview → Material library**, choose a
+Install the Windows beta with `python -m pip install --upgrade swirui==0.2.0b1`,
+then run `python -m swirui studio`. The standalone scripts under `examples/`
+are in the [matching source checkout](https://github.com/Swir/Swirui/tree/v0.2.0b1/examples).
+In **Overview → Material library**, choose a
 material, then select **Launch preview**.
 
 The preview opens the same form in dark and light appearances. Both use the
@@ -541,7 +543,7 @@ appearance you selected in Studio. **Copy theme JSON** puts the same package
 on the clipboard.
 
 From the folder containing your saved file, run
-`python -m swirui preview-theme studio-theme.json` using your development
+`python -m swirui preview-theme studio-theme.json` using your SwirUI
 environment. Substitute your filename if you renamed the package.
 The window opens with the package default first, followed by the
 first other variant in file order. A single variant fills the window. Try

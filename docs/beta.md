@@ -1,12 +1,12 @@
-# Windows desktop beta: 0.1.0b6
+# Windows desktop beta: 0.2.0b1
 
 The beta is a usable, deliberately bounded desktop release, separate from the
 full roadmap. Canonical roadmap completion remains 68%. See the
-[release page](https://github.com/Swir/Swirui/releases/tag/v0.1.0b6) for publication
+[release page](https://github.com/Swir/Swirui/releases/tag/v0.2.0b1) for publication
 status, installation files and the actual qualification run.
 
 On supported Windows/Python, install with
-`python -m pip install --only-binary=:all: swirui==0.1.0b6`, then run
+`python -m pip install --only-binary=:all: swirui==0.2.0b1`, then run
 `python -m swirui doctor`, `python -m swirui demo` and `python -m swirui studio`.
 
 ## Supported scope
@@ -21,6 +21,10 @@ On supported Windows/Python, install with
   feedback, with reduced motion, preserved child controls and bounded rendering.
 - An integrated Studio showcase with dashboard, preview, editor, asset list,
   inspector, settings and console. Its CPU/GPU samples are generated demo data.
+- Live comparison of dark and light variants, theme-package export and an
+  installed `python -m swirui preview-theme FILE` command with F5 reload.
+- Theme-timed switch travel, responsive headings and shared gradient scales
+  for sliders, progress bars and rings.
 - An installed-package demo (`python -m swirui demo`) and read-only installation
   diagnostics (`python -m swirui doctor`, optionally `--json`). No checkout or
   compiler is required to run the Windows wheel.
