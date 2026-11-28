@@ -683,6 +683,55 @@ def test_tooltip_renders_complete_hard_and_soft_lines_on_wgpu():
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="retained widget smoke requires Windows")
+def test_escape_removes_hover_hint_pixels_and_preserves_focused_selection():
+    renderer = WgpuRenderer()
+    app = App(platform_backend=_isolated_backend(), renderer=renderer)
+    window = app.add_window(Window(width=400, height=240))
+    field = Input("Atlas workbench", bounds=Rect(16, 16, 260, 44))
+    chip = Chip("Keyboard help", bounds=Rect(16, 80, 150, 36))
+    tip = Tooltip("Edit the name.\nTab moves to the next field.", target=chip,
+                  bounds=Rect(16, 132, 300, 58), background=Color(0, 1, 0))
+    mount(window, Component().add(field, chip, tip))
+    try:
+        app.start()
+        app.process_events()
+        hwnd = window.native_handle.value
+        context = renderer._contexts[hwnd]
+        user32 = _user32()
+        window.focus_component(field)
+        field.select(6, 15)
+        point = _lparam(round(55 * window.scale), round(96 * window.scale))
+
+        def send(message, key=0, data=0):
+            user32.SendMessageW(hwnd, message, key, data)
+            _dispatch_sent_messages(app)
+
+        def frame():
+            app.render_pending(app._frame_schedulers[window].stats.last_frame_time + 1)
+            width, _, pixels = context.read_scene_rgba()
+            pos = 4 * (round(140 * window.scale) * width + round(60 * window.scale))
+            field_end = 4 * round(60 * window.scale) * width
+            return tuple(pixels[pos:pos + 3]), bytes(pixels[:field_end])
+
+        send(0x0200, data=point)
+        color, selection = frame()
+        assert color == (0, 255, 0) and tip.is_open
+        send(0x0100, 0x1B, 1)
+        send(0x0102, 0x1B, 1)
+        send(0x0101, 0x1B, 0xC0000001)
+        send(0x0200, data=point)
+        after, field_pixels = frame()
+        assert after != color and not tip.is_open and field_pixels == selection
+        assert window.focused_component is field and field.selected_text == "workbench"
+        send(0x02A3)
+        send(0x0200, data=point)
+        assert tip.is_open and frame() == (color, selection)
+        assert renderer._contexts[hwnd] is context
+    finally:
+        app.stop()
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="retained widget smoke requires Windows")
 def test_retained_content_surfaces_and_tooltip_reuse_real_wgpu_context() -> None:
     renderer = WgpuRenderer()
     backend = _isolated_backend()

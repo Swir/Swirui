@@ -223,9 +223,23 @@ class Tooltip(Widget):
             self._line_width_key = key
         return self._line_width
 
+    def on_mount(self, window: Window) -> None:
+        super().on_mount(window)
+        window.on("_dismiss_tooltips", self._dismiss_if_visible)
+
     def on_unmount(self, window: Window) -> None:
+        window.off("_dismiss_tooltips", self._dismiss_if_visible)
         self._line_width_key = None
         super().on_unmount(window)
+
+    def _dismiss_if_visible(self, event: Event) -> None:
+        component: Component | None = self
+        while component is not None:
+            if not component.visible:
+                return
+            component = component.parent
+        self.hide()
+        event.prevent_default()
 
     def _target_available(self) -> bool:
         component = self._target

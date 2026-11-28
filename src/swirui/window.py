@@ -35,6 +35,7 @@ _KEYBOARD_EVENTS = {
     PlatformEventKind.TEXT_INPUT,
 }
 _VK_TAB = 0x09
+_ESCAPE_KEY_CODES = {"win32": 0x1B, "x11": 0xFF1B, "cocoa": 0x35}
 
 
 class Window(EventEmitter):
@@ -73,6 +74,7 @@ class Window(EventEmitter):
         self.scene: Scene | None = None
         self.hovered_scene_node: SceneNode | None = None
         self._hover_input: tuple[PlatformEvent, tuple[Component, ...]] | None = None
+        self._tooltip_escape_held = False
         self.focused_component: Component | None = None
         self.pointer_capture_component: Component | None = None
         self.visible = False
@@ -367,6 +369,7 @@ class Window(EventEmitter):
 
     def hide(self) -> None:
         if self.visible:
+            self._tooltip_escape_held = False
             self.release_pointer_capture()
             if self._platform_backend is not None and self.native_handle is not None:
                 self._platform_backend.hide_window(self.native_handle)
@@ -395,6 +398,7 @@ class Window(EventEmitter):
         self.emit("native_bound", handle=handle, scale=self.scale, display=self.display)
 
     def _unbind_native(self) -> None:
+        self._tooltip_escape_held = False
         if self.pointer_capture_component is not None:
             self.release_pointer_capture()
         if self.native_handle is None:
@@ -438,6 +442,7 @@ class Window(EventEmitter):
         if event.kind is PlatformEventKind.FOCUS:
             focused = bool(event.focused)
             if not focused:
+                self._tooltip_escape_held = False
                 self.release_pointer_capture()
             if focused != self.focused:
                 self.focused = focused
@@ -615,10 +620,32 @@ class Window(EventEmitter):
         self.emit("pointer_leave", event=event, target=target, component_path=path,
                   component_target=path[-1] if path else None, routed_event=routed)
 
+    @property
+    def _escape_key_code(self) -> int:
+        backend = self._platform_backend
+        return _ESCAPE_KEY_CODES.get(backend.name, 0x1B) if backend else 0x1B
+
+    def _dismiss_tooltips_on_escape(self, event: PlatformEvent) -> bool:
+        if event.kind is PlatformEventKind.TEXT_INPUT:
+            return self._tooltip_escape_held and event.text == "\x1b"
+        if event.key_code != self._escape_key_code:
+            return False
+        if self._tooltip_escape_held:
+            if event.kind is PlatformEventKind.KEY_UP:
+                self._tooltip_escape_held = False
+            return True
+        if (event.kind is PlatformEventKind.KEY_DOWN
+                and not (event.alt or event.ctrl or event.meta or event.shift)):
+            # Offer Escape to visible hints before a focused editor or modal sees it.
+            self._tooltip_escape_held = self.emit("_dismiss_tooltips").default_prevented
+        return self._tooltip_escape_held
+
     def _apply_keyboard_event(self, event: PlatformEvent) -> None:
         focused = self.focused_component
         if focused is not None and not self._component_is_focus_candidate(focused):
             self.focus_component(None)
+        if self._dismiss_tooltips_on_escape(event):
+            return
 
         component_path = self._component_path_for_component(self.focused_component)
         component_target = component_path[-1] if component_path else None

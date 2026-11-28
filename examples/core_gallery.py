@@ -118,7 +118,7 @@ class Gallery(Panel):
             "Focus for help", bounds=Rect(978, 428, 166, 40), variant=ButtonVariant.GHOST
         )
         self.tip = Tooltip(
-            "Open dialog previews the current theme.\nPress Escape to return to the gallery.",
+            "Open dialog previews the current theme.\nPress Escape to hide this hint.",
             bounds=Rect(808, 488, 336, 60), target=self.help,
         )
         self.open_dialog = Button("Open dialog", bounds=Rect(808, 566, 336, 44))

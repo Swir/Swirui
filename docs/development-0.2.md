@@ -252,13 +252,13 @@ the card, and a theme with `reduced_motion=True` keeps the layers at rest.
 
 Run `python examples/core_gallery.py` on Windows. Select a word in the text
 field, then hover over **Focus for help**. The tooltip describes **Open dialog**
-and shows the Escape shortcut on its second line. Move the pointer straight
-onto the title bar. The tooltip closes and
-the word stays selected. Move back onto the button to show the tip again.
+and shows the Escape shortcut on its second line. Move the pointer onto the
+title bar or press Escape. The hint closes and the word stays selected.
+Leave the button and hover over it again to bring the hint back.
 
-![The two-line tooltip opens and closes in the dark and light gallery while the word workbench stays selected](screenshots/gallery-pointer-exit.png)
+![The hint appears on hover in dark and light themes. In the final two frames Escape hides it while Focus for help keeps its keyboard outline.](screenshots/gallery-pointer-exit.png)
 
-The four frames are cursor-free crops of the Windows DX12 render target.
+The six frames are cursor-free crops of the Windows DX12 render target.
 In your own window, the hovered control receives `pointer_leave`. Use
 `window.on("pointer_exit", callback)` to react when the pointer leaves the
 client area. The exit event carries no coordinates. A control with pointer
@@ -285,6 +285,17 @@ panel.add(name, help_text)
 The text uses the tooltip’s font, display scale and horizontal padding.
 When the box can hold two lines, the vertical padding contracts if needed
 to show both. Longer hints use the available height and clip at the boundary.
+
+### Dismiss a hint with Escape
+
+Tab to **Focus for help**, then press Escape. The hint disappears and the
+button keeps its focus outline. Tab moves on to **Open dialog**. Shift+Tab
+returns to **Focus for help** and shows its hint again.
+
+A plain Escape dismisses visible tooltips in the current window, including
+a hover hint while you are editing another field. Inside a modal dialog,
+one press hides its hint. Release Escape and press it again to dismiss the
+dialog if it supports that shortcut. Holding the key keeps the dialog open.
 
 ## Edit a field inside an expander
 

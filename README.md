@@ -65,7 +65,8 @@ Tabbing through checkboxes, radio buttons and switches outlines the focused
 control, even when its checked color matches the theme's focus color.
 Tooltips display keyboard shortcuts on a second line and wrap longer hints
 when their box has room. Hover over **Focus for help** in the component
-gallery or Tab to it. [See the tooltip and Python example](https://github.com/Swir/Swirui/blob/development/0.2/docs/development-0.2.md#show-more-than-one-line-in-a-tooltip).
+gallery or Tab to it. Press Escape to hide the hint while keeping keyboard
+focus and text selection. [See the tooltip and Python example](https://github.com/Swir/Swirui/blob/development/0.2/docs/development-0.2.md#show-more-than-one-line-in-a-tooltip).
 For image cards, set `image_position=Point(1, 0.5)` with `ImageFit.COVER`
 to keep the right edge in view as the card narrows. Try the live crop slider
 with `python examples/image_framing.py` from the 0.2 source checkout.
