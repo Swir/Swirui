@@ -7,7 +7,7 @@ from dataclasses import fields, replace
 from typing import cast
 
 from .animation import AnimationStatus, Easing, Tween, ease_in_out_cubic
-from .rendering.geometry import Color
+from .rendering.geometry import Color, linear_contrast_ratio, mix_linear_colors
 from .surface_style import SurfaceStyle
 from .theme import ColorRole, Palette, Theme
 
@@ -30,24 +30,6 @@ def _encoded(value: float) -> int:
 def _swatch(color: Color) -> str:
     values = (_encoded(color.r), _encoded(color.g), _encoded(color.b), round(color.a * 255))
     return "#" + "".join(f"{value:02X}" for value in values[:3 if values[3] == 255 else 4])
-
-
-def _mix(first: Color, second: Color, progress: float) -> Color:
-    alpha = (1 - progress) * first.a + progress * second.a
-    if alpha == 0:
-        return Color(0, 0, 0, 0)
-    channels = [
-        ((1 - progress) * a * first.a + progress * b * second.a) / alpha
-        for a, b in zip((first.r, first.g, first.b), (second.r, second.g, second.b), strict=True)
-    ]
-    return Color(channels[0], channels[1], channels[2], alpha)
-
-
-def _contrast(first: Color, second: Color) -> float:
-    def luminance(color: Color) -> float:
-        return 0.2126 * color.r + 0.7152 * color.g + 0.0722 * color.b
-    a, b = luminance(first), luminance(second)
-    return (max(a, b) + 0.05) / (min(a, b) + 0.05)
 
 
 def _mix_material(source: SurfaceStyle | None, target: SurfaceStyle | None,
@@ -131,7 +113,8 @@ class ThemeTransition:
         if progress >= 1:
             self.update(self.to_value)
             return
-        colors = {role: _mix(self._source[role], self._target[role], progress) for role in _ROLES}
+        colors = {role: mix_linear_colors(self._source[role], self._target[role], progress)
+                  for role in _ROLES}
         if self.protect_text_contrast:
             for name, backgrounds in _TEXT_BACKGROUNDS.items():
                 role = cast(ColorRole, name)
@@ -140,7 +123,7 @@ class ThemeTransition:
                     continue
 
                 def score(color: Color, surfaces: list[Color] = surfaces) -> float:
-                    return min(_contrast(color, bg) for bg in surfaces)
+                    return min(linear_contrast_ratio(color, bg) for bg in surfaces)
 
                 if score(colors[role]) < 4.5:
                     candidates = [colors[role], self._source[role], self._target[role],

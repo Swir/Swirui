@@ -2,12 +2,15 @@ import ctypes
 import math
 import sys
 import time
+from dataclasses import replace
 from typing import Any
 
 import pytest
 
 from swirui import (
     FUTURE_DARK,
+    FUTURE_LIGHT,
+    AnimationController,
     App,
     Badge,
     Checkbox,
@@ -19,6 +22,7 @@ from swirui import (
     PasswordInput,
     ProgressBar,
     ProgressRing,
+    RadioButton,
     RangeSlider,
     Slider,
     Switch,
@@ -327,14 +331,152 @@ def test_retained_toggles_route_real_win32_input_and_reuse_wgpu_context() -> Non
         assert app.render_pending(time.monotonic() + 1.0) == 1
         assert renderer.persistent_context_count == initial_contexts
         assert window.scene is not None
-        checkbox_mark = next(
-            node for node in window.scene.walk() if node.key == "native-checkbox:mark"
+        face = next(
+            node.bounds for node in window.scene.walk() if node.key == "native-checkbox:indicator"
         )
         switch_knob = next(
             node for node in window.scene.walk() if node.key == "native-switch:knob"
         )
-        assert checkbox_mark.kind is SceneNodeKind.TEXT
         assert switch_knob.kind is SceneNodeKind.RECTANGLE
+
+        # The disabled face stays the same color in both states. Pixel differences
+        # locate the ink itself, independent of the retained node's bounds.
+        checkbox.enabled = False
+        context = renderer._contexts[hwnd]
+        app.render_pending(app._frame_schedulers[window].stats.last_frame_time + 1)
+        width, _, checked = context.read_scene_rgba()
+        checkbox.checked = False
+        app.render_pending(app._frame_schedulers[window].stats.last_frame_time + 1)
+        _, _, unchecked = context.read_scene_rgba()
+        scale = window.scale
+        left, right = round(face.x * scale), round(face.right * scale)
+        top, bottom = round(face.y * scale), round(face.bottom * scale)
+        ink = []
+        for y in range(top, bottom):
+            for x in range(left, right):
+                i = 4 * (y * width + x)
+                if abs(checked[i] - unchecked[i]) > 24:
+                    ink.append((x, y))
+        assert ink
+        xs, ys = zip(*ink, strict=True)
+        assert abs(min(xs) + max(xs) - (left + right - 1)) <= 2 * scale
+        assert abs(min(ys) + max(ys) - (top + bottom - 1)) <= 2 * scale
+    finally:
+        app.stop()
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="retained widget smoke requires Windows")
+def test_switch_track_fades_with_the_thumb_on_the_gpu():
+    app = App(platform_backend=_isolated_backend(), renderer=WgpuRenderer())
+    window = app.add_window(Window(width=320, height=240))
+    clock = AnimationController(app, window)
+    theme = replace(FUTURE_DARK.with_accent("#A4ECCF"), motion_duration=1)
+    switch = Switch("Sync", bounds=Rect(24, 32, 140, 40), theme=theme, animations=clock)
+    mount(window, switch)
+    try:
+        app.start()
+        app.process_events()
+        ctx = app.renderer._contexts[window.native_handle.value]
+
+        def sample_track():
+            app.renderer.render(window, switch)
+            width, _, rgba = ctx.read_scene_rgba()
+            # Inside the horizontal track, above the thumb at every position.
+            i = 4 * (round(42 * window.scale) * width + round(44 * window.scale))
+            return rgba[i:i + 3]
+
+        off = sample_track()
+        switch.checked = True
+        assert switch.accessible_checked and sample_track() == off
+        clock.tick(.5)
+        halfway = sample_track()
+        switch.checked = False
+        assert not switch.accessible_checked and sample_track() == halfway
+        clock.tick(.5)
+        assert sample_track() == off
+        switch.checked = True
+        clock.tick(1)
+        on = sample_track()
+        channels = zip(off, halfway, on, strict=True)
+        assert all(start < middle < end for start, middle, end in channels)
+    finally:
+        clock.dispose()
+        app.stop()
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="retained widget smoke requires Windows")
+def test_win32_arrow_moves_the_radio_dot_and_focus_ring_together():
+    app = App(platform_backend=_isolated_backend(), renderer=WgpuRenderer())
+    window = app.add_window(Window(width=320, height=240))
+    root = Component(theme=FUTURE_DARK)
+    first = RadioButton("Balanced", bounds=Rect(24, 24, 150, 32), checked=True)
+    second = RadioButton("Ultra", bounds=Rect(24, 80, 150, 32))
+    root.add(first, second)
+    mount(window, root)
+    try:
+        app.start()
+        app.process_events()
+        hwnd = window.native_handle.value
+        user32 = _user32()
+        context = app.renderer._contexts[hwnd]
+
+        def press(key):
+            user32.SendMessageW(hwnd, 0x0100, key, 1)
+            user32.SendMessageW(hwnd, 0x0101, key, 1)
+            _dispatch_sent_messages(app)
+            app.render_pending(app._frame_schedulers[window].stats.last_frame_time + 1)
+            width, _, rgba = context.read_scene_rgba()
+            pixels = []
+            for x, y in ((35, 40), (25, 40), (35, 96), (25, 96)):
+                i = 4 * (round(y * window.scale) * width + round(x * window.scale))
+                pixels.append(rgba[i:i + 3])
+            return pixels
+
+        start = press(0x09)
+        assert window.focused_component is first and first.checked
+        moved = press(0x28)
+        assert window.focused_component is second and second.checked and not first.checked
+        assert start[:2] == moved[2:] and start[2:] == moved[:2]
+        assert start[0] != moved[0] and start[1] != moved[1]
+        assert press(0x26) == start
+        assert window.focused_component is first and first.checked and not second.checked
+    finally:
+        app.stop()
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="retained widget smoke requires Windows")
+def test_locked_toggle_values_stay_distinct_on_authored_surfaces():
+    # This light theme uses its dark normal inks as the disabled surface.
+    palette = replace(FUTURE_LIGHT.palette, on_accent="#203141", text="#203141",
+                      disabled="#203141", disabled_text="#B7CEED")
+    root = Component(theme=replace(FUTURE_LIGHT, palette=palette))
+    radio = RadioButton("Balanced", bounds=Rect(20, 20, 160, 32))
+    switch = Switch("Refresh", bounds=Rect(20, 68, 160, 32))
+    radio.enabled = switch.enabled = False
+    root.add(radio, switch)
+    app = App(platform_backend=_isolated_backend(), renderer=WgpuRenderer())
+    window = app.add_window(Window(width=250, height=150))
+    mount(window, root)
+    try:
+        app.start()
+        app.process_events()
+        context = app.renderer._contexts[window.native_handle.value]
+
+        def indicator_pixels(checked):
+            radio.checked = switch.checked = checked
+            app.render_pending(app._frame_schedulers[window].stats.last_frame_time + 1)
+            width, _, rgba = context.read_scene_rgba()
+            pixels = []
+            for x, y in ((31, 36), (31, 84), (49, 84)):
+                i = 4 * (round(y * window.scale) * width + round(x * window.scale))
+                pixels.append(rgba[i:i + 3])
+            return pixels
+
+        on_dot, on_left, on_right = indicator_pixels(True)
+        off_dot, off_left, off_right = indicator_pixels(False)
+        assert on_dot != off_dot
+        assert on_right == off_left == on_dot
+        assert on_left == off_right == off_dot
     finally:
         app.stop()
 

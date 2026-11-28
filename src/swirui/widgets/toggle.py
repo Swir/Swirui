@@ -2,12 +2,21 @@
 
 from __future__ import annotations
 
+from functools import lru_cache
 from typing import TYPE_CHECKING, Any
 
 from swirui.animation import AnimationController, Tween, ease_in_out_cubic
 from swirui.core import AccessibilityRole, Event, state_transaction
 from swirui.platforms import PlatformEvent, PlatformEventKind, PointerButton
-from swirui.rendering.geometry import Color, CornerRadius, Rect
+from swirui.rendering.geometry import (
+    Color,
+    CornerRadius,
+    Path2D,
+    Point,
+    Rect,
+    linear_contrast_ratio,
+    mix_linear_colors,
+)
 from swirui.rendering.scene import SceneNode, SceneNodeKind
 from swirui.theme import DEFAULT_THEME, Theme
 
@@ -18,6 +27,12 @@ if TYPE_CHECKING:
 
 _VK_RETURN = 0x0D
 _VK_SPACE = 0x20
+# Backends report arrows as Win32 virtual keys, X11 keysyms or Cocoa hardware codes.
+_WINDOWS_RADIO_STEPS = {0x25: -1, 0x26: -1, 0x27: 1, 0x28: 1}
+_RADIO_STEPS = {
+    "x11": {0xFF51: -1, 0xFF52: -1, 0xFF53: 1, 0xFF54: 1},
+    "cocoa": {0x7B: -1, 0x7E: -1, 0x7C: 1, 0x7D: 1},
+}
 _TRANSPARENT = Color(0.0, 0.0, 0.0, 0.0)
 _SURFACE = Color.from_hex("#172632")
 _SURFACE_HOVER = Color.from_hex("#20394A")
@@ -65,7 +80,9 @@ class _ToggleControl(Widget):
         self._foreground_disabled = (
             theme.text_color("disabled_text") if theme else _FOREGROUND_DISABLED
         )
-        self._mark_text = theme.text_color("on_accent") if theme else _MARK
+        self._disabled_mark = (
+            theme.surface_color("disabled_text") if theme else _FOREGROUND_DISABLED
+        )
         self._mark_surface = theme.surface_color("on_accent") if theme else _MARK
         self._knob_surface = theme.surface_color("text") if theme else _MARK
         self._text = str(text)
@@ -105,7 +122,7 @@ class _ToggleControl(Widget):
                 "_accent_pressed": ("surface", "accent_pressed", _ACCENT_PRESSED),
                 "_foreground": ("text", "text", _FOREGROUND),
                 "_foreground_disabled": ("text", "disabled_text", _FOREGROUND_DISABLED),
-                "_mark_text": ("text", "on_accent", _MARK),
+                "_disabled_mark": ("surface", "disabled_text", _FOREGROUND_DISABLED),
                 "_mark_surface": ("surface", "on_accent", _MARK),
                 "_knob_surface": ("surface", "text", _MARK),
                 "_font_family": ("token", "font_family", "Segoe UI"),
@@ -207,7 +224,7 @@ class _ToggleControl(Widget):
 
     def _add_indicator_face(
         self, root: SceneNode, bounds: Rect, radius: float, suffix: str
-    ) -> Rect:
+    ) -> tuple[Rect, Color]:
         def layer(name: str, fill: Color) -> None:
             root.add(SceneNode(
                 key=f"{self.key}:{name}", kind=SceneNodeKind.RECTANGLE, bounds=bounds,
@@ -226,23 +243,27 @@ class _ToggleControl(Widget):
                 bounds = Rect(bounds.x + inset, bounds.y + inset,
                               bounds.width - 2 * inset, bounds.height - 2 * inset)
                 radius = max(0.0, radius - inset)
-        layer(suffix, self._surface_color())
-        return bounds
+        face, ink = self._indicator_paint()
+        layer(suffix, face)
+        return bounds, ink
 
-    def _surface_color(self) -> Color:
+    def _indicator_paint(self) -> tuple[Color, Color]:
+        return self._state_paint(self.checked)
+
+    def _state_paint(self, checked: bool) -> tuple[Color, Color]:
         if not self.enabled:
-            return self._surface_disabled
-        if self._checked:
+            return self._surface_disabled, self._disabled_mark
+        if checked:
             if self._pressed:
-                return self._accent_pressed
+                return self._accent_pressed, self._mark_surface
             if self._hovered:
-                return self._accent_hover
-            return self._accent
+                return self._accent_hover, self._mark_surface
+            return self._accent, self._mark_surface
         if self._pressed or self._focused:
-            return self._surface_focus
+            return self._surface_focus, self._knob_surface
         if self._hovered:
-            return self._surface_hover
-        return self._surface
+            return self._surface_hover, self._knob_surface
+        return self._surface, self._knob_surface
 
     def _activate(self, *, input_event: Event | None) -> None:
         self._set_checked(not self._checked, input_event=input_event)
@@ -346,6 +367,14 @@ class _ToggleControl(Widget):
         return None
 
 
+@lru_cache(maxsize=32)
+def _checkmark_path(size: float) -> Path2D:
+    # Author the tick once for a 22-DIP face and reuse its triangles at each size.
+    scale = size / 22
+    outline = ((0, 5.5), (1.6, 3.9), (5, 7.3), (12.4, 0), (14, 1.6), (5, 10.5))
+    return Path2D.polygon(*(Point(x * scale, y * scale) for x, y in outline))
+
+
 class Checkbox(_ToggleControl):
     """Boolean checkbox with retained GPU visuals and checked semantics."""
 
@@ -368,21 +397,20 @@ class Checkbox(_ToggleControl):
         )
 
     def _build_indicator(self, root: SceneNode, bounds: Rect) -> None:
-        bounds = self._add_indicator_face(root, bounds, min(5.0, bounds.width * 0.24), "indicator")
-        if self.checked:
-            root.add(
-                SceneNode(
-                    key=f"{self.key}:mark",
-                    kind=SceneNodeKind.TEXT,
-                    bounds=bounds,
-                    z_index=2,
-                    fill=self._mark_text,
-                    text="✓",
-                    font_size=min(bounds.height / 1.25, max(10.0, bounds.height * 0.72)),
-                    font_family="Segoe UI Symbol",
-                    hit_testable=False,
-                )
-            )
+        radius = min(5.0, bounds.width * 0.24)
+        bounds, color = self._add_indicator_face(root, bounds, radius, "indicator")
+        size = min(bounds.width, bounds.height)
+        if not self.checked or size < 1:
+            return
+        path = _checkmark_path(size)
+        ink = path.bounds
+        mark = Rect(bounds.x + (bounds.width - ink.width) / 2,
+                    bounds.y + (bounds.height - ink.height) / 2, ink.width, ink.height)
+        root.add(SceneNode(
+            key=f"{self.key}:mark", kind=SceneNodeKind.PATH, bounds=mark, path=path,
+            fill=color,
+            z_index=2, hit_testable=False,
+        ))
 
 
 class RadioButton(_ToggleControl):
@@ -409,6 +437,7 @@ class RadioButton(_ToggleControl):
             role=AccessibilityRole.RADIO,
             **kwargs,
         )
+        self.on("key_down", self._navigate_group)
 
     @property
     def group(self) -> str:
@@ -418,21 +447,49 @@ class RadioButton(_ToggleControl):
         if not self.checked:
             self._set_checked(True, input_event=input_event)
 
+    def _group_members(self) -> tuple[RadioButton, ...]:
+        if self.parent is None:
+            return (self,)
+        return tuple(child for child in self.parent.children
+                     if isinstance(child, RadioButton) and child.group == self.group)
+
+    def _navigate_group(self, event: Event) -> None:
+        key = self._platform_event(event, PlatformEventKind.KEY_DOWN)
+        if (event.source is not self or event.default_prevented or key is None
+                or key.key_code is None or key.ctrl or key.alt or key.shift or key.meta):
+            return
+        window = self.mounted_window
+        if window is None or window.focused_component is not self:
+            return
+        backend = window._platform_backend
+        steps = _RADIO_STEPS.get(backend.name if backend else "win32", _WINDOWS_RADIO_STEPS)
+        step = steps.get(key.key_code)
+        if step is None or not window._component_is_focus_candidate(self):
+            return
+        choices = [member for member in self._group_members()
+                   if member.visible and member.enabled and member.focusable]
+        if len(choices) < 2:
+            return
+        target = choices[(choices.index(self) + step) % len(choices)]
+        parent = self.parent
+        event.prevent_default()
+        with state_transaction():
+            window.focus_component(target)
+            # Focus listeners can remove, disable or redirect the destination.
+            if (window.focused_component is target and target.parent is parent
+                    and window._component_is_focus_candidate(target)):
+                target._activate(input_event=event)
+
     def _set_checked(self, value: bool, *, input_event: Event | None) -> None:
-        if value and self.parent is not None:
-            for sibling in tuple(self.parent.children):
-                if (
-                    sibling is not self
-                    and isinstance(sibling, RadioButton)
-                    and sibling.group == self.group
-                    and sibling.checked
-                ):
+        if value:
+            for sibling in self._group_members():
+                if sibling is not self and sibling.checked:
                     sibling._set_checked(False, input_event=input_event)
         super()._set_checked(value, input_event=input_event)
 
     def _build_indicator(self, root: SceneNode, bounds: Rect) -> None:
         radius = min(bounds.width, bounds.height) * 0.5
-        bounds = self._add_indicator_face(root, bounds, radius, "indicator")
+        bounds, color = self._add_indicator_face(root, bounds, radius, "indicator")
         if not self.checked:
             return
         diameter = min(bounds.width, bounds.height) * 0.42
@@ -444,7 +501,7 @@ class RadioButton(_ToggleControl):
                 kind=SceneNodeKind.RECTANGLE,
                 bounds=Rect(x, y, diameter, diameter),
                 z_index=2,
-                fill=self._mark_surface,
+                fill=color,
                 corner_radius=CornerRadius.uniform(diameter * 0.5),
                 hit_testable=False,
             )
@@ -542,9 +599,22 @@ class Switch(_ToggleControl):
                 and not (self.enabled and self.visible)):
             self._cancel_slide()
 
+    def _indicator_paint(self) -> tuple[Color, Color]:
+        position = self._position
+        if not self.enabled or position in (0.0, 1.0):
+            return self._state_paint(position == 1.0)
+        off, off_ink = self._state_paint(False)
+        on, on_ink = self._state_paint(True)
+        track = mix_linear_colors(off, on, position)
+        if track.a == off_ink.a == on_ink.a == 1.0:
+            ink = max((off_ink, on_ink), key=lambda color: linear_contrast_ratio(color, track))
+        else:
+            ink = mix_linear_colors(off_ink, on_ink, position)
+        return track, ink
+
     def _build_indicator(self, root: SceneNode, bounds: Rect) -> None:
         original_size = min(bounds.width, bounds.height)
-        bounds = self._add_indicator_face(root, bounds, bounds.height * 0.5, "track")
+        bounds, ink = self._add_indicator_face(root, bounds, bounds.height * 0.5, "track")
         size = min(bounds.width, bounds.height)
         knob_size = max(0.0, original_size - 6.0) * (size / original_size)
         if knob_size <= 0.0:
@@ -560,7 +630,7 @@ class Switch(_ToggleControl):
                 kind=SceneNodeKind.RECTANGLE,
                 bounds=Rect(x, y, knob_size, knob_size),
                 z_index=2,
-                fill=self._mark_surface if self.checked else self._knob_surface,
+                fill=ink,
                 corner_radius=CornerRadius.uniform(knob_size * 0.5),
                 hit_testable=False,
             )

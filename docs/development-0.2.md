@@ -1,8 +1,8 @@
 # Studio in SwirUI 0.2 beta
 
-Install the Windows beta with `python -m pip install --upgrade swirui==0.2.0b2`,
+Install the Windows beta with `python -m pip install --upgrade swirui==0.2.0b3`,
 then run `python -m swirui studio`. The standalone scripts under `examples/`
-are in the [matching source checkout](https://github.com/Swir/Swirui/tree/v0.2.0b2/examples).
+are in the [matching source checkout](https://github.com/Swir/Swirui/tree/v0.2.0b3/examples).
 In **Overview → Material library**, choose a
 material, then select **Launch preview**.
 
@@ -118,6 +118,49 @@ ink = replace(FUTURE_DARK, palette=replace(
 Themed `Input`, `PasswordInput` and `TextArea` use `disabled_text` for both
 entered text and placeholders while disabled. An explicit `foreground` or
 `placeholder_color` on a field takes precedence for the text it controls.
+
+### Check a box in both appearances
+
+In beta 3, select **Disable form** in both
+panes. The tick stays centered in the accent square and scales down when the
+keyboard focus outline takes up part of the face. Press Space to clear it.
+
+![Two checked boxes in the Studio comparison, with the light appearance showing the focus outline](screenshots/checkbox-checkmarks.png)
+
+The marks use the theme’s `on_accent` color and are drawn as vector paths.
+For a locked setting in your own app, set `checkbox.enabled = False`. Its
+checkmark then uses `disabled_text` on the `disabled` surface. You can read
+or update `checkbox.checked` while the control is locked.
+
+### Compare locked settings
+
+From the matching source checkout, run `python examples/core_toggles_demo.py`.
+Choose **Ultra**, enable **Renderer telemetry**, then select **Lock settings**.
+Switch to **Light appearance** while the settings are locked. The selected
+radio dot, checkbox tick and switch thumb follow the new palette. Unlock
+the controls to edit them again.
+
+![Rendering preferences in dark and light appearances, showing a locked Ultra selection and a locked Balanced selection with high refresh off](screenshots/locked-toggle-palettes.png)
+
+In your own app, set `radio.enabled = switch.enabled = False`. The radio dot
+and the switch thumb use the theme’s `disabled_text` against `disabled`.
+The thumb stays on the left for off and on the right for on. Updating
+`checked` in code also updates the indicator while locked. The five frames
+above come directly from the Windows/wgpu demo on AMD Radeon graphics.
+
+### Choose a radio option with the arrow keys
+
+In the same demo, press Tab to focus **Balanced**. Down selects **Ultra**
+and moves the focus ring with the dot. Down again wraps to **Balanced**.
+Up and Left go backward. Down and Right go forward. Tab and Shift+Tab
+follow the form’s usual focus order.
+
+![The focus ring and selected dot move between Balanced and Ultra, then Tab moves focus to Renderer telemetry](screenshots/radio-keyboard.png)
+
+In a Python form, add the radio buttons to the same parent with the same
+`group` name. Arrows follow their child order and skip hidden, disabled and
+non-focusable options. Listen for the existing `changed` event to apply the
+selection. The recording shows the native Windows demo operated by keyboard.
 
 ## Add magnetic hover to a button
 
@@ -495,7 +538,11 @@ opposite end of the track. Toggle again during travel and it goes back
 from its current position. **Reduce appearance motion** makes the switches
 snap into place, including one already moving.
 
-![The focused notifications switch slides off and on in the mint glass workspace](screenshots/appearance-switch-motion.png)
+In beta 3, the track fades with the moving
+thumb. Press Space halfway through a slide to reverse both the movement and
+the fade from the frame you see. The setting takes effect on the keypress.
+
+![The notifications switch slides off and on as its track fades between mint and slate](screenshots/appearance-switch-motion.png)
 
 The recording shows **Keep notifications on** in
 `python examples/appearance_gallery.py`. Each trip takes 160 ms with this
@@ -521,6 +568,11 @@ Share one controller among switches in the same window. Set
 seconds. A shorter return trip takes proportionally less time. The
 `changed` event and accessible checked state update once per toggle.
 Omit `animations` for immediate movement.
+
+The fade uses the theme’s track colors for the current focus, hover or
+pressed state. With opaque colors, the moving thumb uses whichever of
+`text` and `on_accent` has higher contrast against the track. With translucent
+colors, the thumb blends its two authored colors and their opacity.
 
 ## Animate a theme switch
 

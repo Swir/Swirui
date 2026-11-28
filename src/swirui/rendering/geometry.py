@@ -266,6 +266,26 @@ class Color:
         return Color(self.r, self.g, self.b, alpha)
 
 
+def mix_linear_colors(first: Color, second: Color, progress: float) -> Color:
+    """Interpolate linear-light surface colors using premultiplied alpha."""
+    alpha = (1 - progress) * first.a + progress * second.a
+    if alpha == 0:
+        return Color(0, 0, 0, 0)
+    channels = [
+        ((1 - progress) * a * first.a + progress * b * second.a) / alpha
+        for a, b in zip((first.r, first.g, first.b), (second.r, second.g, second.b), strict=True)
+    ]
+    return Color(channels[0], channels[1], channels[2], alpha)
+
+
+def linear_contrast_ratio(first: Color, second: Color) -> float:
+    """Return the luminance contrast ratio of two opaque linear-light colors."""
+    def luminance(color: Color) -> float:
+        return 0.2126 * color.r + 0.7152 * color.g + 0.0722 * color.b
+    a, b = luminance(first), luminance(second)
+    return (max(a, b) + 0.05) / (min(a, b) + 0.05)
+
+
 def _signed_area(points: tuple[Point, ...]) -> float:
     return 0.5 * sum(
         point.x * points[(index + 1) % len(points)].y
