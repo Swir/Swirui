@@ -56,10 +56,10 @@ def test_switch_presents_intermediate_knob_positions_after_native_space(record_p
         while app.platform_backend._events:
             app._dispatch_platform_event(app.platform_backend._events.popleft())
         assert switch.checked and switch.accessible_checked and clock.active_count == 1
-        color = theme.text_color("on_accent")
-        expected = tuple(round(channel * 255) for channel in (color.r, color.g, color.b))
 
-        def knob_center():
+        def knob_center(role):
+            color = theme.text_color(role)
+            expected = tuple(round(channel * 255) for channel in (color.r, color.g, color.b))
             renderer.render(window, root)
             width, _, rgba = context.read_scene_rgba()
             y = round(56 * window.scale)
@@ -71,11 +71,11 @@ def test_switch_presents_intermediate_knob_positions_after_native_space(record_p
             assert len(xs) >= 6 * window.scale
             return (min(xs) + max(xs)) / (2 * window.scale)
 
-        start = knob_center()
+        start = knob_center("text")
         clock.tick(theme.motion_duration / 2)
-        midpoint = knob_center()
+        midpoint = knob_center("on_accent")
         assert clock.tick(theme.motion_duration / 2) == 0
-        end = knob_center()
+        end = knob_center("on_accent")
         assert midpoint - start > 6 and end - midpoint > 6
         assert abs(midpoint - (start + end) / 2) <= 1
         assert window.focused_component is switch and renderer._contexts[hwnd] is context
