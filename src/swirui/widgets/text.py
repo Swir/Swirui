@@ -11,7 +11,7 @@ from swirui.rendering.scene import SceneNode, SceneNodeKind
 from swirui.theme import Theme
 
 from .base import Widget
-from .measurement import measure_text_block
+from .measurement import measure_line_width, measure_text_block
 
 if TYPE_CHECKING:
     from swirui.rendering.text_layout import TextShaper
@@ -179,15 +179,8 @@ class Label(Widget):
     def _measure_fitted_line(self, width: float, floor: float, scale: float,
                              shaper: TextShaper | None) -> _FittedLine:
         def measure(size: float) -> _FittedLine:
-            if shaper is not None:
-                try:
-                    layout = shaper.shape_line(self.text, size, self.font_family, scale)
-                    return _FittedLine(size, layout.width)
-                except ValueError:
-                    # Keep layout available beyond the native shaper's text and font limits.
-                    pass
-            estimated = measure_text_block(self.text, font_size=size, wrap=False)
-            return _FittedLine(size, estimated.width)
+            return _FittedLine(size, measure_line_width(self.text, size, self.font_family,
+                                                        scale, shaper))
 
         preferred = measure(self.font_size)
         if preferred.width <= width or floor >= self.font_size:

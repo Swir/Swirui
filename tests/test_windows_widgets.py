@@ -641,6 +641,48 @@ def test_fractional_ring_leaves_visible_space_until_completion() -> None:
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="retained widget smoke requires Windows")
+def test_tooltip_renders_complete_hard_and_soft_lines_on_wgpu():
+    renderer = WgpuRenderer(background=Color(0, 0, 0))
+    app = App(platform_backend=_isolated_backend(), renderer=renderer)
+    window = app.add_window(Window(width=460, height=246))
+    root = Component()
+    tip = Tooltip("", bounds=Rect(16, 16, 176, 80), initially_open=True, padding=10,
+                  font_size=16, background=Color(0, 0, 0), foreground=Color(1, 1, 1))
+    reference = Label("", bounds=Rect(0, 0, 1, 1), font_size=16, color=Color(1, 1, 1))
+    root.add(tip, reference)
+    mount(window, root)
+    try:
+        app.start()
+        app.process_events()
+        context = renderer._contexts[window.native_handle.value]
+        phrase = "Focus the field to edit its name."
+        for hint, box_width, multiple in (("Save\r\nZapisz zmiany", 176, True),
+                                          (phrase, 176, True), (phrase, 380, False),
+                                          ("Save", 176, False)):
+            top = 10 if multiple else 30
+            height = 60 if multiple else 20
+            tip.bounds = Rect(16, 16, box_width, 80)
+            tip.text = reference.text = hint
+            reference.bounds = Rect(26, 128 + top, box_width - 20, height)
+            app.render_pending(app._frame_schedulers[window].stats.last_frame_time + 1)
+            width, _, pixels = context.read_scene_rgba()
+            stride = width * 4
+            y = round(16 * window.scale)
+            ref_y = round(128 * window.scale)
+            length = round(80 * window.scale) * stride
+            actual = bytes(pixels[y * stride:y * stride + length])
+            assert actual == bytes(pixels[ref_y * stride:ref_y * stride + length])
+            assert max(actual[::4]) > 220
+            if multiple:
+                # Read the glyphs below the first 20-DIP line, including Polish accents.
+                lower = actual[round(30 * window.scale) * stride:]
+                assert max(lower[::4]) > 220
+        assert renderer._contexts[window.native_handle.value] is context
+    finally:
+        app.stop()
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="retained widget smoke requires Windows")
 def test_retained_content_surfaces_and_tooltip_reuse_real_wgpu_context() -> None:
     renderer = WgpuRenderer()
     backend = _isolated_backend()

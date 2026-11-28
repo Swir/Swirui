@@ -251,17 +251,40 @@ the card, and a theme with `reduced_motion=True` keeps the layers at rest.
 ### Leave the window with the keyboard selection intact
 
 Run `python examples/core_gallery.py` on Windows. Select a word in the text
-field, then hover over **Focus for help**. When “Your work stays right here.”
-appears, move the pointer straight onto the title bar. The tooltip closes and
+field, then hover over **Focus for help**. The tooltip describes **Open dialog**
+and shows the Escape shortcut on its second line. Move the pointer straight
+onto the title bar. The tooltip closes and
 the word stays selected. Move back onto the button to show the tip again.
 
-![Two native gallery frames show the tooltip opening and closing while the same word stays selected](screenshots/gallery-pointer-exit.png)
+![The two-line tooltip opens and closes in the dark and light gallery while the word workbench stays selected](screenshots/gallery-pointer-exit.png)
 
-The two frames come from the Windows DX12 renderer and contain no cursor.
+The four frames are cursor-free crops of the Windows DX12 render target.
 In your own window, the hovered control receives `pointer_leave`. Use
 `window.on("pointer_exit", callback)` to react when the pointer leaves the
 client area. The exit event carries no coordinates. A control with pointer
 capture continues receiving drag events through button release.
+
+### Show more than one line in a tooltip
+
+Give the tooltip a box tall enough for your hint. Insert a line break before
+a keyboard shortcut, or let the renderer wrap the sentence at the available
+width. A short hint stays vertically centered. Hovering over the target or
+tabbing to it opens the same tooltip.
+
+```python
+from swirui import Input, Panel, Tooltip
+from swirui.rendering import Rect
+
+panel = Panel(bounds=Rect(0, 0, 360, 160))
+name = Input("Field notes", bounds=Rect(20, 16, 280, 40), accessible_name="Project name")
+help_text = Tooltip("Enter a project name.\nPress Ctrl+A to select the whole name.",
+                    target=name, bounds=Rect(20, 64, 280, 64))
+panel.add(name, help_text)
+```
+
+The text uses the tooltip’s font, display scale and horizontal padding.
+When the box can hold two lines, the vertical padding contracts if needed
+to show both. Longer hints use the available height and clip at the boundary.
 
 ## Edit a field inside an expander
 

@@ -1,17 +1,32 @@
-"""Backend-neutral intrinsic text measurement for retained widgets.
+"""Text measurement in logical DIPs for retained widgets.
 
-The native renderer remains responsible for final glyph shaping. Layout needs a
-fast deterministic desired-size estimate before a renderer surface exists, so
-this module provides a conservative Unicode-aware measurement model in logical
-DIPs. It intentionally avoids platform font APIs and external dependencies.
+Single-line controls can measure with their window's font shaper. Intrinsic
+block measurement also works before a renderer exists, using a deterministic
+Unicode-aware estimate. The renderer performs final shaping and wrapping.
 """
 
 from __future__ import annotations
 
 import math
 import unicodedata
+from typing import TYPE_CHECKING
 
 from swirui.rendering.geometry import Size
+
+if TYPE_CHECKING:
+    from swirui.rendering.text_layout import TextShaper
+
+
+def measure_line_width(text: str, size: float, family: str, scale: float,
+                       shaper: TextShaper | None) -> float:
+    """Measure an unwrapped line in DIPs with the window's font provider when available."""
+    if shaper is not None:
+        try:
+            return shaper.shape_line(text, size, family, scale).width
+        except ValueError:
+            # The native measurer limits line length, font family length and physical font size.
+            pass
+    return measure_text_block(text, font_size=size, wrap=False).width
 
 
 def measure_text_block(

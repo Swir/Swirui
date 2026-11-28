@@ -118,7 +118,8 @@ class Gallery(Panel):
             "Focus for help", bounds=Rect(978, 428, 166, 40), variant=ButtonVariant.GHOST
         )
         self.tip = Tooltip(
-            "Your work stays right here.", bounds=Rect(808, 488, 336, 44), target=self.help
+            "Open dialog previews the current theme.\nPress Escape to return to the gallery.",
+            bounds=Rect(808, 488, 336, 60), target=self.help,
         )
         self.open_dialog = Button("Open dialog", bounds=Rect(808, 566, 336, 44))
         self.open_dialog.on("click", lambda _: self.show_dialog())

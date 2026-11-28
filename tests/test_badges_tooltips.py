@@ -158,6 +158,25 @@ def test_tooltip_follows_target_hover_and_focus_without_stealing_hits() -> None:
     assert runtime.generation >= 4
 
 
+@pytest.mark.parametrize("text", ["Pierwsza linia\r\nDruga linia",
+                                  "A long keyboard hint for the current workspace"])
+def test_tooltip_grants_wrapped_text_the_height_of_its_authored_box(text):
+    tip = Tooltip(text, bounds=Rect(8, 12, 160, 80), font_size=16, padding=10)
+    node = tip.build_scene_node().children[0]
+    assert node.bounds == Rect(18, 22, 140, 60)
+    assert node.text == tip.accessible_name == text
+    assert not node.hit_testable
+    tip.bounds = Rect(8, 12, 160, 43)
+    assert tip.build_scene_node().children[0].bounds == Rect(18, 13.5, 140, 40)
+    tip.bounds = Rect(8, 12, 160, 26)
+    assert tip.build_scene_node().children[0].bounds == Rect(18, 15, 140, 20)
+    tip.text = "Short hint"
+    tip.bounds = Rect(8, 12, 160, 80)
+    assert tip.build_scene_node().children[0].bounds == Rect(18, 42, 140, 20)
+    tip.bounds = Rect(8, 12, 12, 80)
+    assert not tip.build_scene_node().children
+
+
 def test_tooltip_closes_when_bound_target_becomes_unavailable() -> None:
     button = Button("Inspect", bounds=Rect(0.0, 0.0, 120.0, 40.0))
     tooltip = Tooltip(

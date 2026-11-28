@@ -2,7 +2,17 @@
 
 import pytest
 
-from swirui import FUTURE_DARK, FUTURE_LIGHT, Button, Input, Label, PasswordInput, Window, mount
+from swirui import (
+    FUTURE_DARK,
+    FUTURE_LIGHT,
+    Button,
+    Input,
+    Label,
+    PasswordInput,
+    Tooltip,
+    Window,
+    mount,
+)
 from swirui.rendering import Rect
 from swirui.rendering.text_layout import NativeTextShaper, TextLineLayout
 
@@ -77,6 +87,26 @@ def test_fitted_label_reuses_metrics_until_its_font_scale_or_shaper_changes():
     window._set_text_shaper(replacement)
     label.text = "iii"
     assert label.build_scene_node().font_size == 26 and replacement.calls[-1][0] == "iii"
+
+
+def test_tooltip_reuses_shaped_line_width_across_resizes_and_refreshes_on_scale_change():
+    window = Window()
+    tip = Tooltip("iiiiW", bounds=Rect(0, 0, 60, 80), font_size=16, initially_open=True)
+    mount(window, tip)
+    shaper = ProportionalShaper()
+    window._set_text_shaper(shaper)
+    assert node(tip, ":text").bounds.height == 20
+    tip.bounds = Rect(0, 0, 45, 80)
+    assert node(tip, ":text").bounds.height == 60
+    tip.bounds = Rect(0, 0, 60, 80)
+    assert node(tip, ":text").bounds.height == 20 and len(shaper.calls) == 1
+    window._set_scale(1.5)
+    assert shaper.calls[-1][-1] == 1.5
+    tip.text = "WWWW"
+    assert node(tip, ":text").bounds.height == 60 and shaper.calls[-1][0] == "WWWW"
+    calls = len(shaper.calls)
+    tip.text = "i\ni"
+    assert node(tip, ":text").bounds.height == 60 and len(shaper.calls) == calls
 
 
 def test_proportional_caret_selection_and_click_use_the_same_advances():

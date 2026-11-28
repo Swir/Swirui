@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 from swirui.core import AccessibilityRole, Component, Event
 from swirui.rendering.geometry import Color, CornerRadius, Rect
@@ -11,6 +12,10 @@ from swirui.rendering.scene import SceneNode, SceneNodeKind
 from swirui.theme import Theme
 
 from .base import Widget
+from .measurement import measure_line_width
+
+if TYPE_CHECKING:
+    from swirui.window import Window
 
 _DEFAULT_BACKGROUND = Color.from_hex("#08131F")
 _DEFAULT_FOREGROUND = Color.from_hex("#EAF8FF")
@@ -42,6 +47,8 @@ class Tooltip(Widget):
         accessible_description: str | None = None,
     ) -> None:
         self._text = str(text)
+        self._line_width_key: tuple[object, ...] | None = None
+        self._line_width = 0.0
         self._background = background or _DEFAULT_BACKGROUND
         self._foreground = foreground or _DEFAULT_FOREGROUND
         self._corner_radius = self._validate_non_negative(
@@ -99,6 +106,7 @@ class Tooltip(Widget):
         if normalized == self._text:
             return
         self._text = normalized
+        self._line_width_key = None
         if self._auto_accessible_name:
             self.accessible_name = normalized
         self.invalidate(reason="text")
@@ -193,8 +201,31 @@ class Tooltip(Widget):
         width = max(0.0, self.bounds.width - (2.0 * self._padding))
         line_height = self._font_size * 1.25
         height = min(self.bounds.height, line_height)
+        if (width > 0 and self.text and self.bounds.height >= 2 * line_height
+                and self._natural_line_width() > width):
+            # Preserve room for two complete lines when the box is shorter than
+            # their combined height plus the normal top and bottom insets.
+            inset = min(self._padding, (self.bounds.height - 2 * line_height) / 2)
+            height = self.bounds.height - 2 * inset
         y = self.bounds.y + max(0.0, (self.bounds.height - height) * 0.5)
         return Rect(self.bounds.x + self._padding, y, width, height)
+
+    def _natural_line_width(self) -> float:
+        window = self.mounted_window
+        shaper = window._text_shaper if window else None
+        scale = window.scale if window else 1.0
+        key = (self.text, self._font_size, self._font_family, scale, shaper)
+        if key != self._line_width_key:
+            self._line_width = math.inf
+            if self.text.splitlines() == [self.text]:
+                self._line_width = measure_line_width(self.text, self._font_size,
+                                                      self._font_family, scale, shaper)
+            self._line_width_key = key
+        return self._line_width
+
+    def on_unmount(self, window: Window) -> None:
+        self._line_width_key = None
+        super().on_unmount(window)
 
     def _target_available(self) -> bool:
         component = self._target
