@@ -56,6 +56,41 @@ Set `save.text_align` to `"left"`, `"center"` or `"right"` to position the
 caption inside the button's padding. The default `"auto"` on regular buttons
 uses the renderer's paragraph alignment. Icon buttons default to `"center"`.
 
+## Fit a heading to its panel
+
+In Studio, enter **Pracownia Światła Północy** as the project name and
+**Powierzchnie ze szkła i satyny** as the Inspector headline. Open **Launch
+preview** and narrow the window to 680 × 460. Both appearances keep the full
+headings on one line. Widen the preview and the type returns to its authored
+size. Saved packages opened by `preview-theme` use the same fitting behavior.
+
+![The dark and light previews show both complete Polish headings in two narrow panels](screenshots/comparison-fitted-titles.png)
+
+At 320 × 390 the panes stack. The decorative ribbon begins below the project
+name so its highlight leaves the letters readable in both appearances.
+
+![The complete project name sits above the ribbon in each stacked appearance](screenshots/comparison-fitted-titles-stacked.png)
+
+To use it in a Python app, set a minimum size on a label.
+
+```python
+from swirui import Label
+from swirui.rendering import Rect
+
+heading = Label("Pracownia Światła Północy", bounds=Rect(20, 20, 300, 48),
+                font_size=31, min_font_size=16)
+```
+
+The label measures the full line with the window’s font and display scale.
+It keeps the preferred size when it fits and tries smaller whole-DIP sizes
+down to the minimum. If the text still exceeds the available space, ordinary
+wrapping and clipping apply at the minimum. An explicit line break keeps the
+authored size. The label text and accessible name stay intact.
+
+To reproduce this cursor-free Windows/wgpu screenshot from the checkout, run
+`python tools/capture_studio.py --pane comparison --comparison-size 680 460 --comparison-text "Pracownia Światła Północy" "Powierzchnie ze szkła i satyny" --accent "#86DCD4" --corner-radius 18 --output comparison-fitted-titles.png`.
+Use `--comparison-size 320 390` for the stacked view.
+
 ## Compare disabled form colors
 
 Select **Disable form** in one pane to see the disabled background and text

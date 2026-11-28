@@ -58,6 +58,8 @@ def main() -> None:
     parser.add_argument("--height", type=int, default=1000)
     parser.add_argument("--comparison-size", type=int, nargs=2, metavar=("WIDTH", "HEIGHT"),
                         help="Resize the comparison window before capturing its frame")
+    parser.add_argument("--comparison-text", nargs=2, metavar=("NAME", "HEADLINE"),
+                        help="Set the project name and Inspector headline for the comparison")
     args = parser.parse_args()
     if args.width < 1024 or args.height < 720:
         parser.error("Studio requires at least 1024 × 720 logical pixels")
@@ -68,12 +70,22 @@ def main() -> None:
     if args.comparison_size and (args.pane != "comparison" or args.comparison_size[0] < 320
                                  or args.comparison_size[1] < 390):
         parser.error("--comparison-size requires --pane comparison and at least 320 × 390")
+    if args.comparison_text and args.pane != "comparison":
+        parser.error("--comparison-text requires --pane comparison")
     renderer = WgpuRenderer()
     app = App("SwirUI Studio capture", renderer=renderer)
     window = app.add_window(Window(width=args.width, height=args.height,
                                    min_width=1024, min_height=720))
     studio = StudioSuite()
     studio.resize_to(args.width, args.height)
+    if args.comparison_text:
+        name, headline = args.comparison_text
+        studio.preview.project.value = name
+        studio.inspector.set_value("title", headline)
+        try:
+            studio.preview.theme_package()
+        except ValueError as error:
+            parser.error(str(error))
     window.on("resized", lambda _: studio.resize_to(window.width, window.height))
     if args.theme == "light":
         studio.toggle_theme()

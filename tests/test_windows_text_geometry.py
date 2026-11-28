@@ -5,7 +5,7 @@ import sys
 
 import pytest
 
-from swirui import App, Button, IconButton, Input, Panel, Window, mount
+from swirui import App, Button, IconButton, Input, Label, Panel, Window, mount
 from swirui.platforms.windows import Win32PlatformBackend
 from swirui.rendering import Color, Rect, WgpuRenderer
 from swirui.rendering.text_layout import NativeTextShaper
@@ -132,6 +132,48 @@ def test_shaped_carets_follow_real_rasterized_proportional_text(scale):
     narrow = shaper.shape_line("iiii", 24, "Segoe UI", scale)
     wide = shaper.shape_line("WWWW", 24, "Segoe UI", scale)
     assert wide.carets[-1] > 2 * narrow.carets[-1]
+
+
+def test_fitted_title_keeps_all_native_glyphs_when_its_width_changes():
+    renderer = WgpuRenderer()
+    app = App(platform_backend=Win32PlatformBackend(), renderer=renderer)
+    window = app.add_window(Window(width=550, height=200))
+    root = Panel(bounds=Rect(0, 0, 550, 200), background=Color(0, 0, 0))
+    name = "Pracownia Światła Północy"
+    title = Label(name, bounds=Rect(16, 16, 420, 48), color=Color(1, 1, 1),
+                  font_size=31, min_font_size=16, clip_to_bounds=True)
+    reference = Label(name, bounds=Rect(16, 96, 480, 48), color=Color(1, 1, 1))
+    root.add(title, reference)
+    mount(window, root)
+    try:
+        app.start()
+        app.process_events()
+        context = renderer._contexts[window.native_handle.value]
+        widths = {size: window._text_shaper.shape_line(name, size, title.font_family,
+                                                       window.scale).width
+                  for size in range(16, 32)}
+
+        def rows(frame, y):
+            width, _, rgba = frame
+            top = round(y * window.scale)
+            bottom = top + round(48 * window.scale)
+            return bytes(rgba[top * width * 4:bottom * width * 4])
+
+        for available in (420, 245, 420):
+            expected = max(size for size, width in widths.items() if width <= available)
+            assert (expected < 31) == (available == 245)
+            title.bounds = Rect(16, 16, available, 48)
+            reference.font_size = expected
+            app.render_pending(app._frame_schedulers[window].stats.last_frame_time + 1)
+            frame = context.read_scene_rgba()
+            fitted = rows(frame, 16)
+            assert max(fitted[::4]) == 255
+            assert fitted == rows(frame, 96)
+            assert title.build_scene_node().font_size == expected
+            assert title.text == title.accessible_name == name and title.font_size == 31
+        assert renderer._contexts[window.native_handle.value] is context
+    finally:
+        app.stop()
 
 
 def test_native_unicode_positions_use_python_indices_and_real_rtl_geometry():

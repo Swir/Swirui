@@ -35,6 +35,10 @@ comparison is open. Select **Disable form** in either pane to compare its
 disabled field and button with the other appearance. Your draft stays in the
 field when you turn editing back on. [Try the disabled palette](https://github.com/Swir/Swirui/blob/development/0.2/docs/development-0.2.md#compare-disabled-form-colors).
 
+Project names and card headings now adjust their type size to the width of
+each appearance pane. Use `Label(..., font_size=31, min_font_size=16)` for
+the same behavior in your own app. [See a narrow preview with long names](https://github.com/Swir/Swirui/blob/development/0.2/docs/development-0.2.md#fit-a-heading-to-its-panel).
+
 In the Inspector, edit **Tilt X (°)** and **Tilt Y (°)**
 to turn the layers behind a card while its controls stay in place.
 Select **Save theme…** to write both appearances to one

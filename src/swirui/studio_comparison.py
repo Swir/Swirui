@@ -51,10 +51,10 @@ class _AppearancePane(Panel):
         self.variant_button = Button("", bounds=empty, variant=ButtonVariant.SECONDARY,
                                      text_align="center", padding=5, font_size=13,
                                      accessible_name="Choose variant")
-        self.title = Label("", bounds=empty, font_size=31, clip_to_bounds=True)
+        self.title = Label("", bounds=empty, font_size=31, min_font_size=16, clip_to_bounds=True)
         self.ribbon = SilkRibbon(bounds=empty)
         self.card = ThemeSurface(bounds=empty)
-        self.headline = Label("", bounds=empty, font_size=23, clip_to_bounds=True)
+        self.headline = Label("", bounds=empty, font_size=23, min_font_size=15, clip_to_bounds=True)
         self.caption = Label("Project name", bounds=empty, font_size=13)
         self.field = Input("", bounds=empty)
         self.apply = Button("Apply name", bounds=empty, text_align="center")
@@ -128,7 +128,8 @@ class _AppearancePane(Panel):
         self.mode_label._set_layout_bounds(Rect(left + inner - badge, top + 12, badge, 28))
         self.title._set_layout_bounds(Rect(left, top + 10, max(0, inner - badge - 10), 32))
         card_y = top + 52 + max(0, viewport.height - 195) * .5
-        self.ribbon._set_layout_bounds(Rect(viewport.x + 2, card_y - 34,
+        ribbon_y = max(self.title.bounds.bottom, card_y - 34)
+        self.ribbon._set_layout_bounds(Rect(viewport.x + 2, ribbon_y,
                                             max(0, viewport.width - 4), 116))
         self.card._set_layout_bounds(Rect(left, card_y, inner, 139))
         content_x, content_w = left + 14, max(0, inner - 28)

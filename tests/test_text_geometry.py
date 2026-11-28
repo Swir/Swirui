@@ -2,7 +2,7 @@
 
 import pytest
 
-from swirui import FUTURE_DARK, FUTURE_LIGHT, Button, Input, PasswordInput, Window, mount
+from swirui import FUTURE_DARK, FUTURE_LIGHT, Button, Input, Label, PasswordInput, Window, mount
 from swirui.rendering import Rect
 from swirui.rendering.text_layout import NativeTextShaper, TextLineLayout
 
@@ -56,6 +56,27 @@ def test_button_label_alignment_uses_shaped_width_and_keeps_the_hit_target():
     with pytest.raises(ValueError, match="text_align"):
         button.text_align = "diagonal"
     assert button.text_align == "left"
+
+
+def test_fitted_label_reuses_metrics_until_its_font_scale_or_shaper_changes():
+    window = Window()
+    shaper = ProportionalShaper()
+    label = Label("WWW", bounds=Rect(0, 0, 24, 48), font_size=26, min_font_size=14)
+    mount(window, label)
+    window._set_text_shaper(shaper)
+    assert label.build_scene_node().font_size == 14
+    calls = len(shaper.calls)
+    label.theme = FUTURE_LIGHT
+    label.build_scene_node()
+    assert len(shaper.calls) == calls
+    window._set_scale(1.5)
+    assert shaper.calls[-1][-1] == 1.5
+    label.font_family = "Consolas"
+    assert shaper.calls[-1][-2] == "Consolas"
+    replacement = ProportionalShaper()
+    window._set_text_shaper(replacement)
+    label.text = "iii"
+    assert label.build_scene_node().font_size == 26 and replacement.calls[-1][0] == "iii"
 
 
 def test_proportional_caret_selection_and_click_use_the_same_advances():

@@ -244,6 +244,7 @@ def test_comparison_reflows_both_forms_at_the_minimum_width_and_restores_them():
         for pane in root.panes:
             if pane.bounds.height < 370:
                 assert pane.title.bounds.right < pane.mode_label.bounds.x
+                assert pane.title.bounds.bottom <= pane.ribbon.bounds.y
                 assert pane.field.bounds.right < pane.apply.bounds.x
                 assert pane.field.bounds.y == pane.apply.bounds.y
             for widget in (pane.mode_label, pane.title, pane.card, pane.headline,
@@ -259,6 +260,25 @@ def test_comparison_reflows_both_forms_at_the_minimum_width_and_restores_them():
             )
         assert second.field.value == "Unsubmitted edit" and second.field.caret_index == 4
         assert second.field.selected_text == "bmitted "
+
+
+def test_long_comparison_titles_fit_each_pane_without_renaming_the_project():
+    name = "Pracownia Światła Północy"
+    headline = "Powierzchnie ze szkła i satyny"
+    package = ThemePackage(name, {"dark": NEON_BLUE, "light": FUTURE_LIGHT}, "dark")
+    root = comparison_module.AppearanceComparison(package, headline)
+    for width in (1100, 680, 320, 1100):
+        compile_component_scene(root, width=width, height=460)
+        for pane in root.panes:
+            for label, text in ((pane.title, name), (pane.headline, headline)):
+                node = label.build_scene_node()
+                assert label.min_font_size <= node.font_size <= label.font_size
+                assert node.text == label.accessible_name == text
+                if width == 1100:
+                    assert node.font_size == label.font_size
+                if width == 680:
+                    assert node.font_size < label.font_size
+            assert pane.field.value == name
 
 
 def test_disabled_preview_is_local_and_focus_survives_package_changes():
