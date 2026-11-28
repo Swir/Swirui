@@ -166,6 +166,74 @@ def test_saved_theme_cli_renders_both_authored_accents_in_requested_order(tmp_pa
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Windows/wgpu required")
+def test_file_preview_switches_one_form_to_its_disabled_palette(tmp_path, monkeypatch):
+    import ctypes
+    from dataclasses import replace
+
+    path = tmp_path / "Field notes.json"
+    ink = replace(NEON_BLUE, palette=replace(NEON_BLUE.palette, disabled="#35283D",
+                                              disabled_text="#F1C7DE"))
+    ThemePackage("Field notes", {"ink": ink, "paper": FUTURE_LIGHT}, "ink").save(path)
+    saved = path.read_bytes()
+
+    def inspect(app):
+        app.start()
+        app.process_events()
+        window, = app.windows
+        dark, light = window.root.panes
+        dark.field.value = "My draft"
+        window.focus_component(dark.field)
+        hwnd = window.native_handle.value
+        context = app.renderer._contexts[hwnd]
+        send = app.platform_backend._user32.SendMessageW
+        send.argtypes = [ctypes.c_void_p, ctypes.c_uint, ctypes.c_size_t, ctypes.c_ssize_t]
+        send.restype = ctypes.c_ssize_t
+
+        def press(key):
+            send(hwnd, 0x0100, key, 1)
+            send(hwnd, 0x0101, key, 1)
+            app.process_events()
+
+        def samples():
+            window._apply_platform_event(PlatformEvent(
+                PlatformEventKind.POINTER_MOVE, window.native_handle, x=2, y=2))
+            app.render_pending(app._frame_schedulers[window].stats.last_frame_time + 1)
+            width, _, rgba = context.read_scene_rgba()
+            colors = []
+            for widget in (dark.field, dark.apply, light.field, light.apply):
+                b = widget.bounds
+                offset = 4 * (round((b.bottom - 6) * window.scale) * width
+                              + round((b.x + b.width / 2) * window.scale))
+                colors.append(bytes(rgba[offset:offset + 3]))
+            b = dark.field.bounds
+            x1, x2 = round((b.x + 8) * window.scale), round((b.right - 8) * window.scale)
+            y1, y2 = round((b.y + 6) * window.scale), round((b.bottom - 6) * window.scale)
+            text_area = b"".join(rgba[4 * (y * width + x1):4 * (y * width + x2)]
+                                 for y in range(y1, y2))
+            return colors, text_area
+
+        press(0x09)
+        press(0x09)
+        assert window.focused_component is dark.disable_form
+        normal, _ = samples()
+        press(0x20)
+        assert dark.disable_form.checked and not light.disable_form.checked
+        disabled, text_area = samples()
+        assert disabled[:2] == [bytes.fromhex("35283D")] * 2
+        assert disabled[2:] == normal[2:] and disabled[:2] != normal[:2]
+        assert any(text_area[i:i + 3] == bytes.fromhex("F1C7DE")
+                   for i in range(0, len(text_area), 4))
+        press(0x20)
+        assert samples()[0] == normal and dark.field.value == "My draft"
+        assert app.renderer._contexts[hwnd] is context
+        return 0
+
+    monkeypatch.setattr(App, "run", inspect)
+    assert cli.main(["preview-theme", str(path)]) == 0
+    assert path.read_bytes() == saved
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows/wgpu required")
 def test_f5_reloads_saved_material_in_the_open_native_window(tmp_path, monkeypatch):
     import ctypes
     from dataclasses import replace

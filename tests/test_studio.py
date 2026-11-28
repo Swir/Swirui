@@ -2,7 +2,7 @@ from swirui import FUTURE_LIGHT, NEON_BLUE, ThemePackage, Window, mount
 from swirui import __main__ as cli
 from swirui import studio_comparison as comparison_module
 from swirui import studio_suite as studio_module
-from swirui.platforms import NativeWindowHandle, PlatformEvent, PlatformEventKind
+from swirui.platforms import NativeWindowHandle, PlatformEvent, PlatformEventKind, PointerButton
 from swirui.rendering import Rect
 from swirui.studio import Studio
 from swirui.widgets import compile_component_scene
@@ -247,14 +247,53 @@ def test_comparison_reflows_both_forms_at_the_minimum_width_and_restores_them():
                 assert pane.field.bounds.right < pane.apply.bounds.x
                 assert pane.field.bounds.y == pane.apply.bounds.y
             for widget in (pane.mode_label, pane.title, pane.card, pane.headline,
-                           pane.caption, pane.field, pane.apply):
+                           pane.caption, pane.field, pane.apply, pane.disable_form):
                 b = widget.bounds
                 assert pane.bounds.x <= b.x < b.right <= pane.bounds.right
                 assert pane.bounds.y <= b.y < b.bottom <= pane.bounds.bottom
             assert scene.hit_test_xy(pane.apply.bounds.x + 20,
                                      pane.apply.bounds.y + 18).key == pane.apply.key
+            check = pane.disable_form.bounds
+            assert scene.hit_test_xy(check.x + 10, check.y + check.height / 2).key == (
+                pane.disable_form.key
+            )
         assert second.field.value == "Unsubmitted edit" and second.field.caret_index == 4
         assert second.field.selected_text == "bmitted "
+
+
+def test_disabled_preview_is_local_and_focus_survives_package_changes():
+    package = ThemePackage("Workshop", {"ink": NEON_BLUE, "paper": FUTURE_LIGHT}, "ink")
+    root = comparison_module.AppearanceComparison(package, "Settings", variants=("ink", "paper"))
+    window = Window(width=320, height=390)
+    mount(window, root)
+    ink, paper = root.panes
+    ink.field.value = "Unsubmitted draft"
+    window.focus_component(ink.field)
+    ink.disable_form.checked = True
+    assert window.focused_component is ink.disable_form
+    assert not ink.field.enabled and not ink.apply.enabled
+    assert paper.field.enabled and paper.apply.enabled
+    b = ink.apply.bounds
+    for kind in (PlatformEventKind.POINTER_DOWN, PlatformEventKind.POINTER_UP):
+        window._apply_platform_event(PlatformEvent(kind, NativeWindowHandle(1),
+                                                  x=b.x + b.width / 2, y=b.y + b.height / 2,
+                                                  button=PointerButton.LEFT))
+    assert ink.title.text == paper.title.text == "Workshop"
+    window.focus_component(ink.disable_form)
+    assert window.focus_next() is paper.field
+    assert window.focus_next(reverse=True) is ink.disable_form
+    assert window.focus_next(reverse=True) is paper.disable_form
+
+    # Reload while the focused pane disappears. The survivor's field is disabled.
+    solo = ThemePackage("Updated", {"ink": FUTURE_LIGHT}, "ink")
+    root._reload_package(solo, pane_limit=2)
+    assert root.panes == (ink,) and ink.disable_form.checked
+    assert window.focused_component is ink.disable_form
+    assert ink.field.value == "Unsubmitted draft" and ink.theme == FUTURE_LIGHT
+    for kind in (PlatformEventKind.KEY_DOWN, PlatformEventKind.KEY_UP):
+        window._apply_platform_event(PlatformEvent(kind, NativeWindowHandle(1), key_code=0x20))
+    assert ink.field.enabled and ink.apply.enabled and not ink.disable_form.checked
+    assert window.focus_next() is ink.field
 
 
 def test_variant_search_reaches_last_of_32_and_escape_restores_focus():

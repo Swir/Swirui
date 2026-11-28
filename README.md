@@ -31,7 +31,11 @@ slider and still fine-tune it horizontally. Select **Launch preview** to try the
 dark and light versions side by side. Narrow the comparison window and the
 two forms stack vertically, keeping the current field and selection. Both
 versions follow changes to the material, accent and corners while the
-comparison is open. In the Inspector, edit **Tilt X (°)** and **Tilt Y (°)**
+comparison is open. Select **Disable form** in either pane to compare its
+disabled field and button with the other appearance. Your draft stays in the
+field when you turn editing back on. [Try the disabled palette](https://github.com/Swir/Swirui/blob/development/0.2/docs/development-0.2.md#compare-disabled-form-colors).
+
+In the Inspector, edit **Tilt X (°)** and **Tilt Y (°)**
 to turn the layers behind a card while its controls stay in place.
 Select **Save theme…** to write both appearances to one
 JSON file. To try them outside

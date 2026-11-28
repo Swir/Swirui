@@ -56,6 +56,32 @@ Set `save.text_align` to `"left"`, `"center"` or `"right"` to position the
 caption inside the button's padding. The default `"auto"` on regular buttons
 uses the renderer's paragraph alignment. Icon buttons default to `"center"`.
 
+## Compare disabled form colors
+
+Select **Disable form** in one pane to see the disabled background and text
+on the project field and **Apply name** button. The other pane stays editable.
+You can check both panes to compare disabled colors across variants. From the
+field, press Tab twice and then Space. Press Space again to resume editing.
+Your draft stays in the field. The same checkbox works in Studio’s live
+comparison and in `python -m swirui preview-theme`.
+
+![Field notes in dark and light themes, with each form switching independently between enabled and disabled](screenshots/preview-disabled-forms.png)
+
+Set the colors in your own theme when you author a package.
+
+```python
+from dataclasses import replace
+from swirui import FUTURE_DARK
+
+ink = replace(FUTURE_DARK, palette=replace(
+    FUTURE_DARK.palette, disabled="#382F40", disabled_text="#CDB6CF"
+))
+```
+
+Themed `Input`, `PasswordInput` and `TextArea` use `disabled_text` for both
+entered text and placeholders while disabled. An explicit `foreground` or
+`placeholder_color` on a field takes precedence for the text it controls.
+
 ## Add magnetic hover to a button
 
 Run `python examples/magnetic_interaction_demo.py`. Move along the edges of

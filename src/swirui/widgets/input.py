@@ -407,7 +407,7 @@ class _TextInputBase(Widget):
                     kind=SceneNodeKind.TEXT,
                     bounds=Rect(content.x - offset, content.y, layout.width, line_height),
                     z_index=1,
-                    fill=self._placeholder_color if showing_placeholder else self._foreground,
+                    fill=self._current_text_color(placeholder=showing_placeholder),
                     text=text,
                     font_size=self._font_size,
                     font_family=self._font_family,
@@ -523,7 +523,7 @@ class _TextInputBase(Widget):
                         kind=SceneNodeKind.TEXT,
                         bounds=Rect(content.x - offset, y, layout.width, height),
                         text=text,
-                        fill=self._placeholder_color if placeholder else self._foreground,
+                        fill=self._current_text_color(placeholder=placeholder),
                         font_size=self._font_size,
                         font_family=self._font_family,
                         z_index=1,
@@ -573,6 +573,12 @@ class _TextInputBase(Widget):
         line_starts = self._line_starts()
         caret_line = self._line_index_for_position(self._caret, line_starts)
         return max(0, min(caret_line - visible_lines + 1, len(line_starts) - visible_lines))
+
+    def _current_text_color(self, *, placeholder: bool) -> Color:
+        attribute = "_placeholder_color" if placeholder else "_foreground"
+        if not self.enabled and self._theme is not None and attribute not in self._theme_overrides:
+            return self._theme.text_color("disabled_text")
+        return self._placeholder_color if placeholder else self._foreground
 
     def _current_background(self) -> Color:
         if not self.enabled:

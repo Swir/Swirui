@@ -12,6 +12,7 @@ from . import (
     Badge,
     Button,
     ButtonVariant,
+    Checkbox,
     CommandItem,
     CommandPalette,
     Input,
@@ -57,7 +58,9 @@ class _AppearancePane(Panel):
         self.caption = Label("Project name", bounds=empty, font_size=13)
         self.field = Input("", bounds=empty)
         self.apply = Button("Apply name", bounds=empty, text_align="center")
-        self.card.add(self.headline, self.caption, self.field, self.apply)
+        self.disable_form = Checkbox("Disable form", bounds=empty, font_size=13)
+        self.disable_form.on("changed", self._change_form_state)
+        self.card.add(self.headline, self.caption, self.field, self.apply, self.disable_form)
         self.add(self.ribbon, self.badge, self.variant_button, self.title, self.card)
         self.set_mode(mode, selectable=selectable)
 
@@ -76,9 +79,18 @@ class _AppearancePane(Panel):
         self.mode_label.text = self._full_label
         self.mode_label.accessible_name = f"Choose variant, current {mode}" if selectable else full
         self.field.accessible_name = f"{mode.title()} preview project name"
+        self.disable_form.accessible_name = f"Disable {mode} preview form"
         self._badge_width = max(150, measure_text_block(self._full_label, font_size=13).width + 16)
         self._short_badge_width = max(60, measure_text_block(
             self._short_label, font_size=13).width + 16)
+
+    def _change_form_state(self, _event: Event) -> None:
+        disabled = self.disable_form.checked
+        window = self.mounted_window
+        with state_transaction():
+            if disabled and window and window.focused_component in (self.field, self.apply):
+                window.focus_component(self.disable_form)
+            self.field.enabled = self.apply.enabled = not disabled
 
     def prepare_layout(self, viewport: Rect) -> None:
         self._set_layout_bounds(viewport)
@@ -103,7 +115,11 @@ class _AppearancePane(Panel):
         self.headline._set_layout_bounds(Rect(left, card_y + 16, content, 35))
         self.caption._set_layout_bounds(Rect(left, card_y + 63, content, 20))
         self.field._set_layout_bounds(Rect(left, card_y + 88, content, 40))
-        self.apply._set_layout_bounds(Rect(left, card_y + 152, min(content, 128), 40))
+        check_width = min(content / 2, 120)
+        button_width = min(128, max(0, content - check_width - 8))
+        self.apply._set_layout_bounds(Rect(left, card_y + 152, button_width, 40))
+        self.disable_form._set_layout_bounds(Rect(left + content - check_width, card_y + 152,
+                                                  check_width, 40))
 
     def _arrange_short_pane(self, viewport: Rect) -> None:
         left, top = viewport.x + 16, viewport.y
@@ -114,7 +130,7 @@ class _AppearancePane(Panel):
         card_y = top + 52 + max(0, viewport.height - 195) * .5
         self.ribbon._set_layout_bounds(Rect(viewport.x + 2, card_y - 34,
                                             max(0, viewport.width - 4), 116))
-        self.card._set_layout_bounds(Rect(left, card_y, inner, 114))
+        self.card._set_layout_bounds(Rect(left, card_y, inner, 139))
         content_x, content_w = left + 14, max(0, inner - 28)
         self.headline._set_layout_bounds(Rect(content_x, card_y + 9, content_w, 26))
         self.caption._set_layout_bounds(Rect(content_x, card_y + 40, content_w, 20))
@@ -122,6 +138,7 @@ class _AppearancePane(Panel):
         field = max(0, content_w - button - 8)
         self.field._set_layout_bounds(Rect(content_x, card_y + 64, field, 38))
         self.apply._set_layout_bounds(Rect(content_x + content_w - button, card_y + 64, button, 38))
+        self.disable_form._set_layout_bounds(Rect(content_x, card_y + 106, min(120, content_w), 26))
 
 
 class _VariantDialog(Modal):
@@ -193,12 +210,12 @@ class AppearanceComparison(Panel):
             restore = None
             for pane in self.panes:
                 if pane not in panes:
-                    if focused in (pane.field, pane.apply, pane.variant_button):
-                        restore = panes[0].field
+                    if focused in (pane.field, pane.apply, pane.variant_button, pane.disable_form):
+                        restore = panes[0]
                     self.remove(pane)
             for pane in panes:
                 if focused is pane.variant_button and not selectable:
-                    restore = pane.field
+                    restore = pane
                 mode = pane.mode if pane.mode in package.themes else next(available)
                 pane.set_mode(mode, selectable=selectable)
             if len(panes) < count:
@@ -209,7 +226,8 @@ class AppearanceComparison(Panel):
             self.panes = tuple(panes)
             self.set_appearance(package.themes, panes[0].headline.text)
             if window and restore is not None:
-                window.focus_component(restore)
+                target = restore.field if restore.field.enabled else restore.disable_form
+                window.focus_component(target)
 
     def set_design(self, package: ThemePackage, headline: str) -> None:
         with state_transaction():
