@@ -1,4 +1,5 @@
 import ctypes
+import math
 import sys
 import time
 from typing import Any
@@ -27,7 +28,15 @@ from swirui import (
     mount,
 )
 from swirui.platforms.windows import Win32PlatformBackend
-from swirui.rendering import Color, LinearGradient, Rect, SceneNodeKind, WgpuRenderer
+from swirui.rendering import (
+    Color,
+    GradientStop,
+    LinearGradient,
+    Point,
+    Rect,
+    SceneNodeKind,
+    WgpuRenderer,
+)
 
 
 def _isolated_backend() -> Win32PlatformBackend:
@@ -445,6 +454,67 @@ def test_retained_ranges_and_progress_render_in_persistent_wgpu_context() -> Non
         assert half[0][0] > half[0][2] and full[2][2] > full[2][0]
         assert len(set(full)) == 3 and sample_bar(50) == half
         assert renderer._contexts[hwnd] is context
+    finally:
+        app.stop()
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="retained widget smoke requires Windows")
+def test_ring_sweep_reveals_fixed_gpu_colors_and_restores_theme_accent():
+    renderer = WgpuRenderer()
+    app = App(platform_backend=_isolated_backend(), renderer=renderer)
+    window = app.add_window(Window(width=320, height=220))
+    scale = LinearGradient(Point(0, .5), Point(1, .5), (
+        GradientStop(0, Color.from_hex("#B558EF")), GradientStop(.5, Color.from_hex("#35ACF1")),
+        GradientStop(1, Color.from_hex("#00D99C")),
+    ))
+    ring = ProgressRing(bounds=Rect(60, 20, 160, 160), theme=FUTURE_DARK, thickness=20,
+                        segments=64, sweep_stops=scale.stops)
+    mount(window, ring)
+    try:
+        app.start()
+        app.process_events()
+        context = renderer._contexts[window.native_handle.value]
+        offsets = [(index + .5) / 64 for index in (4, 21, 40, 58)]
+
+        def sample(value):
+            ring.value = value
+            app.render_pending(app._frame_schedulers[window].stats.last_frame_time + 1)
+            width, _, rgba = context.read_scene_rgba()
+            pixels = []
+            for offset in offsets:
+                angle = math.tau * offset
+                x = round((140 + 70 * math.sin(angle)) * window.scale)
+                y = round((100 - 70 * math.cos(angle)) * window.scale)
+                pos = 4 * (y * width + x)
+                pixels.append(tuple(rgba[pos:pos + 3]))
+            return pixels
+
+        def rgb(color):
+            # The GPU encodes linear surface colors into the sRGB readback.
+            def channel(c):
+                return round(255 * (12.92 * c if c <= .0031308 else 1.055 * c ** (1 / 2.4) - .055))
+
+            return pytest.approx(tuple(channel(c) for c in (color.r, color.g, color.b)), abs=1)
+
+        track = sample(0)
+        assert all(color == rgb(FUTURE_DARK.surface_color("border")) for color in track)
+        half = sample(42)
+        full = sample(100)
+        assert half[:2] == full[:2] and half[2:] == track[2:]
+        for pixel, offset in zip(full, offsets, strict=True):
+            assert pixel == rgb(scale.color_at(offset))
+        assert sample(42) == half
+        ring.sweep_stops = (GradientStop(0, scale.stops[-1].color),
+                            GradientStop(1, scale.stops[-1].color))
+        recolored = sample(42)
+        assert all(color == rgb(scale.stops[-1].color) for color in recolored[:2])
+        assert recolored[2:] == track[2:]
+        ring.enabled = False
+        assert all(color == rgb(FUTURE_DARK.surface_color("disabled")) for color in sample(100))
+        ring.enabled = True
+        ring.sweep_stops = None
+        assert all(color == rgb(FUTURE_DARK.surface_color("accent")) for color in sample(100))
+        assert renderer._contexts[window.native_handle.value] is context
     finally:
         app.stop()
 

@@ -59,6 +59,7 @@ ring = ProgressRing(
     value=volume.value,
     thickness=9.0,
     segments=64,
+    sweep_stops=scale.stops,
     accessible_name="Demo progress ring",
 )
 allowed = RangeSlider(

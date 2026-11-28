@@ -366,6 +366,37 @@ rounder outline. Values between vertices advance the arc in either case.
 Custom `minimum` and `maximum` values map onto the same full turn.
 The recording shows the default 48 segments on Windows/DX12.
 
+### Share a color scale with a progress ring
+
+Run `python examples/range_progress_demo.py --step 4`, Tab to the progress
+slider and use Left or Right. The bar and ring show the same value. Violet
+starts at twelve o’clock, blue passes through the bottom and mint finishes
+the turn. Lowering and raising the value reveals the same colors again.
+
+![A violet, blue and mint progress ring shrinks and grows in step with the slider and bar](screenshots/ring-color-scale.png)
+
+This 700 × 420 recording follows the keyboard-controlled example on Windows.
+All 50 frames come from the AMD Radeon / DX12 render target, without a cursor.
+
+```python
+from swirui import ProgressBar, ProgressRing
+from swirui.rendering import Color, GradientStop, LinearGradient, Point, Rect
+
+scale = LinearGradient(Point(0, .5), Point(1, .5), (
+    GradientStop(0, Color.from_hex("#9234ED")),
+    GradientStop(.48, Color.from_hex("#187BD8")),
+    GradientStop(1, Color.from_hex("#14D789")),
+))
+bar = ProgressBar(bounds=Rect(24, 82, 240, 8), value=80, fill_gradient=scale)
+ring = ProgressRing(bounds=Rect(288, 28, 108, 108), value=80,
+                    thickness=9, segments=64, sweep_stops=scale.stops)
+```
+
+Each segment samples its midpoint on the full turn, even when only part of
+that segment is visible. Use up to 128 segments for a smoother sweep or
+choose fewer for distinct color bands. Assign new stops to recolor a mounted
+ring, or set `ring.sweep_stops = None` to follow the theme accent again.
+
 ## Animate a theme switch
 
 To try an animated theme switch in a running app, launch

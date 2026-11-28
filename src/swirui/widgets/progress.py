@@ -3,12 +3,18 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 from functools import lru_cache
 from itertools import pairwise
 
 from swirui.core import AccessibilityRole
 from swirui.rendering.geometry import Color, CornerRadius, Path2D, Point, Rect, Size, _signed_area
-from swirui.rendering.gradients import LinearGradient
+from swirui.rendering.gradients import (
+    GradientStop,
+    LinearGradient,
+    _color_at_stops,
+    _validate_stops,
+)
 from swirui.rendering.scene import SceneNode, SceneNodeKind
 from swirui.theme import Theme
 
@@ -197,7 +203,7 @@ class ProgressBar(_ProgressWidget):
 
 
 class ProgressRing(_ProgressWidget):
-    """Determinate clockwise ring. Segments shape the outline, and value sets its sweep."""
+    """Clockwise progress ring with an optional fixed color scale starting at twelve o'clock."""
 
     def __init__(
         self,
@@ -208,6 +214,7 @@ class ProgressRing(_ProgressWidget):
         maximum: float = 100.0,
         thickness: float = 6.0,
         segments: int = 48,
+        sweep_stops: Sequence[GradientStop] | None = None,
         key: str | None = None,
         theme: Theme | None = None,
         opacity: float = 1.0,
@@ -222,6 +229,8 @@ class ProgressRing(_ProgressWidget):
             raise ValueError("segments must be between 8 and 128.")
         self._thickness = thickness
         self._segments = int(segments)
+        self._sweep_stops: tuple[GradientStop, ...] | None = None
+        self._sweep_colors: tuple[Color, ...] = ()
         super().__init__(
             bounds=bounds,
             theme=theme,
@@ -234,6 +243,7 @@ class ProgressRing(_ProgressWidget):
             accessible_name=accessible_name,
             accessible_description=accessible_description,
         )
+        self.sweep_stops = sweep_stops
 
     @property
     def thickness(self) -> float:
@@ -242,6 +252,27 @@ class ProgressRing(_ProgressWidget):
     @property
     def segments(self) -> int:
         return self._segments
+
+    @property
+    def sweep_stops(self) -> tuple[GradientStop, ...] | None:
+        """Colors along one full turn. None follows the current theme accent."""
+        return self._sweep_stops
+
+    @sweep_stops.setter
+    def sweep_stops(self, value: Sequence[GradientStop] | None) -> None:
+        stops = None if value is None else tuple(value)
+        if stops == self._sweep_stops:
+            return
+        colors: tuple[Color, ...] = ()
+        if stops is not None:
+            if not all(isinstance(stop, GradientStop) for stop in stops):
+                raise TypeError("sweep_stops must contain GradientStop values.")
+            _validate_stops(stops)
+            colors = tuple(_color_at_stops(stops, (index + .5) / self.segments)
+                           for index in range(self.segments))
+        self._sweep_stops = stops
+        self._sweep_colors = colors
+        self.invalidate(reason="sweep_stops")
 
     def build_scene_node(self) -> SceneNode:
         root = SceneNode(
@@ -266,6 +297,7 @@ class ProgressRing(_ProgressWidget):
         for index, segment in enumerate(track):
             key = f"{self.key}:segment:{index}"
             fraction = sweep - index
+            fill = self._sweep_colors[index] if self._sweep_colors else self._fill
             if segment is not None and self.enabled and 0 < fraction < 1:
                 # Intersect the progress ray with both polygon edges. Splitting the
                 # chords keeps the outline fixed even on deliberately faceted rings.
@@ -277,11 +309,11 @@ class ProgressRing(_ProgressWidget):
                                   outer_a.y + weight * (outer_b.y - outer_a.y))
                 inner_tip = Point(inner_a.x + weight * (inner_b.x - inner_a.x),
                                   inner_a.y + weight * (inner_b.y - inner_a.y))
-                paint(key, _ring_wedge(outer_a, outer_tip, inner_tip, inner_a), self._fill)
+                paint(key, _ring_wedge(outer_a, outer_tip, inner_tip, inner_a), fill)
                 remaining = _ring_wedge(outer_tip, outer_b, inner_b, inner_tip)
                 paint(key + ":remaining", remaining, self._track)
             else:
-                color = self._fill if fraction >= 1 else self._track
+                color = fill if fraction >= 1 else self._track
                 paint(key, segment, color if self.enabled else self._disabled)
         return root
 

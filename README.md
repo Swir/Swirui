@@ -89,6 +89,11 @@ next color while each previous stop stays in place.
 even on an eight-sided ring. The gap closes when the value reaches its maximum.
 [See the native ring at 1% and 99%](https://github.com/Swir/Swirui/blob/development/0.2/docs/development-0.2.md#show-the-last-percent-on-a-ring).
 
+Use `ProgressRing(sweep_stops=scale.stops, ...)` to carry a slider or bar's
+color scale clockwise around the ring. Dragging the slider reveals the same
+violet, blue and mint in all three controls.
+[Watch the example on Windows](https://github.com/Swir/Swirui/blob/development/0.2/docs/development-0.2.md#share-a-color-scale-with-a-progress-ring).
+
 ![SwirUI Studio in dark appearance, captured without a cursor](https://raw.githubusercontent.com/Swir/Swirui/v0.1.0b6/docs/screenshots/studio-dark.png)
 
 ### Your signature, across the whole interface
