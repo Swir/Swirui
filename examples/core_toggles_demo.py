@@ -38,7 +38,8 @@ high_refresh = Switch("High refresh rate", key="high-refresh", bounds=Rect(305, 
                       checked=True)
 locked = Checkbox("Lock settings", key="lock", bounds=Rect(32, 278, 204, 40))
 appearance = Switch("Light appearance", key="appearance", bounds=Rect(305, 278, 275, 40))
-status = Label("Tab to a setting. Press Space to change it.", bounds=Rect(32, 329, 580, 32),
+status = Label("Tab to a setting. Use arrows for quality or Space to toggle.",
+               bounds=Rect(32, 329, 580, 32),
                font_size=14)
 
 card.add(Label("Render quality", bounds=Rect(52, 111, 210, 32), font_size=20),

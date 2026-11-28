@@ -365,6 +365,46 @@ def test_retained_toggles_route_real_win32_input_and_reuse_wgpu_context() -> Non
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="retained widget smoke requires Windows")
+def test_win32_arrow_moves_the_radio_dot_and_focus_ring_together():
+    app = App(platform_backend=_isolated_backend(), renderer=WgpuRenderer())
+    window = app.add_window(Window(width=320, height=240))
+    root = Component(theme=FUTURE_DARK)
+    first = RadioButton("Balanced", bounds=Rect(24, 24, 150, 32), checked=True)
+    second = RadioButton("Ultra", bounds=Rect(24, 80, 150, 32))
+    root.add(first, second)
+    mount(window, root)
+    try:
+        app.start()
+        app.process_events()
+        hwnd = window.native_handle.value
+        user32 = _user32()
+        context = app.renderer._contexts[hwnd]
+
+        def press(key):
+            user32.SendMessageW(hwnd, 0x0100, key, 1)
+            user32.SendMessageW(hwnd, 0x0101, key, 1)
+            _dispatch_sent_messages(app)
+            app.render_pending(app._frame_schedulers[window].stats.last_frame_time + 1)
+            width, _, rgba = context.read_scene_rgba()
+            pixels = []
+            for x, y in ((35, 40), (25, 40), (35, 96), (25, 96)):
+                i = 4 * (round(y * window.scale) * width + round(x * window.scale))
+                pixels.append(rgba[i:i + 3])
+            return pixels
+
+        start = press(0x09)
+        assert window.focused_component is first and first.checked
+        moved = press(0x28)
+        assert window.focused_component is second and second.checked and not first.checked
+        assert start[:2] == moved[2:] and start[2:] == moved[:2]
+        assert start[0] != moved[0] and start[1] != moved[1]
+        assert press(0x26) == start
+        assert window.focused_component is first and first.checked and not second.checked
+    finally:
+        app.stop()
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="retained widget smoke requires Windows")
 def test_locked_toggle_values_stay_distinct_on_authored_surfaces():
     # This light theme uses its dark normal inks as the disabled surface.
     palette = replace(FUTURE_LIGHT.palette, on_accent="#203141", text="#203141",

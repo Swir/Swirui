@@ -45,6 +45,9 @@ checkbox’s keyboard focus ring. When you lock a checkbox, radio button or
 switch, its indicator uses your theme’s disabled colors. Changing themes
 keeps the selected value visible. [Compare locked settings in both appearances](docs/development-0.2.md#compare-locked-settings).
 
+In that checkout, arrow keys move focus and selection together within a radio
+button group. [Try keyboard selection in the rendering preferences demo](docs/development-0.2.md#choose-a-radio-option-with-the-arrow-keys).
+
 Project names and card headings now adjust their type size to the width of
 each appearance pane. Use `Label(..., font_size=31, min_font_size=16)` for
 the same behavior in your own app. [See a narrow preview with long names](https://github.com/Swir/Swirui/blob/v0.2.0b2/docs/development-0.2.md#fit-a-heading-to-its-panel).

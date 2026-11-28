@@ -1,4 +1,5 @@
 from dataclasses import replace
+from types import SimpleNamespace
 
 import pytest
 
@@ -227,6 +228,67 @@ def test_radio_group_keeps_one_checked_and_emits_both_state_changes() -> None:
     assert balanced_changes[0].data["checked"] is False
     assert len(quality_changes) == 1
     assert quality_changes[0].data["checked"] is True
+
+
+@pytest.mark.parametrize(("backend", "arrows", "ordinary_key"), [
+    ("win32", (0x25, 0x26, 0x27, 0x28), 0x7B),
+    ("x11", (0xFF51, 0xFF52, 0xFF53, 0xFF54), 0x25),
+    ("cocoa", (0x7B, 0x7E, 0x7C, 0x7D), 0x25),
+])
+def test_radio_arrows_move_selection_and_focus_within_the_current_group(
+    backend, arrows, ordinary_key,
+):
+    window, root = Window(), Component()
+    rect = Rect(10, 10, 120, 32)
+    first, disabled, hidden, unfocusable, middle, last = [
+        RadioButton(label, bounds=rect) for label in ("A", "B", "C", "D", "E", "F")
+    ]
+    disabled.enabled = False
+    hidden.visible = False
+    unfocusable.focusable = False
+    other = RadioButton("Other", group="secondary", bounds=rect, checked=True)
+    nested = RadioButton("Nested", bounds=rect, checked=True)
+    root.add(first, disabled, hidden, other, Component().add(nested), unfocusable, middle, last)
+    mount(window, root)
+    window._platform_backend = SimpleNamespace(name=backend)
+    first.checked = True
+    window.focus_component(first)
+    changes = []
+    middle.on("changed", changes.append)
+    left, up, right, down = arrows
+    for modifier in ("shift", "ctrl", "alt", "meta"):
+        window._apply_platform_event(PlatformEvent(
+            PlatformEventKind.KEY_DOWN, NativeWindowHandle(1), key_code=down, **{modifier: True}
+        ))
+    _key(window, PlatformEventKind.KEY_DOWN, ordinary_key)
+    assert window.focused_component is first and first.checked and not changes
+    for key, target in ((down, middle), (right, last), (right, first), (up, last), (left, middle)):
+        _key(window, PlatformEventKind.KEY_DOWN, key)
+        _key(window, PlatformEventKind.KEY_UP, key)
+        assert window.focused_component is target and target.accessible_checked
+        assert [option for option in (first, middle, last) if option.checked] == [target]
+        assert other.checked and nested.checked
+    assert [event.data["checked"] for event in changes] == [True, False, True]
+    assert changes[0].data["input_event"].source is first
+    _key(window, PlatformEventKind.KEY_DOWN, 0x09)
+    assert window.focused_component is last
+
+
+def test_radio_arrow_respects_cancelled_keys_and_focus_redirects():
+    window, root = Window(), Component()
+    first = RadioButton("A", bounds=Rect(0, 0, 120, 32), checked=True)
+    second = RadioButton("B", bounds=Rect(0, 40, 120, 32))
+    after = Checkbox("Next", bounds=Rect(0, 80, 120, 32))
+    root.add(first, second, after)
+    mount(window, root)
+    window.focus_component(first)
+    cancel = root.on("key_down", lambda ev: ev.prevent_default(), capture=True)
+    _key(window, PlatformEventKind.KEY_DOWN, 0x28)
+    assert window.focused_component is first and first.checked
+    cancel()
+    second.on("focus_gained", lambda _: window.focus_component(after))
+    _key(window, PlatformEventKind.KEY_DOWN, 0x28)
+    assert window.focused_component is after and first.checked and not second.checked
 
 
 def test_disabled_toggle_is_semantic_but_not_interactive() -> None:

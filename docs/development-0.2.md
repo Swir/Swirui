@@ -148,6 +148,20 @@ The thumb stays on the left for off and on the right for on. Updating
 `checked` in code also updates the indicator while locked. The five frames
 above come directly from the Windows/wgpu demo on AMD Radeon graphics.
 
+### Choose a radio option with the arrow keys
+
+In the same demo, press Tab to focus **Balanced**. Down selects **Ultra**
+and moves the focus ring with the dot. Down again wraps to **Balanced**.
+Up and Left go backward. Down and Right go forward. Tab and Shift+Tab
+follow the form’s usual focus order.
+
+![The focus ring and selected dot move between Balanced and Ultra, then Tab moves focus to Renderer telemetry](screenshots/radio-keyboard.png)
+
+In a Python form, add the radio buttons to the same parent with the same
+`group` name. Arrows follow their child order and skip hidden, disabled and
+non-focusable options. Listen for the existing `changed` event to apply the
+selection. The recording shows the native Windows demo operated by keyboard.
+
 ## Add magnetic hover to a button
 
 Run `python examples/magnetic_interaction_demo.py`. Move along the edges of

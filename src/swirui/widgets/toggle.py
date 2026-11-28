@@ -19,6 +19,12 @@ if TYPE_CHECKING:
 
 _VK_RETURN = 0x0D
 _VK_SPACE = 0x20
+# Backends report arrows as Win32 virtual keys, X11 keysyms or Cocoa hardware codes.
+_WINDOWS_RADIO_STEPS = {0x25: -1, 0x26: -1, 0x27: 1, 0x28: 1}
+_RADIO_STEPS = {
+    "x11": {0xFF51: -1, 0xFF52: -1, 0xFF53: 1, 0xFF54: 1},
+    "cocoa": {0x7B: -1, 0x7E: -1, 0x7C: 1, 0x7D: 1},
+}
 _TRANSPARENT = Color(0.0, 0.0, 0.0, 0.0)
 _SURFACE = Color.from_hex("#172632")
 _SURFACE_HOVER = Color.from_hex("#20394A")
@@ -423,6 +429,7 @@ class RadioButton(_ToggleControl):
             role=AccessibilityRole.RADIO,
             **kwargs,
         )
+        self.on("key_down", self._navigate_group)
 
     @property
     def group(self) -> str:
@@ -432,15 +439,43 @@ class RadioButton(_ToggleControl):
         if not self.checked:
             self._set_checked(True, input_event=input_event)
 
+    def _group_members(self) -> tuple[RadioButton, ...]:
+        if self.parent is None:
+            return (self,)
+        return tuple(child for child in self.parent.children
+                     if isinstance(child, RadioButton) and child.group == self.group)
+
+    def _navigate_group(self, event: Event) -> None:
+        key = self._platform_event(event, PlatformEventKind.KEY_DOWN)
+        if (event.source is not self or event.default_prevented or key is None
+                or key.key_code is None or key.ctrl or key.alt or key.shift or key.meta):
+            return
+        window = self.mounted_window
+        if window is None or window.focused_component is not self:
+            return
+        backend = window._platform_backend
+        steps = _RADIO_STEPS.get(backend.name if backend else "win32", _WINDOWS_RADIO_STEPS)
+        step = steps.get(key.key_code)
+        if step is None:
+            return
+        choices = [member for member in self._group_members()
+                   if member.visible and member.enabled and member.focusable]
+        if len(choices) < 2 or self not in choices:
+            return
+        target = choices[(choices.index(self) + step) % len(choices)]
+        parent = self.parent
+        event.prevent_default()
+        with state_transaction():
+            window.focus_component(target)
+            # Focus listeners can remove, disable or redirect the destination.
+            if (window.focused_component is target and target.parent is parent
+                    and window._component_is_focus_candidate(target)):
+                target._activate(input_event=event)
+
     def _set_checked(self, value: bool, *, input_event: Event | None) -> None:
-        if value and self.parent is not None:
-            for sibling in tuple(self.parent.children):
-                if (
-                    sibling is not self
-                    and isinstance(sibling, RadioButton)
-                    and sibling.group == self.group
-                    and sibling.checked
-                ):
+        if value:
+            for sibling in self._group_members():
+                if sibling is not self and sibling.checked:
                     sibling._set_checked(False, input_event=input_event)
         super()._set_checked(value, input_event=input_event)
 
