@@ -63,7 +63,7 @@ def test_gradient_bar_clips_a_fixed_scale_and_remains_pointer_transparent() -> N
     assert bar.accessible_value == 30 and bar.accessible_value_text == "25%"
 
     bar.enabled = False
-    assert bar.build_scene_node().children[0].fill == FUTURE_LIGHT.surface_color("disabled")
+    assert bar.build_scene_node().children[0].fill == FUTURE_LIGHT.surface_color("disabled_text")
     bar.enabled = True
     assert bar.build_scene_node().children[0].children[0].path is paint.children[0].path
     bar.fill_gradient = None
@@ -154,7 +154,7 @@ def test_progress_ring_preserves_its_outline_at_fractional_values(thickness):
         assert area(ring.build_scene_node().children) == pytest.approx(track_area)
     ring.enabled = False
     nodes = ring.build_scene_node().children
-    assert len(nodes) == 8 and all(node.fill == FUTURE_LIGHT.surface_color("disabled")
+    assert len(nodes) == 8 and all(node.fill == FUTURE_LIGHT.surface_color("disabled_text")
                                    for node in nodes)
 
 
@@ -182,7 +182,7 @@ def test_ring_sweep_colors_stay_at_fixed_angles_as_progress_and_theme_change():
     assert all(node.fill == track for node in ring.build_scene_node().children)
     ring.value = 110
     ring.enabled = False
-    disabled = FUTURE_LIGHT.surface_color("disabled")
+    disabled = FUTURE_LIGHT.surface_color("disabled_text")
     assert all(node.fill == disabled for node in ring.build_scene_node().children)
     ring.enabled = True
     ring.sweep_stops = stops[::-1]

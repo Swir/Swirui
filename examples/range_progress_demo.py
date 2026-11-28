@@ -6,6 +6,7 @@ from dataclasses import replace
 from swirui import (
     NEON_BLUE,
     App,
+    Checkbox,
     Label,
     Panel,
     ProgressBar,
@@ -17,6 +18,7 @@ from swirui import (
     ThemeSurface,
     Window,
     mount,
+    state_transaction,
 )
 from swirui.rendering import Color, GradientStop, LinearGradient, Point, Rect
 
@@ -73,14 +75,16 @@ allowed = RangeSlider(
 )
 progress_value = Label("", bounds=Rect(545, 145, 63, 34), font_size=20)
 range_value = Label("", bounds=Rect(541, 239, 108, 32), font_size=18)
+disable_indicators = Checkbox("Disable indicators", bounds=Rect(475, 353, 200, 44))
 card.add(Label("Preview progress", bounds=Rect(54, 112, 350, 34), font_size=21),
          volume, progress, ring, progress_value,
          Label("Allowed range", bounds=Rect(54, 237, 350, 34), font_size=21), range_value, allowed)
 root.add(SilkRibbon(bounds=Rect(298, 0, 383, 186)),
          Label("Range and progress", bounds=Rect(30, 22, 390, 52), font_size=32),
          card,
-         Label("Tab selects the next handle. Use the arrow keys to adjust its value.",
-               bounds=Rect(32, 360, 636, 36), font_size=16))
+         Label("Tab to a handle. Use the arrow keys to adjust it.",
+               bounds=Rect(32, 360, 436, 36), font_size=16),
+         disable_indicators)
 mount(window, root)
 
 
@@ -91,6 +95,12 @@ def update_progress(*_args: object) -> None:
     range_value.text = f"{allowed.lower_value:g}–{allowed.upper_value:g}%"
 
 
+def update_indicators(*_args: object) -> None:
+    with state_transaction():
+        progress.enabled = ring.enabled = not disable_indicators.checked
+
+
+disable_indicators.on("changed", update_indicators)
 volume.on("changed", update_progress)
 allowed.on("changed", update_progress)
 update_progress()

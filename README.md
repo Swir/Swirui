@@ -112,6 +112,10 @@ color scale clockwise around the ring. Dragging the slider reveals the same
 violet, blue and mint in all three controls.
 [Watch the example on Windows](https://github.com/Swir/Swirui/blob/v0.2.0b1/docs/development-0.2.md#share-a-color-scale-with-a-progress-ring).
 
+In the source checkout after 0.2.0b1, disabled progress bars and rings keep
+showing how much work is complete. Re-enabling them restores their color
+scale at the current value. [See the native demo](docs/development-0.2.md#keep-progress-visible-when-an-indicator-is-disabled).
+
 ![SwirUI Studio in dark appearance, captured without a cursor](https://raw.githubusercontent.com/Swir/Swirui/v0.2.0b1/docs/screenshots/studio-dark.png)
 
 ### Your signature, across the whole interface

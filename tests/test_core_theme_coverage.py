@@ -81,11 +81,14 @@ def test_progress_inherits_palette_without_resetting_value_or_accessibility(fact
         assert progress.value == progress.accessible_value == 37
         assert progress.accessible_value_text == "37%"
     progress.enabled = False
-    assert all(
-        node.fill == FUTURE_DARK.surface_color("disabled")
-        for node in progress.build_scene_node().walk()
-        if node.kind is not SceneNodeKind.GROUP
-    )
+    custom = replace(FUTURE_LIGHT, palette=replace(FUTURE_LIGHT.palette, disabled="#153640",
+                                                   disabled_text="#8BE6CD"))
+    for theme in (FUTURE_DARK, FUTURE_LIGHT, custom):
+        root.theme = theme
+        colors = {n.fill for n in progress.build_scene_node().walk()
+                  if n.kind is not SceneNodeKind.GROUP}
+        assert colors == {theme.surface_color("disabled"), theme.surface_color("disabled_text")}
+        assert progress.accessible_value == 37 and progress.accessible_value_text == "37%"
     progress.enabled = True
     root.remove(progress)
     assert [node.fill for node in progress.build_scene_node().walk()] == legacy

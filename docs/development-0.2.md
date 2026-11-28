@@ -468,6 +468,20 @@ that segment is visible. Use up to 128 segments for a smoother sweep or
 choose fewer for distinct color bands. Assign new stops to recolor a mounted
 ring, or set `ring.sweep_stops = None` to follow the theme accent again.
 
+### Keep progress visible when an indicator is disabled
+
+In the source checkout after 0.2.0b1, run
+`python examples/range_progress_demo.py`. Select **Disable indicators** and
+move the top slider. The bar and ring still show the current percentage.
+Clear the checkbox to restore their gradient at that value.
+
+![The progress bar and ring show 42% and 75% in the disabled palette, then return to their color scale](screenshots/disabled-progress.png)
+
+In your own app, set `bar.enabled = ring.enabled = False`. The completed
+portion uses the theme’s `disabled_text` color and the remaining track uses
+`disabled`. Updating `value` moves the boundary even within a single ring
+segment. The four frames above were read from the running Windows/wgpu demo.
+
 ## Animate a switch thumb
 
 In Studio **Settings**, focus **Show Studio notifications** and press Space.
