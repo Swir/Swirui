@@ -32,6 +32,7 @@ _LAYOUT_VISUAL_ONLY_INVALIDATIONS = frozenset(
         "pointer_enter",
         "pointer_leave",
         "pointer_up",
+        "switch_position",
         "text_editing_geometry",  # caret/selection shaping does not change intrinsic size
         "text_align",
         "visual_offset",

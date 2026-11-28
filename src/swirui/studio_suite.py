@@ -35,11 +35,11 @@ from .theme_presets import NEON_BLUE
 class StudioSuite(Studio):
     """The complete Studio shell with dashboard, settings and notifications."""
 
-    def __init__(self) -> None:
+    def __init__(self, *, animations: AnimationController | None = None) -> None:
         super().__init__()
         empty = Rect(0, 0, 0, 0)
         self.dashboard = StudioDashboard()
-        self.settings = StudioSettings()
+        self.settings = StudioSettings(animations=animations)
         self.dashboard_button = Button("Overview", bounds=empty)
         self.settings_button = Button(
             "Settings",
@@ -362,12 +362,12 @@ def run(*, smoke_test: bool = False) -> int:
         min_width=1024,
         min_height=720,
     )
-    root = StudioSuite()
+    animations = AnimationController(app, window)
+    root = StudioSuite(animations=animations)
     window.on("resized", lambda _: root.resize_to(window.width, window.height))
     mount(window, root)
     app.add_window(window)
     bind_comparison(app, window, root.preview)
-    animations = AnimationController(app, window)
     interactions = root.bind_interactions(animations)
     try:
         if not smoke_test:

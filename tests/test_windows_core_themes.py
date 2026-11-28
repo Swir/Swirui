@@ -9,6 +9,7 @@ import pytest
 from swirui import (
     FUTURE_DARK,
     FUTURE_LIGHT,
+    AnimationController,
     App,
     Badge,
     Checkbox,
@@ -27,6 +28,62 @@ from swirui import (
 )
 from swirui.platforms.windows import Win32PlatformBackend
 from swirui.rendering import Rect, WgpuRenderer
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Real Windows GPU required")
+def test_switch_presents_intermediate_knob_positions_after_native_space(record_property):
+    renderer = WgpuRenderer()
+    app = App(platform_backend=Win32PlatformBackend(), renderer=renderer)
+    window = app.add_window(Window(width=320, height=180))
+    clock = AnimationController(app, window)
+    theme = FUTURE_DARK.with_accent("#85DECB")
+    root = Panel(bounds=Rect(0, 0, 320, 180), theme=theme)
+    switch = Switch("Notifications", bounds=Rect(32, 40, 180, 32), animations=clock)
+    root.add(switch)
+    mount(window, root)
+    try:
+        app.start()
+        app.process_events()
+        window.focus_component(switch)
+        hwnd = window.native_handle.value
+        context = renderer._contexts[hwnd]
+        send = app.platform_backend._user32.SendMessageW
+        send.argtypes = [ctypes.c_void_p, ctypes.c_uint, ctypes.c_size_t, ctypes.c_ssize_t]
+        send.restype = ctypes.c_ssize_t
+        send(hwnd, 0x0100, 0x20, 1)
+        send(hwnd, 0x0101, 0x20, 0xC0000001)
+        # Drain real Win32 events without advancing the clock between samples.
+        while app.platform_backend._events:
+            app._dispatch_platform_event(app.platform_backend._events.popleft())
+        assert switch.checked and switch.accessible_checked and clock.active_count == 1
+        color = theme.text_color("on_accent")
+        expected = tuple(round(channel * 255) for channel in (color.r, color.g, color.b))
+
+        def knob_center():
+            renderer.render(window, root)
+            width, _, rgba = context.read_scene_rgba()
+            y = round(56 * window.scale)
+            xs = []
+            for x in range(round(36 * window.scale), round(68 * window.scale)):
+                offset = (y * width + x) * 4
+                if math.dist(tuple(rgba[offset:offset + 3]), expected) < 3:
+                    xs.append(x)
+            assert len(xs) >= 6 * window.scale
+            return (min(xs) + max(xs)) / (2 * window.scale)
+
+        start = knob_center()
+        clock.tick(theme.motion_duration / 2)
+        midpoint = knob_center()
+        assert clock.tick(theme.motion_duration / 2) == 0
+        end = knob_center()
+        assert midpoint - start > 6 and end - midpoint > 6
+        assert abs(midpoint - (start + end) / 2) <= 1
+        assert window.focused_component is switch and renderer._contexts[hwnd] is context
+        record_property("adapter", renderer.adapter_name)
+        record_property("backend", renderer.graphics_backend)
+    finally:
+        clock.dispose()
+        app.stop()
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Real Windows GPU required")

@@ -466,6 +466,41 @@ that segment is visible. Use up to 128 segments for a smoother sweep or
 choose fewer for distinct color bands. Assign new stops to recolor a mounted
 ring, or set `ring.sweep_stops = None` to follow the theme accent again.
 
+## Animate a switch thumb
+
+In Studio **Settings**, focus **Show Studio notifications** and press Space.
+The setting takes effect as soon as you toggle it. The thumb eases to the
+opposite end of the track. Toggle again during travel and it goes back
+from its current position. **Reduce appearance motion** makes the switches
+snap into place, including one already moving.
+
+![The focused notifications switch slides off and on in the mint glass workspace](screenshots/appearance-switch-motion.png)
+
+The recording shows **Keep notifications on** in
+`python examples/appearance_gallery.py`. Each trip takes 160 ms with this
+theme. The 21 cursor-free Windows/wgpu frames play at quarter speed with a
+pause at each end.
+
+```python
+from swirui import AnimationController, Switch
+from swirui.rendering import Rect
+
+clock = AnimationController(app, window)
+notifications = Switch("Notifications", bounds=Rect(24, 40, 220, 40),
+                       checked=True, animations=clock)
+root.add(notifications)
+try:
+    app.run()
+finally:
+    clock.dispose()
+```
+
+Share one controller among switches in the same window. Set
+`motion_duration` on their theme to choose the time for a full trip in
+seconds. A shorter return trip takes proportionally less time. The
+`changed` event and accessible checked state update once per toggle.
+Omit `animations` for immediate movement.
+
 ## Animate a theme switch
 
 To try an animated theme switch in a running app, launch

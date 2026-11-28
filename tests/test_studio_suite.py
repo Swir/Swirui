@@ -1,5 +1,6 @@
 from swirui import (
     FUTURE_LIGHT,
+    AnimationController,
     App,
     ClipboardError,
     MemoryClipboard,
@@ -369,7 +370,11 @@ def test_dashboard_records_bounded_samples_and_updates_accessibility() -> None:
 
 
 def test_settings_are_retained_and_drive_notifications_and_reduced_motion() -> None:
-    studio = StudioSuite()
+    window = Window(width=1280, height=800)
+    clock = AnimationController(App(platform_backend=NullPlatformBackend()), window)
+    studio = StudioSuite(animations=clock)
+    studio.activate("settings")
+    mount(window, studio)
     assert studio.show_notification("Build ready", kind="success")
     assert studio.toast.visible
     assert studio.toast.message == "Build ready"
@@ -379,10 +384,12 @@ def test_settings_are_retained_and_drive_notifications_and_reduced_motion() -> N
 
     studio.toast.dismiss()
     studio.settings.notifications.checked = False
+    assert clock.tick(.04) == 1
     assert not studio.show_notification("Hidden")
     assert not studio.toast.visible
 
     studio.settings.reduced_motion.checked = True
+    assert clock.active_count == 0
     assert studio.theme is not None and studio.theme.reduced_motion
     assert studio.preview.theme is not None and studio.preview.theme.reduced_motion
 
@@ -394,6 +401,7 @@ def test_settings_are_retained_and_drive_notifications_and_reduced_motion() -> N
     assert after["hierarchy"] > before["hierarchy"]
     assert after["inspector"] > before["inspector"]
     assert after["console"] > before["console"]
+    clock.dispose()
 
 
 def test_studio_suite_commands_drive_dashboard_settings_theme_and_metrics() -> None:

@@ -1,8 +1,12 @@
+from dataclasses import replace
+
 import pytest
 
 from swirui import (
     FUTURE_DARK,
     FUTURE_LIGHT,
+    AnimationController,
+    App,
     Checkbox,
     Component,
     RadioButton,
@@ -250,3 +254,77 @@ def test_compact_standalone_switch_keeps_thumb_and_drops_focus_cue_when_disabled
     switch.enabled = False
     assert not any(n.key.startswith("compact:focus") for n in window.scene.walk())
     assert switch.checked
+
+
+def test_switch_reverses_from_the_visible_position_and_commits_each_change_immediately():
+    window = Window()
+    clock = AnimationController(App(), window)
+    root = Component(theme=replace(FUTURE_DARK, motion_duration=1))
+    switch = Switch("Sync", bounds=Rect(0, 0, 120, 22), key="sync", animations=clock)
+    root.add(switch)
+    mount(window, root)
+    changes = []
+    switch.on("changed", lambda e: changes.append((e.data["checked"], switch.accessible_checked)))
+    window.focus_component(switch)
+
+    def x():
+        return _node(window.scene, "sync:knob").bounds.x
+
+    start = x()
+    label = _node(window.scene, "sync:label").bounds
+    _key(window, PlatformEventKind.KEY_DOWN, 0x20)
+    _key(window, PlatformEventKind.KEY_UP, 0x20)
+    assert changes == [(True, True)] and x() == start
+    assert clock.tick(.25) == 1
+    first = x()
+    clock.tick(.25)
+    middle = x()
+    assert start < first < middle
+    switch.checked = False
+    assert x() == middle and changes[-1] == (False, False)
+    assert clock.tick(.25) == 1
+    assert start < x() < middle
+    assert clock.tick(.25) == 0 and x() == start
+    switch.checked = True
+    clock.tick(.5)
+    assert x() == pytest.approx(middle)
+    assert clock.tick(.5) == 0 and x() == pytest.approx(2 * middle - start)
+    assert len(changes) == 3 and _node(window.scene, "sync:label").bounds == label
+    assert window.focused_component is switch
+    clock.dispose()
+
+
+@pytest.mark.parametrize("interrupt", ["reduced", "duration", "disabled", "hidden",
+                                        "unmount", "dispose"])
+def test_switch_finishes_travel_when_motion_stops(interrupt):
+    window = Window()
+    clock = AnimationController(App(), window)
+    root = Component(theme=replace(FUTURE_LIGHT, motion_duration=1))
+    switch = Switch("Sync", bounds=Rect(0, 0, 140, 22), key="sync", animations=clock)
+    root.add(switch)
+    mount(window, root)
+    switch.checked = True
+    assert clock.tick(.5) == 1
+
+    def knob_x():
+        return next(n.bounds.x for n in switch.build_scene_node().walk() if n.key == "sync:knob")
+
+    halfway = knob_x()
+    if interrupt == "reduced":
+        root.theme = replace(root.theme, reduced_motion=True)
+    elif interrupt == "duration":
+        root.theme = replace(root.theme, motion_duration=0)
+    elif interrupt == "disabled":
+        switch.enabled = False
+    elif interrupt == "hidden":
+        switch.visible = False
+    elif interrupt == "unmount":
+        root.remove(switch)
+    else:
+        clock.dispose()
+    assert clock.active_count == 0 and switch.accessible_checked
+    assert knob_x() > halfway
+    switch.checked = False
+    assert clock.active_count == 0 and not switch.accessible_checked
+    assert knob_x() < halfway
+    clock.dispose()

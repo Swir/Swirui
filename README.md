@@ -63,6 +63,11 @@ In your own app, use `Button("Save", bounds=bounds, text_align="center")` to
 center an action label. `IconButton` centers its glyph by default.
 Tabbing through checkboxes, radio buttons and switches outlines the focused
 control, even when its checked color matches the theme's focus color.
+In Studio **Settings**, press Space on a switch to see its thumb slide.
+Press it again mid-travel to reverse direction. Your own
+`Switch(..., animations=clock)` follows the theme’s motion duration and
+reduced-motion setting. [Watch the native switch and try it in Python](https://github.com/Swir/Swirui/blob/development/0.2/docs/development-0.2.md#animate-a-switch-thumb).
+
 Tooltips display keyboard shortcuts on a second line and wrap longer hints
 when their box has room. Hover over **Focus for help** in the component
 gallery or Tab to it. Press Escape to hide the hint while keeping keyboard

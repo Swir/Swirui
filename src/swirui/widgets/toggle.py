@@ -2,15 +2,19 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from swirui.core import AccessibilityRole, Event
+from swirui.animation import AnimationController, Tween, ease_in_out_cubic
+from swirui.core import AccessibilityRole, Event, state_transaction
 from swirui.platforms import PlatformEvent, PlatformEventKind, PointerButton
 from swirui.rendering.geometry import Color, CornerRadius, Rect
 from swirui.rendering.scene import SceneNode, SceneNodeKind
-from swirui.theme import Theme
+from swirui.theme import DEFAULT_THEME, Theme
 
 from .base import Widget
+
+if TYPE_CHECKING:
+    from swirui.window import Window
 
 _VK_RETURN = 0x0D
 _VK_SPACE = 0x20
@@ -447,8 +451,22 @@ class RadioButton(_ToggleControl):
         )
 
 
+class _SwitchSlide(Tween):
+    """A cancelled visual must still agree with the switch's committed value."""
+
+    def cancel(self) -> bool:
+        if not super().cancel():
+            return False
+        self.update(self.to_value)
+        return True
+
+
 class Switch(_ToggleControl):
-    """Focusable on/off switch with retained track and knob geometry."""
+    """Focusable on/off switch with optional theme-timed thumb travel.
+
+    Supply the window's animation controller to slide the thumb when checked
+    changes. The checked state and change event are immediate in both modes.
+    """
 
     indicator_width = 40.0
     indicator_height = 22.0
@@ -460,9 +478,13 @@ class Switch(_ToggleControl):
         *,
         bounds: Rect,
         checked: bool = False,
+        animations: AnimationController | None = None,
         key: str | None = None,
         **kwargs: Any,
     ) -> None:
+        self._animations = animations
+        self._slide: _SwitchSlide | None = None
+        self._position = float(bool(checked))
         super().__init__(
             text,
             bounds=bounds,
@@ -471,6 +493,54 @@ class Switch(_ToggleControl):
             role=AccessibilityRole.SWITCH,
             **kwargs,
         )
+
+    def _set_checked(self, value: bool, *, input_event: Event | None) -> None:
+        if value == self.checked:
+            return
+        if self._animations is None:
+            self._position = float(value)
+            super()._set_checked(value, input_event=input_event)
+            return
+        start, end = self._position, float(value)
+        theme = self.effective_theme or DEFAULT_THEME
+        controller = self._animations
+        with state_transaction():
+            self._cancel_slide()
+            if (not controller.disposed
+                    and self.mounted_window is controller.window and self.enabled and self.visible
+                    and not theme.reduced_motion and theme.motion_duration and start != end):
+                self._slide = _SwitchSlide(start, end, theme.motion_duration * abs(end - start),
+                                           self._set_position, easing=ease_in_out_cubic)
+                controller.play(self._slide)
+            else:
+                self._position = end
+            super()._set_checked(value, input_event=input_event)
+
+    def _set_position(self, value: float) -> None:
+        if value != self._position:
+            self._position = value
+            self.invalidate(reason="switch_position")
+
+    def _cancel_slide(self) -> None:
+        if self._slide is not None and self._animations is not None:
+            previous = self._slide
+            self._slide = None
+            self._animations.cancel(previous)
+
+    def on_unmount(self, window: Window) -> None:
+        self._cancel_slide()
+        super().on_unmount(window)
+
+    def on_theme_changed(self, previous: Theme | None, current: Theme | None) -> None:
+        super().on_theme_changed(previous, current)
+        if current and (current.reduced_motion or current.motion_duration == 0):
+            self._cancel_slide()
+
+    def _on_invalidated(self, event: Event) -> None:
+        super()._on_invalidated(event)
+        if (event.data.get("reason") in ("enabled", "visible")
+                and not (self.enabled and self.visible)):
+            self._cancel_slide()
 
     def _build_indicator(self, root: SceneNode, bounds: Rect) -> None:
         original_size = min(bounds.width, bounds.height)
@@ -482,7 +552,7 @@ class Switch(_ToggleControl):
         margin = (size - knob_size) * 0.5
         left = bounds.x + margin
         right = bounds.right - margin - knob_size
-        x = right if self.checked else left
+        x = left + (right - left) * self._position
         y = bounds.y + ((bounds.height - knob_size) * 0.5)
         root.add(
             SceneNode(

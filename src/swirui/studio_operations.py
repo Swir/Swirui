@@ -6,6 +6,7 @@ import math
 from collections.abc import Callable
 
 from . import (
+    AnimationController,
     Badge,
     Button,
     ButtonVariant,
@@ -283,7 +284,7 @@ class StudioSettingsScroll(ScrollView):
 class StudioSettings(Panel):
     """Application-owned settings surface with retained interactive state."""
 
-    def __init__(self) -> None:
+    def __init__(self, *, animations: AnimationController | None = None) -> None:
         super().__init__(bounds=Rect(0, 0, 760, 540))
         empty = Rect(0, 0, 0, 0)
         self.heading = Label("Make it yours.", bounds=empty, font_size=30)
@@ -292,10 +293,14 @@ class StudioSettings(Panel):
             bounds=empty,
             font_size=14,
         )
-        self.autosave = Switch("Autosave project state", bounds=empty, checked=True)
-        self.notifications = Switch("Show Studio notifications", bounds=empty, checked=True)
-        self.reduced_motion = Switch("Reduce appearance motion", bounds=empty, checked=False)
-        self.live_metrics = Switch("Enable demo sample actions", bounds=empty, checked=True)
+        self.autosave = Switch("Autosave project state", bounds=empty, checked=True,
+                               animations=animations)
+        self.notifications = Switch("Show Studio notifications", bounds=empty, checked=True,
+                                    animations=animations)
+        self.reduced_motion = Switch("Reduce appearance motion", bounds=empty,
+                                     animations=animations)
+        self.live_metrics = Switch("Enable demo sample actions", bounds=empty, checked=True,
+                                   animations=animations)
         self.density = Slider(
             bounds=empty,
             value=100,

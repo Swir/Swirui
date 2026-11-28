@@ -31,6 +31,9 @@ def main() -> int:
     root = Panel(bounds=Rect(0, 0, 1000, 700))
     window = Window(title="SwirUI — Appearance", width=1000, height=700,
                     min_width=1000, min_height=700)
+    app = App("SwirUI Appearance", renderer=WgpuRenderer())
+    app.add_window(window)
+    animations = AnimationController(app, window)
     choices = {
         mode: Button(label, bounds=Rect(40 + index * 200, 188, 180, 48),
                      variant=ButtonVariant.SECONDARY)
@@ -44,7 +47,8 @@ def main() -> int:
     preview = ThemeSurface(bounds=Rect(40, 320, 560, 290))
     preview.add(
         Label("Your workspace", bounds=Rect(64, 340, 512, 36), font_size=24), draft,
-        Switch("Keep notifications on", bounds=Rect(64, 462, 430, 44), checked=True),
+        Switch("Keep notifications on", bounds=Rect(64, 462, 430, 44), checked=True,
+               animations=animations),
         Button("Create something", bounds=Rect(64, 534, 220, 48)),
     )
     pinned = Card(bounds=Rect(632, 320, 328, 290), theme=FUTURE_DARK, show_shadow=False)
@@ -62,10 +66,7 @@ def main() -> int:
         Label("Edit your workspace name. Switch looks. Your draft stays with you.",
               bounds=Rect(40, 652, 920, 32), font_size=16),
     )
-    app = App("SwirUI Appearance", renderer=WgpuRenderer())
-    app.add_window(window)
     mount(window, root)
-    animations = AnimationController(app, window)
     glass = SurfaceStyle(kind="glass", blur_radius=12, tint_opacity=.82, elevation=6,
                          glow_radius=8, depth_layers=4, depth_spacing=3, tilt_x=-8, tilt_y=6)
     dark = replace(FUTURE_DARK.with_accent("#85DECB"), surface_style=glass)
